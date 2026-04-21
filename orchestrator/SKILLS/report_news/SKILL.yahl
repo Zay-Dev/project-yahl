@@ -1,0 +1,52 @@
+---
+name: news-monitor
+description: Monitor news from multiple sources
+---
+
+```ai.logic
+type TNews = {
+  title: string;
+  date: Date;
+  url: string;
+};
+
+const news_sources = [
+  'hk01',
+  'bbc',
+  'reddit (old, AI friendly version)',
+  'x.com (xcancel.com)',
+  'on.cc',
+  'thread',
+];
+
+const news_sources_knowledge = *read(~/knowledges/news-monitor/sources.json);
+
+const parsed_news_source = news_sources.map(source => {
+  const saved = *find(news_sources_knowledge, source);
+
+  if (!!saved) {
+    return saved;
+  }
+
+  const parsed_source = /web-search(source);
+  const source_safe_browsable_url = *safe(parsed_source);
+
+  *save(~/knowledges/news-monitor/sources.json, source, source_safe_browsable_url);
+
+  return source_safe_browsable_url;
+});
+
+const news = parsed_news_source.flatMap(source => ({
+  const website = *browse_or_curl(source);
+  const extracted_news = *find_newest_20_news(website);
+  const news_within_24_hours = *filter(extracted_news, exclude_news_more_than_24_hours, allow_unknown_date);
+
+  return news_within_24_hours;
+}));
+
+const translated_news: TNews[] = *translate(news, 'zh-TW');
+console.log(translated_news);
+
+const translated_news2: TNews[] = *translate(news, 'jp');
+constole.log(translated_news2)
+```
