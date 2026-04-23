@@ -1,5 +1,16 @@
 FROM node:22
 
-WORKDIR /workspace
+WORKDIR /app
 
-CMD ["bash"]
+RUN corepack enable
+
+COPY package.json ./
+COPY pnpm-lock.yaml* ./
+
+RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
+
+COPY agent ./agent
+COPY orchestrator ./orchestrator
+COPY shared ./shared
+
+CMD ["bash", "-lc", "sleep infinity"]

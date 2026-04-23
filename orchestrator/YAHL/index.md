@@ -28,7 +28,7 @@ Syntax of "/skill(...args)" is a skill, that means
 
 #### ~/file-system
 
-Syntax of "~/some-text" means the workspace, it takes the linux's home (~/) syntax sematically, usually means accessing (read/write) the file system, we only access file-system when this syntax presents, and ~/ means our workspace (user's home)
+Syntax of "~/some-text" means the workspace, it takes the linux's home (~/) syntax sematically, usually means accessing (read/write) the file system, we only access file-system when this syntax presents, and ~/ means our workspace (user's home), use bash command to validate if you have written content correctly if it is a write virtual function
 
 examples:
 - *read(~/knowledges/news-monitor/sources.json) means reading the content of the file at that absolute path

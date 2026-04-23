@@ -1,83 +1,241 @@
+import { fileURLToPath } from "url";
+import { promises as fs } from "fs";
 import path from "path";
-import fs from "fs/promises";
+import { spawn } from "child_process";
 
-const TAB_SIZE = 2 as const;
-const END_LINE_WITH = ';' as const;
+import "dotenv/config";
+import { parseStageEnvelope, type StageEnvelope, type StageSessionInput } from "../shared/stage-contract";
+import {
+  createRuntimeContext,
+  extractAiLogic,
+  getStages,
+  resetStageContext,
+  setContextValue,
+  toStageContextPayload,
+} from "./runtime";
 
-const base = path.resolve(import.meta.dirname || process.cwd());
-const myBase = path.resolve(base, "orchestrator");
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
-const main = async () => {
-  const report_news = await fs.readFile(
-    path.resolve(myBase, "SKILLS/report_news/SKILL.yahl"),
-    "utf-8",
-  );
+const projectRoot = path.resolve(moduleDir, "..");
+const envFilePath = path.resolve(projectRoot, ".env");
+const yahlPath = path.resolve(projectRoot, "orchestrator", "YAHL");
+const imageName = "project-yahl-runner";
+const agentPath = path.resolve(projectRoot, "agent", "Agent.md");
+const containerName = "project-yahl-runner-main";
+const workspacePath = path.resolve(projectRoot, "workspace");
+const skillsPath = path.resolve(projectRoot, "orchestrator", "SKILLS");
+// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "SKILLS", "test");
+const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "SKILLS", "report_news");
 
-  const ai_logic = report_news
-    .match(/```ai\.logic\n(.*)\n```/s)?.[0]
-    ?.replace(/^```ai\.logic\n/, '')
-    ?.replace(/\n```$/, '');
+const runCommand = (
+  args: string[],
+  options?: {
+    ignoreFailure?: boolean;
+  },
+) => new Promise<void>((resolve, reject) => {
+  const child = spawn("docker", args, {
+    stdio: "inherit",
+  });
 
-  if (!ai_logic) {
-    console.error("No ai.logic found in report_news");
-    return;
-  }
+  child.on("error", reject);
 
-  _iterate(ai_logic);
-};
-
-const _iterate = (text: string, tabIndex = 0) => {
-  const stages = _getStages(text, tabIndex);
-  // stages.forEach((text, i) => console.log({ i, text }));
-
-  if (stages.length <= 0) return;
-
-  for (const stage of stages) {
-    // const stages = _getStages(stage, tabIndex + 1);
-
-    console.log(`exec: ${stage}`);
-    // if (stages.length === 1) {
-    // } else {
-    //   stages.forEach(stage => _iterate(stage, tabIndex + 1));
-    //   // console.log({ stage, stages, length: stages.length });
-    // }
-  }
-};
-
-const _getStages = (text: string, tabIndex = 0) => {
-  type TStage = {
-    lines: string[];
-    closed: boolean;
-  };
-
-  const stages: TStage[] = [];
-  const tabSize = tabIndex * TAB_SIZE;
-
-  for (const line of text.split('\n')) {
-    const numberOfWhitespaces = (line.match(/^[\s]+/)?.[0] || '').length;
-    const isOpenOrClose = numberOfWhitespaces <= tabSize;
-
-    if (isOpenOrClose) {
-      const lastStage = stages.at(-1);
-
-      if (!lastStage || !!lastStage?.closed) {
-        if (!line) continue;
-
-        stages.push({
-          lines: [],
-          closed: false,
-        });
-      }
+  child.on("close", (code) => {
+    if (code === 0 || options?.ignoreFailure) {
+      resolve();
+      return;
     }
 
-    const currentStage = stages.at(-1)!;
+    reject(new Error(`docker ${args.join(" ")} failed with code ${code || -1}`));
+  });
+});
 
-    currentStage.lines.push(line);
-    currentStage.closed = isOpenOrClose &&
-      line.endsWith(END_LINE_WITH);
-  }
+const runCommandCollect = (args: string[]) =>
+  new Promise<{
+    stderr: string;
+    stdout: string;
+  }>((resolve, reject) => {
+    const child = spawn("docker", args, {
+      stdio: [
+        "ignore",
+        "pipe",
+        "pipe",
+      ],
+    });
+    const stderrChunks: Buffer[] = [];
+    const stdoutChunks: Buffer[] = [];
 
-  return stages.map(({ lines }) => lines.join('\n'));
+    child.on("error", reject);
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdoutChunks.push(chunk);
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderrChunks.push(chunk);
+    });
+    child.on("close", (code) => {
+      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+
+      if (code === 0) {
+        resolve({
+          stderr,
+          stdout,
+        });
+        return;
+      }
+
+      reject(new Error(`docker ${args.join(" ")} failed with code ${code || -1}\n${stderr}`));
+    });
+  });
+
+const buildImage = async () => {
+  await runCommand([
+    "build",
+    "-f",
+    path.resolve(projectRoot, "Dockerfile.runner"),
+    "-t",
+    imageName,
+    projectRoot,
+  ]);
 };
 
-main();
+const resolveReportPromptPath = async () => {
+  const candidates = [
+    path.resolve(reportNewsDirPath, "SKILL.md"),
+    path.resolve(reportNewsDirPath, "index.md"),
+    path.resolve(reportNewsDirPath, "SKILL.yahl"),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch { }
+  }
+
+  throw new Error(`No report prompt file found in ${reportNewsDirPath}`);
+};
+
+const runContainer = async () => {
+  await runCommand([
+    "run",
+    "-d",
+    "--rm",
+    "--name",
+    containerName,
+    "--env-file",
+    envFilePath,
+    "-v",
+    `${workspacePath}:/root`,
+    "-v",
+    `${agentPath}:/opt/agent/Agent.md:ro`,
+    "-v",
+    `${yahlPath}:/opt/yahl:ro`,
+    "-v",
+    `${skillsPath}:/opt/skills:ro`,
+    imageName,
+    "bash",
+    "-lc",
+    "sleep infinity",
+  ]);
+};
+
+const extractJsonLine = (stdout: string) =>
+  stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .find((line) => line.startsWith("{") && line.endsWith("}")) || "";
+
+const parseAgentEnvelope = (stdout: string): StageEnvelope => {
+  const jsonLine = extractJsonLine(stdout);
+  const parsed = parseStageEnvelope(jsonLine);
+
+  if (parsed) return parsed;
+
+  return {
+    output: stdout.trim(),
+    type: "result",
+  };
+};
+
+const execStageAgent = async (input: StageSessionInput) => {
+  const stageInputBase64 = Buffer.from(JSON.stringify(input), "utf-8").toString("base64");
+  const args = [
+    "exec",
+    "-i",
+    "-e",
+    `AGENT_STAGE_INPUT_BASE64=${stageInputBase64}`,
+    containerName,
+    "bash",
+    "-lc",
+    "cd /app && pnpm --silent run agent -- --non-interactive --agent-md /opt/agent/Agent.md --yahl-dir /opt/yahl --stage-input-base64 \"$AGENT_STAGE_INPUT_BASE64\"",
+  ];
+
+  const result = await runCommandCollect(args);
+  return parseAgentEnvelope(result.stdout);
+};
+
+const stopContainer = async () => {
+  await runCommand([
+    "rm",
+    "-f",
+    containerName,
+  ], {
+    ignoreFailure: true,
+  });
+};
+
+const main = async () => {
+  const reportPath = await resolveReportPromptPath();
+  const reportSkill = await fs.readFile(reportPath, "utf-8");
+  const aiLogic = extractAiLogic(reportSkill);
+
+  if (!aiLogic) {
+    throw new Error(`No ai.logic block found in ${reportPath}`);
+  }
+
+  const stages = getStages(aiLogic);
+
+  if (stages.length <= 0) {
+    throw new Error("No stages parsed from ai.logic");
+  }
+
+  await fs.mkdir(workspacePath, {
+    recursive: true,
+  });
+  await stopContainer();
+  await buildImage();
+  await runContainer();
+
+  try {
+    const runtime = createRuntimeContext();
+
+    for (const stage of stages) {
+      console.log('\nStage'.padStart(10, '=').padEnd(10, '='));
+      resetStageContext(runtime);
+
+      const currentStage = stage;
+      const context = toStageContextPayload(runtime);
+
+      console.log('request', { context, currentStage });
+
+      const envelope = await execStageAgent({ context, currentStage });
+
+      if (envelope.type === "tool_call" && envelope.tool === "set_context") {
+        setContextValue(runtime, /*envelope.arguments.scope*/'global', envelope.arguments.key, envelope.arguments.value);
+      }
+
+      process.stdout.write(`[Orchestrator Stage] ${envelope.type}\n`);
+    }
+
+    process.stdout.write(`${JSON.stringify(toStageContextPayload(runtime), null, 2)}\n`);
+  } finally {
+    await stopContainer();
+  }
+};
+
+main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`[Orchestrator Error] ${message}\n`);
+  process.exit(1);
+});

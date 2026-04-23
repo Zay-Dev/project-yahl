@@ -4,8 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "agent": "tsx agent/index.ts",
     "dev": "tsx watch orchestrator/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "orchestrate": "tsx orchestrator/index.ts",
+    "test": "tsx --test \"agent/**/*.test.ts\""
   },
   "keywords": [],
   "author": "",

@@ -1,0 +1,15 @@
+---
+name: test
+description: Testing
+---
+
+```ai.logic
+const a = 1;
+const b = 2;
+
+const c = a + b;
+
+const result = {a,b,c};
+
+return result;
+```
