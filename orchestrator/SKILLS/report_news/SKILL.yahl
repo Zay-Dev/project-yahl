@@ -36,11 +36,19 @@ const parsed_news_source = news_sources.map(source => {
   return source_safe_browsable_url;
 });
 
-const tool = *get_or_create_html_to_plain_text_python();
+const tool = *break_content_to_array_of_under_128k_tokens(~/);
 
 const news = parsed_news_source.flatMap(source => ({
   const website = *browse_or_curl(source);
-  const extracted_news = tool( *find_newest_20_news(website) );
+  const website_segments = tool( website );
+
+  const extracted_news = new Array<string>();
+
+  for (let i = 0; i < html_segments.length; i++) {
+    const segment = html_segments[i];
+    extracted_news[i] = *extract_news_related_info(segment);
+  }
+
   const news_within_24_hours = *filter(extracted_news, exclude_news_more_than_24_hours, allow_unknown_date);
 
   return news_within_24_hours;

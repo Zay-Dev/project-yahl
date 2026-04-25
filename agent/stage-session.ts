@@ -1,28 +1,34 @@
-import { parseStageEnvelope, type StageEnvelope, type StageSessionInput } from "../shared/stage-contract";
+import config from "./config";
 
-type Message = {
-  role: "system" | "user" | "assistant";
+import path from "path";
+
+import {
+  parseStageEnvelope,
+  type StageEnvelope,
+  type StageSessionInput,
+} from "../shared/stage-contract";
+
+import {
+  type ChatApiMessage,
+  type ChatAssistantMessage,
+  type ChatToolCall,
+  type SetContextToolArguments,
+  parseRunBashToolArguments,
+  parseSetContextToolArguments,
+  setContextArgumentsToEnvelope,
+} from "../shared/stage-tools";
+
+import { readFileUtf8 } from "./-utils/prompts";
+
+type BootstrapMessage = {
   content: string;
+  role: "system" | "user" | "assistant";
 };
 
-type StageReply =
-  | {
-    envelope: StageEnvelope;
-    type: "envelope";
-  }
-  | {
-    command: string;
-    type: "bash";
-  }
-  | {
-    type: "invalid_bash";
-  }
-  | {
-    type: "invalid_output";
-  };
-
 type StageRunner = {
-  chat: (messages: Message[]) => Promise<string>;
+  chatWithTools: (messages: ChatApiMessage[]) => Promise<{
+    assistantMessage: ChatAssistantMessage;
+  }>;
   runCommand: (command: string) => Promise<string>;
 };
 
@@ -31,139 +37,226 @@ type StageSessionOptions = {
   maxTurns?: number;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === "object" && !Array.isArray(value);
+const toApiMessages = (messages: BootstrapMessage[]): ChatApiMessage[] =>
+  messages.map((message) => ({
+    content: message.content,
+    role: message.role,
+  }));
 
-const parseInternalBashCall = (value: string): StageReply => {
-  const envelope = parseStageEnvelope(value);
-  if (envelope) {
-    return {
-      envelope,
-      type: "envelope",
-    };
-  }
-
-  let parsed: unknown;
+export const parseStageSessionInput = (text: string): StageSessionInput | null => {
+  let parsedRaw: unknown;
   try {
-    parsed = JSON.parse(value) as unknown;
+    parsedRaw = JSON.parse(text) as unknown;
   } catch {
-    return {
-      type: "invalid_output",
-    };
+    return null;
   }
 
-  if (!isRecord(parsed)) {
-    return {
-      type: "invalid_output",
-    };
-  }
+  if (!parsedRaw || typeof parsedRaw !== "object" || Array.isArray(parsedRaw)) return null;
 
-  if (parsed.type !== "tool_call" || parsed.tool !== "bash") {
-    return {
-      type: "invalid_output",
-    };
-  }
+  const parsed = parsedRaw as Record<string, unknown>;
+  if (typeof parsed.currentStage !== "string") return null;
 
-  if (!isRecord(parsed.arguments)) {
-    return {
-      type: "invalid_bash",
-    };
-  }
+  if (!parsed.context) return null;
+  if (typeof parsed.context !== 'object') return null;
+  if (Array.isArray(parsed.context)) return null;
 
-  if (typeof parsed.arguments.command !== "string") {
-    return {
-      type: "invalid_bash",
-    };
-  }
+  const context = parsed.context as Record<string, unknown>;
 
-  if (!parsed.arguments.command.trim()) {
-    return {
-      type: "invalid_bash",
-    };
-  }
+  if (!context.context) return null;
+  if (typeof context.context !== 'object') return null;
+  if (Array.isArray(context.context)) return null;
+
+  if (!context.stage) return null;
+  if (typeof context.stage !== 'object') return null;
+  if (Array.isArray(context.stage)) return null;
 
   return {
-    command: parsed.arguments.command,
-    type: "bash",
+    context: {
+      context: context.context as Record<string, unknown>,
+      stage: context.stage as Record<string, unknown>,
+    },
+    currentStage: parsed.currentStage,
   };
 };
 
-const buildInstruction = () =>
-  [
-    "Return strict JSON only.",
-    "Orchestrator output Schema 1:",
-    "{\"type\":\"result\",\"output\":\"<text>\"}",
-    "Orchestrator output Schema 2:",
-    "{\"type\":\"tool_call\",\"tool\":\"set_context\",\"arguments\":{\"scope\":\"global|stage\",\"key\":\"<string>\",\"value\":<json>}}",
-    "Internal tool Schema 3 (executed inside @agent container only):",
-    "{\"type\":\"tool_call\",\"tool\":\"bash\",\"arguments\":{\"command\":\"<single shell command>\"}}",
-    "Only set_context can be returned to orchestrator as tool_call.",
-    "After bash result is returned to you, continue and eventually return Schema 1 or Schema 2.",
-    "No markdown or extra fields.",
-  ].join("\n");
+export const normalizeToolCalls = (raw: unknown): ChatToolCall[] | undefined => {
+  if (!Array.isArray(raw)) return undefined;
+
+  const out: ChatToolCall[] = [];
+
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+
+    const entry = item as Record<string, unknown>;
+    const id = typeof entry.id === "string" ? entry.id : "";
+    const type = entry.type === "function" ? "function" : null;
+    const fn = entry.function;
+
+    if (!type || !fn || typeof fn !== "object") continue;
+
+    const fnObj = fn as Record<string, unknown>;
+    const name = typeof fnObj.name === "string" ? fnObj.name : "";
+    const args = typeof fnObj.arguments === "string" ? fnObj.arguments : "";
+
+    if (!id || !name) continue;
+
+    out.push({
+      function: {
+        arguments: args,
+        name,
+      },
+      id,
+      type: "function",
+    });
+  }
+
+  return out.length > 0 ? out : undefined;
+};
+
+const finalizeEnvelope = (
+  content: string | null,
+  contextsToSet: SetContextToolArguments[],
+): StageEnvelope => {
+  const trimmed = (content ?? "").trim();
+
+  if (contextsToSet.length > 0) {
+    return contextsToSet.map(toSet => setContextArgumentsToEnvelope(toSet));
+  }
+
+  if (trimmed) {
+    const envelope = parseStageEnvelope(trimmed);
+    if (envelope) return envelope;
+  }
+
+  const hint = trimmed ? trimmed.slice(0, 240) : "";
+
+  return {
+    output: trimmed
+      ? `执行失败 最终回复不是有效 envelope 且未成功调用 set_context 工具: ${hint}`
+      : "执行失败 最终回复为空 且未成功调用 set_context 工具",
+    type: "result",
+  };
+};
+
+const toolErrorContent = (message: string) =>
+  JSON.stringify({
+    error: message,
+    ok: false,
+  });
+
+const toolOkContent = () =>
+  JSON.stringify({
+    ok: true,
+  });
 
 export const runStageSession = async (
   stageInput: StageSessionInput,
-  messages: Message[],
+  messages: BootstrapMessage[],
   runner: StageRunner,
   options: StageSessionOptions = {},
 ): Promise<StageEnvelope> => {
   const maxBashCalls = options.maxBashCalls ?? 8;
   const maxTurns = options.maxTurns ?? 20;
-  const instruction = buildInstruction();
+
+  const toolsMd = await readFileUtf8(path.resolve(config.moduleDir, "Tools.md"));
+
   const payload = JSON.stringify(stageInput, null, 2);
-  const stageMessages: Message[] = [
-    ...messages,
+
+  const stageMessages: ChatApiMessage[] = [
+    ...toApiMessages(messages),
     {
-      content: `${instruction}\n\nInput:\n${payload}`,
       role: "user",
+      content: `${toolsMd}\n\nInput:\n${payload}`,
     },
   ];
 
   let bashCalls = 0;
   let turns = 0;
+  const contextsToSet: SetContextToolArguments[] = [];
 
   while (turns < maxTurns) {
     turns += 1;
-    const reply = await runner.chat(stageMessages);
-    stageMessages.push({
-      content: reply,
-      role: "assistant",
-    });
-    
-    const parsed = parseInternalBashCall(reply);
-    if (parsed.type === "envelope") return parsed.envelope;
 
-    if (parsed.type === "bash") {
-      if (bashCalls >= maxBashCalls) {
-        return {
-          output: `执行失败 内部 bash 工具调用次数超过限制 ${maxBashCalls}`,
-          type: "result",
-        };
+    const { assistantMessage } = await runner.chatWithTools(stageMessages);
+    stageMessages.push(assistantMessage);
+
+    const toolCalls = assistantMessage.tool_calls || [];
+
+    for (const call of toolCalls) {
+      const name = call.function.name;
+      const rawArgs = call.function.arguments ?? "";
+
+      if (name === "run_bash") {
+        const command = parseRunBashToolArguments(rawArgs);
+
+        if (!command) {
+          stageMessages.push({
+            content: toolErrorContent("run_bash: invalid or empty command"),
+            role: "tool",
+            tool_call_id: call.id,
+          });
+
+          continue;
+        }
+
+        if (bashCalls >= maxBashCalls) {
+          stageMessages.push({
+            content: toolErrorContent(`run_bash: exceeded max calls (${maxBashCalls})`),
+            role: "tool",
+            tool_call_id: call.id,
+          });
+
+          continue;
+        }
+
+        bashCalls += 1;
+        const commandResult = await runner.runCommand(command);
+        if (config.debug) {
+          process.stderr.write(`[DEBUG] [RUN_BASH] ${command}: ${commandResult}\n`);
+        }
+
+        stageMessages.push({
+          content: commandResult,
+          role: "tool",
+          tool_call_id: call.id,
+        });
+
+        continue;
       }
 
-      bashCalls += 1;
-      const commandResult = await runner.runCommand(parsed.command);
-      console.log(parsed.command, ':', commandResult);
+      if (name === "set_context") {
+        const args = parseSetContextToolArguments(rawArgs);
+
+        if (!args) {
+          stageMessages.push({
+            content: toolErrorContent("set_context: invalid arguments"),
+            role: "tool",
+            tool_call_id: call.id,
+          });
+
+          continue;
+        }
+
+        contextsToSet.push(args);
+        stageMessages.push({
+          content: toolOkContent(),
+          role: "tool",
+          tool_call_id: call.id,
+        });
+
+        continue;
+      }
+
       stageMessages.push({
-        content: `bash执行完毕 ${commandResult}`,
-        role: "user",
+        content: toolErrorContent(`unknown tool: ${name}`),
+        role: "tool",
+        tool_call_id: call.id,
       });
-      continue;
     }
 
-    if (parsed.type === "invalid_bash") {
-      stageMessages.push({
-        content: "执行失败 bash工具格式无效 你必须返回严格JSON且arguments.command为非空字符串",
-        role: "user",
-      });
-      continue;
-    }
+    if (toolCalls.length > 0) continue;
 
-    stageMessages.push({
-      content: "执行失败 输出格式无效 你必须返回严格JSON对象并符合result set_context bash schema",
-      role: "user",
-    });
+    return finalizeEnvelope(assistantMessage.content, contextsToSet);
   }
 
   return {

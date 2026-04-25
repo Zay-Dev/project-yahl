@@ -70,6 +70,7 @@ const runCommandCollect = (args: string[]) =>
     });
     child.stderr.on("data", (chunk: Buffer) => {
       stderrChunks.push(chunk);
+      console.log('stderr', chunk.toString('utf-8'));
     });
     child.on("close", (code) => {
       const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
@@ -144,7 +145,10 @@ const extractJsonLine = (stdout: string) =>
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .find((line) => line.startsWith("{") && line.endsWith("}")) || "";
+    .find((line) =>
+      (line.startsWith("{") && line.endsWith("}")) ||
+      (line.startsWith("[") && line.endsWith("]"))
+    ) || "";
 
 const parseAgentEnvelope = (stdout: string): StageEnvelope => {
   const jsonLine = extractJsonLine(stdout);
@@ -211,21 +215,47 @@ const main = async () => {
     const runtime = createRuntimeContext();
 
     for (const stage of stages) {
-      console.log('\nStage'.padStart(10, '=').padEnd(10, '='));
       resetStageContext(runtime);
 
       const currentStage = stage;
       const context = toStageContextPayload(runtime);
 
-      console.log('request', { context, currentStage });
+      console.log('\n', '----- Stage -----', '\n');
+      console.log('request', JSON.stringify({ context, currentStage }, null, 2));
+
+      process.stdout.write('Press [Enter] or [Space] to continue...\n');
+
+      await new Promise<void>((resolve) => {
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+        process.stdin.once('data', (data: Buffer) => {
+          // Accept space or enter
+          if (data[0] === 32 || data[0] === 13 || data[0] === 10) {
+            process.stdin.setRawMode(false);
+            process.stdin.pause();
+            resolve();
+          }
+        });
+      });
 
       const envelope = await execStageAgent({ context, currentStage });
 
-      if (envelope.type === "tool_call" && envelope.tool === "set_context") {
-        setContextValue(runtime, /*envelope.arguments.scope*/'global', envelope.arguments.key, envelope.arguments.value);
+      if (Array.isArray(envelope)) {
+        envelope
+          .filter(item => item.type === 'tool_call' && item.tool === 'set_context')
+          .forEach(item => {
+            setContextValue(
+              runtime,
+              /*envelope.arguments.scope*/'global',
+              item.arguments.key,
+              item.arguments.value,
+            );
+          });
+        process.stdout.write(`[Orchestrator Stage] set_context calls, length: ${envelope.length}\n`);
+      } else {
+        process.stdout.write(`[Orchestrator Stage] ${envelope.type}\n`);
       }
 
-      process.stdout.write(`[Orchestrator Stage] ${envelope.type}\n`);
     }
 
     process.stdout.write(`${JSON.stringify(toStageContextPayload(runtime), null, 2)}\n`);

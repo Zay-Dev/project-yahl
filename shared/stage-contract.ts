@@ -31,7 +31,7 @@ export type SetContextToolCallEnvelope = {
   type: "tool_call";
 };
 
-export type StageEnvelope = StageResultEnvelope | SetContextToolCallEnvelope;
+export type StageEnvelope = StageResultEnvelope | SetContextToolCallEnvelope[];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -48,29 +48,35 @@ export const parseStageEnvelope = (value: string): StageEnvelope | null => {
     return null;
   }
 
-  if (!isRecord(parsed)) return null;
-  if (parsed.type === "result") {
-    if (typeof parsed.output !== "string") return null;
-    return {
-      output: parsed.output,
-      type: "result",
-    };
+  if (isRecord(parsed)) {
+    if (parsed.type === "result") {
+      return {
+        output: `${parsed.output || ''}`,
+        type: "result",
+      };
+    }
   }
 
-  if (parsed.type !== "tool_call") return null;
-  if (parsed.tool !== "set_context") return null;
-  if (!isRecord(parsed.arguments)) return null;
-  if (!isScope(parsed.arguments.scope)) return null;
-  if (typeof parsed.arguments.key !== "string") return null;
-  if (!parsed.arguments.key.trim()) return null;
+  if (!Array.isArray(parsed)) return null;
 
-  return {
-    arguments: {
-      key: parsed.arguments.key,
-      scope: parsed.arguments.scope,
-      value: parsed.arguments.value,
-    },
-    tool: "set_context",
-    type: "tool_call",
-  };
+  return parsed
+    .filter(item => {
+      return isRecord(item) &&
+        item.type === "tool_call" &&
+        item.tool === "set_context" &&
+        isRecord(item.arguments) &&
+        isScope(item.arguments.scope) &&
+        typeof item.arguments.key === 'string' &&
+        item.arguments.key.trim();
+    })
+    .map(item => ({
+      arguments: {
+        key: item.arguments.key,
+        scope: item.arguments.scope,
+        value: item.arguments.value,
+      },
+      tool: "set_context",
+      type: "tool_call",
+    }));
+
 };

@@ -1,99 +1,35 @@
-import { fileURLToPath } from "url";
+import config from "./config";
+
 import { exec } from "child_process";
-import { promises as fs } from "fs";
-import path from "path";
 import readline from "readline";
 import { promisify } from "util";
 
-import "dotenv/config";
-import { type StageSessionInput } from "../shared/stage-contract";
-import { runStageSession } from "./stage-session";
+import {
+  STAGE_TOOLS,
+  type ChatApiMessage,
+  type ChatAssistantMessage,
+} from "../shared/stage-tools";
+
+import { parseArgs } from "./-utils/args-parser";
+import { readFileUtf8, readFolderUtf8, decodeBase64 } from "./-utils/prompts";
+
+import {
+  runStageSession,
+  normalizeToolCalls,
+  parseStageSessionInput,
+} from "./stage-session";
 
 const execAsync = promisify(exec);
-
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 type Message = {
   role: "system" | "user" | "assistant";
   content: string;
 };
 
-type CliOptions = {
-  agentMdPath: string;
-  nonInteractive: boolean;
-  promptBase64: string;
-  stageInputBase64: string;
-  yahlDirPath: string;
-};
-
 type AgentReply = {
   approach: "command" | "complete";
   command: string;
   summary: string;
-};
-
-const deepseekApiKey = process.env.DEEPSEEK_API_KEY || process.env.API_KEY || "";
-
-const deepseekBaseUrl = (process.env.DEEPSEEK_URL || "https://api.deepseek.com").replace(/\/+$/, "");
-
-const model = process.env.DEEPSEEK_MODEL || "deepseek-reasoner";
-
-const decodeBase64 = (text: string) => {
-  try {
-    return Buffer.from(text, "base64").toString("utf-8").trim();
-  } catch {
-    return "";
-  }
-};
-
-const parseArgs = (): CliOptions => {
-  const args = process.argv.slice(2);
-  const pairs = args.reduce((acc, value, index) => {
-    if (!value.startsWith("--")) return acc;
-    const key = value.replace(/^--/, "");
-    const next = args[index + 1];
-    if (!next || next.startsWith("--")) {
-      acc[key] = "true";
-      return acc;
-    }
-    acc[key] = next;
-    return acc;
-  }, {} as Record<string, string>);
-
-  const defaultAgentMdPath = path.resolve(moduleDir, "Agent.md");
-  const defaultYahlDirPath = path.resolve(process.cwd(), "orchestrator", "YAHL");
-
-  return {
-    agentMdPath: pairs["agent-md"] || process.env.AGENT_MD_PATH || defaultAgentMdPath,
-    nonInteractive: pairs["non-interactive"] === "true" || process.env.AGENT_NON_INTERACTIVE === "1",
-    promptBase64: pairs["prompt-base64"] || process.env.AGENT_PROMPT_BASE64 || "",
-    stageInputBase64: pairs["stage-input-base64"] || process.env.AGENT_STAGE_INPUT_BASE64 || "",
-    yahlDirPath: pairs["yahl-dir"] || process.env.AGENT_YAHL_DIR || defaultYahlDirPath,
-  };
-};
-
-const readUtf8 = async (filePath: string) => {
-  try {
-    return await fs.readFile(filePath, "utf-8");
-  } catch {
-    return "";
-  }
-};
-
-const readYahlPrompt = async (dirPath: string) => {
-  try {
-    const entries = await fs.readdir(dirPath, {
-      withFileTypes: true,
-    });
-    const files = entries
-      .filter((entry) => entry.isFile())
-      .map((entry) => path.resolve(dirPath, entry.name))
-      .sort((a, b) => a.localeCompare(b));
-    const contents = await Promise.all(files.map(readUtf8));
-    return contents.filter(Boolean).join("\n\n");
-  } catch {
-    return "";
-  }
 };
 
 const ask = (rl: readline.Interface, text: string) =>
@@ -116,41 +52,19 @@ const parseAgentReply = (reply: string): AgentReply | null => {
   }
 };
 
-const parseStageSessionInput = (text: string): StageSessionInput | null => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-
-  const top = parsed as Record<string, unknown>;
-  if (typeof top.currentStage !== "string") return null;
-  if (!top.context || typeof top.context !== "object" || Array.isArray(top.context)) return null;
-  const context = top.context as Record<string, unknown>;
-  if (!context.context || typeof context.context !== "object" || Array.isArray(context.context)) return null;
-  if (!context.stage || typeof context.stage !== "object" || Array.isArray(context.stage)) return null;
-
-  return {
-    context: {
-      context: context.context as Record<string, unknown>,
-      stage: context.stage as Record<string, unknown>,
-    },
-    currentStage: top.currentStage,
-  };
-};
-
 const chat = async (messages: Message[]) => {
-  const response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
+  const response = await fetch(`${config.apiUrl}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${deepseekApiKey}`,
       "Content-Type": "application/json",
+      Authorization: config.apiKey && `Bearer ${config.apiKey}` || '',
     },
     body: JSON.stringify({
       messages,
-      model,
+      model: config.model,
+      thinking: {
+        type: config.thinkingMode ? "enabled" : "disabled",
+      },
     }),
   });
 
@@ -162,8 +76,74 @@ const chat = async (messages: Message[]) => {
   const data = await response.json() as {
     choices?: Array<{ message?: { content?: string } }>;
   };
-  
+
   return data.choices?.[0]?.message?.content?.trim() || "";
+};
+
+const chatWithTools = async (
+  messages: ChatApiMessage[],
+): Promise<{
+  assistantMessage: ChatAssistantMessage;
+}> => {
+  const response = await fetch(`${config.apiUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: config.apiKey && `Bearer ${config.apiKey}` || '',
+    },
+    body: JSON.stringify({
+      messages,
+      model: config.model,
+      thinking: {
+        type: config.thinkingMode ? "enabled" : "disabled",
+      },
+      tool_choice: "auto",
+      tools: STAGE_TOOLS,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`DeepSeek API error ${response.status}: ${body}`);
+  }
+
+  const data = await response.json() as {
+    choices?: Array<{
+      message?: {
+        content?: string | null;
+        reasoning_content?: string | null;
+        tool_calls?: unknown;
+      };
+    }>;
+  };
+
+  if (config.debug) {
+    process.stderr.write(`[DEBUG] [REPLY] ${JSON.stringify(data, null, 2)}\n`);
+  }
+
+  const message = data.choices?.[0]?.message;
+  if (!message) {
+    throw new Error("DeepSeek API returned no message");
+  }
+
+  const tool_calls = normalizeToolCalls(message.tool_calls);
+  const content =
+    typeof message.content === "string" || message.content === null
+      ? message.content
+      : null;
+  const reasoning_content =
+    typeof message.reasoning_content === "string" || message.reasoning_content === null
+      ? message.reasoning_content
+      : null;
+
+  return {
+    assistantMessage: {
+      content,
+      tool_calls,
+      reasoning_content,
+      role: "assistant",
+    },
+  };
 };
 
 const runCommand = async (command: string) => {
@@ -278,14 +258,15 @@ const runInteractive = async (messages: Message[]) => {
 };
 
 const run = async () => {
-  if (!deepseekApiKey) {
-    throw new Error("Missing API_KEY or DEEPSEEK_API_KEY in environment");
+  if (!config.apiKey) {
+    process.stderr.write('[WARN] Running without API KEY');
   }
 
   const cli = parseArgs();
-  const agentmd = await readUtf8(cli.agentMdPath);
-  const yahlPrompt = await readYahlPrompt(cli.yahlDirPath);
   const prompt = decodeBase64(cli.promptBase64);
+  const agentmd = await readFileUtf8(cli.agentMdPath);
+  const yahlPrompt = await readFolderUtf8(cli.yahlDirPath);
+
   const messages: Message[] = [
     {
       role: "system",
@@ -296,13 +277,16 @@ const run = async () => {
   if (cli.stageInputBase64) {
     const stageInputRaw = decodeBase64(cli.stageInputBase64);
     const stageInput = parseStageSessionInput(stageInputRaw);
+
     if (!stageInput) {
       throw new Error("Invalid AGENT_STAGE_INPUT_BASE64 payload");
     }
+
     const envelope = await runStageSession(stageInput, messages, {
-      chat,
+      chatWithTools,
       runCommand,
     });
+
     process.stdout.write(`${JSON.stringify(envelope)}\n`);
     return;
   }
@@ -312,6 +296,7 @@ const run = async () => {
       role: "user",
       content: prompt,
     });
+
     await runLoop(messages);
     return;
   }
