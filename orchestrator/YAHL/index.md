@@ -4,6 +4,12 @@ YAHL is a new language that allow developer to write pseudo code to communicate 
 
 ### Syntaxes
 
+#### System tags
+
+Ignore system tags unless otherwise indicated, treat them as a space and not more than a space
+
+- REPLACE: 
+
 #### *func(...args)
 
 Syntax of "*some_text(...args)" is a virtual function, that means
@@ -38,6 +44,10 @@ examples:
 #### return
 
 To return a value as the result, use the set_context tool to set the value to the key 'result'
+
+### Instructions
+
+- NEVER throw error if you cannot find the skill, try to fallback to your capabilities to solve the problem.
 
 ## Example, taste of the language
 

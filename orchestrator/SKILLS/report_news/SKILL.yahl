@@ -14,9 +14,9 @@ const news_sources = [
   'hk01',
   'bbc',
   'reddit (old, AI friendly version)',
-  'x.com (xcancel.com)',
+  'x.com (no need login version)',
   'on.cc',
-  'thread',
+  'thread (no need login version)',
 ];
 
 const news_sources_knowledge = *read(~/knowledges/news-monitor/sources.json);
@@ -31,35 +31,42 @@ for each source of [news_sources] {
     return;
   }
 
-  const parsed_source = /web-search(source);
-  const source_safe_browsable_url = *safe(parsed_source);
+  for (let i = 0; i < 5; i++) {
+    const parsed_source = /web-search(source);
+    const source_safe_browsable_url = *safe(parsed_source);
 
-  *save(~/knowledges/news-monitor/sources.json, source, source_safe_browsable_url);
+    if (*browsable_containsNew_without_login(source_safe_browsable_url)) {
+      break;
+    }
+  }
 
   parsed_news_source = [...parsed_news_source, source_safe_browsable_url];
 }
 
-const tool = *break_content_to_array_of_under_128k_tokens(~/);
+*confirm_updated(~/knowledges/news-monitor/sources.json, parsed_news_source, keep_others);
+
 const news = new Array();
 
 for each source of [parsed_news_source] {
-  const website = *browse_or_curl(source);
-  const website_segments = tool( website );
+  const uuid = *uuidgen();
+  const tmp_file_path = *save(browse_or_curl(source), `~/tmp/${uuid}`);
 
-  const extracted_news = new Array();
+  *use_python_remove_css(tmp_file_path, keep_javascript);
 
-  for (let i = 0; i < html_segments.length; i++) {
-    const segment = html_segments[i];
-    extracted_news[i] = *extract_news_related_info(segment);
-  }
+  const byte_length = *get_byte_length(tmp_file_path);
 
-  const news_within_24_hours = *filter(extracted_news, exclude_news_more_than_24_hours, allow_unknown_date);
+  REPLACE: const website = /rag( chunkSize: 49600, tmp_file_path, byte_length, keep_datetime, keep_full_url );
 
-  news = [...news, ...news_within_24_hours];
+  const extracted_news = *extract_news(website);
+
+  news = *combine([...news, ...extracted_news]);
+  website = null;
 }
 
+const news_within_24_hours = *filter(news, within_24hours, allow_unknown_date);
+
 return {
-  zh: *translate(news, 'zh-TW') as TNews[],
-  jp: *translate(news, 'jp') as TNews[],
+  zh: *translate(news_within_24_hours, 'zh-TW', force_virtual_function) as TNews[],
+  jp: *translate(news_within_24_hours, 'jp', force_virtual_function) as TNews[],
 };
 ```

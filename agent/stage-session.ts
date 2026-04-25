@@ -13,8 +13,10 @@ import {
   type ChatAssistantMessage,
   type ChatToolCall,
   type SetContextToolArguments,
+  parseRagToolArguments,
   parseRunBashToolArguments,
   parseSetContextToolArguments,
+  ragArgumentsToEnvelope,
   setContextArgumentsToEnvelope,
 } from "../shared/stage-tools";
 
@@ -155,8 +157,8 @@ export const runStageSession = async (
   runner: StageRunner,
   options: StageSessionOptions = {},
 ): Promise<StageEnvelope> => {
-  const maxBashCalls = options.maxBashCalls ?? 8;
-  const maxTurns = options.maxTurns ?? 20;
+  const maxBashCalls = options.maxBashCalls ?? 24;
+  const maxTurns = options.maxTurns ?? 60;
 
   const toolsMd = await readFileUtf8(path.resolve(config.moduleDir, "Tools.md"));
 
@@ -222,6 +224,21 @@ export const runStageSession = async (
         });
 
         continue;
+      }
+
+      if (name === "rag") {
+        const args = parseRagToolArguments(rawArgs);
+        if (!args) {
+          stageMessages.push({
+            content: toolErrorContent("rag: invalid arguments"),
+            role: "tool",
+            tool_call_id: call.id,
+          });
+
+          continue;
+        }
+
+        return ragArgumentsToEnvelope(args);
       }
 
       if (name === "set_context") {

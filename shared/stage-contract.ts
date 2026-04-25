@@ -31,7 +31,21 @@ export type SetContextToolCallEnvelope = {
   type: "tool_call";
 };
 
-export type StageEnvelope = StageResultEnvelope | SetContextToolCallEnvelope[];
+export type RagToolCallEnvelope = {
+  arguments: {
+    lookingFor: string;
+    chunkSize: number;
+    tmp_file_path: string;
+    byteLength: number;
+    context_key: string;
+  };
+  tool: "rag";
+  type: "tool_call";
+};
+
+export type StageEnvelope = StageResultEnvelope |
+  SetContextToolCallEnvelope[] |
+  RagToolCallEnvelope;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -48,6 +62,12 @@ export const parseStageEnvelope = (value: string): StageEnvelope | null => {
     return null;
   }
 
+  const isValidTool = (item: unknown) => {
+    return isRecord(item) &&
+      item.type === "tool_call" &&
+      isRecord(item.arguments);
+  };
+
   if (isRecord(parsed)) {
     if (parsed.type === "result") {
       return {
@@ -55,16 +75,43 @@ export const parseStageEnvelope = (value: string): StageEnvelope | null => {
         type: "result",
       };
     }
+
+    if (isValidTool(parsed)) {
+      return [parsed]
+        .filter(item => {
+          return item.tool === "rag" &&
+            isRecord(item.arguments) &&
+            typeof item.arguments.lookingFor === 'string' &&
+            typeof item.arguments.chunkSize === 'number' &&
+            typeof item.arguments.tmp_file_path === 'string' &&
+            typeof item.arguments.byteLength === 'number' &&
+            typeof item.arguments.context_key === 'string' &&
+            !!item.arguments.lookingFor.trim() &&
+            item.arguments.chunkSize > 0 &&
+            !!item.arguments.tmp_file_path.trim() &&
+            item.arguments.byteLength > 0 &&
+            !!item.arguments.context_key.trim();
+        })
+        .map((item: any) => ({
+          arguments: {
+            lookingFor: item.arguments.lookingFor,
+            chunkSize: item.arguments.chunkSize,
+            tmp_file_path: item.arguments.tmp_file_path,
+            byteLength: item.arguments.byteLength,
+            context_key: item.arguments.context_key,
+          },
+          tool: "rag" as const,
+          type: "tool_call" as const,
+        }))[0];
+    }
   }
 
   if (!Array.isArray(parsed)) return null;
 
   return parsed
     .filter(item => {
-      return isRecord(item) &&
-        item.type === "tool_call" &&
+      return isValidTool(item) &&
         item.tool === "set_context" &&
-        isRecord(item.arguments) &&
         isScope(item.arguments.scope) &&
         typeof item.arguments.key === 'string' &&
         item.arguments.key.trim();

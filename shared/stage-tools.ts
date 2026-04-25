@@ -1,5 +1,6 @@
 import {
   CONTEXT_SCOPES,
+  RagToolCallEnvelope,
   type ContextScope,
   type SetContextToolCallEnvelope,
 } from "./stage-contract";
@@ -85,6 +86,40 @@ export const STAGE_TOOLS = [
     },
     type: "function" as const,
   },
+  {
+    function: {
+      description:
+        "Perform a RAG operation on a file. Use for searching for information in a file.",
+      name: "rag",
+      parameters: {
+        properties: {
+          lookingFor: {
+            description: "The content description of what we want to extract.",
+            type: "string",
+          },
+          chunkSize: {
+            description: "The size of each chunk to read from the file.",
+            type: "number",
+          },
+          tmp_file_path: {
+            description: "The path to the temporary file to read from.",
+            type: "string",
+          },
+          byteLength: {
+            description: "The length of the file in bytes.",
+            type: "number",
+          },
+          context_key: {
+            description: "The key to store the result in the context.",
+            type: "string",
+          },
+        },
+        required: ["lookingFor", "chunkSize", "tmp_file_path", "byteLength", "context_key"],
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
 ];
 
 export const parseSetContextToolArguments = (raw: string): SetContextToolArguments | null => {
@@ -105,6 +140,36 @@ export const parseSetContextToolArguments = (raw: string): SetContextToolArgumen
     key: parsed.key,
     scope: parsed.scope,
     value: parsed.value,
+  };
+};
+
+export const parseRagToolArguments = (raw: string): RagToolCallEnvelope["arguments"] | null => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed)) return null;
+  if (typeof parsed.lookingFor !== "string") return null;
+  if (!parsed.lookingFor.trim()) return null;
+  if (typeof parsed.chunkSize !== "number") return null;
+  if (parsed.chunkSize <= 0) return null;
+  if (typeof parsed.tmp_file_path !== "string") return null;
+  if (!parsed.tmp_file_path.trim()) return null;
+  if (typeof parsed.byteLength !== "number") return null;
+  if (parsed.byteLength <= 0) return null;
+  if (typeof parsed.context_key !== "string") return null;
+  if (!parsed.context_key.trim()) return null;
+
+  return {
+    lookingFor: parsed.lookingFor,
+    chunkSize: parsed.chunkSize,
+    tmp_file_path: parsed.tmp_file_path,
+    byteLength: parsed.byteLength,
+    context_key: parsed.context_key,
   };
 };
 
@@ -129,5 +194,13 @@ export const setContextArgumentsToEnvelope = (
 ): SetContextToolCallEnvelope => ({
   arguments: arguments_,
   tool: "set_context",
+  type: "tool_call",
+});
+
+export const ragArgumentsToEnvelope = (
+  arguments_: RagToolCallEnvelope["arguments"],
+): RagToolCallEnvelope => ({
+  arguments: arguments_,
+  tool: "rag",
   type: "tool_call",
 });
