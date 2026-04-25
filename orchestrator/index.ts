@@ -382,7 +382,8 @@ const main = async () => {
   await buildImage();
   await runContainer();
 
-  await execute(reportSkill);
+  const runtime = await execute(reportSkill);
+  console.log('result', JSON.stringify(runtime.get('context')?.['result'], null, 2));
 
   await stopContainer();
 };

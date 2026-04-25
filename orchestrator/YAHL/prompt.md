@@ -47,3 +47,5 @@ Examples
 4. const web_result = /web-search; // execute the skill '/web-search' and set the result to the web_result
 5. const escapedArray = array.map(item => *escape(item)); // execute the virtual function to each item of the 'array' and set the new values of array to escapedArray
 6. type TType = {...}; // set the type definition to TType
+7. records = [...records, ...new_records]; // update the records
+8. records = [...records, ...new_records, mandantory_record]; // update the records

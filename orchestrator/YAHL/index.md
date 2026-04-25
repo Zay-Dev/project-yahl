@@ -35,6 +35,10 @@ examples:
 - *find(~/knowledges/**/*.json) means find all json files recursively under the ~/knowledges folder
 - *save(~/memory.md, new_memory) means saving new memory to the ~/memory.md file
 
+#### return
+
+To return a value as the result, use the set_context tool to set the value to the key 'result'
+
 ## Example, taste of the language
 
 const context = ''; // no context yet
