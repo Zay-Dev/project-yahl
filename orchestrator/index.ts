@@ -6,6 +6,7 @@ import { spawn } from "child_process";
 import "dotenv/config";
 import { parseStageEnvelope, type StageEnvelope, type StageSessionInput } from "../shared/stage-contract";
 import {
+  type RuntimeContext,
   createRuntimeContext,
   extractAiLogic,
   getStages,
@@ -24,7 +25,7 @@ const agentPath = path.resolve(projectRoot, "agent", "Agent.md");
 const containerName = "project-yahl-runner-main";
 const workspacePath = path.resolve(projectRoot, "workspace");
 const skillsPath = path.resolve(projectRoot, "orchestrator", "SKILLS");
-// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "SKILLS", "test");
+//const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "SKILLS", "test");
 const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "SKILLS", "report_news");
 
 const runCommand = (
@@ -189,13 +190,67 @@ const stopContainer = async () => {
   });
 };
 
-const main = async () => {
-  const reportPath = await resolveReportPromptPath();
-  const reportSkill = await fs.readFile(reportPath, "utf-8");
-  const aiLogic = extractAiLogic(reportSkill);
+const parseLoop = (line: string, context: RuntimeContext) => {
+  const matchMeta = line.match(/^\s*for each (\w+) of (\[.*\])/i);
 
+  if (!matchMeta) {
+    return null;
+  }
+
+  const indexName = matchMeta[1];
+  const arrayName = matchMeta[2];
+
+  const loopSetup = (() => {
+    const matchRange = arrayName.match(/\[(\d+)\.\.(\d+)(,[+-]?(\d+))?\]/);
+
+    if (matchRange) {
+      const startAt = parseInt(matchRange[1]);
+      const endAfter = parseInt(matchRange[2]);
+
+      const step = matchRange[3] ? parseInt(matchRange[3].slice(1)) :
+        (startAt > endAfter ? -1 : 1);
+
+      return { startAt, endAfter, step };
+    }
+
+    const matchArray = arrayName.match(/\[(\w+)(,[+-]?(\d+))?\]/);
+
+    if (matchArray) {
+      const arrayName = matchArray[1];
+      const stageArray = context.get('stage')?.[arrayName];
+      const contextArray = context.get('context')?.[arrayName];
+
+      const array = stageArray && Array.isArray(stageArray) ? stageArray : contextArray;
+      if (!array || !Array.isArray(array)) return null;
+
+      const step = matchArray[2] ? parseInt(matchArray[2].slice(1)) : 1;
+
+      const startAt = step >= 0 ? 0 : array.length - 1;
+      const endAfter = step >= 0 ? array.length - 1 : 0;
+
+      return { startAt, endAfter, step, array };
+    }
+
+    return null;
+  })();
+
+  if (!loopSetup) return null;
+
+  const { startAt, endAfter, step } = loopSetup;
+
+  if (startAt > endAfter && step > 0) {
+    throw new Error(`Invalid range: ${startAt}..${endAfter}, step ${step}`);
+  } else if (endAfter > startAt && step < 0) {
+    throw new Error(`Invalid range: ${startAt}..${endAfter}, step ${step}`);
+  }
+
+  return { indexName, ...loopSetup };
+}
+
+const execute = async (text: string, stageContext: Record<string, unknown> = {}) => {
+  const aiLogic = extractAiLogic(text);
   if (!aiLogic) {
-    throw new Error(`No ai.logic block found in ${reportPath}`);
+    throw new Error('No ai.logic block found');
   }
 
   const stages = getStages(aiLogic);
@@ -204,36 +259,84 @@ const main = async () => {
     throw new Error("No stages parsed from ai.logic");
   }
 
-  await fs.mkdir(workspacePath, {
-    recursive: true,
-  });
-  await stopContainer();
-  await buildImage();
-  await runContainer();
-
   try {
     const runtime = createRuntimeContext();
 
-    for (const stage of stages) {
+    for (const { type, lines } of stages) {
       resetStageContext(runtime);
+      Object.assign(runtime.get('stage')!, stageContext);
 
-      const currentStage = stage;
+      if (type === 'loop') {
+        const loopSetup = parseLoop(lines, runtime);
+        if (!loopSetup) {
+          console.error(lines);
+          throw new Error('Invalid loop setup occurred in the above stage');
+        }
+
+        const { indexName, startAt, endAfter, step, array } = loopSetup;
+        let i = startAt;
+
+        while (step >= 0 ? i <= endAfter : i >= endAfter) {
+          const currentValue = !!array ? array[i] || null : i;
+          const aiBlock = `\`\`\`ai.logic\n${lines.substring(lines.indexOf('{'))}\n\`\`\``;
+
+          const toContext = (records: Record<string, unknown>) => {
+            return Object.keys(records)
+              .filter(key => aiBlock.includes(key))
+              .reduce((acc, key) => {
+                acc[key] = records[key];
+                return acc;
+              }, {} as Record<string, unknown>);
+          }
+
+          const loopRuntime = await execute(aiBlock, {
+            ...toContext(runtime.get('context')!),
+            ...toContext(runtime.get('stage')!),
+
+            [indexName]: currentValue,
+          });
+
+          const myContext = runtime.get('context')!;
+          const loopContext = loopRuntime.get('context')!;
+
+          const myStage = runtime.get('stage')!;
+          const loopStage = loopRuntime.get('stage')!;
+
+          for (const key of Object.keys(loopContext)) {
+            if (Object.keys(myContext).includes(key)) {
+              myContext[key] = loopContext[key];
+            }
+          }
+
+          runtime.set('stage', { ...myStage, ...loopStage, ...loopContext });
+          i += step;
+        }
+
+        continue;
+      }
+
+      const currentStage = lines;
       const context = toStageContextPayload(runtime);
 
       console.log('\n', '----- Stage -----', '\n');
-      console.log('request', JSON.stringify({ context, currentStage }, null, 2));
+      console.log('request', JSON.stringify({ context, currentStage, type }, null, 2));
 
-      process.stdout.write('Press [Enter] or [Space] to continue...\n');
+      process.stdout.write('Press [Enter] or [Space] to continue, or any other key to abort...\n');
 
       await new Promise<void>((resolve) => {
         process.stdin.setRawMode(true);
         process.stdin.resume();
         process.stdin.once('data', (data: Buffer) => {
-          // Accept space or enter
+          // Accept space or enter or ctrl+c
           if (data[0] === 32 || data[0] === 13 || data[0] === 10) {
             process.stdin.setRawMode(false);
             process.stdin.pause();
+            console.log('\nContinuing...\n');
             resolve();
+          } else {
+            process.stdin.setRawMode(false);
+            process.stdin.pause();
+            process.exit(1);
           }
         });
       });
@@ -259,9 +362,29 @@ const main = async () => {
     }
 
     process.stdout.write(`${JSON.stringify(toStageContextPayload(runtime), null, 2)}\n`);
-  } finally {
-    await stopContainer();
+
+    return runtime;
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
+};
+
+const main = async () => {
+  const reportPath = await resolveReportPromptPath();
+  const reportSkill = await fs.readFile(reportPath, "utf-8");
+
+  await fs.mkdir(workspacePath, {
+    recursive: true,
+  });
+
+  await stopContainer();
+  await buildImage();
+  await runContainer();
+
+  await execute(reportSkill);
+
+  await stopContainer();
 };
 
 main().catch((error: unknown) => {

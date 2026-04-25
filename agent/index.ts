@@ -117,13 +117,13 @@ const chatWithTools = async (
     }>;
   };
 
-  if (config.debug) {
-    process.stderr.write(`[DEBUG] [REPLY] ${JSON.stringify(data, null, 2)}\n`);
-  }
-
   const message = data.choices?.[0]?.message;
   if (!message) {
     throw new Error("DeepSeek API returned no message");
+  }
+
+  if (config.debug) {
+    process.stderr.write(`[DEBUG] [REPLY] ${JSON.stringify(message, null, 2)}\n`);
   }
 
   const tool_calls = normalizeToolCalls(message.tool_calls);

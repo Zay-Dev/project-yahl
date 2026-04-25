@@ -1,7 +1,7 @@
 import type { ContextScope, RuntimeBucket, StageContextPayload } from "../shared/stage-contract";
 
 const TAB_SIZE = 2 as const;
-const END_LINE_WITH = ";" as const;
+const DEFAULT_END_LINE_WITH = ";" as const;
 
 export type RuntimeContext = Map<RuntimeBucket, Record<string, unknown>>;
 
@@ -39,8 +39,10 @@ export const toStageContextPayload = (runtime: RuntimeContext): StageContextPayl
 
 export const getStages = (text: string, tabIndex = 0) => {
   type Stage = {
+    type: 'plain' | 'loop';
     closed: boolean;
     lines: string[];
+    openedBy: string;
   };
 
   const stages: Stage[] = [];
@@ -55,9 +57,13 @@ export const getStages = (text: string, tabIndex = 0) => {
 
       if (!lastStage || lastStage.closed) {
         if (!line) continue;
+
         stages.push({
           closed: false,
           lines: [],
+          openedBy: line.at(-1) || '',
+          type: line.match(/^\s*for each\s+(\w+)\s+of\s+(\[.*\])/i) &&
+            ['{', '}'].find(char => line.trim().endsWith(char)) ? 'loop' : 'plain',
         });
       }
     }
@@ -65,11 +71,26 @@ export const getStages = (text: string, tabIndex = 0) => {
     const currentStage = stages.at(-1);
     if (!currentStage) continue;
 
+    const endLineWith = (() => {
+      switch (currentStage.openedBy) {
+        case '{':
+          return '}';
+        case '[':
+          return ']';
+        default:
+          return DEFAULT_END_LINE_WITH;
+      }
+    })();
+
     currentStage.lines.push(line);
-    currentStage.closed = isOpenOrClose && line.endsWith(END_LINE_WITH);
+    currentStage.closed = isOpenOrClose &&
+      (line.endsWith(endLineWith) || line.endsWith(`${endLineWith};`));
   }
 
-  return stages.map((stage) => stage.lines.join("\n"));
+  return stages.map((stage) => ({
+    type: stage.type,
+    lines: stage.lines.join("\n"),
+  }));
 };
 
 export const extractAiLogic = (text: string) =>
