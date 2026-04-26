@@ -72,10 +72,17 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
   if (typeof context.stage !== 'object') return null;
   if (Array.isArray(context.stage)) return null;
 
+  const types = context.types;
+  const typesRecord =
+    types && typeof types === "object" && !Array.isArray(types)
+      ? (types as Record<string, unknown>)
+      : {};
+
   return {
     context: {
       context: context.context as Record<string, unknown>,
       stage: context.stage as Record<string, unknown>,
+      types: typesRecord,
     },
     currentStage: parsed.currentStage,
   };

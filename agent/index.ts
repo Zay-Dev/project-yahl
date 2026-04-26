@@ -150,6 +150,7 @@ const runCommand = async (command: string) => {
   try {
     const result = await execAsync(command, {
       maxBuffer: 20 * 1024 * 1024,
+      timeout: 60 * 1000,
     });
     return `${result.stdout || ""}${result.stderr || ""}`;
   } catch (error) {

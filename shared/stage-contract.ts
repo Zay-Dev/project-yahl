@@ -1,5 +1,5 @@
-export const CONTEXT_SCOPES = ["global", "stage"] as const;
-export const RUNTIME_BUCKETS = ["context", "stage"] as const;
+export const CONTEXT_SCOPES = ["global", "stage", "types"] as const;
+export const RUNTIME_BUCKETS = ["context", "stage", "types"] as const;
 export const STAGE_ENVELOPE_TYPES = ["result", "tool_call"] as const;
 
 export type ContextScope = (typeof CONTEXT_SCOPES)[number];
@@ -9,6 +9,7 @@ export type StageEnvelopeType = (typeof STAGE_ENVELOPE_TYPES)[number];
 export type StageContextPayload = {
   context: Record<string, unknown>;
   stage: Record<string, unknown>;
+  types: Record<string, unknown>;
 };
 
 export type StageSessionInput = {

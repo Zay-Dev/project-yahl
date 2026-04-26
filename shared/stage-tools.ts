@@ -63,7 +63,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Persist a key-value pair to orchestrator runtime context. scope global is shared across stages; scope stage is reset each stage.",
+        "Persist a key-value pair to orchestrator runtime. scope global is shared across stages; scope stage is reset each stage; scope types is the type-definition bucket, shared across stages, always present in the agent input payload.",
       name: "set_context",
       parameters: {
         properties: {

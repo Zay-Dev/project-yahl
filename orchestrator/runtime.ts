@@ -5,12 +5,17 @@ const DEFAULT_END_LINE_WITH = ";" as const;
 
 export type RuntimeContext = Map<RuntimeBucket, Record<string, unknown>>;
 
-const getBucket = (scope: ContextScope): RuntimeBucket =>
-  scope === "global" ? "context" : "stage";
+const getBucket = (scope: ContextScope): RuntimeBucket => {
+  if (scope === "global") return "context";
+  if (scope === "types") return "types";
+
+  return "stage";
+};
 
 export const createRuntimeContext = (): RuntimeContext => new Map<RuntimeBucket, Record<string, unknown>>([
   ["context", {}],
   ["stage", {}],
+  ["types", {}],
 ]);
 
 export const resetStageContext = (runtime: RuntimeContext) => {
@@ -35,6 +40,7 @@ export const setContextValue = (
 export const toStageContextPayload = (runtime: RuntimeContext): StageContextPayload => ({
   context: { ...(runtime.get("context") || {}) },
   stage: { ...(runtime.get("stage") || {}) },
+  types: { ...(runtime.get("types") || {}) },
 });
 
 export const getStages = (text: string, tabIndex = 0) => {

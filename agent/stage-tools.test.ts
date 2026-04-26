@@ -31,6 +31,19 @@ describe("parseSetContextToolArguments", () => {
     assert.equal(parseSetContextToolArguments(raw), null);
   });
 
+  it("parses types scope", () => {
+    const raw = JSON.stringify({
+      key: "TItem",
+      scope: "types",
+      value: "type TItem = { id: string };",
+    });
+    const parsed = parseSetContextToolArguments(raw);
+
+    assert.ok(parsed);
+    assert.equal(parsed!.scope, "types");
+    assert.equal(parsed!.key, "TItem");
+  });
+
   it("builds orchestrator envelope", () => {
     const args = parseSetContextToolArguments(
       JSON.stringify({ key: "k", scope: "global", value: { a: 1 } }),

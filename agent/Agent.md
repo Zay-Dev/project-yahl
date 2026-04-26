@@ -12,11 +12,8 @@
 当不再发起 `tool_calls` 时，**`content` 必须是且仅是一个 JSON 对象**（不要 markdown 围栏、不要前后缀文字）：
 
 - 正常结束：`{"type":"result","output":"<text>"}`
-- 触发 RAG：`{"type":"tool_call","tool":"rag","arguments":{"lookingFor":"...","chunkSize":4096,"tmp_file_path":"...","byteLength":12345,"context_key":"..."}}`
 
 若本 stage 只靠 **`set_context` 工具** 表达结果，你可以让最后一次 `content` 为空或省略有效 envelope；运行时会采用**最后一次成功**的 `set_context` 工具参数作为 orchestrator 的 `tool_call` 信封。
-
-兼容旧格式（不推荐）：最终 `content` 仍可为单个 `set_context` 的 `tool_call` 信封，但推荐继续使用工具调用或数组形式。
 
 ## 边界
 
