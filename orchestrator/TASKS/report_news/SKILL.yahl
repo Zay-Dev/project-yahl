@@ -46,12 +46,13 @@ for each source of [news_sources] {
 *confirm_updated(~/knowledges/news-monitor/sources.json, parsed_news_source, keep_others);
 
 const news = new Array();
+const tool_path = *get_or_create_python_remove_css_tool(keep_javascript);
 
 for each source of [parsed_news_source] {
   const uuid = *uuidgen();
   const tmp_file_path = *save(browse_or_curl(source), `~/tmp/${uuid}`);
 
-  *use_python_remove_css(tmp_file_path, keep_javascript);
+  *use_python_tool(tool_path, tmp_file_path, keep_javascript);
 
   const byte_length = *get_byte_length(tmp_file_path);
 

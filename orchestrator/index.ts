@@ -26,8 +26,8 @@ const agentPath = path.resolve(projectRoot, "agent", "Agent.md");
 const containerName = "project-yahl-runner-main";
 const workspacePath = path.resolve(projectRoot, "workspace");
 const skillsPath = path.resolve(projectRoot, "orchestrator", "SKILLS");
-//const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "SKILLS", "test");
-const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "SKILLS", "report_news");
+//const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
+const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
 
 const runCommand = (
   args: string[],
