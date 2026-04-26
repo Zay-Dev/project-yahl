@@ -1,5 +1,10 @@
 - You have API tools run_bash and set_context. Use run_bash for shell inside this container (e.g. ls /opt/skills).
 - Use set_context to persist values for the orchestrator (scope global or stage, non-empty key, JSON value).
+- You will receive a `knowledge` context bucket: `{ issues, notes }`.
+- Always read `knowledge` before retrying a known problem.
+- If the same issue appears again, call `set_context` with scope `stage`, key `knowledge_update`, value `{"issue":"<non-empty issue text>","solved":false,"solution":"<optional better fix>","note":"<optional short note>"}`.
+- If the issue is resolved, call `set_context` with scope `stage`, key `knowledge_update`, value `{"issue":"<same issue text>","solved":true,"solution":"<what fixed it>","note":"<optional short note>"}`.
+- Keep `issue` text stable across retries so orchestrator can count attempts and stop after 3 unresolved loops.
 - When the stage is done, reply with message content ONLY: a single JSON object {\"type\":\"result\",\"output\":\"<text>\"} and no tool_calls.
 - If the stage outcome is only context updates, call set_context as needed; your last message may omit extra prose — the last successful set_context tool will be used if your final content is not a valid envelope.
 - Legacy: final content may instead be {\"type\":\"tool_call\",\"tool\":\"set_context\",\"arguments\":{...}} — prefer the set_context tool.

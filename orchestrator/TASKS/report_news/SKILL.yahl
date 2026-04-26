@@ -13,9 +13,9 @@ type TNews = {
 const news_sources = [
   'hk01',
   'bbc',
+  'on.cc',
   'reddit (old, AI friendly version)',
   'x.com (no need login version)',
-  'on.cc',
   'thread (no need login version)',
 ];
 
@@ -52,22 +52,22 @@ for each source of [parsed_news_source] {
   const uuid = *uuidgen();
   const tmp_file_path = *save(browse_or_curl(source), `~/tmp/${uuid}`);
 
-  *use_python_tool(tool_path, tmp_file_path, keep_javascript);
+  *use_python_tool(tool_path, tmp_file_path, keep_javascript, max_time_out: 5s, try_fix_if_error);
 
   const byte_length = *get_byte_length(tmp_file_path);
+  const chunkSize = *bash(getconf ARG_MAX) / 10;
 
-  REPLACE: const website = /rag( chunkSize: 49600, tmp_file_path, byte_length, keep_datetime, keep_full_url );
+  REPLACE: const website = /rag( chunkSize: Math.min(49600, chunkSize), tmp_file_path, byte_length, within_24hours, allow_unknown_date, keep_datetime, keep_full_url );
 
   const extracted_news = *extract_news(website);
 
   news = *combine([...news, ...extracted_news]);
   website = null;
+  extracted_news = null;
 }
 
-const news_within_24_hours = *filter(news, within_24hours, allow_unknown_date);
-
 return {
-  zh: *translate(news_within_24_hours, 'zh-TW', force_virtual_function) as TNews[],
-  jp: *translate(news_within_24_hours, 'jp', force_virtual_function) as TNews[],
+  zh: *translate(news, 'zh-TW', force_virtual_function) as TNews[],
+  jp: *translate(news, 'jp', force_virtual_function) as TNews[],
 };
 ```
