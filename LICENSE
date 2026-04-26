@@ -1,0 +1,51 @@
+OmniFlex Source-Available License 1.0
+
+Copyright (c) 2026 OmniFlex
+
+1. Definitions
+"Software" means this repository and all source code, binaries, documentation, and related materials provided by Licensor.
+"Licensor" means the copyright holder(s) of the Software.
+"Commercial License" means a separate written license agreement granted by Licensor for commercial use.
+"Profitable Activity" means any activity that directly or indirectly generates revenue, monetary benefit, or commercial advantage.
+
+2. License Grant (Free Use Scope)
+Subject to the terms of this License, Licensor grants you a non-exclusive, non-transferable, revocable license to use, copy, modify, and internally deploy the Software solely for personal, educational, and non-profit research purposes, at no cost.
+
+3. Commercial Restriction
+Any Profitable Activity requires a separate Commercial License from Licensor, included but not limited to:
+a) integrating the Software into any paid product or service;
+b) using the Software in operations that directly or indirectly generate revenue;
+c) offering hosting, support, consulting, managed services, or other commercial services based on the Software;
+d) use by any company or corporate group with annual revenue exceeding USD 500,000.
+
+4. Commercial License Contact
+To obtain commercial rights, contact:
+license@omniflex.io
+contact@zay-dev.com
+
+5. Distribution and Notice
+If you distribute the Software or derivative works where distribution is permitted by law, you must retain this License text and all copyright notices.
+
+6. Termination
+Any use of the Software in breach of this License automatically terminates your rights under this License.
+Upon termination, you must cease all use and distribution of the Software until proper authorization is obtained.
+
+7. No Warranty
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDED BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, AVAILABILITY, SECURITY, ACCURACY, OR PERFORMANCE.
+LICENSOR MAKES NO PROMISES OR COMMITMENTS REGARDING SUPPORT, MAINTENANCE, BUG FIXES, UPDATES, UPGRADES, PATCHES, SERVICE LEVELS, UPTIME, OR CONTINUED AVAILABILITY.
+
+8. Limitation of Liability
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL LICENSOR OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT, STRICT LIABILITY, OR OTHERWISE, ARISING FROM OR RELATED TO THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE, INCLUDED BUT NOT LIMITED TO DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, LOSS OF PROFITS, LOSS OF REVENUE, LOSS OF DATA, LOSS OF GOODWILL, BUSINESS INTERRUPTION, OR PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES.
+
+9. Responsibility Disclaimer
+YOU ARE SOLELY RESPONSIBLE FOR YOUR USE OF THE SOFTWARE, YOUR COMPLIANCE WITH APPLICABLE LAWS, AND ANY RESULTS PRODUCED BY THE SOFTWARE.
+LICENSOR ASSUMES NO RESPONSIBILITIES OR OBLIGATIONS FOR ANY USER ACTIONS, IMPLEMENTATIONS, DEPLOYMENTS, OUTPUTS, OR DECISIONS MADE USING THE SOFTWARE.
+LICENSOR HAS NO DUTY TO DEFEND, INDEMNIFY, OR HOLD HARMLESS ANY USER, EXCEPT AS MAY BE EXPRESSLY AGREED IN A SEPARATE WRITTEN COMMERCIAL LICENSE.
+
+10. Reservation of Rights
+All rights not expressly granted under this License are reserved by Licensor.
+Licensor may offer the Software under different license terms, included but not limited to commercial terms, in future releases.
+
+11. Severability and Enforceability
+If any provision of this License is held invalid, illegal, unenforceable, or inapplicable under any applicable law, that provision shall be interpreted and enforced to the maximum extent permitted, and the remaining provisions remain in full force and effect.
+Where any exclusion or limitation is not permitted under applicable law, such exclusion or limitation applies only to the maximum extent permitted, and all other exclusions and limitations continue to apply.
