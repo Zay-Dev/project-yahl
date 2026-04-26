@@ -4,20 +4,14 @@ import { exec } from "child_process";
 import readline from "readline";
 import { promisify } from "util";
 
-import {
-  STAGE_TOOLS,
-  type ChatApiMessage,
-  type ChatAssistantMessage,
-} from "../shared/stage-tools";
-
 import { parseArgs } from "./-utils/args-parser";
 import { readFileUtf8, readFolderUtf8, decodeBase64 } from "./-utils/prompts";
 
 import {
   runStageSession,
-  normalizeToolCalls,
   parseStageSessionInput,
 } from "./stage-session";
+import { chat, chatWithTools } from "./llm-client";
 
 const execAsync = promisify(exec);
 
@@ -50,100 +44,6 @@ const parseAgentReply = (reply: string): AgentReply | null => {
   } catch {
     return null;
   }
-};
-
-const chat = async (messages: Message[]) => {
-  const response = await fetch(`${config.apiUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: config.apiKey && `Bearer ${config.apiKey}` || '',
-    },
-    body: JSON.stringify({
-      messages,
-      model: config.model,
-      thinking: {
-        type: config.thinkingMode ? "enabled" : "disabled",
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`DeepSeek API error ${response.status}: ${body}`);
-  }
-
-  const data = await response.json() as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-
-  return data.choices?.[0]?.message?.content?.trim() || "";
-};
-
-const chatWithTools = async (
-  messages: ChatApiMessage[],
-): Promise<{
-  assistantMessage: ChatAssistantMessage;
-}> => {
-  const response = await fetch(`${config.apiUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: config.apiKey && `Bearer ${config.apiKey}` || '',
-    },
-    body: JSON.stringify({
-      messages,
-      model: config.model,
-      thinking: {
-        type: config.thinkingMode ? "enabled" : "disabled",
-      },
-      tool_choice: "auto",
-      tools: STAGE_TOOLS,
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`DeepSeek API error ${response.status}: ${body}`);
-  }
-
-  const data = await response.json() as {
-    choices?: Array<{
-      message?: {
-        content?: string | null;
-        reasoning_content?: string | null;
-        tool_calls?: unknown;
-      };
-    }>;
-  };
-
-  const message = data.choices?.[0]?.message;
-  if (!message) {
-    throw new Error("DeepSeek API returned no message");
-  }
-
-  if (config.debug) {
-    process.stderr.write(`[DEBUG] [REPLY] ${JSON.stringify(message, null, 2)}\n`);
-  }
-
-  const tool_calls = normalizeToolCalls(message.tool_calls);
-  const content =
-    typeof message.content === "string" || message.content === null
-      ? message.content
-      : null;
-  const reasoning_content =
-    typeof message.reasoning_content === "string" || message.reasoning_content === null
-      ? message.reasoning_content
-      : null;
-
-  return {
-    assistantMessage: {
-      content,
-      tool_calls,
-      reasoning_content,
-      role: "assistant",
-    },
-  };
 };
 
 const runCommand = async (command: string) => {
