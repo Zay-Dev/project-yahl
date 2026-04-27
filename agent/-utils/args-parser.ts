@@ -4,6 +4,7 @@ import path from "path";
 
 export type TCliOptions = {
   agentMdPath: string;
+  daemon: boolean;
   nonInteractive: boolean;
   promptBase64: string;
   stageInputBase64: string;
@@ -31,6 +32,7 @@ export const parseArgs = (): TCliOptions => {
 
   return {
     agentMdPath: pairs["agent-md"] || process.env.AGENT_MD_PATH || defaultAgentMdPath,
+    daemon: pairs["daemon"] === "true" || process.env.AGENT_DAEMON === "1",
     nonInteractive: pairs["non-interactive"] === "true" || process.env.AGENT_NON_INTERACTIVE === "1",
     promptBase64: pairs["prompt-base64"] || process.env.AGENT_PROMPT_BASE64 || "",
     stageInputBase64: pairs["stage-input-base64"] || process.env.AGENT_STAGE_INPUT_BASE64 || "",

@@ -49,12 +49,15 @@ export const getStages = (text: string, tabIndex = 0) => {
     closed: boolean;
     lines: string[];
     openedBy: string;
+    sourceStartLine: number;
   };
 
   const stages: Stage[] = [];
   const tabSize = tabIndex * TAB_SIZE;
 
-  for (const line of text.split("\n")) {
+  const allLines = text.split("\n");
+
+  for (const [lineIndex, line] of allLines.entries()) {
     const numberOfWhitespaces = (line.match(/^[\s]+/)?.[0] || "").length;
     const isOpenOrClose = numberOfWhitespaces <= tabSize;
 
@@ -68,6 +71,7 @@ export const getStages = (text: string, tabIndex = 0) => {
           closed: false,
           lines: [],
           openedBy: line.at(-1) || '',
+          sourceStartLine: lineIndex + 1,
           type: line.match(/^\s*for each\s+(\w+)\s+of\s+(\[.*\])/i) &&
             ['{', '}'].find(char => line.trim().endsWith(char)) ? 'loop' : 'plain',
         });
@@ -94,6 +98,7 @@ export const getStages = (text: string, tabIndex = 0) => {
   }
 
   return stages.map((stage) => ({
+    sourceStartLine: stage.sourceStartLine,
     type: stage.type,
     lines: stage.lines.join("\n"),
   }));

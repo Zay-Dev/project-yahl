@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "agent": "tsx agent/index.ts",
+    "compose:down": "docker compose down",
+    "compose:up": "docker compose up -d --build",
     "dev": "tsx watch orchestrator/index.ts",
     "orchestrate": "tsx orchestrator/index.ts",
     "test": "tsx --test \"agent/**/*.test.ts\"",
@@ -22,6 +24,7 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
+    "ioredis": "^5.8.2",
     "openai": "^6.34.0"
   }
 }

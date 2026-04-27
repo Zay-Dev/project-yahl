@@ -9,6 +9,8 @@ import {
   type ChatToolCall,
 } from "../shared/stage-tools";
 
+import { normalizeUsage, type NormalizedUsage } from "../shared/usage";
+
 const normalizeToolCalls = (raw: unknown): ChatToolCall[] | undefined => {
   if (!Array.isArray(raw)) return undefined;
 
@@ -79,8 +81,38 @@ const getContentText = (content: unknown): string | null => {
   return null;
 };
 
+export type UsageEmitPayload = {
+  model: string;
+  requestId: string;
+  sessionId: string;
+  thinkingMode: boolean;
+  usage: NormalizedUsage;
+};
+
+let usageEmitter: ((payload: UsageEmitPayload) => void) | null = null;
+
+export const setUsageEmitter = (fn: ((payload: UsageEmitPayload) => void) | null) => {
+  usageEmitter = fn;
+};
+
+const emitUsage = (
+  meta: { requestId: string; sessionId: string } | undefined,
+  raw: unknown,
+) => {
+  if (!meta || !usageEmitter) return;
+
+  usageEmitter({
+    model: config.model,
+    requestId: meta.requestId,
+    sessionId: meta.sessionId,
+    thinkingMode: config.thinkingMode,
+    usage: normalizeUsage(raw),
+  });
+};
+
 export const chat = async (
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  meta?: { requestId: string; sessionId: string },
 ) => {
   const response = await client.chat.completions.create({
     messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
@@ -89,11 +121,14 @@ export const chat = async (
     ...toThinkingPayload(),
   } as any);
 
+  emitUsage(meta, (response as { usage?: unknown }).usage);
+
   return getContentText(response.choices?.[0]?.message?.content) || "";
 };
 
 export const chatWithTools = async (
   messages: ChatApiMessage[],
+  meta?: { requestId: string; sessionId: string },
 ): Promise<{
   assistantMessage: ChatAssistantMessage;
 }> => {
@@ -105,6 +140,8 @@ export const chatWithTools = async (
     tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
     ...toThinkingPayload(),
   } as any);
+
+  emitUsage(meta, (response as { usage?: unknown }).usage);
 
   const message = response.choices?.[0]?.message || null;
   if (!message) {

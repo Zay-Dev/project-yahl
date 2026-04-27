@@ -164,6 +164,14 @@ const run = async () => {
   }
 
   const cli = parseArgs();
+
+  if (cli.daemon) {
+    const { startRedisDaemon } = await import("./redis-daemon");
+
+    await startRedisDaemon();
+
+    return;
+  }
   const prompt = decodeBase64(cli.promptBase64);
   const agentmd = await readFileUtf8(cli.agentMdPath);
   const yahlPrompt = await readFolderUtf8(cli.yahlDirPath);

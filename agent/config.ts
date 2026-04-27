@@ -18,6 +18,7 @@ export default {
   apiBaseUrl: normalizeBaseUrl(rawBaseUrl),
   apiKey: process.env.LLM_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.API_KEY || "",
   model: process.env.LLM_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
+  redisUrl: process.env.REDIS_URL || "redis://127.0.0.1:6379",
   thinkingMode: (process.env.LLM_THINKING_MODE || process.env.DEEPSEEK_THINKING_MODE || "disabled")
     .trim()
     .toLowerCase() === "enabled",
