@@ -11,11 +11,11 @@ import {
   type RuntimeContext,
   createRuntimeContext,
   extractAiLogic,
-  getStages,
   resetStageContext,
   setContextValue,
   toStageContextPayload,
 } from "./runtime";
+import { extractYahlBlocks } from "./-utils/index";
 
 import { createOrchestratorRedis } from "./redis-client";
 import { createSessionTracker } from "./session-tracker";
@@ -26,8 +26,8 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(moduleDir, "..");
 const composeFile = path.resolve(projectRoot, "docker-compose.yml");
 const workspacePath = path.resolve(projectRoot, "workspace");
-const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
-// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
+// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
+const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
 
 const runCommand = (
   args: string[],
@@ -126,8 +126,8 @@ const firstTraceableLineOffset = (text: string) => {
   return Math.max(0, index);
 };
 
-const getLineAtOffset = (text: string, offset: number) =>
-  text.split("\n")[offset] || "";
+const getLineSinceOffset = (text: string, offset: number) =>
+  text.split("\n").slice(offset).join("\n") || "";
 
 const getAiLogicStartLineInFile = (text: string) => {
   const lines = text.split("\n");
@@ -136,6 +136,76 @@ const getAiLogicStartLineInFile = (text: string) => {
   if (fenceIndex < 0) return 1;
 
   return fenceIndex + 2;
+};
+
+type ParsedStage = {
+  lines: string;
+  sourceStartLine: number;
+  type: "loop" | "plain";
+};
+
+const isLoopStage = (block: string) =>
+  !!block.match(/^\s*for each\s+(\w+)\s+of\s+(\[.*\])/i) &&
+  !!["{", "}"].find((char) => block.trim().endsWith(char));
+
+const resolveBlockSourceStartLine = (
+  aiLines: string[],
+  blockLines: string[],
+  cursor: number,
+) => {
+  for (let start = cursor; start < aiLines.length; start += 1) {
+    if (aiLines[start] !== blockLines[0]) continue;
+
+    let aiIndex = start;
+    let matched = true;
+
+    for (const blockLine of blockLines) {
+      while (aiIndex < aiLines.length && aiLines[aiIndex].trim() === "") {
+        aiIndex += 1;
+      }
+
+      if (aiLines[aiIndex] !== blockLine) {
+        matched = false;
+        break;
+      }
+
+      aiIndex += 1;
+    }
+
+    if (matched) {
+      return {
+        nextCursor: aiIndex,
+        sourceStartLine: start + 1,
+      };
+    }
+  }
+
+  return {
+    nextCursor: cursor,
+    sourceStartLine: cursor + 1,
+  };
+};
+
+const parseStages = (aiLogic: string): ParsedStage[] => {
+  const aiLines = aiLogic.split("\n");
+  const blocks = extractYahlBlocks(aiLogic);
+  const stages: ParsedStage[] = [];
+
+  let cursor = 0;
+
+  for (const block of blocks) {
+    const blockLines = block.split("\n");
+    const { nextCursor, sourceStartLine } = resolveBlockSourceStartLine(aiLines, blockLines, cursor);
+
+    cursor = nextCursor;
+    stages.push({
+      lines: block,
+      sourceStartLine,
+      type: isLoopStage(block) ? "loop" : "plain",
+    });
+  }
+
+  return stages;
 };
 
 const toStableHash = (value: string) =>
@@ -499,7 +569,7 @@ const execute = async (
     throw new Error('No ai.logic block found');
   }
 
-  const stages = getStages(aiLogic);
+  const stages = parseStages(aiLogic);
 
   if (stages.length <= 0) {
     throw new Error("No stages parsed from ai.logic");
@@ -533,7 +603,7 @@ const execute = async (
         const currentStage = next?.stageText || lines;
         const stageText = currentStage;
         const meaningfulOffset = firstTraceableLineOffset(stageText);
-        const sourceLineText = getLineAtOffset(stageText, meaningfulOffset);
+        const sourceLineText = getLineSinceOffset(stageText, meaningfulOffset);
         const generatedLine = (next?.generatedLine || position.generatedLine) + meaningfulOffset;
         const sourceLine = (next?.sourceLine || position.sourceLine) + meaningfulOffset;
 
