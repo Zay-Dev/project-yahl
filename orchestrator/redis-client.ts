@@ -89,7 +89,7 @@ export const createOrchestratorRedis = async (
 
     const executionMeta = requestMeta.get(parsed.requestId);
     if (!executionMeta) return;
-
+    
     options.onUsage({
       executionMeta,
       model: parsed.model,

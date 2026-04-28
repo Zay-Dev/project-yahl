@@ -1,12 +1,20 @@
+import type { StageExecutionMeta } from "../shared/transport";
+import type { StageEnvelope, StageSessionInput } from "../shared/stage-contract";
+
+import "dotenv/config";
+
+import path from "path";
 import { fileURLToPath } from "url";
 import { promises as fs } from "fs";
-import path from "path";
 import { spawn } from "child_process";
-import { createHash } from "crypto";
-import { randomUUID } from "crypto";
-import "dotenv/config";
-import { type StageEnvelope, type StageSessionInput } from "../shared/stage-contract";
-import type { StageExecutionMeta } from "../shared/transport";
+import { createHash, randomUUID } from "crypto";
+
+import { extractYahlBlocks } from "./-utils";
+
+import * as agentTrackers from "./-utils/agent-trackers";
+import { createConsoleTracker } from "./-utils/agent-trackers/console-tracker";
+import { createSessionTracker } from "./-utils/agent-trackers/session-tracker";
+
 import {
   type RuntimeContext,
   createRuntimeContext,
@@ -15,19 +23,17 @@ import {
   setContextValue,
   toStageContextPayload,
 } from "./runtime";
-import { extractYahlBlocks } from "./-utils/index";
 
 import { createOrchestratorRedis } from "./redis-client";
-import { createSessionTracker } from "./session-tracker";
-import { createConsoleStageTraceSaver } from "./stage-trace-saver";
+
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 const projectRoot = path.resolve(moduleDir, "..");
 const composeFile = path.resolve(projectRoot, "docker-compose.yml");
 const workspacePath = path.resolve(projectRoot, "workspace");
-// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
-const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
+const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
+// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
 
 const runCommand = (
   args: string[],
@@ -727,8 +733,11 @@ const main = async () => {
 
   const startTime = process.hrtime.bigint();
   const sessionId = randomUUID();
-  const stageTraceSaver = createConsoleStageTraceSaver();
+
   const tracker = createSessionTracker();
+
+  agentTrackers.add(tracker);
+  agentTrackers.add(createConsoleTracker());
 
   await fs.mkdir(workspacePath, {
     recursive: true,
@@ -746,8 +755,7 @@ const main = async () => {
       onUsage: (trace) => {
         if (trace.sessionId !== sessionId) return;
 
-        tracker.recordUsage(trace);
-        void stageTraceSaver.saveStageTokenTrace(trace);
+        agentTrackers.track(trace);
       },
       redisUrl,
     });

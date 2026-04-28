@@ -1,8 +1,8 @@
-import type { StageTokenTrace } from "../shared/transport";
+import type { TAgentTracker } from "./index";
 
-import { computeCost } from "./pricing";
+import { computeCost } from "@/orchestrator/pricing";
 
-export type PerModelTotals = {
+type PerModelTotals = {
   cacheHitTokens: number;
   cacheMissTokens: number;
   calls: number;
@@ -20,15 +20,10 @@ const emptyRow = (): PerModelTotals => ({
   reasoningTokens: 0,
 });
 
-export type SessionTracker = {
-  recordUsage: (event: StageTokenTrace) => void;
-  summaryText: (sessionId: string) => string;
-};
-
-export const createSessionTracker = (): SessionTracker => {
+export const createSessionTracker = () => {
   const byModel = new Map<string, PerModelTotals>();
 
-  const recordUsage = (event: StageTokenTrace) => {
+  const track: TAgentTracker['track'] = (event) => {
     const { model, usage } = event;
     const row = byModel.get(model) ?? emptyRow();
 
@@ -88,8 +83,15 @@ export const createSessionTracker = (): SessionTracker => {
     return lines.join("\n");
   };
 
+  const base = {
+    track,
+    reset: () => {
+      byModel.clear();
+    },
+  } satisfies TAgentTracker;
+
   return {
-    recordUsage,
+    ...base,
     summaryText,
   };
 };
