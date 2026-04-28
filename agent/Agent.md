@@ -7,11 +7,15 @@
 - **`set_context`**：参数 `{ "scope": "global"|"stage", "key": "<非空字符串>", "value": <任意 JSON> }`。`global` 跨 stage 共享；`stage` 每 stage 重置。
 - **`rag`**：参数 `{ "lookingFor": "<提取目标描述>", "chunkSize": <正数>, "tmp_file_path": "<临时文件路径>", "byteLength": <正数>, "context_key": "<写入 stage 的 key>" }`。用于触发 orchestrator 执行分块读取与抽取，再把结果回填到当前 stage。
 
+## During the steps per stage
+
+If there are no error, leave your response, thinking and reasoning empty if not an error, if you must include them, use concise wordings, prefer as short as possible.
+
 ## 结束 stage 时的消息正文（content）
 
-当不再发起 `tool_calls` 时，**`content` 必须是且仅是一个 JSON 对象**（不要 markdown 围栏、不要前后缀文字）：
+当不再发起 `tool_calls` 时，**`content` 必须是且仅是 an empty string.
 
-- 正常结束：`{"type":"result","output":"<text>"}`
+- 正常结束：``
 
 若本 stage 只靠 **`set_context` 工具** 表达结果，你可以让最后一次 `content` 为空或省略有效 envelope；运行时会采用**最后一次成功**的 `set_context` 工具参数作为 orchestrator 的 `tool_call` 信封。
 
