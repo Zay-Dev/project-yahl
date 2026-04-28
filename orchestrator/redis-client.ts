@@ -46,6 +46,16 @@ const isUsageEvent = (value: unknown): value is UsageEvent => {
   if (typeof o.model !== "string") return false;
   if (typeof o.thinkingMode !== "boolean") return false;
   if (!o.usage || typeof o.usage !== "object" || Array.isArray(o.usage)) return false;
+  if (o.response !== undefined) {
+    if (!o.response || typeof o.response !== "object" || Array.isArray(o.response)) return false;
+
+    const response = o.response as Record<string, unknown>;
+
+    if (typeof response.durationMs !== "number" || !Number.isFinite(response.durationMs)) return false;
+    if (typeof response.reply !== "string" && response.reply !== null) return false;
+    if (typeof response.reasoning !== "string" && response.reasoning !== null) return false;
+    if (response.toolCalls !== undefined && !Array.isArray(response.toolCalls)) return false;
+  }
 
   return true;
 };
@@ -93,6 +103,7 @@ export const createOrchestratorRedis = async (
     options.onUsage({
       executionMeta,
       model: parsed.model,
+      response: parsed.response,
       requestId: parsed.requestId,
       sessionId: parsed.sessionId,
       thinkingMode: parsed.thinkingMode,

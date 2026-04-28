@@ -3,20 +3,26 @@ import type { TAgentTracker } from "./index";
 import { computeCost } from "@/orchestrator/pricing";
 
 type PerModelTotals = {
+  avgDurationMs: number;
   cacheHitTokens: number;
   cacheMissTokens: number;
   calls: number;
   completionTokens: number;
   cost: number;
+  durationCalls: number;
+  durationTotalMs: number;
   reasoningTokens: number;
 };
 
 const emptyRow = (): PerModelTotals => ({
+  avgDurationMs: 0,
   cacheHitTokens: 0,
   cacheMissTokens: 0,
   calls: 0,
   completionTokens: 0,
   cost: 0,
+  durationCalls: 0,
+  durationTotalMs: 0,
   reasoningTokens: 0,
 });
 
@@ -33,6 +39,11 @@ export const createSessionTracker = () => {
     row.completionTokens += usage.completionTokens;
     row.reasoningTokens += usage.reasoningTokens;
     row.cost += computeCost(model, usage);
+    if (typeof event.response?.durationMs === "number") {
+      row.durationCalls += 1;
+      row.durationTotalMs += event.response.durationMs;
+      row.avgDurationMs = row.durationTotalMs / row.durationCalls;
+    }
 
     byModel.set(model, row);
   };
@@ -49,6 +60,8 @@ export const createSessionTracker = () => {
     let outReason = 0;
     let outVisible = 0;
     let costSum = 0;
+    let durationTotalMs = 0;
+    let durationCalls = 0;
 
     const sorted = [...byModel.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
@@ -63,6 +76,11 @@ export const createSessionTracker = () => {
       lines.push(
         `  output:  reasoning=${row.reasoningTokens}    visible=${visible}      total=${row.completionTokens}`,
       );
+      if (row.durationCalls > 0) {
+        lines.push(
+          `  latency: avg=${row.avgDurationMs.toFixed(2)}ms  calls=${row.durationCalls}`,
+        );
+      }
       lines.push(`  cost  :  $${row.cost.toFixed(5)}`);
 
       inHit += row.cacheHitTokens;
@@ -72,12 +90,17 @@ export const createSessionTracker = () => {
       outReason += row.reasoningTokens;
       outVisible += visible;
       costSum += row.cost;
+      durationTotalMs += row.durationTotalMs;
+      durationCalls += row.durationCalls;
     }
 
     lines.push("");
     lines.push("[Session totals]");
     lines.push(`  input  total = ${inTotal}  (cache_hit=${inHit}, cache_miss=${inMiss})`);
     lines.push(`  output total = ${outTotal}  (reasoning=${outReason}, visible=${outVisible})`);
+    if (durationCalls > 0) {
+      lines.push(`  latency avg  = ${(durationTotalMs / durationCalls).toFixed(2)}ms  (calls=${durationCalls})`);
+    }
     lines.push(`  cost   total = $${costSum.toFixed(5)}`);
 
     return lines.join("\n");

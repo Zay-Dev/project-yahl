@@ -83,6 +83,12 @@ const getContentText = (content: unknown): string | null => {
 
 export type UsageEmitPayload = {
   model: string;
+  response?: {
+    durationMs: number;
+    reasoning: string | null;
+    reply: string | null;
+    toolCalls?: ChatToolCall[];
+  };
   requestId: string;
   sessionId: string;
   thinkingMode: boolean;
@@ -98,11 +104,13 @@ export const setUsageEmitter = (fn: ((payload: UsageEmitPayload) => void) | null
 const emitUsage = (
   meta: { requestId: string; sessionId: string } | undefined,
   raw: unknown,
+  response?: UsageEmitPayload["response"],
 ) => {
   if (!meta || !usageEmitter) return;
 
   usageEmitter({
     model: config.model,
+    response,
     requestId: meta.requestId,
     sessionId: meta.sessionId,
     thinkingMode: config.thinkingMode,
@@ -110,18 +118,36 @@ const emitUsage = (
   });
 };
 
+const getReasoningText = (message: unknown): string | null => {
+  if (!message || typeof message !== "object") return null;
+
+  const reasoningValue = (message as Record<string, unknown>).reasoning_content;
+  if (typeof reasoningValue === "string" || reasoningValue === null) {
+    return reasoningValue;
+  }
+
+  return null;
+};
+
 export const chat = async (
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   meta?: { requestId: string; sessionId: string },
 ) => {
+  const start = Date.now();
   const response = await client.chat.completions.create({
     messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
     model: config.model,
     stream: false,
     ...toThinkingPayload(),
   } as any);
+  const durationMs = Date.now() - start;
+  const message = response.choices?.[0]?.message || null;
 
-  emitUsage(meta, (response as { usage?: unknown }).usage);
+  emitUsage(meta, (response as { usage?: unknown }).usage, {
+    durationMs,
+    reasoning: getReasoningText(message),
+    reply: getContentText(message?.content),
+  });
 
   return getContentText(response.choices?.[0]?.message?.content) || "";
 };
@@ -132,6 +158,7 @@ export const chatWithTools = async (
 ): Promise<{
   assistantMessage: ChatAssistantMessage;
 }> => {
+  const start = Date.now();
   const response = await client.chat.completions.create({
     messages: asApiMessages(messages),
     model: config.model,
@@ -140,10 +167,9 @@ export const chatWithTools = async (
     tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
     ...toThinkingPayload(),
   } as any);
-
-  emitUsage(meta, (response as { usage?: unknown }).usage);
-
+  const durationMs = Date.now() - start;
   const message = response.choices?.[0]?.message || null;
+
   if (!message) {
     throw new Error("LLM API returned no message");
   }
@@ -152,18 +178,22 @@ export const chatWithTools = async (
     process.stderr.write(`[DEBUG] [REPLY] ${JSON.stringify(message, null, 2)}\n`);
   }
 
-  const reasoningValue = (message as any).reasoning_content;
-  const reasoning_content =
-    typeof reasoningValue === "string" || reasoningValue === null
-      ? reasoningValue
-      : null;
+  const reasoning_content = getReasoningText(message);
+  const tool_calls = normalizeToolCalls(message.tool_calls);
+
+  emitUsage(meta, (response as { usage?: unknown }).usage, {
+    durationMs,
+    reasoning: reasoning_content,
+    reply: getContentText(message.content),
+    toolCalls: tool_calls,
+  });
 
   return {
     assistantMessage: {
       content: getContentText(message.content),
       reasoning_content,
       role: "assistant",
-      tool_calls: normalizeToolCalls(message.tool_calls),
+      tool_calls,
     },
   };
 };

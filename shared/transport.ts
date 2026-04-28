@@ -1,5 +1,6 @@
 import type { StageSessionInput } from "./stage-contract";
 
+import type { ChatToolCall } from "./stage-tools";
 import type { NormalizedUsage } from "./usage";
 
 export const REQUEST_QUEUE = "yahl:requests";
@@ -17,6 +18,12 @@ export type StageRequestEnvelope = {
 
 export type UsageEvent = {
   model: string;
+  response?: {
+    durationMs: number;
+    reasoning: string | null;
+    reply: string | null;
+    toolCalls?: ChatToolCall[];
+  };
   requestId: string;
   sessionId: string;
   thinkingMode: boolean;
@@ -44,6 +51,7 @@ export type StageExecutionMeta = {
 export type StageTokenTrace = {
   executionMeta: StageExecutionMeta;
   model: string;
+  response?: UsageEvent["response"];
   requestId: string;
   sessionId: string;
   thinkingMode: boolean;
