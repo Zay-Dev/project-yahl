@@ -28,10 +28,10 @@ type BootstrapMessage = {
 };
 
 type StageRunner = {
-  chatWithTools: (messages: ChatApiMessage[]) => Promise<{
-    assistantMessage: ChatAssistantMessage;
-  }>;
   runCommand: (command: string) => Promise<string>;
+  
+  chatWithTools: (messages: ChatApiMessage[]) =>
+    Promise<ChatAssistantMessage>;
 };
 
 type StageSessionOptions = {
@@ -186,7 +186,7 @@ export const runStageSession = async (
   while (turns < maxTurns) {
     turns += 1;
 
-    const { assistantMessage } = await runner.chatWithTools(stageMessages);
+    const assistantMessage = await runner.chatWithTools(stageMessages);
     stageMessages.push(assistantMessage);
 
     const toolCalls = assistantMessage.tool_calls || [];

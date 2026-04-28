@@ -16,8 +16,9 @@ import { parseArgs } from "./-utils/args-parser";
 import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 
 import config from "./config";
-import { chatWithTools, setUsageEmitter } from "./llm-client";
+
 import { runStageSession } from "./stage-session";
+import { chatWithTools, setUsageEmitter } from "./-utils/llm-client";
 
 const execAsync = promisify(exec);
 

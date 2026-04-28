@@ -12,5 +12,6 @@ RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm ins
 COPY agent ./agent
 COPY orchestrator ./orchestrator
 COPY shared ./shared
+COPY tsconfig.json ./
 
 CMD ["pnpm", "--silent", "run", "agent", "--", "--daemon"]
