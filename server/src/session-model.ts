@@ -17,6 +17,7 @@ type SessionRecord = {
   finalizedAt?: Date;
   modelAggregates: Record<string, ModelAggregate>;
   sessionId: string;
+  taskYahlPath?: string;
   updatedAt: Date;
 };
 
@@ -34,10 +35,8 @@ const modelAggregateSchema = new Schema<ModelAggregate>(
 
 const sessionEventSchema = new Schema<SessionUsagePayload>(
   {
-    executionMeta: {
-      sourceStartLine: Number,
-      stageIndex: Number,
-    },
+    cost: { type: Number },
+    executionMeta: { type: Schema.Types.Mixed },
     model: { required: true, type: String },
     requestId: { required: true, type: String },
     response: {
@@ -47,6 +46,8 @@ const sessionEventSchema = new Schema<SessionUsagePayload>(
       toolCalls: { type: [Schema.Types.Mixed] },
     },
     sessionId: { required: true, type: String },
+    stageInput: { type: Schema.Types.Mixed },
+    stageInputTruncated: { type: Boolean },
     thinkingMode: { required: true, type: Boolean },
     timestamp: { required: true, type: String },
     usage: {
@@ -69,6 +70,7 @@ const sessionSchema = new Schema<SessionRecord>(
       type: Map,
     },
     sessionId: { index: true, required: true, type: String, unique: true },
+    taskYahlPath: { type: String },
   },
   { timestamps: true },
 );

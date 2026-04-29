@@ -1,3 +1,5 @@
+import { emitSessionMeta, emitSessionStep, emitSessionsLifecycle } from "./session-sse-hub";
+import type { SessionMetaSsePayload, SessionStepSsePayload } from "./session-sse-hub";
 import { SessionModel } from "./session-model";
 import type { SessionUsagePayload } from "./types";
 
@@ -7,11 +9,92 @@ const toNumber = (value: number | undefined) => {
   return value;
 };
 
+const replyPreview = (payload: SessionUsagePayload) => {
+  const reply = payload.response?.reply;
+
+  if (typeof reply !== "string" || !reply) return null;
+
+  const max = 200;
+
+  return reply.length <= max ? reply : `${reply.slice(0, max)}…`;
+};
+
+const stepSummary = (
+  sessionId: string,
+  stepIndex: number,
+  payload: SessionUsagePayload,
+): SessionStepSsePayload => ({
+  cost: toNumber(payload.cost),
+  durationMs:
+    typeof payload.response?.durationMs === "number" && Number.isFinite(payload.response.durationMs)
+      ? payload.response.durationMs
+      : null,
+  model: payload.model,
+  replyPreview: replyPreview(payload),
+  sessionId,
+  stepIndex,
+  usage: {
+    cacheHitTokens: payload.usage.cacheHitTokens,
+    cacheMissTokens: payload.usage.cacheMissTokens,
+    completionTokens: payload.usage.completionTokens,
+    reasoningTokens: payload.usage.reasoningTokens,
+  },
+});
+
+const metaFromRow = (
+  sessionId: string,
+  row: { finalizedAt?: Date | null; taskYahlPath?: string | null } | null,
+): SessionMetaSsePayload => ({
+  finalizedAt: row?.finalizedAt ? new Date(row.finalizedAt).toISOString() : null,
+  sessionId,
+  taskYahlPath: typeof row?.taskYahlPath === "string" ? row.taskYahlPath : null,
+});
+
+const emitLifecycle = (
+  eventType: "created" | "finalized" | "updated",
+  sessionId: string,
+  row: { finalizedAt?: Date | null; taskYahlPath?: string | null; updatedAt?: Date | null } | null,
+) => {
+  emitSessionsLifecycle({
+    eventType,
+    finalizedAt: row?.finalizedAt ? new Date(row.finalizedAt).toISOString() : null,
+    sessionId,
+    taskYahlPath: typeof row?.taskYahlPath === "string" ? row.taskYahlPath : null,
+    updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+  });
+};
+
+export const registerSessionMetadata = async (sessionId: string, taskYahlPath: string) => {
+  const now = new Date();
+
+  const result = await SessionModel.updateOne(
+    { sessionId },
+    {
+      $set: {
+        taskYahlPath,
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        events: [],
+        modelAggregates: {},
+        sessionId,
+      },
+    },
+    { upsert: true },
+  );
+
+  const row = await SessionModel.findOne({ sessionId }).lean();
+
+  emitSessionMeta(sessionId, metaFromRow(sessionId, row));
+  emitLifecycle(result.upsertedCount > 0 ? "created" : "updated", sessionId, row);
+};
+
 export const appendUsageEvent = async (payload: SessionUsagePayload) => {
   const now = new Date();
   const modelKey = payload.model;
   const safeCost = toNumber(payload.cost);
   const current = await SessionModel.findOne({ sessionId: payload.sessionId });
+
   if (!current) {
     await SessionModel.create({
       events: [payload],
@@ -28,10 +111,15 @@ export const appendUsageEvent = async (payload: SessionUsagePayload) => {
       sessionId: payload.sessionId,
     });
 
+    emitSessionStep(payload.sessionId, stepSummary(payload.sessionId, 0, payload));
+    emitLifecycle("created", payload.sessionId, await SessionModel.findOne({ sessionId: payload.sessionId }).lean());
+
     return;
   }
 
   current.events.push(payload);
+
+  const stepIndex = current.events.length - 1;
 
   const aggregates = (current.modelAggregates || {}) as Record<string, {
     cacheHitTokens: number;
@@ -61,6 +149,9 @@ export const appendUsageEvent = async (payload: SessionUsagePayload) => {
   current.modelAggregates = aggregates;
   current.updatedAt = now;
   await current.save();
+
+  emitSessionStep(payload.sessionId, stepSummary(payload.sessionId, stepIndex, payload));
+  emitLifecycle("updated", payload.sessionId, current.toObject());
 };
 
 export const finalizeSession = async (sessionId: string) => {
@@ -69,6 +160,11 @@ export const finalizeSession = async (sessionId: string) => {
     { $set: { finalizedAt: new Date() } },
     { upsert: true },
   );
+
+  const row = await SessionModel.findOne({ sessionId }).lean();
+
+  emitSessionMeta(sessionId, metaFromRow(sessionId, row));
+  emitLifecycle("finalized", sessionId, row);
 };
 
 export const listSessions = async (limit: number, offset: number) => {
@@ -95,6 +191,7 @@ export const listSessions = async (limit: number, offset: number) => {
       createdAt: row.createdAt,
       finalizedAt: row.finalizedAt || null,
       sessionId: row.sessionId,
+      taskYahlPath: row.taskYahlPath ?? null,
       totalCalls,
       totalCost,
       totalInputTokens,

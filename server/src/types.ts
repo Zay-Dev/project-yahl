@@ -1,9 +1,6 @@
 export type SessionUsagePayload = {
   cost?: number;
-  executionMeta?: {
-    sourceStartLine?: number;
-    stageIndex?: number;
-  };
+  executionMeta?: unknown;
   model: string;
   requestId: string;
   response?: {
@@ -13,6 +10,8 @@ export type SessionUsagePayload = {
     toolCalls?: unknown[];
   };
   sessionId: string;
+  stageInput?: unknown;
+  stageInputTruncated?: boolean;
   thinkingMode: boolean;
   timestamp: string;
   usage: {

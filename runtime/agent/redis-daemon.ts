@@ -1,4 +1,4 @@
-import type { SetContextToolCallEnvelope } from "@/shared/stage-contract";
+import type { SetContextToolCallEnvelope, StageSessionInput } from "@/shared/stage-contract";
 
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -23,6 +23,30 @@ import { runScript } from "./-utils/vm-client";
 import { chatWithTools, setUsageEmitter } from "./-utils/llm-client";
 
 const execAsync = promisify(exec);
+
+const stageTextMaxChars = () => {
+  const raw = process.env.STEP_STAGE_TEXT_MAX_CHARS;
+  const n = raw ? Number(raw) : 50_000;
+
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 50_000;
+};
+
+const truncateStageInputForUsage = (input: StageSessionInput) => {
+  const max = stageTextMaxChars();
+  const text = input.currentStage;
+
+  if (text.length <= max) {
+    return { stageInput: input, truncated: false };
+  }
+
+  return {
+    stageInput: {
+      ...input,
+      currentStage: `${text.slice(0, max)}\n…[truncated ${text.length - max} chars]`,
+    },
+    truncated: true,
+  };
+};
 
 const runCommand = async (command: string) => {
   try {
@@ -82,7 +106,16 @@ export const startRedisDaemon = async () => {
     const { requestId, sessionId, stageInput } = envelope;
 
     setUsageEmitter((payload) => {
-      void redis.publish(USAGE_CHANNEL, JSON.stringify(payload));
+      const { stageInput: publishedStageInput, truncated } = truncateStageInputForUsage(stageInput);
+
+      void redis.publish(
+        USAGE_CHANNEL,
+        JSON.stringify({
+          ...payload,
+          stageInput: publishedStageInput,
+          ...(truncated ? { stageInputTruncated: true } : {}),
+        }),
+      );
     });
 
     try {

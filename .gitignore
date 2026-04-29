@@ -400,3 +400,5 @@ next-env.d.ts
 # Mac files
 .DS_Store
 /workspace/
+/.pnpm-store/
+/mongo_data/

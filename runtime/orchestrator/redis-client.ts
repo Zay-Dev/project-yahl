@@ -10,7 +10,11 @@ import {
   type UsageEvent,
 } from "../shared/transport";
 
-import { parseStageEnvelope, type StageEnvelope } from "../shared/stage-contract";
+import {
+  parseStageEnvelope,
+  type StageEnvelope,
+  type StageSessionInput,
+} from "../shared/stage-contract";
 
 import { randomUUID } from "crypto";
 
@@ -36,6 +40,17 @@ const parseAgentEnvelope = (stdout: string): StageEnvelope => {
   };
 };
 
+const isStageSessionInputLoose = (value: unknown): value is StageSessionInput => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const o = value as Record<string, unknown>;
+
+  if (typeof o.currentStage !== "string") return false;
+  if (!o.context || typeof o.context !== "object" || Array.isArray(o.context)) return false;
+
+  return true;
+};
+
 const isUsageEvent = (value: unknown): value is UsageEvent => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 
@@ -46,6 +61,8 @@ const isUsageEvent = (value: unknown): value is UsageEvent => {
   if (typeof o.model !== "string") return false;
   if (typeof o.thinkingMode !== "boolean") return false;
   if (!o.usage || typeof o.usage !== "object" || Array.isArray(o.usage)) return false;
+  if (o.stageInput !== undefined && !isStageSessionInputLoose(o.stageInput)) return false;
+  if (o.stageInputTruncated !== undefined && typeof o.stageInputTruncated !== "boolean") return false;
   if (o.response !== undefined) {
     if (!o.response || typeof o.response !== "object" || Array.isArray(o.response)) return false;
 
@@ -103,9 +120,11 @@ export const createOrchestratorRedis = async (
     options.onUsage({
       executionMeta,
       model: parsed.model,
-      response: parsed.response,
       requestId: parsed.requestId,
+      response: parsed.response,
       sessionId: parsed.sessionId,
+      stageInput: parsed.stageInput,
+      stageInputTruncated: parsed.stageInputTruncated,
       thinkingMode: parsed.thinkingMode,
       timestamp: new Date().toISOString(),
       usage: parsed.usage,

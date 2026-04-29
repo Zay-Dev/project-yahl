@@ -26,6 +26,8 @@ export type UsageEvent = {
   };
   requestId: string;
   sessionId: string;
+  stageInput?: StageSessionInput;
+  stageInputTruncated?: boolean;
   thinkingMode: boolean;
   usage: NormalizedUsage;
 };
@@ -54,6 +56,8 @@ export type StageTokenTrace = {
   response?: UsageEvent["response"];
   requestId: string;
   sessionId: string;
+  stageInput?: StageSessionInput;
+  stageInputTruncated?: boolean;
   thinkingMode: boolean;
   timestamp: string;
   usage: NormalizedUsage;

@@ -2,6 +2,7 @@ export type SessionListItem = {
   createdAt: string;
   finalizedAt: string | null;
   sessionId: string;
+  taskYahlPath: string | null;
   totalCalls: number;
   totalCost: number;
   totalInputTokens: number;
@@ -9,19 +10,33 @@ export type SessionListItem = {
   updatedAt: string;
 };
 
+export type SessionStepEvent = {
+  cost?: number;
+  executionMeta?: unknown;
+  model: string;
+  requestId: string;
+  response?: {
+    durationMs: number;
+    reasoning: string | null;
+    reply: string | null;
+    toolCalls?: unknown[];
+  };
+  sessionId: string;
+  stageInput?: unknown;
+  stageInputTruncated?: boolean;
+  thinkingMode: boolean;
+  timestamp: string;
+  usage: {
+    cacheHitTokens: number;
+    cacheMissTokens: number;
+    completionTokens: number;
+    reasoningTokens: number;
+  };
+};
+
 export type SessionDetail = {
   createdAt: string;
-  events: Array<{
-    model: string;
-    requestId: string;
-    timestamp: string;
-    usage: {
-      cacheHitTokens: number;
-      cacheMissTokens: number;
-      completionTokens: number;
-      reasoningTokens: number;
-    };
-  }>;
+  events: SessionStepEvent[];
   finalizedAt?: string;
   modelAggregates: Record<string, {
     cacheHitTokens: number;
@@ -32,5 +47,35 @@ export type SessionDetail = {
     reasoningTokens: number;
   }>;
   sessionId: string;
+  taskYahlPath?: string | null;
   updatedAt: string;
+};
+
+export type SessionMetaSse = {
+  finalizedAt: string | null;
+  sessionId: string;
+  taskYahlPath: string | null;
+};
+
+export type SessionStepSse = {
+  cost: number;
+  durationMs: number | null;
+  model: string;
+  replyPreview: string | null;
+  sessionId: string;
+  stepIndex: number;
+  usage: {
+    cacheHitTokens: number;
+    cacheMissTokens: number;
+    completionTokens: number;
+    reasoningTokens: number;
+  };
+};
+
+export type SessionsLifecycleSse = {
+  eventType: "created" | "finalized" | "updated";
+  finalizedAt: string | null;
+  sessionId: string;
+  taskYahlPath: string | null;
+  updatedAt: string | null;
 };

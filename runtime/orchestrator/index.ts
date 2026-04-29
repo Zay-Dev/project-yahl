@@ -24,8 +24,8 @@ import {
   toStageContextPayload,
 } from "./runtime";
 
+import { createStepTracker } from "./-utils/agent-trackers/step-tracker";
 import { createOrchestratorRedis } from "./redis-client";
-import { createSessionRecorder } from "./session-recorder";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -748,10 +748,13 @@ const main = async () => {
   const sessionId = randomUUID();
 
   const tracker = createSessionTracker();
-  const sessionRecorder = createSessionRecorder();
+  const stepTracker = createStepTracker();
 
   agentTrackers.add(tracker);
   agentTrackers.add(createConsoleTracker());
+  agentTrackers.add(stepTracker);
+
+  await stepTracker.registerSession(sessionId, { taskYahlPath: reportPath });
 
   await fs.mkdir(workspacePath, {
     recursive: true,
@@ -770,7 +773,6 @@ const main = async () => {
         if (trace.sessionId !== sessionId) return;
 
         agentTrackers.track(trace);
-        void sessionRecorder.postUsageEvent(trace);
       },
       redisUrl,
     });
@@ -787,7 +789,7 @@ const main = async () => {
 
     console.log('result', JSON.stringify(runtime.get('context')?.['result'], null, 2));
   } finally {
-    void sessionRecorder.finalizeSession(sessionId);
+    void stepTracker.finalizeSession(sessionId);
     process.stdout.write(`\n${tracker.summaryText(sessionId)}\n`);
 
     if (redisTransport) {
