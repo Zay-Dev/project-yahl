@@ -1,4 +1,4 @@
-import "dotenv/config";
+import type { SetContextToolCallEnvelope } from "@/shared/stage-contract";
 
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -10,7 +10,7 @@ import {
   USAGE_CHANNEL,
   replyQueue,
   type StageRequestEnvelope,
-} from "../shared/transport";
+} from "@/shared/transport";
 
 import { parseArgs } from "./-utils/args-parser";
 import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
@@ -18,6 +18,8 @@ import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 import config from "./config";
 
 import { runStageSession } from "./stage-session";
+
+import { runScript } from "./-utils/vm-client";
 import { chatWithTools, setUsageEmitter } from "./-utils/llm-client";
 
 const execAsync = promisify(exec);
@@ -84,6 +86,31 @@ export const startRedisDaemon = async () => {
     });
 
     try {
+      const lines = stageInput.currentStage.split('\n');
+
+      if (lines[0]?.match(/\s*CONTEXT:/)) {
+        const contextInput = stageInput.context;
+        const contextOutput = await runScript(
+          ['{', ...lines].slice(1).join('\n').trim(),
+          contextInput,
+        );
+
+        await redis.lpush(replyQueue(requestId), JSON.stringify(
+          Object.entries(contextOutput)
+            .map(([key, value]) => ({
+              arguments: {
+                key,
+                value,
+                scope: "global",
+              },
+              tool: "set_context",
+              type: "tool_call",
+            }) as SetContextToolCallEnvelope),
+        ));
+
+        continue;
+      }
+
       const out = await runStageSession(stageInput, messages, {
         chatWithTools: (m) => chatWithTools(m, {
           requestId,

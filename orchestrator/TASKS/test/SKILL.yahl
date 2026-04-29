@@ -5,10 +5,16 @@ description: Testing
 
 ```ai.logic
 
-const a = 1;
-const b = 2;
+CONTEXT: {
+  this.a = 1;
+  this.b = 2;
 
-let c = a + b;
+  this.c = a + b;
+}
+
+for each i of [1..5] CONTEXT: {
+    this.c = this.stage.c + this.stage.i;
+}
 
 for each i of [1..5,+2] {
   c += i;

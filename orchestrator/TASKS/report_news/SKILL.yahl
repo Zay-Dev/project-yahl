@@ -10,18 +10,23 @@ type TNews = {
   url: string;
 };
 
-const news_sources = [
-  'hk01',
-  'bbc',
-  'on.cc',
-  'reddit (old, AI friendly version)',
-  'x.com (no need login version)',
-  'thread (no need login version)',
-];
+CONTEXT: {
+  this.news_sources = [
+    'hk01',
+    'bbc',
+    'on.cc',
+    'reddit (old, AI friendly version)',
+    'x.com (no need login version)',
+    'thread (no need login version)',
+  ];
+}
 
 const news_sources_knowledge = *read(~/knowledges/news-monitor/sources.json);
 
-const parsed_news_source = new Array();
+CONTEXT: {
+  this.news = [];
+  this.parsed_news_source = [];
+}
 
 for each source of [news_sources] {
   const saved = *find(news_sources_knowledge, source);
@@ -45,7 +50,6 @@ for each source of [news_sources] {
 
 *confirm_updated(~/knowledges/news-monitor/sources.json, parsed_news_source, keep_others);
 
-const news = new Array();
 const tool_path = *get_or_create_python_remove_css_tool(keep_javascript);
 
 for each source of [parsed_news_source] {
