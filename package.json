@@ -1,30 +1,23 @@
 {
-  "name": "project-yahl",
+  "name": "project-yahl-workspace",
+  "private": true,
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
-  "type": "module",
   "scripts": {
-    "agent": "tsx agent/index.ts",
     "compose:down": "docker compose down",
     "compose:up": "docker compose up -d --build",
-    "dev": "tsx watch orchestrator/index.ts",
-    "orchestrate": "tsx orchestrator/index.ts",
-    "test": "tsx --test \"agent/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "compose:runtime:down": "docker compose -f runtime/docker-compose.yml down",
+    "compose:runtime:up": "docker compose -f runtime/docker-compose.yml up -d --build",
+    "dev": "pnpm -r --parallel --filter runtime --filter server --filter web run dev",
+    "dev:runtime": "pnpm --filter runtime run dev",
+    "dev:server": "pnpm --filter server run dev",
+    "dev:web": "pnpm --filter web run dev",
+    "orchestrate": "pnpm --filter runtime run orchestrate",
+    "test": "pnpm --filter runtime run test",
+    "typecheck": "pnpm -r run typecheck"
   },
   "keywords": [],
   "author": "",
   "license": "SEE LICENSE IN LICENSE",
-  "packageManager": "pnpm@10.33.0",
-  "devDependencies": {
-    "@types/node": "^25.6.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "dotenv": "^17.4.2",
-    "ioredis": "^5.8.2",
-    "openai": "^6.34.0"
-  }
+  "packageManager": "pnpm@10.33.0"
 }

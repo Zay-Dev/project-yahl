@@ -1,0 +1,76 @@
+import mongoose, { Schema } from "mongoose";
+
+import type { SessionUsagePayload } from "./types";
+
+type ModelAggregate = {
+  cacheHitTokens: number;
+  cacheMissTokens: number;
+  calls: number;
+  completionTokens: number;
+  cost: number;
+  reasoningTokens: number;
+};
+
+type SessionRecord = {
+  createdAt: Date;
+  events: SessionUsagePayload[];
+  finalizedAt?: Date;
+  modelAggregates: Record<string, ModelAggregate>;
+  sessionId: string;
+  updatedAt: Date;
+};
+
+const modelAggregateSchema = new Schema<ModelAggregate>(
+  {
+    cacheHitTokens: { default: 0, required: true, type: Number },
+    cacheMissTokens: { default: 0, required: true, type: Number },
+    calls: { default: 0, required: true, type: Number },
+    completionTokens: { default: 0, required: true, type: Number },
+    cost: { default: 0, required: true, type: Number },
+    reasoningTokens: { default: 0, required: true, type: Number },
+  },
+  { _id: false },
+);
+
+const sessionEventSchema = new Schema<SessionUsagePayload>(
+  {
+    executionMeta: {
+      sourceStartLine: Number,
+      stageIndex: Number,
+    },
+    model: { required: true, type: String },
+    requestId: { required: true, type: String },
+    response: {
+      durationMs: Number,
+      reasoning: { default: null, type: String },
+      reply: { default: null, type: String },
+      toolCalls: { type: [Schema.Types.Mixed] },
+    },
+    sessionId: { required: true, type: String },
+    thinkingMode: { required: true, type: Boolean },
+    timestamp: { required: true, type: String },
+    usage: {
+      cacheHitTokens: { required: true, type: Number },
+      cacheMissTokens: { required: true, type: Number },
+      completionTokens: { required: true, type: Number },
+      reasoningTokens: { required: true, type: Number },
+    },
+  },
+  { _id: false },
+);
+
+const sessionSchema = new Schema<SessionRecord>(
+  {
+    events: { default: [], type: [sessionEventSchema] },
+    finalizedAt: { type: Date },
+    modelAggregates: {
+      default: {},
+      of: modelAggregateSchema,
+      type: Map,
+    },
+    sessionId: { index: true, required: true, type: String, unique: true },
+  },
+  { timestamps: true },
+);
+
+export const SessionModel = mongoose.model("Session", sessionSchema);

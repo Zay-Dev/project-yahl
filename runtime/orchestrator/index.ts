@@ -25,12 +25,14 @@ import {
 } from "./runtime";
 
 import { createOrchestratorRedis } from "./redis-client";
+import { createSessionRecorder } from "./session-recorder";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 const projectRoot = path.resolve(moduleDir, "..");
+const repoRoot = path.resolve(projectRoot, "..");
 const composeFile = path.resolve(projectRoot, "docker-compose.yml");
-const workspacePath = path.resolve(projectRoot, "workspace");
+const workspacePath = path.resolve(repoRoot, "workspace");
 
 const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
 // const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
@@ -68,7 +70,7 @@ const composeUp = async () => {
     "-d",
     "--build",
   ], {
-    cwd: projectRoot,
+    cwd: repoRoot,
   });
 };
 
@@ -79,7 +81,7 @@ const composeDown = async () => {
     composeFile,
     "down",
   ], {
-    cwd: projectRoot,
+    cwd: repoRoot,
     ignoreFailure: true,
   });
 };
@@ -746,6 +748,7 @@ const main = async () => {
   const sessionId = randomUUID();
 
   const tracker = createSessionTracker();
+  const sessionRecorder = createSessionRecorder();
 
   agentTrackers.add(tracker);
   agentTrackers.add(createConsoleTracker());
@@ -767,6 +770,7 @@ const main = async () => {
         if (trace.sessionId !== sessionId) return;
 
         agentTrackers.track(trace);
+        void sessionRecorder.postUsageEvent(trace);
       },
       redisUrl,
     });
@@ -783,6 +787,7 @@ const main = async () => {
 
     console.log('result', JSON.stringify(runtime.get('context')?.['result'], null, 2));
   } finally {
+    void sessionRecorder.finalizeSession(sessionId);
     process.stdout.write(`\n${tracker.summaryText(sessionId)}\n`);
 
     if (redisTransport) {

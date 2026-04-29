@@ -99,8 +99,20 @@ flowchart LR
 ## Run it
 
 - Need Node + pnpm and Docker.
-- `pnpm run orchestrate` and watch it go.
-- Copy `.env.example` to `.env`, drop in an LLM API key. (also need brave api key, feel free to change to other web search skill)
+- This repo is now a pnpm workspace:
+  - `runtime/` - YAHL runtime + orchestrator
+  - `server/` - Express + Mongoose session records API
+  - `web/` - Vite + shadcn session records UI
+- Docker compose split:
+  - root `docker-compose.yml` serves `mongo + server + web`
+  - `runtime/docker-compose.yml` serves `redis + agent`
+- Copy `.env.example` to `.env`, drop in an LLM API key, and optionally set `SESSION_API_BASE_URL`.
+- Start runtime only: `pnpm run orchestrate`.
+- Start API server: `pnpm run dev:server`.
+- Start web app: `pnpm run dev:web`.
+- Start all apps together: `pnpm run dev`.
+- Start app stack with Docker: `pnpm run compose:up`
+- Start runtime stack with Docker: `pnpm run compose:runtime:up`
 
 ## License
 
