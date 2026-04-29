@@ -34,8 +34,8 @@ const repoRoot = path.resolve(projectRoot, "..");
 const composeFile = path.resolve(projectRoot, "docker-compose.yml");
 const workspacePath = path.resolve(repoRoot, "workspace");
 
-const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
-// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
+// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
+const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
 
 const runCommand = (
   args: string[],
@@ -763,6 +763,7 @@ const main = async () => {
   const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 
   let redisTransport: Awaited<ReturnType<typeof createOrchestratorRedis>> | null = null;
+  let finalResult: unknown;
 
   try {
     await composeDown();
@@ -786,10 +787,12 @@ const main = async () => {
     };
 
     const runtime = await execute(reportSkill, {}, {}, stageAgent, reportPath, aiLogicStartLine);
+    
+    finalResult = runtime.get("context")?.result;
 
     console.log('result', JSON.stringify(runtime.get('context')?.['result'], null, 2));
   } finally {
-    void stepTracker.finalizeSession(sessionId);
+    void stepTracker.finalizeSession(sessionId, { result: finalResult });
     process.stdout.write(`\n${tracker.summaryText(sessionId)}\n`);
 
     if (redisTransport) {

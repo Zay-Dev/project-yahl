@@ -21,3 +21,7 @@ export type SessionUsagePayload = {
     reasoningTokens: number;
   };
 };
+
+export type FinalizeSessionPayload = {
+  result?: unknown;
+};

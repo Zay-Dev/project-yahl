@@ -16,6 +16,7 @@ type SessionRecord = {
   events: SessionUsagePayload[];
   finalizedAt?: Date;
   modelAggregates: Record<string, ModelAggregate>;
+  result?: unknown;
   sessionId: string;
   taskYahlPath?: string;
   updatedAt: Date;
@@ -69,6 +70,7 @@ const sessionSchema = new Schema<SessionRecord>(
       of: modelAggregateSchema,
       type: Map,
     },
+    result: { type: Schema.Types.Mixed },
     sessionId: { index: true, required: true, type: String, unique: true },
     taskYahlPath: { type: String },
   },

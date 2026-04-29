@@ -5,6 +5,7 @@ export type SessionListItem = {
   taskYahlPath: string | null;
   totalCalls: number;
   totalCost: number;
+  totalUsedTimeMs: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   updatedAt: string;
@@ -46,6 +47,7 @@ export type SessionDetail = {
     cost: number;
     reasoningTokens: number;
   }>;
+  result?: unknown;
   sessionId: string;
   taskYahlPath?: string | null;
   updatedAt: string;

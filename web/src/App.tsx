@@ -12,6 +12,18 @@ import type { SessionDetail, SessionListItem, SessionMetaSse, SessionStepEvent, 
 
 const formatNumber = (value: number) => Intl.NumberFormat().format(value);
 const formatCost = (value: number) => `$${value.toFixed(5)}`;
+const formatDuration = (value: number) => {
+  const totalMs = Math.max(0, Math.round(value));
+  const hours = Math.floor(totalMs / 3_600_000);
+  const minutes = Math.floor((totalMs % 3_600_000) / 60_000);
+  const seconds = Math.floor((totalMs % 60_000) / 1_000);
+  const milliseconds = totalMs % 1_000;
+  const hh = String(hours).padStart(2, "0");
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  const mmm = String(milliseconds).padStart(3, "0");
+  return `${hh}:${mm}:${ss}.${mmm}`;
+};
 const STAGE_PREVIEW_LIMIT = 500;
 const EMPTY_VALUE = "—";
 const JSON_SPACING = 2;
@@ -52,10 +64,13 @@ const App = () => {
   const [liveMeta, setLiveMeta] = useState<SessionMetaSse | null>(null);
   const [liveSteps, setLiveSteps] = useState<SessionStepSse[]>([]);
   const [modalStep, setModalStep] = useState<{ event: SessionStepEvent; index: number } | null>(null);
-  const [sessionIdInput, setSessionIdInput] = useState("");
+  const [resultModalOpen, setResultModalOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectSession = useCallback((sessionId: string) => {
+    setSelectedId(sessionId);
+  }, []);
 
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true);
@@ -63,13 +78,13 @@ const App = () => {
     try {
       const rows = await fetchSessions();
       setSessions(rows);
-      if (!selectedId && rows[0]) setSelectedId(rows[0].sessionId);
+      if (!selectedId && rows[0]) selectSession(rows[0].sessionId);
     } catch (loadError) {
       setError(String(loadError));
     } finally {
       setSessionsLoading(false);
     }
-  }, [selectedId]);
+  }, [selectedId, selectSession]);
 
   useEffect(() => {
     void loadSessions();
@@ -97,6 +112,7 @@ const App = () => {
       .finally(() => setDetailLoading(false));
 
     setModalStep(null);
+    setResultModalOpen(false);
   }, [selectedId]);
 
   useEffect(() => {
@@ -140,16 +156,16 @@ const App = () => {
     () => new Map(groupedEvents.map(([requestId, rows]) => [requestId, rows])),
     [groupedEvents],
   );
+  const detailTotalUsedTimeMs = useMemo(
+    () => (detail?.events || []).reduce((sum, event) => {
+      if (typeof event.response?.durationMs !== "number") return sum;
+      return sum + event.response.durationMs;
+    }, 0),
+    [detail?.events],
+  );
 
   const taskPath = liveMeta?.taskYahlPath ?? detail?.taskYahlPath ?? null;
 
-  const watchManualSession = () => {
-    const id = sessionIdInput.trim();
-
-    if (!id) return;
-
-    setSelectedId(id);
-  };
   const openModalAtIndex = (index: number) => {
     const event = detail?.events?.[index];
     if (!event) return;
@@ -168,40 +184,21 @@ const App = () => {
   const modalRequestIndex = modalStep ? groupedEvents.findIndex(([requestId]) => requestId === modalStep.event.requestId) : -1;
   const canOpenPrevRequest = modalRequestIndex > 0;
   const canOpenNextRequest = modalRequestIndex >= 0 && modalRequestIndex < groupedEvents.length - 1;
+  const hasStoredResult = detail?.result !== undefined && detail?.result !== null;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-4 p-4">
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle>Session Records</CardTitle>
-            <CardDescription>Runtime usage logs persisted from orchestrator events</CardDescription>
-          </div>
-          <Button onClick={() => void loadSessions()} size="sm" variant="outline">
-            <RefreshCcw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:max-w-md"
-            onChange={(event) => setSessionIdInput(event.target.value)}
-            placeholder="Session UUID to load / SSE"
-            type="text"
-            value={sessionIdInput}
-          />
-          <Button onClick={watchManualSession} size="sm" type="button" variant="default">
-            Watch session
-          </Button>
-        </CardContent>
-      </Card>
+    <main className="mx-auto flex min-h-screen w-[90vw] max-w-none flex-col gap-4 p-4">
 
       {error ? <Card><CardContent className="pt-6 text-sm text-red-500">{error}</CardContent></Card> : null}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+        <Card className="w-full max-w-[400px]">
+          <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>Sessions</CardTitle>
+            <Button onClick={() => void loadSessions()} size="sm" variant="outline">
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
           </CardHeader>
           <CardContent>
             {sessionsLoading ? (
@@ -217,7 +214,7 @@ const App = () => {
                     <TableHead>Session</TableHead>
                     <TableHead>Calls</TableHead>
                     <TableHead>Cost</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Used Time</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -225,24 +222,12 @@ const App = () => {
                     <TableRow
                       className={selectedId === session.sessionId ? "bg-slate-100 dark:bg-slate-900" : ""}
                       key={session.sessionId}
-                      onClick={() => setSelectedId(session.sessionId)}
+                      onClick={() => selectSession(session.sessionId)}
                     >
                       <TableCell className="font-mono text-xs">{session.sessionId.slice(0, 8)}...</TableCell>
                       <TableCell>{formatNumber(session.totalCalls)}</TableCell>
                       <TableCell>{formatCost(session.totalCost)}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedId(session.sessionId);
-                          }}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          Bind livestream
-                        </Button>
-                      </TableCell>
+                      <TableCell>{formatDuration(session.totalUsedTimeMs || 0)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -267,9 +252,19 @@ const App = () => {
               <>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="secondary">events: {formatNumber(detail?.events.length || 0)}</Badge>
+                  <Badge variant="secondary">used: {formatDuration(detailTotalUsedTimeMs)}</Badge>
                   <Badge variant={detail?.finalizedAt ? "default" : "outline"}>
                     {detail?.finalizedAt ? "finalized" : "active"}
                   </Badge>
+                  <Button
+                    disabled={!hasStoredResult}
+                    onClick={() => setResultModalOpen(true)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    View result
+                  </Button>
                 </div>
 
                 {taskPath ? (
@@ -376,64 +371,49 @@ const App = () => {
                     </div>
                   </div>
                 ) : null}
+
+                {selectedId ? (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">Live stream (SSE)</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline">SSE: {liveMeta?.finalizedAt ? "closed" : "open"}</Badge>
+                      {liveMeta?.finalizedAt ? (
+                        <Badge variant="secondary">finalized {liveMeta.finalizedAt}</Badge>
+                      ) : null}
+                    </div>
+                    {liveSteps.length ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Step</TableHead>
+                            <TableHead>Model</TableHead>
+                            <TableHead>ms</TableHead>
+                            <TableHead>Cost</TableHead>
+                            <TableHead>Preview</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {liveSteps.map((step) => (
+                            <TableRow key={`${step.stepIndex}-${step.sessionId}`}>
+                              <TableCell>{step.stepIndex}</TableCell>
+                              <TableCell className="font-mono text-xs">{step.model}</TableCell>
+                              <TableCell>{step.durationMs !== null ? formatNumber(step.durationMs) : EMPTY_VALUE}</TableCell>
+                              <TableCell>{formatCost(step.cost)}</TableCell>
+                              <TableCell className="max-w-[240px] truncate text-xs">{step.replyPreview ?? EMPTY_VALUE}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No live steps yet. Waiting for model usage events.</p>
+                    )}
+                  </div>
+                ) : null}
               </>
             )}
           </CardContent>
         </Card>
       </div>
-
-      {selectedId ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Live stream (SSE)</CardTitle>
-            <CardDescription className="font-mono text-xs">{selectedId}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">SSE: {liveMeta?.finalizedAt ? "closed" : "open"}</Badge>
-              {liveMeta?.finalizedAt ? (
-                <Badge variant="secondary">finalized {liveMeta.finalizedAt}</Badge>
-              ) : null}
-            </div>
-            {taskPath ? (
-              <p className="break-all font-mono text-xs text-muted-foreground">{taskPath}</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">Task path appears when the orchestrator registers the session.</p>
-            )}
-
-            {liveSteps.length ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Step</TableHead>
-                    <TableHead>Model</TableHead>
-                    <TableHead>ms</TableHead>
-                    <TableHead>Cost</TableHead>
-                    <TableHead>Preview</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {liveSteps.map((step) => (
-                    <TableRow key={`${step.stepIndex}-${step.sessionId}`}>
-                      <TableCell>{step.stepIndex}</TableCell>
-                      <TableCell className="font-mono text-xs">{step.model}</TableCell>
-                      <TableCell>
-                        {step.durationMs !== null ? formatNumber(step.durationMs) : "—"}
-                      </TableCell>
-                      <TableCell>{formatCost(step.cost)}</TableCell>
-                      <TableCell className="max-w-[240px] truncate text-xs">
-                        {step.replyPreview ?? "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-sm text-muted-foreground">No live steps yet. Waiting for model usage events.</p>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
 
       {modalStep ? (
         <div
@@ -535,7 +515,7 @@ const App = () => {
                     </CardHeader>
                     <CardContent>
                       <p className="max-h-72 overflow-auto whitespace-pre-wrap rounded border p-3 font-mono text-xs">
-                        {truncateText(getStagePreview(modalGlobalStageEvent || modalStep.event), STAGE_PREVIEW_LIMIT)}
+                        {getStagePreview(modalGlobalStageEvent || modalStep.event)}
                       </p>
                     </CardContent>
                   </Card>
@@ -674,6 +654,33 @@ const App = () => {
                   </Accordion>
                 </CardContent>
               </Card>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {resultModalOpen && detail ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setResultModalOpen(false)}
+        >
+          <Card
+            className="flex max-h-[95vh] w-full max-w-4xl flex-col"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <CardHeader className="flex shrink-0 flex-row items-center justify-between space-y-0 border-b">
+              <div>
+                <CardTitle>Session result</CardTitle>
+                <CardDescription>Session {detail.sessionId}</CardDescription>
+              </div>
+              <Button onClick={() => setResultModalOpen(false)} size="sm" type="button" variant="outline">
+                Close
+              </Button>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto pt-4">
+              <pre className="max-h-[70vh] overflow-auto rounded border p-2 text-xs">
+                {stringifyValue(detail.result)}
+              </pre>
             </CardContent>
           </Card>
         </div>

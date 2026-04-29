@@ -63,11 +63,15 @@ export const createStepTracker = () => {
     }
   };
 
-  const finalizeSession = async (sessionId: string) => {
+  const finalizeSession = async (sessionId: string, opts?: { result?: unknown }) => {
     if (!baseUrl) return;
 
     try {
       await fetch(`${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/finalize`, {
+        body: JSON.stringify({ result: opts?.result }),
+        headers: {
+          "content-type": "application/json",
+        },
         method: "POST",
       });
     } catch (error) {
@@ -88,7 +92,7 @@ export const createStepTracker = () => {
     reset,
     track,
   } satisfies TAgentTracker & {
-    finalizeSession: (sessionId: string) => Promise<void>;
+    finalizeSession: (sessionId: string, opts?: { result?: unknown }) => Promise<void>;
     postStep: (trace: StageTokenTrace) => Promise<void>;
     registerSession: (sessionId: string, opts: { taskYahlPath: string }) => Promise<void>;
   };

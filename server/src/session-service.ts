@@ -154,10 +154,17 @@ export const appendUsageEvent = async (payload: SessionUsagePayload) => {
   emitLifecycle("updated", payload.sessionId, current.toObject());
 };
 
-export const finalizeSession = async (sessionId: string) => {
+export const finalizeSession = async (sessionId: string, result?: unknown) => {
+  const updateSet: Record<string, unknown> = {
+    finalizedAt: new Date(),
+  };
+  if (result !== undefined) {
+    updateSet.result = result;
+  }
+
   await SessionModel.updateOne(
     { sessionId },
-    { $set: { finalizedAt: new Date() } },
+    { $set: updateSet },
     { upsert: true },
   );
 
@@ -175,17 +182,19 @@ export const listSessions = async (limit: number, offset: number) => {
     .lean();
 
   return rows.map((row) => {
-    const modelEntries = Object.values(row.modelAggregates || {});
-    const totalCost = modelEntries.reduce((sum, item) => sum + item.cost, 0);
-    const totalCalls = modelEntries.reduce((sum, item) => sum + item.calls, 0);
-    const totalInputTokens = modelEntries.reduce(
-      (sum, item) => sum + item.cacheHitTokens + item.cacheMissTokens,
+    const events = row.events || [];
+    const totalCalls = events.length;
+    const totalCost = events.reduce((sum, event) => sum + toNumber(event?.cost), 0);
+    const totalInputTokens = events.reduce(
+      (sum, event) => sum + toNumber(event?.usage?.cacheHitTokens) + toNumber(event?.usage?.cacheMissTokens),
       0,
     );
-    const totalOutputTokens = modelEntries.reduce(
-      (sum, item) => sum + item.completionTokens,
-      0,
-    );
+    const totalOutputTokens = events.reduce((sum, event) => sum + toNumber(event?.usage?.completionTokens), 0);
+    const totalUsedTimeMs = events.reduce((sum, event) => {
+      if (typeof event?.response?.durationMs !== "number" || !Number.isFinite(event.response.durationMs)) return sum;
+
+      return sum + event.response.durationMs;
+    }, 0);
 
     return {
       createdAt: row.createdAt,
@@ -194,6 +203,7 @@ export const listSessions = async (limit: number, offset: number) => {
       taskYahlPath: row.taskYahlPath ?? null,
       totalCalls,
       totalCost,
+      totalUsedTimeMs,
       totalInputTokens,
       totalOutputTokens,
       updatedAt: row.updatedAt,
