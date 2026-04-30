@@ -46,6 +46,6 @@ Examples
 3. const content = *read(~/some_file.json); // execute the virtual function '*read' and set the result to the content
 4. const web_result = /web-search; // execute the skill '/web-search' and set the result to the web_result
 5. const escapedArray = array.map(item => *escape(item)); // execute the virtual function to each item of the 'array' and set the new values of array to escapedArray
-6. type TType = {...}; // set the type definition to TType
+6. type TType = {...}; // set the type definition to TType, respect the typescript/javascript type, then python, then dotnet, then Java, fallback to type you think suitable
 7. records = [...records, ...new_records]; // update the records
 8. records = [...records, ...new_records, mandantory_record]; // update the records

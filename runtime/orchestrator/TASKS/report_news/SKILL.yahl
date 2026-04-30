@@ -15,64 +15,26 @@ CONTEXT: {
     'hk01',
     'bbc',
   ];
-}
-
-const news_sources_knowledge = *read(~/knowledges/news-monitor/sources.json);
-
-CONTEXT: {
+  
   this.news = [];
-  this.parsed_news_source = [];
 }
 
 for each source of [news_sources] {
-  const saved = *find(news_sources_knowledge, source);
-
-  if (!!saved) {
-    parsed_news_source = [...parsed_news_source, saved];
-    return;
-  }
-
-  for (let i = 0; i < 5; i++) {
-    const parsed_source = /web-search(source);
-    const source_safe_browsable_url = *safe(parsed_source);
-
-    if (*browsable_containsNew_without_login(source_safe_browsable_url)) {
-      break;
-    }
-  }
-
-  parsed_news_source = [...parsed_news_source, source_safe_browsable_url];
+  news = *combine([
+    ...news,
+    ...*extract_news(source, within_24hours, allow_unknown_date, keep_datetime, keep_full_url),
+  ]);
 }
 
-*confirm_updated(~/knowledges/news-monitor/sources.json, parsed_news_source, keep_others);
-
-const tool_path = *get_or_create_python_remove_css_tool(keep_javascript);
-
-for each source of [parsed_news_source] {
-  const uuid = *uuidgen();
-  const tmp_file_path = *save(browse_or_curl(source), `~/tmp/${uuid}`);
-
-  *use_python_tool(tool_path, tmp_file_path, keep_javascript, max_time_out: 5s, try_fix_if_error);
-
-  const byte_length = *get_byte_length(tmp_file_path);
-  const chunkSize = *bash(getconf ARG_MAX) / 10;
-
-  REPLACE: const website = /rag( chunkSize: Math.min(49600, chunkSize), tmp_file_path, byte_length, within_24hours, allow_unknown_date, keep_datetime, keep_full_url );
-
-  const extracted_news = *extract_news(website);
-
-  news = *combine([...news, ...extracted_news]);
-  website = null;
-  extracted_news = null;
+{
+  const zh_news = *translate(news, 'zh-TW', force_virtual_function) as TNews[];
+  const jp_news = *translate(news, 'jp', force_virtual_function) as TNews[];
 }
-
-const zh_news = *translate(news, 'zh-TW', force_virtual_function) as TNews[];
-const jp_news = *translate(news, 'jp', force_virtual_function) as TNews[];
 
 CONTEXT: {
   this.result = {
-    zh: this.stage.zh_news,
-    jp: this.stage.jp_news,
+    zh: this.context.zh_news,
+    jp: this.context.jp_news,
   };
 };
 ```

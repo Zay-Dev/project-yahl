@@ -22,5 +22,7 @@ for each i of [1..5,+2] {
 
 const result = {a,b,c};
 
-return result;
+CONTEXT: {
+  this.result = this.context.result;
+}
 ```

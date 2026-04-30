@@ -588,7 +588,7 @@ const execute = async (
     throw new Error('No ai.logic block found');
   }
 
-  const stages = parseStages(aiLogic);
+  const stages = parseStages(aiLogic).filter(stage => stage.lines != '}');
 
   if (stages.length <= 0) {
     throw new Error("No stages parsed from ai.logic");

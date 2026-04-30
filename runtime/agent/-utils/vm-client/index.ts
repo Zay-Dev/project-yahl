@@ -22,6 +22,6 @@ export const runScript = async (
   delete context.context;
   delete context.stage;
   delete context.types;
-
+  
   return context as Record<string, unknown>;
 };
