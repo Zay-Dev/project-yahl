@@ -62,9 +62,13 @@ export type SessionMetaSse = {
 export type SessionStepSse = {
   cost: number;
   durationMs: number | null;
+  executionMeta?: unknown;
   model: string;
+  requestId?: string;
   replyPreview: string | null;
   sessionId: string;
+  stageInput?: unknown;
+  stageInputTruncated?: boolean;
   stepIndex: number;
   usage: {
     cacheHitTokens: number;

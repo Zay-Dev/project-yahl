@@ -29,9 +29,13 @@ const stepSummary = (
     typeof payload.response?.durationMs === "number" && Number.isFinite(payload.response.durationMs)
       ? payload.response.durationMs
       : null,
+  executionMeta: payload.executionMeta,
   model: payload.model,
+  requestId: payload.requestId,
   replyPreview: replyPreview(payload),
   sessionId,
+  stageInput: payload.stageInput,
+  stageInputTruncated: payload.stageInputTruncated,
   stepIndex,
   usage: {
     cacheHitTokens: payload.usage.cacheHitTokens,

@@ -3,9 +3,13 @@ import { EventEmitter } from "events";
 export type SessionStepSsePayload = {
   cost: number;
   durationMs: number | null;
+  executionMeta?: unknown;
   model: string;
+  requestId: string;
   replyPreview: string | null;
   sessionId: string;
+  stageInput?: unknown;
+  stageInputTruncated?: boolean;
   stepIndex: number;
   usage: {
     cacheHitTokens: number;

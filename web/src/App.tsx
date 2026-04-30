@@ -56,6 +56,30 @@ const getRequestGlobalStage = (rows: Array<{ event: SessionStepEvent; index: num
   const globalRow = scopedRows.find(({ event }) => getStagePreview(event) !== EMPTY_VALUE) ?? scopedRows[0] ?? null;
   return globalRow;
 };
+const toLiveEvent = (step: SessionStepSse): SessionStepEvent => ({
+  cost: step.cost,
+  executionMeta: step.executionMeta,
+  model: step.model,
+  requestId: step.requestId || `live-${step.sessionId}-${step.stepIndex}`,
+  response: step.durationMs !== null || step.replyPreview !== null
+    ? {
+      durationMs: step.durationMs ?? 0,
+      reasoning: null,
+      reply: step.replyPreview,
+    }
+    : undefined,
+  sessionId: step.sessionId,
+  stageInput: step.stageInput,
+  stageInputTruncated: step.stageInputTruncated,
+  thinkingMode: false,
+  timestamp: "",
+  usage: {
+    cacheHitTokens: step.usage.cacheHitTokens,
+    cacheMissTokens: step.usage.cacheMissTokens,
+    completionTokens: step.usage.completionTokens,
+    reasoningTokens: step.usage.reasoningTokens,
+  },
+});
 
 const App = () => {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
@@ -156,6 +180,17 @@ const App = () => {
     () => new Map(groupedEvents.map(([requestId, rows]) => [requestId, rows])),
     [groupedEvents],
   );
+  const groupedLiveEvents = useMemo(() => {
+    if (!liveSteps.length) return [];
+    const groups = new Map<string, Array<{ event: SessionStepEvent; index: number }>>();
+    liveSteps.forEach((step, index) => {
+      const event = toLiveEvent(step);
+      const row = groups.get(event.requestId) || [];
+      row.push({ event, index });
+      groups.set(event.requestId, row);
+    });
+    return Array.from(groups.entries());
+  }, [liveSteps]);
   const detailTotalUsedTimeMs = useMemo(
     () => (detail?.events || []).reduce((sum, event) => {
       if (typeof event.response?.durationMs !== "number") return sum;
@@ -176,6 +211,24 @@ const App = () => {
     const firstRow = rows?.[0];
     if (!firstRow) return;
     setModalStep({ event: firstRow.event, index: firstRow.index });
+  };
+  const openLiveRequestDetails = async (requestId: string) => {
+    if (!selectedId) return;
+    setError(null);
+    try {
+      const freshDetail = await fetchSessionById(selectedId);
+      setDetail(freshDetail);
+      const requestRows = freshDetail.events
+        .map((event, index) => ({ event, index }))
+        .filter((row) => row.event.requestId === requestId);
+      if (!requestRows[0]) {
+        setError(`Request ${requestId} is not persisted yet`);
+        return;
+      }
+      setModalStep({ event: requestRows[0].event, index: requestRows[0].index });
+    } catch (loadError) {
+      setError(String(loadError));
+    }
   };
   const modalRequestRows = modalStep ? (groupedEventsByRequestId.get(modalStep.event.requestId) || []) : [];
   const modalRequestGlobalStage = modalRequestRows.length ? getRequestGlobalStage(modalRequestRows) : null;
@@ -381,29 +434,75 @@ const App = () => {
                         <Badge variant="secondary">finalized {liveMeta.finalizedAt}</Badge>
                       ) : null}
                     </div>
-                    {liveSteps.length ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Step</TableHead>
-                            <TableHead>Model</TableHead>
-                            <TableHead>ms</TableHead>
-                            <TableHead>Cost</TableHead>
-                            <TableHead>Preview</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {liveSteps.map((step) => (
-                            <TableRow key={`${step.stepIndex}-${step.sessionId}`}>
-                              <TableCell>{step.stepIndex}</TableCell>
-                              <TableCell className="font-mono text-xs">{step.model}</TableCell>
-                              <TableCell>{step.durationMs !== null ? formatNumber(step.durationMs) : EMPTY_VALUE}</TableCell>
-                              <TableCell>{formatCost(step.cost)}</TableCell>
-                              <TableCell className="max-w-[240px] truncate text-xs">{step.replyPreview ?? EMPTY_VALUE}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                    {groupedLiveEvents.length ? (
+                      <div className="space-y-3">
+                        {groupedLiveEvents.map(([requestId, rows]) => (
+                          <details className="overflow-hidden rounded-md border" key={requestId} open>
+                            <summary className="flex cursor-pointer list-none items-center justify-between bg-muted px-3 py-2 text-xs">
+                              <span className="font-mono">{requestId}</span>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">steps: {formatNumber(rows.length)}</Badge>
+                                <Button
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    void openLiveRequestDetails(requestId);
+                                  }}
+                                  size="sm"
+                                  type="button"
+                                  variant="outline"
+                                >
+                                  Request full details
+                                </Button>
+                              </div>
+                            </summary>
+                            <div className="p-2">
+                              <Card className="mb-2">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="flex items-center gap-2 text-sm">
+                                    <span>Current stage (request-global)</span>
+                                    <Badge variant={isLoopStep((getRequestGlobalStage(rows)?.event) || rows[0].event) ? "default" : "outline"}>
+                                      {isLoopStep((getRequestGlobalStage(rows)?.event) || rows[0].event) ? "loop" : "non-loop"}
+                                    </Badge>
+                                  </CardTitle>
+                                  <CardDescription className="text-xs">
+                                    source step #{liveSteps[getRequestGlobalStage(rows)?.index ?? rows[0].index]?.stepIndex ?? (getRequestGlobalStage(rows)?.index ?? rows[0].index)}
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                  <p className="max-h-56 overflow-auto whitespace-pre-wrap rounded border p-2 font-mono text-xs">
+                                    {truncateText(getStagePreview((getRequestGlobalStage(rows)?.event) || rows[0].event), STAGE_PREVIEW_LIMIT)}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Step</TableHead>
+                                    <TableHead>Model</TableHead>
+                                    <TableHead>ms</TableHead>
+                                    <TableHead>Cost</TableHead>
+                                    <TableHead>Tokens in</TableHead>
+                                    <TableHead>Reply</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {rows.map(({ event, index }) => (
+                                    <TableRow key={`${event.requestId}-${index}`}>
+                                      <TableCell>{liveSteps[index]?.stepIndex ?? index}</TableCell>
+                                      <TableCell className="font-mono text-xs">{event.model}</TableCell>
+                                      <TableCell>{typeof event.response?.durationMs === "number" ? formatNumber(event.response.durationMs) : EMPTY_VALUE}</TableCell>
+                                      <TableCell>{formatCost(event.cost ?? 0)}</TableCell>
+                                      <TableCell>{formatNumber(getInputTokens(event))}</TableCell>
+                                      <TableCell className="max-w-[240px] truncate text-xs">{event.response?.reply ?? EMPTY_VALUE}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </details>
+                        ))}
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">No live steps yet. Waiting for model usage events.</p>
                     )}
