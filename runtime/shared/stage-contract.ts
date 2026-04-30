@@ -1,8 +1,10 @@
 export const CONTEXT_SCOPES = ["global", "stage", "types"] as const;
+export const CONTEXT_SET_OPERATIONS = ["set", "extend"] as const;
 export const RUNTIME_BUCKETS = ["context", "stage", "types"] as const;
 export const STAGE_ENVELOPE_TYPES = ["result", "tool_call"] as const;
 
 export type ContextScope = (typeof CONTEXT_SCOPES)[number];
+export type ContextSetOperation = (typeof CONTEXT_SET_OPERATIONS)[number];
 export type RuntimeBucket = (typeof RUNTIME_BUCKETS)[number];
 export type StageEnvelopeType = (typeof STAGE_ENVELOPE_TYPES)[number];
 
@@ -25,6 +27,7 @@ export type StageResultEnvelope = {
 export type SetContextToolCallEnvelope = {
   arguments: {
     key: string;
+    operation: ContextSetOperation;
     scope: ContextScope;
     value: unknown;
   };
@@ -53,6 +56,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isScope = (value: unknown): value is ContextScope =>
   typeof value === "string" && CONTEXT_SCOPES.includes(value as ContextScope);
+
+const isSetOperation = (value: unknown): value is ContextSetOperation =>
+  typeof value === "string" &&
+  CONTEXT_SET_OPERATIONS.includes(value as ContextSetOperation);
 
 export const parseStageEnvelope = (value: string): StageEnvelope | null => {
   let parsed: unknown;
@@ -114,12 +121,14 @@ export const parseStageEnvelope = (value: string): StageEnvelope | null => {
       return isValidTool(item) &&
         item.tool === "set_context" &&
         isScope(item.arguments.scope) &&
+        (item.arguments.operation === undefined || isSetOperation(item.arguments.operation)) &&
         typeof item.arguments.key === 'string' &&
         item.arguments.key.trim();
     })
     .map(item => ({
       arguments: {
         key: item.arguments.key,
+        operation: item.arguments.operation || "set",
         scope: item.arguments.scope,
         value: item.arguments.value,
       },

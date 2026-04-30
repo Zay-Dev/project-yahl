@@ -1,4 +1,5 @@
 import {
+  CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
   RagToolCallEnvelope,
   type ContextScope,
@@ -39,6 +40,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isScope = (value: unknown): value is ContextScope =>
   typeof value === "string" && CONTEXT_SCOPES.includes(value as ContextScope);
 
+const isSetOperation = (value: unknown): value is SetContextToolArguments["operation"] =>
+  typeof value === "string" &&
+  CONTEXT_SET_OPERATIONS.includes(value as SetContextToolArguments["operation"]);
+
 export type SetContextToolArguments = SetContextToolCallEnvelope["arguments"];
 
 export const STAGE_TOOLS = [
@@ -74,6 +79,11 @@ export const STAGE_TOOLS = [
           scope: {
             description: "Target bucket.",
             enum: [...CONTEXT_SCOPES],
+            type: "string",
+          },
+          operation: {
+            description: "Context write strategy. set overwrites; extend stores [oldValue, newValue].",
+            enum: [...CONTEXT_SET_OPERATIONS],
             type: "string",
           },
           value: {
@@ -133,11 +143,13 @@ export const parseSetContextToolArguments = (raw: string): SetContextToolArgumen
 
   if (!isRecord(parsed)) return null;
   if (!isScope(parsed.scope)) return null;
+  if (parsed.operation !== undefined && !isSetOperation(parsed.operation)) return null;
   if (typeof parsed.key !== "string") return null;
   if (!parsed.key.trim()) return null;
 
   return {
     key: parsed.key,
+    operation: parsed.operation === undefined ? "set" : parsed.operation,
     scope: parsed.scope,
     value: parsed.value,
   };

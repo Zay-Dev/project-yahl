@@ -16,8 +16,12 @@ Use the **`set_context`** tool when you need to persist data to runtime context 
 
 - `scope: "global"` writes to the shared `context` bucket across stages.
 - `scope: "stage"` writes to the current stage-only `stage` bucket.
+- `scope: "types"` writes to the shared type-definition bucket.
 - `key` must be a non-empty string.
 - `value` can be any valid JSON value (string, number, object, array, boolean, null).
+- `operation` is optional: `"set"` or `"extend"`. Omitted means `"set"`.
+- `"extend"` always writes `[oldValue, newValue]` regardless of the value types.
+  - when *extend, you MUST use extend regardless if the original context/var value, it is a force use extend
 
 The stage agent exposes this as a **Chat Completions function tool** named `set_context`. Only this tool (or the legacy final JSON envelope) is consumed by the orchestrator for context mutation.
 
@@ -35,6 +39,7 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 - `set_context`: `scope=global`, `key=topic`, `value="AI agents"`
 - `set_context`: `scope=stage`, `key=search_results`, `value=["doc1","doc2"]`
 - `set_context`: `scope=global`, `key=user_profile`, `value={"name":"Zay","role":"developer"}`
+- `set_context`: `scope=global`, `key=records`, `operation=extend`, `value={"id":"2"}`
 
 ### When to use set_context
 

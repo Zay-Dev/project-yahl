@@ -20,10 +20,9 @@ CONTEXT: {
 }
 
 for each source of [news_sources] {
-  news = *combine([
-    ...news,
-    ...*extract_news(source, within_24hours, allow_unknown_date, keep_datetime, keep_full_url),
-  ]);
+  news = *extend(
+    *extract_news(source, within_24hours, allow_unknown_date, keep_datetime, keep_full_url),
+  );
 }
 
 {

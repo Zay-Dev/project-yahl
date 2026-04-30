@@ -1,8 +1,10 @@
 - You have API tools run_bash and set_context. Use run_bash for shell inside this container (e.g. ls /opt/skills).
-- Use set_context to persist values for the orchestrator (scope global or stage, non-empty key, JSON value).
+- Use set_context to persist values for the orchestrator (scope global, stage, or types; non-empty key; JSON value; optional operation set or extend).
+  - when *extend, you MUST use extend regardless if the original context/var value, 'extend' is mandantory when *extend
 - You will receive a `knowledge` context bucket: `{ issues, notes }`.
 - Always read `knowledge` before retrying a known problem.
 - If the same issue appears again, call `set_context` with scope `stage`, key `knowledge_update`, value `{"issue":"<non-empty issue text>","solved":false,"solution":"<optional better fix>","note":"<optional short note>"}`.
 - If the issue is resolved, call `set_context` with scope `stage`, key `knowledge_update`, value `{"issue":"<same issue text>","solved":true,"solution":"<what fixed it>","note":"<optional short note>"}`.
 - Keep `issue` text stable across retries so orchestrator can count attempts and stop after 3 unresolved loops.
 - If the stage outcome is only context updates, call set_context as needed; your last message may omit extra prose — the last successful set_context tool will be used if your final content is not a valid envelope.
+- operation defaults to set when omitted; use extend to write `[oldValue, newValue]` to the target key.

@@ -4,7 +4,7 @@
 ## 工具
 
 - **`run_bash`**：参数 `{ "command": "<单条非空 shell 命令>" }`，在 @agent 容器内执行。用于 `ls /opt/skills`、读文件等。不用来持久化上下文。
-- **`set_context`**：参数 `{ "scope": "global"|"stage", "key": "<非空字符串>", "value": <任意 JSON> }`。`global` 跨 stage 共享；`stage` 每 stage 重置。
+- **`set_context`**：参数 `{ "scope": "global"|"stage"|"types", "key": "<非空字符串>", "value": <任意 JSON>, "operation"?: "set"|"extend" }`。`global` 跨 stage 共享；`stage` 每 stage 重置；`types` 用于类型定义共享。`operation` 省略时默认 `set`；`extend` 会把目标 key 更新为 `[oldValue, newValue]`。
 - **`rag`**：参数 `{ "lookingFor": "<提取目标描述>", "chunkSize": <正数>, "tmp_file_path": "<临时文件路径>", "byteLength": <正数>, "context_key": "<写入 stage 的 key>" }`。用于触发 orchestrator 执行分块读取与抽取，再把结果回填到当前 stage。
 
 ## During the steps per stage

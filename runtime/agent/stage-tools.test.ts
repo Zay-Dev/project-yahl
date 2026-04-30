@@ -19,6 +19,7 @@ describe("parseSetContextToolArguments", () => {
     assert.ok(parsed);
     assert.equal(parsed.scope, "global");
     assert.equal(parsed.key, "topic");
+    assert.equal(parsed.operation, "set");
     assert.equal(parsed.value, "x");
   });
 
@@ -42,6 +43,31 @@ describe("parseSetContextToolArguments", () => {
     assert.ok(parsed);
     assert.equal(parsed!.scope, "types");
     assert.equal(parsed!.key, "TItem");
+    assert.equal(parsed!.operation, "set");
+  });
+
+  it("parses extend operation", () => {
+    const raw = JSON.stringify({
+      key: "records",
+      operation: "extend",
+      scope: "global",
+      value: [1, 2, 3],
+    });
+    const parsed = parseSetContextToolArguments(raw);
+
+    assert.ok(parsed);
+    assert.equal(parsed!.operation, "extend");
+  });
+
+  it("rejects invalid operation", () => {
+    const raw = JSON.stringify({
+      key: "records",
+      operation: "append",
+      scope: "global",
+      value: [1, 2, 3],
+    });
+
+    assert.equal(parseSetContextToolArguments(raw), null);
   });
 
   it("builds orchestrator envelope", () => {
@@ -55,6 +81,18 @@ describe("parseSetContextToolArguments", () => {
     assert.equal(envelope.type, "tool_call");
     assert.equal(envelope.tool, "set_context");
     assert.equal(envelope.arguments.key, "k");
+    assert.equal(envelope.arguments.operation, "set");
+  });
+
+  it("builds orchestrator envelope with explicit operation", () => {
+    const args = parseSetContextToolArguments(
+      JSON.stringify({ key: "k", operation: "extend", scope: "global", value: { a: 1 } }),
+    );
+
+    assert.ok(args);
+    const envelope = setContextArgumentsToEnvelope(args);
+
+    assert.equal(envelope.arguments.operation, "extend");
   });
 });
 

@@ -679,6 +679,7 @@ const execute = async (
                 item.arguments.scope === "types" ? "types" : "global",
                 item.arguments.key,
                 item.arguments.value,
+                item.arguments.operation,
               );
             });
           process.stdout.write(`[Orchestrator Stage] set_context calls, length: ${envelope.length}\n`);

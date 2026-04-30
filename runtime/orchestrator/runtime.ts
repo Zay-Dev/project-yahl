@@ -1,4 +1,9 @@
-import type { ContextScope, RuntimeBucket, StageContextPayload } from "../shared/stage-contract";
+import type {
+  ContextScope,
+  ContextSetOperation,
+  RuntimeBucket,
+  StageContextPayload,
+} from "../shared/stage-contract";
 
 const TAB_SIZE = 2 as const;
 const DEFAULT_END_LINE_WITH = ";" as const;
@@ -27,13 +32,17 @@ export const setContextValue = (
   scope: ContextScope,
   key: string,
   value: unknown,
+  operation: ContextSetOperation = "set",
 ) => {
   const bucketKey = getBucket(scope);
   const current = runtime.get(bucketKey) || {};
+  const nextValue = operation === "extend"
+    ? [current[key], value]
+    : value;
 
   runtime.set(bucketKey, {
     ...current,
-    [key]: value,
+    [key]: nextValue,
   });
 };
 
