@@ -26,9 +26,25 @@ This isn't a victory lap. The shape just happens to line up with where the indus
 
 With the 'tasks' in ~/orchestrator/TASKS, ~95% runs are pretty much the same flow (will even failed at the same place for the same reason), I do feel like the AI is now debuggable, observing the context movements gave me insight of how to 'fix' the AI steps, for example, in some loops, AI got confused about some unwanted temp variables (e.g. website), I could fix that by simply apply `website = null;` by the end of the previous loop.
 
-I also do feel am treating AI as a very outdated computer -- the performance is slow, need to count the used memory (context window), etc. But after all it is still fun!
+And yes, this still feels like operating a very smart but very old machine. You watch memory budget, babysit stage boundaries, and count tokens like it's 1998 and you pay per SMS. Still fun though.
 
-What I'm chasing next: use redis to dispatch messages instead of using stdin/out, may be a nicer UI instead of just terminal, don't hardcode the running tasks, nested stages, per line error logs (this one sounds really interesting!).
+But more important is - it does feel like patching to the right direction! no more roll dice and fingers crossed!
+
+Stuff that already works (aka things that surprisingly do not explode):
+- Redis transport between orchestrator and stage agent.
+- Task discovery from `runtime/orchestrator/TASKS` (instead of fixed hardcoded task IDs).
+- Session/event tracking with replayable step history and usage/cost visibility.
+- Web UI for task runs, live logs, session streams, and rerun/fork from a request boundary.
+- Fork-run flow where you can modify `currentStage` YAHL snapshot before rerun, which makes debugging way less painful.
+- You can attach the orchestrator to a debugger, hit breakpoints, and even poke variables manually while tracing execution. (sounds pretty like coding right?)
+
+Stuff to build:
+- Better nested stage ergonomics and debugging flow.
+- More granular per-line or per-step error visibility.
+- Full input/output logs per stage (so debugging is less detective work, more replay button).
+- OneCLI integration for safer secret handling.
+- A2UI protocol support for richer interactive (getting approval, clarify questions, etc).
+- Friendlier UI polish around authoring and inspecting YAHL scripts.
 
 ## Some catchy syntax
 
@@ -98,21 +114,27 @@ flowchart LR
 
 ## Run it
 
-- Need Node + pnpm and Docker.
-- This repo is now a pnpm workspace:
+- You need Node + pnpm + Docker.
+- Repo shape (pnpm workspace):
   - `runtime/` - YAHL runtime + orchestrator
   - `server/` - Express + Mongoose session records API
   - `web/` - Vite + shadcn session records UI
 - Docker compose split:
-  - root `docker-compose.yml` serves `mongo + server + web`
+  - root `docker-compose.yml` serves `mongo + redis + server + web`
   - `runtime/docker-compose.yml` serves `redis + agent`
-- Copy `.env.example` to `.env`, drop in an LLM API key, and optionally set `SESSION_API_BASE_URL`.
-- Start runtime only: `pnpm run orchestrate`.
-- Start API server: `pnpm run dev:server`.
-- Start web app: `pnpm run dev:web`.
-- Start all apps together: `pnpm run dev`.
-- Start app stack with Docker: `pnpm run compose:up`
-- Start runtime stack with Docker: `pnpm run compose:runtime:up`
+- Copy `.env.example` to `.env`, add your LLM API key, and optionally set `SESSION_API_BASE_URL`.
+- Runtime only: `pnpm run orchestrate`.
+- API server: `pnpm run dev:server`.
+- Web app: `pnpm run dev:web`.
+- Everything together: `pnpm run dev`.
+- App stack with Docker: `pnpm run compose:up`
+- Runtime stack with Docker: `pnpm run compose:runtime:up`
+
+Quick sanity map (so future-you can debug at 2am with less suffering):
+- `GET /api/tasks` lists discovered YAHL tasks.
+- `POST /api/runs` starts an orchestrator run for a task.
+- SSE streams expose live run logs and session events for the web UI.
+- Session endpoints support inspect, soft-delete, hard-delete, and rerun-from-request flow.
 
 ## License
 
