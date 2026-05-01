@@ -1,25 +1,14 @@
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 2s
-      timeout: 3s
-      retries: 10
-
   agent:
+    image: ${AGENT_IMAGE:-project-yahl-agent:latest}
     build:
       context: ..
       dockerfile: runtime/Dockerfile.agent
     env_file:
       - ../.env
     environment:
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      redis:
-        condition: service_healthy
+      AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     # test llm, in reality do not allow host connection
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -29,3 +18,11 @@ services:
       - ./orchestrator/YAHL:/opt/yahl:ro
       - ./orchestrator/SKILLS:/opt/skills:ro
     command: ["pnpm", "--silent", "--filter", "runtime", "run", "agent", "--", "--daemon"]
+    container_name: ${AGENT_CONTAINER_NAME:-agent}
+    networks:
+      - shared
+
+networks:
+  shared:
+    external: true
+    name: ${SHARED_DOCKER_NETWORK:-yahl_shared}

@@ -6,21 +6,39 @@ services:
     volumes:
       - ./mongo_data:/data/db
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
   server:
-    image: node:22
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     working_dir: /app
-    command: sh -lc "corepack enable && pnpm install --config.confirmModulesPurge=false && pnpm --filter server run dev"
+    command: sh -lc "pnpm install --config.confirmModulesPurge=false && pnpm --filter server run dev"
     env_file:
       - .env
     environment:
       CI: "true"
       MONGODB_URI: mongodb://mongo:27017/yahl
+      REDIS_URL: redis://redis:6379
+      RUNTIME_REPO_ROOT: ${HOST_REPO_ROOT}
+      RUNTIME_SHARED_NETWORK: yahl_shared
     ports:
       - "4000:4000"
     depends_on:
       - mongo
+      - redis
     volumes:
       - ./:/app
+      - ${HOST_REPO_ROOT}:${HOST_REPO_ROOT}
+      - /var/run/docker.sock:/var/run/docker.sock
       - server_node_modules:/app/node_modules
 
   web:
@@ -42,3 +60,7 @@ services:
 volumes:
   server_node_modules:
   web_node_modules:
+
+networks:
+  default:
+    name: yahl_shared

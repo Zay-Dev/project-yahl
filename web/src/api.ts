@@ -1,4 +1,9 @@
 import type {
+  RuntimeRun,
+  RuntimeRunLogEvent,
+  RuntimeRunMetaSse,
+  RuntimeRunStatusSse,
+  RuntimeTask,
   SessionDetail,
   SessionListItem,
   SessionMetaSse,
@@ -16,11 +21,46 @@ export const fetchSessions = async () => {
   return data.items;
 };
 
+export const fetchTasks = async () => {
+  const response = await fetch(`${apiBaseUrl}/api/tasks`);
+  if (!response.ok) throw new Error("Failed to fetch tasks");
+
+  const data = await response.json() as { items: RuntimeTask[] };
+  return data.items;
+};
+
+export const createRun = async (taskId: string) => {
+  const response = await fetch(`${apiBaseUrl}/api/runs`, {
+    body: JSON.stringify({ taskId }),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+  if (!response.ok) throw new Error("Failed to create run");
+
+  return await response.json() as RuntimeRun;
+};
+
 export const fetchSessionById = async (sessionId: string) => {
   const response = await fetch(`${apiBaseUrl}/api/sessions/${sessionId}`);
   if (!response.ok) throw new Error("Failed to fetch session detail");
 
   return await response.json() as SessionDetail;
+};
+
+export const softDeleteSession = async (sessionId: string) => {
+  const response = await fetch(`${apiBaseUrl}/api/sessions/${sessionId}/soft-delete`, {
+    method: "POST",
+  });
+  if (!response.ok) throw new Error("Failed to soft delete session");
+};
+
+export const hardDeleteSession = async (sessionId: string) => {
+  const response = await fetch(`${apiBaseUrl}/api/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to hard delete session");
 };
 
 export const openSessionSse = (
@@ -66,6 +106,42 @@ export const openSessionsSse = (
 
     try {
       handlers.onSession(JSON.parse(message.data) as SessionsLifecycleSse);
+    } catch { }
+  });
+
+  return () => {
+    source.close();
+  };
+};
+
+export const openRunLogsSse = (
+  runId: string,
+  handlers: {
+    onLog: (payload: RuntimeRunLogEvent) => void;
+    onMeta: (payload: RuntimeRunMetaSse) => void;
+    onStatus: (payload: RuntimeRunStatusSse) => void;
+  },
+) => {
+  const source = new EventSource(`${apiBaseUrl}/api/runs/${encodeURIComponent(runId)}/logs/stream`);
+
+  source.addEventListener("meta", (event) => {
+    const message = event as MessageEvent<string>;
+    try {
+      handlers.onMeta(JSON.parse(message.data) as RuntimeRunMetaSse);
+    } catch { }
+  });
+
+  source.addEventListener("log", (event) => {
+    const message = event as MessageEvent<string>;
+    try {
+      handlers.onLog(JSON.parse(message.data) as RuntimeRunLogEvent);
+    } catch { }
+  });
+
+  source.addEventListener("status", (event) => {
+    const message = event as MessageEvent<string>;
+    try {
+      handlers.onStatus(JSON.parse(message.data) as RuntimeRunStatusSse);
     } catch { }
   });
 

@@ -1,4 +1,5 @@
 export type SessionListItem = {
+  archivedAt: string | null;
   createdAt: string;
   finalizedAt: string | null;
   sessionId: string;
@@ -79,9 +80,41 @@ export type SessionStepSse = {
 };
 
 export type SessionsLifecycleSse = {
-  eventType: "created" | "finalized" | "updated";
+  eventType: "archived" | "created" | "deleted" | "finalized" | "updated";
   finalizedAt: string | null;
   sessionId: string;
   taskYahlPath: string | null;
   updatedAt: string | null;
+};
+
+export type RuntimeTask = {
+  id: string;
+  label: string;
+  taskPath: string;
+};
+
+export type RuntimeRun = {
+  createdAt: string;
+  runId: string;
+  sessionId: string;
+  status: "completed" | "failed" | "running";
+  taskId: string;
+};
+
+export type RuntimeRunLogEvent = {
+  line: string;
+  ts: string;
+};
+
+export type RuntimeRunMetaSse = {
+  createdAt: string;
+  runId: string;
+  sessionId: string;
+  status: "completed" | "failed" | "running";
+  taskId: string;
+};
+
+export type RuntimeRunStatusSse = {
+  exitCode: number | null;
+  status: "completed" | "failed" | "running";
 };

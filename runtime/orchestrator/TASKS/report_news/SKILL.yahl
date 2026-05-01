@@ -20,7 +20,7 @@ CONTEXT: {
 }
 
 for each source of [news_sources] {
-  EXTENDS: news = *extract_news(source, within_24hours, allow_unknown_date, keep_datetime, keep_full_url);
+  EXTENDS: news = *extract_news(/web-search(source), within_24hours, allow_unknown_date, keep_datetime, keep_full_url);
 }
 
 {

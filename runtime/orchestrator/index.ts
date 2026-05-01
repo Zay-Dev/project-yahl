@@ -33,19 +33,71 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(moduleDir, "..");
 const repoRoot = path.resolve(projectRoot, "..");
 const composeFile = path.resolve(projectRoot, "docker-compose.yml");
+const tasksRoot = path.resolve(projectRoot, "orchestrator", "TASKS");
 const workspacePath = path.resolve(repoRoot, "workspace");
 
-const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
-// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
+type CliOptions = {
+  agentContainerPrefix: string;
+  composeProjectPrefix: string;
+  sessionId: string;
+  taskId: string;
+  taskPath: string;
+};
+
+const parseArgPairs = () => {
+  const args = process.argv.slice(2);
+
+  return args.reduce((acc, value, index) => {
+    if (!value.startsWith("--")) return acc;
+    const key = value.replace(/^--/, "");
+    const next = args[index + 1];
+
+    if (!next || next.startsWith("--")) {
+      acc[key] = "true";
+      return acc;
+    }
+
+    acc[key] = next;
+    return acc;
+  }, {} as Record<string, string>);
+};
+
+const normalizeContainerName = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "")
+    .slice(0, 63) || "session";
+
+const resolveCliOptions = (): CliOptions => {
+  const pairs = parseArgPairs();
+
+  const taskPathRaw = pairs["task-path"] || process.env.ORCHESTRATOR_TASK_PATH || "";
+  const taskId = pairs["task-id"] || process.env.ORCHESTRATOR_TASK_ID || "report_news";
+  const taskPath = taskPathRaw
+    ? path.resolve(repoRoot, taskPathRaw)
+    : path.resolve(tasksRoot, taskId, "SKILL.yahl");
+
+  return {
+    agentContainerPrefix: pairs["agent-container-prefix"] || process.env.AGENT_CONTAINER_PREFIX || "runtime-agent",
+    composeProjectPrefix: pairs["compose-project-prefix"] || process.env.COMPOSE_PROJECT_PREFIX || "runtime-agent",
+    sessionId: normalizeContainerName(pairs["session-id"] || process.env.ORCHESTRATOR_SESSION_ID || randomUUID()),
+    taskId,
+    taskPath,
+  };
+};
 
 const runCommand = (
+  command: string,
   args: string[],
   options?: {
     cwd?: string;
     ignoreFailure?: boolean;
   },
 ) => new Promise<void>((resolve, reject) => {
-  const child = spawn("docker", args, {
+  const child = spawn(command, args, {
     cwd: options?.cwd,
     stdio: "inherit",
   });
@@ -58,36 +110,61 @@ const runCommand = (
       return;
     }
 
-    reject(new Error(`docker ${args.join(" ")} failed with code ${code || -1}`));
+    reject(new Error(`${command} ${args.join(" ")} failed with code ${code || -1}`));
   });
 });
 
-const composeUp = async () => {
-  await runCommand([
-    "compose",
+const runComposeCommand = async (
+  args: string[],
+  options?: {
+    cwd?: string;
+    ignoreFailure?: boolean;
+  },
+) => {
+  await runCommand("docker", ["compose", ...args], options);
+};
+
+const composeUp = async (opts: {
+  agentContainerName: string;
+  composeProjectName: string;
+}) => {
+  await runComposeCommand([
     "-f",
     composeFile,
+    "-p",
+    opts.composeProjectName,
     "up",
     "-d",
-    "--build",
+    "agent",
   ], {
     cwd: repoRoot,
+    ignoreFailure: false,
   });
 };
 
-const composeDown = async () => {
-  await runCommand([
-    "compose",
+const composeDown = async (composeProjectName: string) => {
+  await runComposeCommand([
     "-f",
     composeFile,
+    "-p",
+    composeProjectName,
     "down",
+    "--remove-orphans",
   ], {
     cwd: repoRoot,
     ignoreFailure: true,
   });
 };
 
-const resolveReportPromptPath = async () => {
+const resolveReportPromptPath = async (opts: CliOptions) => {
+  if (opts.taskPath) {
+    try {
+      await fs.access(opts.taskPath);
+      return opts.taskPath;
+    } catch { }
+  }
+
+  const reportNewsDirPath = path.resolve(tasksRoot, opts.taskId);
   const candidates = [
     path.resolve(reportNewsDirPath, "SKILL.md"),
     path.resolve(reportNewsDirPath, "index.md"),
@@ -742,12 +819,15 @@ const execute = async (
 };
 
 const main = async () => {
-  const reportPath = await resolveReportPromptPath();
+  const cli = resolveCliOptions();
+  const reportPath = await resolveReportPromptPath(cli);
   const reportSkill = await fs.readFile(reportPath, "utf-8");
   const aiLogicStartLine = getAiLogicStartLineInFile(reportSkill);
 
   const startTime = process.hrtime.bigint();
-  const sessionId = randomUUID();
+  const sessionId = cli.sessionId;
+  const composeProjectName = normalizeContainerName(`${cli.composeProjectPrefix}-${sessionId}`);
+  const agentContainerName = normalizeContainerName(`${cli.agentContainerPrefix}-${sessionId}`);
 
   const tracker = createSessionTracker();
   const stepTracker = createStepTracker();
@@ -768,8 +848,12 @@ const main = async () => {
   let finalResult: unknown;
 
   try {
-    await composeDown();
-    await composeUp();
+    await composeDown(composeProjectName);
+    process.env.AGENT_CONTAINER_NAME = agentContainerName;
+    await composeUp({
+      agentContainerName,
+      composeProjectName,
+    });
 
     redisTransport = await createOrchestratorRedis({
       onUsage: (trace) => {
@@ -801,7 +885,7 @@ const main = async () => {
       await redisTransport.close().catch(() => { });
     }
 
-    await composeDown();
+    await composeDown(composeProjectName);
   }
 
   const endTime = process.hrtime.bigint();

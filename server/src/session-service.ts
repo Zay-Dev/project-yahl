@@ -55,7 +55,7 @@ const metaFromRow = (
 });
 
 const emitLifecycle = (
-  eventType: "created" | "finalized" | "updated",
+  eventType: "archived" | "created" | "deleted" | "finalized" | "updated",
   sessionId: string,
   row: { finalizedAt?: Date | null; taskYahlPath?: string | null; updatedAt?: Date | null } | null,
 ) => {
@@ -178,8 +178,8 @@ export const finalizeSession = async (sessionId: string, result?: unknown) => {
   emitLifecycle("finalized", sessionId, row);
 };
 
-export const listSessions = async (limit: number, offset: number) => {
-  const rows = await SessionModel.find({})
+export const listSessions = async (limit: number, offset: number, includeArchived = false) => {
+  const rows = await SessionModel.find(includeArchived ? {} : { archivedAt: { $exists: false } })
     .sort({ updatedAt: -1 })
     .skip(offset)
     .limit(limit)
@@ -201,6 +201,7 @@ export const listSessions = async (limit: number, offset: number) => {
     }, 0);
 
     return {
+      archivedAt: row.archivedAt || null,
       createdAt: row.createdAt,
       finalizedAt: row.finalizedAt || null,
       sessionId: row.sessionId,
@@ -217,3 +218,33 @@ export const listSessions = async (limit: number, offset: number) => {
 
 export const getSession = async (sessionId: string) =>
   SessionModel.findOne({ sessionId }).lean();
+
+export const softDeleteSession = async (sessionId: string) => {
+  const now = new Date();
+
+  const row = await SessionModel.findOneAndUpdate(
+    { sessionId },
+    {
+      $set: {
+        archivedAt: now,
+        updatedAt: now,
+      },
+    },
+    { new: true },
+  ).lean();
+
+  if (!row) return false;
+
+  emitSessionMeta(sessionId, metaFromRow(sessionId, row));
+  emitLifecycle("archived", sessionId, row);
+  return true;
+};
+
+export const hardDeleteSession = async (sessionId: string) => {
+  const row = await SessionModel.findOne({ sessionId }).lean();
+  if (!row) return false;
+
+  await SessionModel.deleteOne({ sessionId });
+  emitLifecycle("deleted", sessionId, row);
+  return true;
+};

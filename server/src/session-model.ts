@@ -12,6 +12,7 @@ type ModelAggregate = {
 };
 
 type SessionRecord = {
+  archivedAt?: Date | null;
   createdAt: Date;
   events: SessionUsagePayload[];
   finalizedAt?: Date;
@@ -63,6 +64,7 @@ const sessionEventSchema = new Schema<SessionUsagePayload>(
 
 const sessionSchema = new Schema<SessionRecord>(
   {
+    archivedAt: { type: Date },
     events: { default: [], type: [sessionEventSchema] },
     finalizedAt: { type: Date },
     modelAggregates: {

@@ -26,7 +26,7 @@ export type SessionMetaSsePayload = {
 };
 
 export type SessionsLifecycleSsePayload = {
-  eventType: "created" | "finalized" | "updated";
+  eventType: "archived" | "created" | "deleted" | "finalized" | "updated";
   finalizedAt: string | null;
   sessionId: string;
   taskYahlPath: string | null;

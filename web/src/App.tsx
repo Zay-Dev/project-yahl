@@ -1,14 +1,35 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCcw } from "lucide-react";
 
-import { fetchSessionById, fetchSessions, openSessionSse, openSessionsSse } from "@/api";
+import {
+  createRun,
+  fetchTasks,
+  fetchSessionById,
+  fetchSessions,
+  hardDeleteSession,
+  openRunLogsSse,
+  openSessionSse,
+  openSessionsSse,
+  softDeleteSession,
+} from "@/api";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { SessionDetail, SessionListItem, SessionMetaSse, SessionStepEvent, SessionStepSse } from "@/types";
+import type {
+  RuntimeRun,
+  RuntimeRunLogEvent,
+  RuntimeRunMetaSse,
+  RuntimeRunStatusSse,
+  RuntimeTask,
+  SessionDetail,
+  SessionListItem,
+  SessionMetaSse,
+  SessionStepEvent,
+  SessionStepSse,
+} from "@/types";
 
 const formatNumber = (value: number) => Intl.NumberFormat().format(value);
 const formatCost = (value: number) => `$${value.toFixed(5)}`;
@@ -27,6 +48,7 @@ const formatDuration = (value: number) => {
 const STAGE_PREVIEW_LIMIT = 500;
 const EMPTY_VALUE = "—";
 const JSON_SPACING = 2;
+const RUN_LOG_LIMIT = 300;
 
 const getInputTokens = (event: SessionStepEvent) => event.usage.cacheHitTokens + event.usage.cacheMissTokens;
 const getStagePreview = (event: SessionStepEvent) => {
@@ -89,9 +111,17 @@ const App = () => {
   const [liveSteps, setLiveSteps] = useState<SessionStepSse[]>([]);
   const [modalStep, setModalStep] = useState<{ event: SessionStepEvent; index: number } | null>(null);
   const [resultModalOpen, setResultModalOpen] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [runLogs, setRunLogs] = useState<RuntimeRunLogEvent[]>([]);
+  const [runMeta, setRunMeta] = useState<RuntimeRunMetaSse | null>(null);
+  const [runState, setRunState] = useState<RuntimeRun | null>(null);
+  const [runStatus, setRunStatus] = useState<RuntimeRunStatusSse | null>(null);
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [selectedTaskId, setSelectedTaskId] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<RuntimeTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
   const selectSession = useCallback((sessionId: string) => {
     setSelectedId(sessionId);
   }, []);
@@ -102,7 +132,14 @@ const App = () => {
     try {
       const rows = await fetchSessions();
       setSessions(rows);
-      if (!selectedId && rows[0]) selectSession(rows[0].sessionId);
+      if (!rows.length) {
+        setSelectedId(null);
+        return;
+      }
+
+      if (!selectedId || !rows.some((row) => row.sessionId === selectedId)) {
+        selectSession(rows[0].sessionId);
+      }
     } catch (loadError) {
       setError(String(loadError));
     } finally {
@@ -110,9 +147,29 @@ const App = () => {
     }
   }, [selectedId, selectSession]);
 
+  const loadTasks = useCallback(async () => {
+    setTasksLoading(true);
+    setRunError(null);
+    try {
+      const rows = await fetchTasks();
+      setTasks(rows);
+      if (!selectedTaskId && rows[0]) {
+        setSelectedTaskId(rows[0].id);
+      }
+    } catch (loadError) {
+      setRunError(String(loadError));
+    } finally {
+      setTasksLoading(false);
+    }
+  }, [selectedTaskId]);
+
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    void loadTasks();
+  }, [loadTasks]);
 
   useEffect(() => {
     const dispose = openSessionsSse({
@@ -125,6 +182,35 @@ const App = () => {
       dispose();
     };
   }, [loadSessions]);
+
+  useEffect(() => {
+    if (selectedId) return;
+    setDetail(null);
+    setLiveMeta(null);
+    setLiveSteps([]);
+    setModalStep(null);
+    setResultModalOpen(false);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!runState?.runId) return undefined;
+
+    const dispose = openRunLogsSse(runState.runId, {
+      onLog: (event) => {
+        setRunLogs((prev) => [...prev, event].slice(-RUN_LOG_LIMIT));
+      },
+      onMeta: (meta) => {
+        setRunMeta(meta);
+      },
+      onStatus: (status) => {
+        setRunStatus(status);
+      },
+    });
+
+    return () => {
+      dispose();
+    };
+  }, [runState?.runId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -238,11 +324,109 @@ const App = () => {
   const canOpenPrevRequest = modalRequestIndex > 0;
   const canOpenNextRequest = modalRequestIndex >= 0 && modalRequestIndex < groupedEvents.length - 1;
   const hasStoredResult = detail?.result !== undefined && detail?.result !== null;
+  const removeSessionAndSelectNext = useCallback((sessionId: string) => {
+    setSessions((prev) => {
+      const next = prev.filter((session) => session.sessionId !== sessionId);
+      if (selectedId === sessionId) {
+        setSelectedId(next[0]?.sessionId ?? null);
+      }
+      return next;
+    });
+  }, [selectedId]);
+  const onSoftDelete = useCallback(async () => {
+    if (!selectedId) return;
+    setError(null);
+    try {
+      await softDeleteSession(selectedId);
+      removeSessionAndSelectNext(selectedId);
+      await loadSessions();
+    } catch (deleteError) {
+      setError(String(deleteError));
+    }
+  }, [loadSessions, removeSessionAndSelectNext, selectedId]);
+  const onHardDelete = useCallback(async () => {
+    if (!selectedId) return;
+    const confirmed = window.confirm("Permanently delete this session?");
+    if (!confirmed) return;
+    setError(null);
+    try {
+      await hardDeleteSession(selectedId);
+      removeSessionAndSelectNext(selectedId);
+      await loadSessions();
+    } catch (deleteError) {
+      setError(String(deleteError));
+    }
+  }, [loadSessions, removeSessionAndSelectNext, selectedId]);
+  const onStartRun = useCallback(async () => {
+    if (!selectedTaskId) return;
+
+    setRunError(null);
+
+    try {
+      const created = await createRun(selectedTaskId);
+      setRunLogs([]);
+      setRunMeta(null);
+      setRunState(created);
+      setRunStatus({
+        exitCode: null,
+        status: created.status,
+      });
+      selectSession(created.sessionId);
+      await loadSessions();
+    } catch (startError) {
+      setRunError(String(startError));
+    }
+  }, [loadSessions, selectSession, selectedTaskId]);
 
   return (
     <main className="mx-auto flex min-h-screen w-[90vw] max-w-none flex-col gap-4 p-4">
 
       {error ? <Card><CardContent className="pt-6 text-sm text-red-500">{error}</CardContent></Card> : null}
+      {runError ? <Card><CardContent className="pt-6 text-sm text-red-500">{runError}</CardContent></Card> : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Runtime Runner</CardTitle>
+          <CardDescription>Select task, start orchestrator, watch logs</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="rounded border bg-background px-2 py-1 text-sm"
+              disabled={tasksLoading || !tasks.length}
+              onChange={(event) => setSelectedTaskId(event.target.value)}
+              value={selectedTaskId}
+            >
+              {tasks.map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.id}
+                </option>
+              ))}
+            </select>
+            <Button disabled={!selectedTaskId || tasksLoading} onClick={() => void onStartRun()} size="sm" variant="default">
+              Start
+            </Button>
+            <Button onClick={() => void loadTasks()} size="sm" variant="outline">
+              Refresh tasks
+            </Button>
+            {runState ? <Badge variant="outline">run: {runState.runId.slice(0, 8)}...</Badge> : null}
+            {runMeta ? <Badge variant="secondary">session: {runMeta.sessionId.slice(0, 8)}...</Badge> : null}
+            {runStatus ? (
+              <Badge variant={runStatus.status === "running" ? "outline" : (runStatus.status === "completed" ? "default" : "secondary")}>
+                {runStatus.status}
+              </Badge>
+            ) : null}
+          </div>
+
+          {runLogs.length ? (
+            <pre className="max-h-64 overflow-auto rounded border p-2 text-xs">
+              {runLogs.map((entry) => `[${entry.ts}] ${entry.line}`).join("\n")}
+            </pre>
+          ) : (
+            <p className="text-sm text-muted-foreground">No run logs yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
         <Card className="w-full max-w-[400px]">
@@ -317,6 +501,24 @@ const App = () => {
                     variant="outline"
                   >
                     View result
+                  </Button>
+                  <Button
+                    disabled={!selectedId}
+                    onClick={() => void onSoftDelete()}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Soft Delete
+                  </Button>
+                  <Button
+                    disabled={!selectedId}
+                    onClick={() => void onHardDelete()}
+                    size="sm"
+                    type="button"
+                    variant="default"
+                  >
+                    Hard Delete
                   </Button>
                 </div>
 

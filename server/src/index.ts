@@ -3,18 +3,22 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import mongoose from "mongoose";
+import { createRunManager } from "./run-manager";
 
 import {
   appendUsageEvent,
   finalizeSession,
+  hardDeleteSession,
   getSession,
   listSessions,
   registerSessionMetadata,
+  softDeleteSession,
 } from "./session-service";
 import { subscribeSessionSse, subscribeSessionsSse } from "./session-sse-hub";
 import type { FinalizeSessionPayload, SessionUsagePayload } from "./types";
 
 const app = express();
+const runManager = createRunManager();
 
 const port = Number(process.env.PORT || 4000);
 const mongoUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/yahl";
@@ -60,10 +64,125 @@ const isFinalizeBody = (value: unknown): value is FinalizeSessionPayload => {
   return true;
 };
 
+const isCreateRunBody = (value: unknown): value is { taskId: string } => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const obj = value as Record<string, unknown>;
+  return typeof obj.taskId === "string" && !!obj.taskId.trim();
+};
+
 app.get("/health", (_req, res) => {
   res.json({
     mongoReadyState: mongoose.connection.readyState,
     ok: true,
+  });
+});
+
+app.get("/api/tasks", async (_req, res) => {
+  try {
+    const tasks = await runManager.listTasks();
+    res.json({
+      items: tasks,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: String(error),
+    });
+  }
+});
+
+app.post("/api/runs", async (req, res) => {
+  const body = req.body as unknown;
+  if (!isCreateRunBody(body)) {
+    res.status(400).json({ error: "invalid payload" });
+    return;
+  }
+
+  const started = await runManager.startRun(body.taskId.trim());
+  if (!started) {
+    res.status(404).json({ error: "task not found" });
+    return;
+  }
+
+  res.status(202).json(started);
+});
+
+app.get("/api/runs/:runId", (req, res) => {
+  const run = runManager.getRun(req.params.runId);
+  if (!run) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+
+  res.json({
+    createdAt: run.createdAt,
+    exitCode: run.exitCode,
+    runId: run.runId,
+    sessionId: run.sessionId,
+    status: run.status,
+    taskId: run.taskId,
+    taskPath: run.taskPath,
+  });
+});
+
+app.get("/api/runs/:runId/logs/stream", (req, res) => {
+  const { runId } = req.params;
+  const run = runManager.getRun(runId);
+
+  if (!run) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+
+  const writeSse = (event: string, data: unknown) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  writeSse("meta", {
+    createdAt: run.createdAt,
+    runId: run.runId,
+    sessionId: run.sessionId,
+    status: run.status,
+    taskId: run.taskId,
+  });
+
+  const unsubscribe = runManager.subscribeLogs(runId, (event) => {
+    writeSse("log", event);
+  });
+
+  if (!unsubscribe) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+
+  const heartbeat = setInterval(() => {
+    res.write(`event: ping\ndata: {}\n\n`);
+  }, 25_000);
+
+  const statusTicker = setInterval(() => {
+    const latest = runManager.getRun(runId);
+    if (!latest) return;
+
+    writeSse("status", {
+      exitCode: latest.exitCode,
+      status: latest.status,
+    });
+  }, 1_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    clearInterval(statusTicker);
+    unsubscribe();
   });
 });
 
@@ -189,9 +308,10 @@ app.get("/api/sessions/stream", (_req, res) => {
 });
 
 app.get("/api/sessions", async (req, res) => {
+  const includeArchived = req.query.includeArchived === "true";
   const limit = Number(req.query.limit || 50);
   const offset = Number(req.query.offset || 0);
-  const rows = await listSessions(limit, offset);
+  const rows = await listSessions(limit, offset, includeArchived);
 
   res.json({
     items: rows,
@@ -208,6 +328,26 @@ app.get("/api/sessions/:sessionId", async (req, res) => {
   }
 
   res.json(row);
+});
+
+app.post("/api/sessions/:sessionId/soft-delete", async (req, res) => {
+  const deleted = await softDeleteSession(req.params.sessionId);
+  if (!deleted) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+
+  res.json({ ok: true });
+});
+
+app.delete("/api/sessions/:sessionId", async (req, res) => {
+  const deleted = await hardDeleteSession(req.params.sessionId);
+  if (!deleted) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+
+  res.json({ ok: true });
 });
 
 const start = async () => {
