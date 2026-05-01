@@ -65,62 +65,66 @@ const _chat = async (
   } = {},
 ) => {
   const start = Date.now();
-  const response = await _client.chat.completions.create({
-    messages,
-    model: config.model,
-    stream: false,
-
-    ...options.allowTools && {
-      tool_choice: "auto",
-      tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
-    },
-
-    ...config.thinkingMode && {
-      thinking: { type: "enabled" },
-    },
-  } as any);
-
-  const durationMs = Date.now() - start;
-  const message = response.choices?.[0]?.message || null;
-
-  if (!message) {
-    throw new Error("LLM API returned no message");
-  }
-
-  const content = Utils.getContentText(message.content);
-  const reasoning_content = Utils.getReasoningText(message);
-  const tool_calls = Utils.normalizeToolCalls(message.tool_calls);
-
-  if (!!meta && !!usageEmitter) {
-    const responsePayload = {
-      durationMs,
-      reasoning: reasoning_content,
-      reply: content,
-      toolCalls: tool_calls,
-    };
-
-    usageEmitter({
+  try {
+    const response = await _client.chat.completions.create({
+      messages,
       model: config.model,
-      requestId: meta.requestId,
-      sessionId: meta.sessionId,
-
-      response: responsePayload,
-      thinkingMode: config.thinkingMode,
-      usage: normalizeUsage(response.usage),
-    });
+      stream: false,
+  
+      ...options.allowTools && {
+        tool_choice: "auto",
+        tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
+      },
+  
+      thinking: { type: config.thinkingMode ? "enabled" : "disabled" },
+    } as any);
+    
+    const durationMs = Date.now() - start;
+    const message = response.choices?.[0]?.message || null;
+  
+    if (!message) {
+      throw new Error("LLM API returned no message");
+    }
+  
+    const content = Utils.getContentText(message.content);
+    const reasoning_content = Utils.getReasoningText(message);
+    const tool_calls = Utils.normalizeToolCalls(message.tool_calls);
+  
+    if (!!meta && !!usageEmitter) {
+      const responsePayload = {
+        durationMs,
+        reasoning: reasoning_content,
+        reply: content,
+        toolCalls: tool_calls,
+      };
+  
+      usageEmitter({
+        model: config.model,
+        requestId: meta.requestId,
+        sessionId: meta.sessionId,
+  
+        response: responsePayload,
+        thinkingMode: config.thinkingMode,
+        usage: normalizeUsage(response.usage),
+      });
+    }
+  
+    return {
+      content,
+      tool_calls,
+      reasoning_content,
+      role: "assistant" as const,
+    };
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
-
-  return {
-    content,
-    tool_calls,
-    reasoning_content,
-    role: "assistant" as const,
-  };
 };
 
 const _client = new OpenAI({
   apiKey: config.apiKey || "sk-no-auth-required",
   baseURL: config.apiBaseUrl,
+
   fetch: (() => {
     if (config.apiKey) return fetch;
 

@@ -20,14 +20,12 @@ CONTEXT: {
 }
 
 for each source of [news_sources] {
-  news = *extend(
-    *extract_news(source, within_24hours, allow_unknown_date, keep_datetime, keep_full_url),
-  );
+  EXTENDS: news = *extract_news(source, within_24hours, allow_unknown_date, keep_datetime, keep_full_url);
 }
 
 {
-  const zh_news = *translate(news, 'zh-TW', force_virtual_function) as TNews[];
-  const jp_news = *translate(news, 'jp', force_virtual_function) as TNews[];
+  const zh_news = *translate(news, 'zh-TW', use_ai_capability, flat_map_to: TNews);
+  const jp_news = *translate(news, 'jp', use_ai_capability, flat_map_to: TNews);
 }
 
 CONTEXT: {

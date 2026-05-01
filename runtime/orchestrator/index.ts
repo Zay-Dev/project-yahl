@@ -10,6 +10,7 @@ import { spawn } from "child_process";
 import { createHash, randomUUID } from "crypto";
 
 import { extractYahlBlocks } from "./-utils";
+import { filterContextByReadUsage } from "./context-filter";
 
 import * as agentTrackers from "./-utils/agent-trackers";
 import { createConsoleTracker } from "./-utils/agent-trackers/console-tracker";
@@ -34,8 +35,8 @@ const repoRoot = path.resolve(projectRoot, "..");
 const composeFile = path.resolve(projectRoot, "docker-compose.yml");
 const workspacePath = path.resolve(repoRoot, "workspace");
 
-// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
-const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
+const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "test");
+// const reportNewsDirPath = path.resolve(projectRoot, "orchestrator", "TASKS", "report_news");
 
 const runCommand = (
   args: string[],
@@ -510,20 +511,11 @@ const handleLoop = async (
       `${mode} ${lines.substring(lines.indexOf('{'))}`
     );
 
-    const toContext = (records: Record<string, unknown>) => {
-      return Object.keys(records)
-        .filter(key => aiBlock.includes(key))
-        .reduce((acc, key) => {
-          acc[key] = records[key];
-          return acc;
-        }, {} as Record<string, unknown>);
-    }
-
     const loopRuntime = await execute(
       aiBlock,
       {
-        ...toContext(runtime.get('context')!),
-        ...toContext(runtime.get('stage')!),
+        ...filterContextByReadUsage(aiBlock, runtime.get('context')!),
+        ...filterContextByReadUsage(aiBlock, runtime.get('stage')!),
 
         knowledge: JSON.parse(JSON.stringify(knowledge)),
         [indexName]: currentValue,
@@ -547,7 +539,11 @@ const handleLoop = async (
 
     for (const key of Object.keys(loopContext)) {
       if (Object.keys(myContext).includes(key)) {
-        myContext[key] = loopContext[key];
+        if (lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`))) {
+          myContext[key] = [myContext[key], loopContext[key]];
+        } else {
+          myContext[key] = loopContext[key];
+        }
       }
     }
 
@@ -626,7 +622,12 @@ const execute = async (
         const generatedLine = (next?.generatedLine || position.generatedLine) + meaningfulOffset;
         const sourceLine = (next?.sourceLine || position.sourceLine) + meaningfulOffset;
 
-        const context = toStageContextPayload(runtime);
+        const rawPayload = toStageContextPayload(runtime);
+        const context = {
+          ...rawPayload,
+          context: filterContextByReadUsage(stageText, rawPayload.context),
+          stage: filterContextByReadUsage(stageText, rawPayload.stage),
+        };
         const executionMeta: StageExecutionMeta = {
           loopRef: loopMeta ? {
             arraySnapshot: loopMeta.arraySnapshot,
@@ -788,7 +789,7 @@ const main = async () => {
     };
 
     const runtime = await execute(reportSkill, {}, {}, stageAgent, reportPath, aiLogicStartLine);
-    
+
     finalResult = runtime.get("context")?.result;
 
     console.log('result', JSON.stringify(runtime.get('context')?.['result'], null, 2));

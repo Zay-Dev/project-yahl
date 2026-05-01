@@ -20,6 +20,9 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    # test llm, in reality do not allow host connection
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../workspace:/root
       - ./agent/Agent.md:/opt/agent/Agent.md:ro

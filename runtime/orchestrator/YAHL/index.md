@@ -9,6 +9,7 @@ YAHL is a new language that allow developer to write pseudo code to communicate 
 Ignore system tags unless otherwise indicated, treat them as a space and not more than a space
 
 - REPLACE: 
+- EXTENDS: 
 
 #### *func(...args)
 
