@@ -95,7 +95,18 @@ const decodeBase64Json = <T>(value: string | undefined): T | undefined => {
   }
 };
 
-const resolveCliOptions = (): CliOptions => {
+const decodeJsonFile = async <T>(filePath: string | undefined): Promise<T | undefined> => {
+  if (!filePath) return undefined;
+
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    return JSON.parse(raw) as T;
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveCliOptions = async (): Promise<CliOptions> => {
   const pairs = parseArgPairs();
 
   const taskPathRaw = pairs["task-path"] || process.env.ORCHESTRATOR_TASK_PATH || "";
@@ -105,9 +116,15 @@ const resolveCliOptions = (): CliOptions => {
     : path.resolve(tasksRoot, taskId, "SKILL.yahl");
 
   const resumeMode = pairs["resume-mode"] || "";
-  const resumeExecutionMeta = decodeBase64Json<StageExecutionMeta>(pairs["resume-execution-meta-base64"]);
-  const resumeStageInput = decodeBase64Json<StageSessionInput>(pairs["resume-stage-input-base64"]);
-  const forkedFrom = decodeBase64Json<CliOptions["forkedFrom"]>(pairs["forked-from-base64"]);
+  const resumeExecutionMeta =
+    await decodeJsonFile<StageExecutionMeta>(pairs["resume-execution-meta-file"]) ||
+    decodeBase64Json<StageExecutionMeta>(pairs["resume-execution-meta-base64"]);
+  const resumeStageInput =
+    await decodeJsonFile<StageSessionInput>(pairs["resume-stage-input-file"]) ||
+    decodeBase64Json<StageSessionInput>(pairs["resume-stage-input-base64"]);
+  const forkedFrom =
+    await decodeJsonFile<CliOptions["forkedFrom"]>(pairs["forked-from-file"]) ||
+    decodeBase64Json<CliOptions["forkedFrom"]>(pairs["forked-from-base64"]);
 
   return {
     agentContainerPrefix: pairs["agent-container-prefix"] || process.env.AGENT_CONTAINER_PREFIX || "runtime-agent",
@@ -252,6 +269,17 @@ const applyResumeSnapshotIfNeeded = (
   return resumeInput;
 };
 
+const primeResumeContextIfNeeded = (
+  runtime: RuntimeContext,
+  resumeState?: ResumeState,
+) => {
+  if (!resumeState || resumeState.started || !resumeState.requestSnapshotOverride) return;
+
+  runtime.set("context", { ...resumeState.requestSnapshotOverride.context.context });
+  runtime.set("stage", { ...resumeState.requestSnapshotOverride.context.stage });
+  runtime.set("types", { ...resumeState.requestSnapshotOverride.context.types });
+};
+
 const runSnapshotStageOnce = async (
   runtime: RuntimeContext,
   stageAgent: StageAgentBinding,
@@ -263,6 +291,7 @@ const runSnapshotStageOnce = async (
     resumeState.requestSnapshotOverride,
     resumeState.executionMeta,
   );
+  resumeState.started = true;
   if (!Array.isArray(envelope)) return;
 
   envelope
@@ -846,7 +875,6 @@ const execute = async (
       resetStageContext(runtime);
       Object.assign(runtime.get('stage')!, stageContext);
       const absoluteSourceStartLine = sourceBaseLine + sourceStartLine - 1;
-      applyResumeSnapshotIfNeeded(runtime, resumeState);
 
       const stageId = `${path.basename(sourceFilePath)}:${absoluteSourceStartLine}:${type}`;
       if (type !== "loop" && resumeState?.pendingStageId && resumeState.pendingStageId !== stageId) {
@@ -857,6 +885,9 @@ const execute = async (
       }
 
       if (type === 'loop') {
+        if (resumeState?.pendingStageId) {
+          primeResumeContextIfNeeded(runtime, resumeState);
+        }
         await handleLoop(lines, runtime, stageAgent, sourceFilePath, absoluteSourceStartLine, resumeState || {
           pendingStageId: null,
           started: true,
@@ -1003,7 +1034,7 @@ const execute = async (
 };
 
 const main = async () => {
-  const cli = resolveCliOptions();
+  const cli = await resolveCliOptions();
   const reportPath = await resolveReportPromptPath(cli);
   const reportSkill = await fs.readFile(reportPath, "utf-8");
   const aiLogicStartLine = getAiLogicStartLineInFile(reportSkill);

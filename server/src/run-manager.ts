@@ -110,6 +110,19 @@ const normalizeSessionId = (value: string) =>
     .replace(/-+$/, "")
     .slice(0, 63) || "session";
 
+const writeJsonFile = async (
+  directoryPath: string,
+  fileName: string,
+  value: unknown,
+) => {
+  await fs.mkdir(directoryPath, {
+    recursive: true,
+  });
+  const filePath = path.resolve(directoryPath, fileName);
+  await fs.writeFile(filePath, JSON.stringify(value), "utf-8");
+  return filePath;
+};
+
 export const createRunManager = () => {
   const repoRoot = path.resolve(process.env.RUNTIME_REPO_ROOT || path.resolve(process.cwd(), ".."));
   const runtimeRoot = path.resolve(repoRoot, "runtime");
@@ -220,9 +233,23 @@ export const createRunManager = () => {
     input: StartRerunFromRequestInput,
   ) => {
     const taskId = toTaskId(input.taskPath, tasksRoot);
-    const encodedSnapshot = Buffer.from(JSON.stringify(input.requestSnapshotOverride), "utf-8").toString("base64");
-    const encodedExecutionMeta = Buffer.from(JSON.stringify(input.resumeExecutionMeta), "utf-8").toString("base64");
-    const encodedForkedFrom = Buffer.from(JSON.stringify(input.forkedFrom), "utf-8").toString("base64");
+    const payloadRoot = path.resolve(runtimeRoot, ".rerun-payloads");
+    const payloadId = randomUUID();
+    const executionMetaPath = await writeJsonFile(
+      payloadRoot,
+      `${payloadId}-execution-meta.json`,
+      input.resumeExecutionMeta,
+    );
+    const stageInputPath = await writeJsonFile(
+      payloadRoot,
+      `${payloadId}-stage-input.json`,
+      input.requestSnapshotOverride,
+    );
+    const forkedFromPath = await writeJsonFile(
+      payloadRoot,
+      `${payloadId}-forked-from.json`,
+      input.forkedFrom,
+    );
 
     return startProcess(taskId, input.taskPath, [
       "--task-path",
@@ -235,12 +262,12 @@ export const createRunManager = () => {
       input.sourceRequestId,
       "--resume-from-step-index",
       String(input.forkedFrom.stepIndex),
-      "--resume-execution-meta-base64",
-      encodedExecutionMeta,
-      "--resume-stage-input-base64",
-      encodedSnapshot,
-      "--forked-from-base64",
-      encodedForkedFrom,
+      "--resume-execution-meta-file",
+      executionMetaPath,
+      "--resume-stage-input-file",
+      stageInputPath,
+      "--forked-from-file",
+      forkedFromPath,
     ]);
   };
 
