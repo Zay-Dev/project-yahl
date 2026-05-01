@@ -36,10 +36,18 @@ export type SessionStepEvent = {
   };
 };
 
+export type SessionForkedFrom = {
+  prefixDump: SessionStepEvent[];
+  requestId: string;
+  sourceSessionId: string;
+  stepIndex: number;
+};
+
 export type SessionDetail = {
   createdAt: string;
   events: SessionStepEvent[];
   finalizedAt?: string;
+  forkedFrom?: SessionForkedFrom;
   modelAggregates: Record<string, {
     cacheHitTokens: number;
     cacheMissTokens: number;
@@ -117,4 +125,14 @@ export type RuntimeRunMetaSse = {
 export type RuntimeRunStatusSse = {
   exitCode: number | null;
   status: "completed" | "failed" | "running";
+};
+
+export type RerunRequestPayload = {
+  requestSnapshotOverride: {
+    context: Record<string, unknown>;
+    currentStage: string;
+  };
+  resumeFromStepIndex: number;
+  sourceRequestId: string;
+  sourceSessionId: string;
 };

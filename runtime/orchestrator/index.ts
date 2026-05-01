@@ -39,6 +39,19 @@ const workspacePath = path.resolve(repoRoot, "workspace");
 type CliOptions = {
   agentContainerPrefix: string;
   composeProjectPrefix: string;
+  forkedFrom?: {
+    prefixDump: unknown[];
+    requestId: string;
+    sourceSessionId: string;
+    stepIndex: number;
+  };
+  resume?: {
+    executionMeta: StageExecutionMeta;
+    requestSnapshotOverride: StageSessionInput;
+    sourceRequestId: string;
+    sourceSessionId: string;
+    stepIndex: number;
+  };
   sessionId: string;
   taskId: string;
   taskPath: string;
@@ -71,6 +84,17 @@ const normalizeContainerName = (value: string) =>
     .replace(/-+$/, "")
     .slice(0, 63) || "session";
 
+const decodeBase64Json = <T>(value: string | undefined): T | undefined => {
+  if (!value) return undefined;
+
+  try {
+    const raw = Buffer.from(value, "base64").toString("utf-8");
+    return JSON.parse(raw) as T;
+  } catch {
+    return undefined;
+  }
+};
+
 const resolveCliOptions = (): CliOptions => {
   const pairs = parseArgPairs();
 
@@ -80,9 +104,24 @@ const resolveCliOptions = (): CliOptions => {
     ? path.resolve(repoRoot, taskPathRaw)
     : path.resolve(tasksRoot, taskId, "SKILL.yahl");
 
+  const resumeMode = pairs["resume-mode"] || "";
+  const resumeExecutionMeta = decodeBase64Json<StageExecutionMeta>(pairs["resume-execution-meta-base64"]);
+  const resumeStageInput = decodeBase64Json<StageSessionInput>(pairs["resume-stage-input-base64"]);
+  const forkedFrom = decodeBase64Json<CliOptions["forkedFrom"]>(pairs["forked-from-base64"]);
+
   return {
     agentContainerPrefix: pairs["agent-container-prefix"] || process.env.AGENT_CONTAINER_PREFIX || "runtime-agent",
     composeProjectPrefix: pairs["compose-project-prefix"] || process.env.COMPOSE_PROJECT_PREFIX || "runtime-agent",
+    forkedFrom,
+    resume: resumeMode === "request" && resumeExecutionMeta && resumeStageInput
+      ? {
+        executionMeta: resumeExecutionMeta,
+        requestSnapshotOverride: resumeStageInput,
+        sourceRequestId: pairs["resume-source-request-id"] || "",
+        sourceSessionId: pairs["resume-source-session-id"] || "",
+        stepIndex: Number(pairs["resume-from-step-index"] || 0),
+      }
+      : undefined,
     sessionId: normalizeContainerName(pairs["session-id"] || process.env.ORCHESTRATOR_SESSION_ID || randomUUID()),
     taskId,
     taskPath,
@@ -189,6 +228,135 @@ type StageLoopMeta = {
   arraySnapshot: unknown[];
   index: number;
   value: unknown;
+};
+
+type ResumeState = {
+  executionMeta?: StageExecutionMeta;
+  pendingStageId: string | null;
+  requestSnapshotOverride?: StageSessionInput;
+  started: boolean;
+};
+
+const applyResumeSnapshotIfNeeded = (
+  runtime: RuntimeContext,
+  resumeState?: ResumeState,
+) => {
+  if (!resumeState || resumeState.started || !resumeState.requestSnapshotOverride) return undefined;
+  const resumeInput = resumeState.requestSnapshotOverride;
+
+  runtime.set("context", { ...resumeInput.context.context });
+  runtime.set("stage", { ...resumeInput.context.stage });
+  runtime.set("types", { ...resumeInput.context.types });
+  resumeState.started = true;
+
+  return resumeInput;
+};
+
+const runSnapshotStageOnce = async (
+  runtime: RuntimeContext,
+  stageAgent: StageAgentBinding,
+  resumeState: ResumeState,
+) => {
+  if (!resumeState.requestSnapshotOverride || !resumeState.executionMeta) return;
+
+  const envelope = await stageAgent.execStageAgent(
+    resumeState.requestSnapshotOverride,
+    resumeState.executionMeta,
+  );
+  if (!Array.isArray(envelope)) return;
+
+  envelope
+    .filter((item) => item.type === "tool_call" && item.tool === "set_context")
+    .forEach((item) => {
+      setContextValue(
+        runtime,
+        item.arguments.scope === "types" ? "types" : "global",
+        item.arguments.key,
+        item.arguments.value,
+        item.arguments.operation,
+      );
+    });
+};
+
+const resolveResumeLoopStep = (line: string, loopRef: StageExecutionMeta["loopRef"]) => {
+  const fromArrayExpr = line.match(/^\s*for each \w+ of \[(\w+)(,[+-]?(\d+))?\]/i);
+  if (fromArrayExpr?.[2]) {
+    return parseInt(fromArrayExpr[2].slice(1), 10);
+  }
+  if ((loopRef?.arraySnapshot || []).length >= 2) {
+    return loopRef!.arraySnapshot[1] === 0 && loopRef!.arraySnapshot[0] === 1 ? -1 : 1;
+  }
+  return 1;
+};
+
+const runLoopIteration = async (
+  lines: string,
+  runtime: RuntimeContext,
+  stageAgent: StageAgentBinding,
+  sourceFilePath: string,
+  loopSourceLine: number,
+  knowledge: LoopKnowledge,
+  indexName: string,
+  currentValue: unknown,
+  loopMeta: StageLoopMeta,
+  resumeState: ResumeState,
+) => {
+  const firstLine = lines.split('\n')[0];
+  const mode = firstLine.match(/\s+[A-Z_]+:\s*{/)?.[0]?.replace('{', '') || '';
+  const aiBlock = toAiLogic(
+    `${mode} ${lines.substring(lines.indexOf('{'))}`,
+  );
+
+  const loopRuntime = await execute(
+    aiBlock,
+    {
+      ...filterContextByReadUsage(aiBlock, runtime.get('context')!),
+      ...filterContextByReadUsage(aiBlock, runtime.get('stage')!),
+
+      knowledge: JSON.parse(JSON.stringify(knowledge)),
+      [indexName]: currentValue,
+    },
+    { ...(runtime.get('types') || {}) },
+    stageAgent,
+    sourceFilePath,
+    loopSourceLine + 1,
+    loopMeta,
+    resumeState,
+  );
+
+  const myContext = runtime.get('context')!;
+  const loopContext = loopRuntime.get('context')!;
+  const myStage = runtime.get('stage')!;
+  const loopStage = loopRuntime.get('stage')!;
+
+  for (const key of Object.keys(loopContext)) {
+    if (Object.keys(myContext).includes(key)) {
+      if (lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`))) {
+        myContext[key] = [myContext[key], loopContext[key]];
+      } else {
+        myContext[key] = loopContext[key];
+      }
+    }
+  }
+
+  if (loopStage.result) {
+    runtime.set('context', { ...myContext, result: loopStage.result });
+  }
+
+  runtime.set('stage', { ...myStage, ...loopStage, ...loopContext });
+
+  const stageKnowledgeRaw = loopStage.knowledge_update;
+  const contextKnowledgeRaw = loopContext.knowledge_update;
+  const stageKnowledge = parseKnowledgeUpdate(stageKnowledgeRaw);
+  const contextKnowledge = parseKnowledgeUpdate(contextKnowledgeRaw);
+
+  if (stageKnowledge) {
+    applyKnowledgeUpdate(knowledge, stageKnowledge);
+  } else if (contextKnowledge) {
+    applyKnowledgeUpdate(knowledge, contextKnowledge);
+  } else if (knowledge.notes.length > 0) {
+    console.log(`[knowledge] no update for iteration value="${String(currentValue)}"`);
+  }
 };
 
 type StagePosition = {
@@ -565,7 +733,54 @@ const handleLoop = async (
   stageAgent: StageAgentBinding,
   sourceFilePath: string,
   loopSourceLine: number,
+  resumeState: ResumeState,
 ) => {
+  if (resumeState.pendingStageId && resumeState.executionMeta?.loopRef) {
+    const matchMeta = lines.match(/^\s*for each (\w+) of (\[.*\])/i);
+    if (!matchMeta) {
+      console.error(lines);
+      throw new Error('Invalid loop setup occurred in the above stage');
+    }
+
+    const indexName = matchMeta[1];
+    const loopRef = resumeState.executionMeta.loopRef;
+    const snapshot = Array.isArray(loopRef.arraySnapshot) ? loopRef.arraySnapshot : [];
+    const step = resolveResumeLoopStep(lines, loopRef);
+    const knowledge: LoopKnowledge = {
+      issues: {},
+      notes: [],
+    };
+
+    await runSnapshotStageOnce(runtime, stageAgent, resumeState);
+    resumeState.pendingStageId = null;
+
+    for (
+      let i = loopRef.index + step;
+      step >= 0 ? i < snapshot.length : i >= 0;
+      i += step
+    ) {
+      const currentValue = snapshot[i] ?? null;
+      await runLoopIteration(
+        lines,
+        runtime,
+        stageAgent,
+        sourceFilePath,
+        loopSourceLine,
+        knowledge,
+        indexName,
+        currentValue,
+        {
+          arraySnapshot: snapshot,
+          index: i,
+          value: currentValue,
+        },
+        resumeState,
+      );
+    }
+
+    return;
+  }
+
   const loopSetup = parseLoop(lines, runtime);
   if (!loopSetup) {
     console.error(lines);
@@ -581,67 +796,22 @@ const handleLoop = async (
 
   while (step >= 0 ? i <= endAfter : i >= endAfter) {
     const currentValue = !!array ? array[i] || null : i;
-    const firstLine = lines.split('\n')[0];
-    const mode = firstLine.match(/\s+[A-Z_]+:\s*{/)?.[0]?.replace('{', '') || '';
-
-    const aiBlock = toAiLogic(
-      `${mode} ${lines.substring(lines.indexOf('{'))}`
-    );
-
-    const loopRuntime = await execute(
-      aiBlock,
-      {
-        ...filterContextByReadUsage(aiBlock, runtime.get('context')!),
-        ...filterContextByReadUsage(aiBlock, runtime.get('stage')!),
-
-        knowledge: JSON.parse(JSON.stringify(knowledge)),
-        [indexName]: currentValue,
-      },
-      { ...(runtime.get('types') || {}) },
+    await runLoopIteration(
+      lines,
+      runtime,
       stageAgent,
       sourceFilePath,
-      loopSourceLine + 1,
+      loopSourceLine,
+      knowledge,
+      indexName,
+      currentValue,
       {
         arraySnapshot: Array.isArray(array) ? JSON.parse(JSON.stringify(array)) : [],
         index: i,
         value: currentValue,
       },
+      resumeState,
     );
-
-    const myContext = runtime.get('context')!;
-    const loopContext = loopRuntime.get('context')!;
-
-    const myStage = runtime.get('stage')!;
-    const loopStage = loopRuntime.get('stage')!;
-
-    for (const key of Object.keys(loopContext)) {
-      if (Object.keys(myContext).includes(key)) {
-        if (lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`))) {
-          myContext[key] = [myContext[key], loopContext[key]];
-        } else {
-          myContext[key] = loopContext[key];
-        }
-      }
-    }
-
-    if (loopStage.result) {
-      runtime.set('context', { ...myContext, result: loopStage.result })
-    }
-
-    runtime.set('stage', { ...myStage, ...loopStage, ...loopContext });
-
-    const stageKnowledgeRaw = loopStage.knowledge_update;
-    const contextKnowledgeRaw = loopContext.knowledge_update;
-    const stageKnowledge = parseKnowledgeUpdate(stageKnowledgeRaw);
-    const contextKnowledge = parseKnowledgeUpdate(contextKnowledgeRaw);
-
-    if (stageKnowledge) {
-      applyKnowledgeUpdate(knowledge, stageKnowledge);
-    } else if (contextKnowledge) {
-      applyKnowledgeUpdate(knowledge, contextKnowledge);
-    } else if (knowledge.notes.length > 0) {
-      console.log(`[knowledge] no update for iteration value="${String(currentValue)}"`);
-    }
 
     i += step;
   }
@@ -655,6 +825,7 @@ const execute = async (
   sourceFilePath: string,
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
+  resumeState?: ResumeState,
 ) => {
   const aiLogic = extractAiLogic(text);
   if (!aiLogic) {
@@ -675,9 +846,21 @@ const execute = async (
       resetStageContext(runtime);
       Object.assign(runtime.get('stage')!, stageContext);
       const absoluteSourceStartLine = sourceBaseLine + sourceStartLine - 1;
+      applyResumeSnapshotIfNeeded(runtime, resumeState);
+
+      const stageId = `${path.basename(sourceFilePath)}:${absoluteSourceStartLine}:${type}`;
+      if (type !== "loop" && resumeState?.pendingStageId && resumeState.pendingStageId !== stageId) {
+        continue;
+      }
+      if (type !== "loop" && resumeState?.pendingStageId === stageId) {
+        resumeState.pendingStageId = null;
+      }
 
       if (type === 'loop') {
-        await handleLoop(lines, runtime, stageAgent, sourceFilePath, absoluteSourceStartLine);
+        await handleLoop(lines, runtime, stageAgent, sourceFilePath, absoluteSourceStartLine, resumeState || {
+          pendingStageId: null,
+          started: true,
+        });
         continue;
       }
 
@@ -692,7 +875,8 @@ const execute = async (
         },
       ) => {
         const next = filterLines?.(lines);
-        const currentStage = next?.stageText || lines;
+        const resumeInput = applyResumeSnapshotIfNeeded(runtime, resumeState);
+        const currentStage = resumeInput?.currentStage || next?.stageText || lines;
         const stageText = currentStage;
         const meaningfulOffset = firstTraceableLineOffset(stageText);
         const sourceLineText = getLineSinceOffset(stageText, meaningfulOffset);
@@ -836,7 +1020,10 @@ const main = async () => {
   agentTrackers.add(createConsoleTracker());
   agentTrackers.add(stepTracker);
 
-  await stepTracker.registerSession(sessionId, { taskYahlPath: reportPath });
+  await stepTracker.registerSession(sessionId, {
+    ...(cli.forkedFrom ? { forkedFrom: cli.forkedFrom } : {}),
+    taskYahlPath: reportPath,
+  });
 
   await fs.mkdir(workspacePath, {
     recursive: true,
@@ -872,7 +1059,22 @@ const main = async () => {
         redisTransport!.execStageAgent(sessionId, input, executionMeta),
     };
 
-    const runtime = await execute(reportSkill, {}, {}, stageAgent, reportPath, aiLogicStartLine);
+    const resumeState: ResumeState = {
+      ...(cli.resume ? { executionMeta: cli.resume.executionMeta } : {}),
+      pendingStageId: cli.resume?.executionMeta?.stageId || null,
+      ...(cli.resume ? { requestSnapshotOverride: cli.resume.requestSnapshotOverride } : {}),
+      started: !cli.resume,
+    };
+    const runtime = await execute(
+      reportSkill,
+      {},
+      {},
+      stageAgent,
+      reportPath,
+      aiLogicStartLine,
+      undefined,
+      resumeState,
+    );
 
     finalResult = runtime.get("context")?.result;
 

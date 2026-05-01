@@ -11,11 +11,16 @@ import {
   hardDeleteSession,
   getSession,
   listSessions,
-  registerSessionMetadata,
+  registerSessionMetadataWithFork,
   softDeleteSession,
 } from "./session-service";
 import { subscribeSessionSse, subscribeSessionsSse } from "./session-sse-hub";
-import type { FinalizeSessionPayload, SessionUsagePayload } from "./types";
+import type {
+  FinalizeSessionPayload,
+  RegisterSessionPayload,
+  RerunRequestPayload,
+  SessionUsagePayload,
+} from "./types";
 
 const app = express();
 const runManager = createRunManager();
@@ -49,12 +54,37 @@ const isUsagePayload = (value: unknown): value is SessionUsagePayload => {
   return true;
 };
 
-const isRegisterBody = (value: unknown): value is { taskYahlPath: string } => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
 
-  const obj = value as Record<string, unknown>;
+const isRegisterBody = (value: unknown): value is RegisterSessionPayload => {
+  if (!isRecord(value)) return false;
 
-  return typeof obj.taskYahlPath === "string";
+  if (typeof value.taskYahlPath !== "string") return false;
+  if (value.forkedFrom === undefined) return true;
+  if (!isRecord(value.forkedFrom)) return false;
+
+  const forkedFrom = value.forkedFrom as Record<string, unknown>;
+  if (typeof forkedFrom.sourceSessionId !== "string") return false;
+  if (typeof forkedFrom.requestId !== "string") return false;
+  if (typeof forkedFrom.stepIndex !== "number" || !Number.isInteger(forkedFrom.stepIndex)) return false;
+  if (!Array.isArray(forkedFrom.prefixDump)) return false;
+
+  return true;
+};
+
+const isRerunRequestBody = (value: unknown): value is RerunRequestPayload => {
+  if (!isRecord(value)) return false;
+  if (typeof value.sourceSessionId !== "string") return false;
+  if (typeof value.sourceRequestId !== "string") return false;
+  if (typeof value.resumeFromStepIndex !== "number" || !Number.isInteger(value.resumeFromStepIndex)) return false;
+  if (!isRecord(value.requestSnapshotOverride)) return false;
+
+  const override = value.requestSnapshotOverride as Record<string, unknown>;
+  if (typeof override.currentStage !== "string") return false;
+  if (!isRecord(override.context)) return false;
+
+  return true;
 };
 
 const isFinalizeBody = (value: unknown): value is FinalizeSessionPayload => {
@@ -70,6 +100,7 @@ const isCreateRunBody = (value: unknown): value is { taskId: string } => {
   const obj = value as Record<string, unknown>;
   return typeof obj.taskId === "string" && !!obj.taskId.trim();
 };
+
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -195,8 +226,55 @@ app.post("/api/sessions/:sessionId/register", async (req, res) => {
     return;
   }
 
-  await registerSessionMetadata(routeSessionId, body.taskYahlPath);
+  await registerSessionMetadataWithFork(routeSessionId, body.taskYahlPath, body.forkedFrom);
   res.status(202).json({ ok: true });
+});
+
+app.post("/api/requests/rerun", async (req, res) => {
+  const body = req.body as unknown;
+  if (!isRerunRequestBody(body)) {
+    res.status(400).json({ error: "invalid payload" });
+    return;
+  }
+
+  const source = await getSession(body.sourceSessionId);
+  if (!source) {
+    res.status(404).json({ error: "source session not found" });
+    return;
+  }
+
+  const sourceEvent = source.events?.[body.resumeFromStepIndex];
+  if (!sourceEvent || sourceEvent.requestId !== body.sourceRequestId) {
+    res.status(400).json({ error: "invalid source request anchor" });
+    return;
+  }
+
+  const taskPath = source.taskYahlPath;
+  if (!taskPath) {
+    res.status(400).json({ error: "source session missing task path" });
+    return;
+  }
+
+  const prefixDump = (source.events || []).slice(0, body.resumeFromStepIndex);
+  const started = await runManager.startRerunFromRequest({
+    forkedFrom: {
+      prefixDump,
+      requestId: body.sourceRequestId,
+      sourceSessionId: body.sourceSessionId,
+      stepIndex: body.resumeFromStepIndex,
+    },
+    requestSnapshotOverride: body.requestSnapshotOverride,
+    resumeExecutionMeta: sourceEvent.executionMeta,
+    sourceRequestId: body.sourceRequestId,
+    sourceSessionId: body.sourceSessionId,
+    taskPath,
+  });
+  if (!started) {
+    res.status(500).json({ error: "failed to start rerun" });
+    return;
+  }
+
+  res.status(202).json(started);
 });
 
 app.post("/api/sessions/:sessionId/usage-events", async (req, res) => {

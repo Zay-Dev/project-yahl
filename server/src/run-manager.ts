@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
+import type { SessionForkedFrom } from "./types";
 
 export type RuntimeTask = {
   id: string;
@@ -26,6 +27,26 @@ type RunState = {
   status: RunStatus;
   subscribers: Set<(event: RunLogEvent) => void>;
   taskId: string;
+  taskPath: string;
+};
+
+type StartRunResult = {
+  createdAt: string;
+  runId: string;
+  sessionId: string;
+  status: RunStatus;
+  taskId: string;
+};
+
+type StartRerunFromRequestInput = {
+  forkedFrom: SessionForkedFrom;
+  requestSnapshotOverride: {
+    context: Record<string, unknown>;
+    currentStage: string;
+  };
+  resumeExecutionMeta: unknown;
+  sourceRequestId: string;
+  sourceSessionId: string;
   taskPath: string;
 };
 
@@ -97,11 +118,11 @@ export const createRunManager = () => {
 
   const listTasks = async () => await discoverTasks(tasksRoot);
 
-  const startRun = async (taskId: string) => {
-    const tasks = await listTasks();
-    const task = tasks.find((candidate) => candidate.id === taskId);
-    if (!task) return null;
-
+  const startProcess = (
+    taskId: string,
+    taskPath: string,
+    args: string[],
+  ): StartRunResult => {
     const runId = randomUUID();
     const sessionId = normalizeSessionId(randomUUID());
     const run: RunState = {
@@ -113,8 +134,8 @@ export const createRunManager = () => {
       sessionId,
       status: "running",
       subscribers: new Set(),
-      taskId: task.id,
-      taskPath: task.taskPath,
+      taskId,
+      taskPath,
     };
 
     const child = spawn(
@@ -127,8 +148,7 @@ export const createRunManager = () => {
         "--",
         "--session-id",
         sessionId,
-        "--task-path",
-        task.taskPath,
+        ...args,
       ],
       {
         cwd: repoRoot,
@@ -146,7 +166,7 @@ export const createRunManager = () => {
     run.process = child;
     runs.set(runId, run);
 
-    appendLog(run, `[run] started task=${task.id} session=${sessionId}`);
+    appendLog(run, `[run] started task=${taskId} session=${sessionId}`);
 
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString("utf-8");
@@ -185,6 +205,45 @@ export const createRunManager = () => {
     };
   };
 
+  const startRun = async (taskId: string) => {
+    const tasks = await listTasks();
+    const task = tasks.find((candidate) => candidate.id === taskId);
+    if (!task) return null;
+
+    return startProcess(task.id, task.taskPath, [
+      "--task-path",
+      task.taskPath,
+    ]);
+  };
+
+  const startRerunFromRequest = async (
+    input: StartRerunFromRequestInput,
+  ) => {
+    const taskId = toTaskId(input.taskPath, tasksRoot);
+    const encodedSnapshot = Buffer.from(JSON.stringify(input.requestSnapshotOverride), "utf-8").toString("base64");
+    const encodedExecutionMeta = Buffer.from(JSON.stringify(input.resumeExecutionMeta), "utf-8").toString("base64");
+    const encodedForkedFrom = Buffer.from(JSON.stringify(input.forkedFrom), "utf-8").toString("base64");
+
+    return startProcess(taskId, input.taskPath, [
+      "--task-path",
+      input.taskPath,
+      "--resume-mode",
+      "request",
+      "--resume-source-session-id",
+      input.sourceSessionId,
+      "--resume-source-request-id",
+      input.sourceRequestId,
+      "--resume-from-step-index",
+      String(input.forkedFrom.stepIndex),
+      "--resume-execution-meta-base64",
+      encodedExecutionMeta,
+      "--resume-stage-input-base64",
+      encodedSnapshot,
+      "--forked-from-base64",
+      encodedForkedFrom,
+    ]);
+  };
+
   const getRun = (runId: string) => runs.get(runId) || null;
 
   const subscribeLogs = (
@@ -205,6 +264,7 @@ export const createRunManager = () => {
   return {
     getRun,
     listTasks,
+    startRerunFromRequest,
     startRun,
     subscribeLogs,
   };

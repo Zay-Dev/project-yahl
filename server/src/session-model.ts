@@ -1,6 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 
-import type { SessionUsagePayload } from "./types";
+import type { SessionForkedFrom, SessionUsagePayload } from "./types";
 
 type ModelAggregate = {
   cacheHitTokens: number;
@@ -16,6 +16,7 @@ type SessionRecord = {
   createdAt: Date;
   events: SessionUsagePayload[];
   finalizedAt?: Date;
+  forkedFrom?: SessionForkedFrom;
   modelAggregates: Record<string, ModelAggregate>;
   result?: unknown;
   sessionId: string;
@@ -67,6 +68,7 @@ const sessionSchema = new Schema<SessionRecord>(
     archivedAt: { type: Date },
     events: { default: [], type: [sessionEventSchema] },
     finalizedAt: { type: Date },
+    forkedFrom: { type: Schema.Types.Mixed },
     modelAggregates: {
       default: {},
       of: modelAggregateSchema,

@@ -3,20 +3,33 @@ import type { TAgentTracker } from "@/orchestrator/-utils/agent-trackers";
 
 import { computeCost } from "@/orchestrator/pricing";
 
+type SessionForkedFrom = {
+  prefixDump: unknown[];
+  requestId: string;
+  sourceSessionId: string;
+  stepIndex: number;
+};
+
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
 
 export const createStepTracker = () => {
   const baseUrlRaw = process.env.SESSION_API_BASE_URL;
   const baseUrl = baseUrlRaw ? normalizeBaseUrl(baseUrlRaw) : "http://localhost:4000";
 
-  const registerSession = async (sessionId: string, opts: { taskYahlPath: string }) => {
+  const registerSession = async (
+    sessionId: string,
+    opts: { forkedFrom?: SessionForkedFrom; taskYahlPath: string },
+  ) => {
     if (!baseUrl) return;
 
     const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/register`;
 
     try {
       await fetch(url, {
-        body: JSON.stringify({ taskYahlPath: opts.taskYahlPath }),
+        body: JSON.stringify({
+          ...(opts.forkedFrom ? { forkedFrom: opts.forkedFrom } : {}),
+          taskYahlPath: opts.taskYahlPath,
+        }),
         headers: {
           "content-type": "application/json",
         },
@@ -94,6 +107,9 @@ export const createStepTracker = () => {
   } satisfies TAgentTracker & {
     finalizeSession: (sessionId: string, opts?: { result?: unknown }) => Promise<void>;
     postStep: (trace: StageTokenTrace) => Promise<void>;
-    registerSession: (sessionId: string, opts: { taskYahlPath: string }) => Promise<void>;
+    registerSession: (
+      sessionId: string,
+      opts: { forkedFrom?: SessionForkedFrom; taskYahlPath: string },
+    ) => Promise<void>;
   };
 };

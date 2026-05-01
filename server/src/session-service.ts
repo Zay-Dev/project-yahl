@@ -1,7 +1,7 @@
 import { emitSessionMeta, emitSessionStep, emitSessionsLifecycle } from "./session-sse-hub";
 import type { SessionMetaSsePayload, SessionStepSsePayload } from "./session-sse-hub";
 import { SessionModel } from "./session-model";
-import type { SessionUsagePayload } from "./types";
+import type { SessionForkedFrom, SessionUsagePayload } from "./types";
 
 const toNumber = (value: number | undefined) => {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0;
@@ -70,11 +70,40 @@ const emitLifecycle = (
 
 export const registerSessionMetadata = async (sessionId: string, taskYahlPath: string) => {
   const now = new Date();
+  const result = await SessionModel.updateOne(
+    { sessionId },
+    {
+      $set: {
+        taskYahlPath,
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        events: [],
+        modelAggregates: {},
+        sessionId,
+      },
+    },
+    { upsert: true },
+  );
+
+  const row = await SessionModel.findOne({ sessionId }).lean();
+
+  emitSessionMeta(sessionId, metaFromRow(sessionId, row));
+  emitLifecycle(result.upsertedCount > 0 ? "created" : "updated", sessionId, row);
+};
+
+export const registerSessionMetadataWithFork = async (
+  sessionId: string,
+  taskYahlPath: string,
+  forkedFrom: SessionForkedFrom | undefined,
+) => {
+  const now = new Date();
 
   const result = await SessionModel.updateOne(
     { sessionId },
     {
       $set: {
+        ...(forkedFrom ? { forkedFrom } : {}),
         taskYahlPath,
         updatedAt: now,
       },

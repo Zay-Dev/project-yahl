@@ -10,6 +10,7 @@ import {
   openRunLogsSse,
   openSessionSse,
   openSessionsSse,
+  rerunRequest,
   softDeleteSession,
 } from "@/api";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -24,6 +25,7 @@ import type {
   RuntimeRunMetaSse,
   RuntimeRunStatusSse,
   RuntimeTask,
+  RerunRequestPayload,
   SessionDetail,
   SessionListItem,
   SessionMetaSse,
@@ -73,6 +75,33 @@ const isLoopStep = (event: SessionStepEvent) => {
   const executionMeta = event.executionMeta as { loopRef?: unknown };
   return typeof executionMeta.loopRef === "object" && executionMeta.loopRef !== null;
 };
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+
+const toRequestSnapshot = (event: SessionStepEvent | null): RerunRequestPayload["requestSnapshotOverride"] | null => {
+  if (!event?.stageInput || !isRecord(event.stageInput)) return null;
+  const stageInput = event.stageInput as Record<string, unknown>;
+  if (typeof stageInput.currentStage !== "string" || !isRecord(stageInput.context)) return null;
+  const context = stageInput.context as Record<string, unknown>;
+  return {
+    context: {
+      context: isRecord(context.context) ? context.context : {},
+      stage: isRecord(context.stage) ? context.stage : {},
+      types: isRecord(context.types) ? context.types : {},
+    },
+    currentStage: stageInput.currentStage,
+  };
+};
+const getRequestSnapshot = (
+  rows: Array<{ event: SessionStepEvent; index: number }>,
+  fallback: SessionStepEvent | null,
+) => {
+  const fromRows = [...rows]
+    .reverse()
+    .map(({ event }) => toRequestSnapshot(event))
+    .find((snapshot) => !!snapshot);
+  return fromRows || toRequestSnapshot(fallback);
+};
 const getRequestGlobalStage = (rows: Array<{ event: SessionStepEvent; index: number }>) => {
   const scopedRows = [...rows].reverse();
   const globalRow = scopedRows.find(({ event }) => getStagePreview(event) !== EMPTY_VALUE) ?? scopedRows[0] ?? null;
@@ -111,6 +140,13 @@ const App = () => {
   const [liveSteps, setLiveSteps] = useState<SessionStepSse[]>([]);
   const [modalStep, setModalStep] = useState<{ event: SessionStepEvent; index: number } | null>(null);
   const [resultModalOpen, setResultModalOpen] = useState(false);
+  const [rerunDraftError, setRerunDraftError] = useState<string | null>(null);
+  const [rerunDraftOpen, setRerunDraftOpen] = useState(false);
+  const [rerunDraftStage, setRerunDraftStage] = useState("");
+  const [rerunDraftContext, setRerunDraftContext] = useState("{}");
+  const [rerunDraftStageContext, setRerunDraftStageContext] = useState("{}");
+  const [rerunDraftTypes, setRerunDraftTypes] = useState("{}");
+  const [rerunSubmitting, setRerunSubmitting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [runLogs, setRunLogs] = useState<RuntimeRunLogEvent[]>([]);
   const [runMeta, setRunMeta] = useState<RuntimeRunMetaSse | null>(null);
@@ -223,6 +259,8 @@ const App = () => {
 
     setModalStep(null);
     setResultModalOpen(false);
+    setRerunDraftError(null);
+    setRerunDraftOpen(false);
   }, [selectedId]);
 
   useEffect(() => {
@@ -320,6 +358,7 @@ const App = () => {
   const modalRequestGlobalStage = modalRequestRows.length ? getRequestGlobalStage(modalRequestRows) : null;
   const modalGlobalStageEvent = modalRequestGlobalStage?.event || modalStep?.event || null;
   const modalGlobalStageIndex = modalRequestGlobalStage?.index ?? modalStep?.index ?? null;
+  const modalRequestSnapshot = getRequestSnapshot(modalRequestRows, modalGlobalStageEvent);
   const modalRequestIndex = modalStep ? groupedEvents.findIndex(([requestId]) => requestId === modalStep.event.requestId) : -1;
   const canOpenPrevRequest = modalRequestIndex > 0;
   const canOpenNextRequest = modalRequestIndex >= 0 && modalRequestIndex < groupedEvents.length - 1;
@@ -377,6 +416,77 @@ const App = () => {
       setRunError(String(startError));
     }
   }, [loadSessions, selectSession, selectedTaskId]);
+  const onOpenRerunDraft = useCallback(() => {
+    if (!modalRequestSnapshot) {
+      setRerunDraftError("Current request does not have a valid snapshot");
+      return;
+    }
+    setRerunDraftError(null);
+    setRerunDraftStage(modalRequestSnapshot.currentStage);
+    setRerunDraftContext(stringifyValue(modalRequestSnapshot.context.context));
+    setRerunDraftStageContext(stringifyValue(modalRequestSnapshot.context.stage));
+    setRerunDraftTypes(stringifyValue(modalRequestSnapshot.context.types));
+    setRerunDraftOpen(true);
+  }, [modalRequestSnapshot]);
+  const onSubmitRerun = useCallback(async () => {
+    if (!selectedId || !modalStep || modalGlobalStageIndex === null) {
+      setRerunDraftError("Missing source request anchor");
+      return;
+    }
+    const parseJson = (raw: string, label: string) => {
+      try {
+        const value = JSON.parse(raw) as unknown;
+        if (!isRecord(value)) throw new Error();
+        return value;
+      } catch {
+        throw new Error(`${label} must be a valid JSON object`);
+      }
+    };
+
+    setRerunDraftError(null);
+    setRerunSubmitting(true);
+    setRunError(null);
+    try {
+      const payload: RerunRequestPayload = {
+        requestSnapshotOverride: {
+          context: {
+            context: parseJson(rerunDraftContext, "context.context"),
+            stage: parseJson(rerunDraftStageContext, "context.stage"),
+            types: parseJson(rerunDraftTypes, "context.types"),
+          },
+          currentStage: rerunDraftStage,
+        },
+        resumeFromStepIndex: modalGlobalStageIndex,
+        sourceRequestId: modalStep.event.requestId,
+        sourceSessionId: selectedId,
+      };
+      const created = await rerunRequest(payload);
+      setRunLogs([]);
+      setRunMeta(null);
+      setRunState(created);
+      setRunStatus({
+        exitCode: null,
+        status: created.status,
+      });
+      setRerunDraftOpen(false);
+      selectSession(created.sessionId);
+      await loadSessions();
+    } catch (submitError) {
+      setRerunDraftError(String(submitError));
+    } finally {
+      setRerunSubmitting(false);
+    }
+  }, [
+    loadSessions,
+    modalGlobalStageIndex,
+    modalStep,
+    rerunDraftContext,
+    rerunDraftStage,
+    rerunDraftStageContext,
+    rerunDraftTypes,
+    selectSession,
+    selectedId,
+  ]);
 
   return (
     <main className="mx-auto flex min-h-screen w-[90vw] max-w-none flex-col gap-4 p-4">
@@ -719,7 +829,11 @@ const App = () => {
       {modalStep ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setModalStep(null)}
+          onClick={() => {
+            setModalStep(null);
+            setRerunDraftError(null);
+            setRerunDraftOpen(false);
+          }}
         >
           <Card
             className="flex max-h-[95vh] w-full max-w-6xl flex-col"
@@ -751,7 +865,16 @@ const App = () => {
                 >
                   Next
                 </Button>
-                <Button onClick={() => setModalStep(null)} size="sm" type="button" variant="outline">
+                <Button
+                  onClick={() => {
+                    setModalStep(null);
+                    setRerunDraftError(null);
+                    setRerunDraftOpen(false);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
                   Close
                 </Button>
               </div>
@@ -764,7 +887,92 @@ const App = () => {
                 <Badge variant="default">request: {modalStep.event.requestId}</Badge>
                 <Badge variant="secondary">steps: {formatNumber(modalRequestRows.length || 1)}</Badge>
                 <Badge variant="outline">session: {modalStep.event.sessionId}</Badge>
+                <Button
+                  disabled={!modalRequestSnapshot}
+                  onClick={() => onOpenRerunDraft()}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Rerun from here
+                </Button>
               </div>
+              {modalGlobalStageEvent?.stageInputTruncated ? (
+                <p className="text-xs text-amber-600">
+                  Snapshot was marked truncated in source event. Review and edit carefully before rerun.
+                </p>
+              ) : null}
+
+              {rerunDraftOpen ? (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm">Rerun Request Draft</CardTitle>
+                    <CardDescription className="text-xs">
+                      Forks into a new session and continues pipeline from this request boundary.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium">currentStage</p>
+                      <textarea
+                        className="min-h-28 w-full rounded border bg-background p-2 font-mono text-xs"
+                        onChange={(event) => setRerunDraftStage(event.target.value)}
+                        value={rerunDraftStage}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium">context.context (JSON object)</p>
+                      <textarea
+                        className="min-h-24 w-full rounded border bg-background p-2 font-mono text-xs"
+                        onChange={(event) => setRerunDraftContext(event.target.value)}
+                        value={rerunDraftContext}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium">context.stage (JSON object)</p>
+                      <textarea
+                        className="min-h-24 w-full rounded border bg-background p-2 font-mono text-xs"
+                        onChange={(event) => setRerunDraftStageContext(event.target.value)}
+                        value={rerunDraftStageContext}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium">context.types (JSON object)</p>
+                      <textarea
+                        className="min-h-24 w-full rounded border bg-background p-2 font-mono text-xs"
+                        onChange={(event) => setRerunDraftTypes(event.target.value)}
+                        value={rerunDraftTypes}
+                      />
+                    </div>
+                    {rerunDraftError ? (
+                      <p className="text-xs text-red-500">{rerunDraftError}</p>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        disabled={rerunSubmitting}
+                        onClick={() => void onSubmitRerun()}
+                        size="sm"
+                        type="button"
+                        variant="default"
+                      >
+                        {rerunSubmitting ? "Submitting..." : "Start fork rerun"}
+                      </Button>
+                      <Button
+                        disabled={rerunSubmitting}
+                        onClick={() => {
+                          setRerunDraftError(null);
+                          setRerunDraftOpen(false);
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
 
               <details className="overflow-hidden rounded-md border" open>
                 <summary className="flex cursor-pointer list-none items-center justify-between bg-muted px-3 py-2 text-xs">

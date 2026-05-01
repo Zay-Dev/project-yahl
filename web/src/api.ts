@@ -1,4 +1,5 @@
 import type {
+  RerunRequestPayload,
   RuntimeRun,
   RuntimeRunLogEvent,
   RuntimeRunMetaSse,
@@ -38,6 +39,19 @@ export const createRun = async (taskId: string) => {
     method: "POST",
   });
   if (!response.ok) throw new Error("Failed to create run");
+
+  return await response.json() as RuntimeRun;
+};
+
+export const rerunRequest = async (payload: RerunRequestPayload) => {
+  const response = await fetch(`${apiBaseUrl}/api/requests/rerun`, {
+    body: JSON.stringify(payload),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+  if (!response.ok) throw new Error("Failed to rerun request");
 
   return await response.json() as RuntimeRun;
 };
