@@ -3,6 +3,7 @@ import type { StageEnvelope, StageSessionInput } from "../shared/stage-contract"
 
 import "dotenv/config";
 
+import { OneCLI } from "@onecli-sh/sdk";
 import path from "path";
 import { fileURLToPath } from "url";
 import { promises as fs } from "fs";
@@ -33,6 +34,10 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(moduleDir, "..");
 const repoRoot = path.resolve(projectRoot, "..");
 const composeFile = path.resolve(projectRoot, "docker-compose.yml");
+const onecliRuntimePath = path.resolve(projectRoot, ".onecli");
+const onecliSharedCaFile = path.resolve(onecliRuntimePath, "proxy-ca.pem");
+const onecliSharedCombinedCaFile = path.resolve(onecliRuntimePath, "combined-ca.pem");
+const onecliSharedComposeOverrideFile = path.resolve(onecliRuntimePath, "docker-compose.onecli.override.yml");
 const tasksRoot = path.resolve(projectRoot, "orchestrator", "TASKS");
 const workspacePath = path.resolve(repoRoot, "workspace");
 
@@ -180,18 +185,105 @@ const runComposeCommand = async (
   await runCommand("docker", ["compose", ...args], options);
 };
 
+const readFirstExistingFile = async (candidates: string[]) => {
+  for (const candidate of candidates) {
+    try {
+      const content = await fs.readFile(candidate, "utf-8");
+      if (content.trim()) return content;
+    } catch { }
+  }
+
+  return null;
+};
+
+const yamlQuote = (value: string) => JSON.stringify(value);
+
+const writeSharedOneCliOverride = async () => {
+  const onecliApiKey = process.env.ONECLI_API_KEY || "";
+  const onecliDashboardUrl = process.env.ONECLI_DASHBOARD_URL || process.env.ONECLI_URL || "";
+
+  if (!onecliApiKey || !onecliDashboardUrl) {
+    process.stdout.write("[OneCLI] ONECLI_API_KEY or ONECLI_DASHBOARD_URL missing, skip shared override\n");
+    return undefined;
+  }
+
+  const onecli = new OneCLI({
+    apiKey: onecliApiKey,
+    url: onecliDashboardUrl,
+  });
+
+  const config = await onecli.getContainerConfig();
+  const configEnv = config?.env && typeof config.env === "object" ? config.env : {};
+  const caCertificate = typeof config?.caCertificate === "string" ? config.caCertificate : "";
+  const caContainerPath = typeof config?.caCertificateContainerPath === "string"
+    ? config.caCertificateContainerPath
+    : "";
+
+  if (!caCertificate || !caContainerPath) {
+    throw new Error("[OneCLI] Missing CA certificate fields from container config");
+  }
+
+  await fs.mkdir(onecliRuntimePath, { recursive: true });
+  await fs.writeFile(onecliSharedCaFile, caCertificate, "utf-8");
+
+  const baseCa = await readFirstExistingFile([
+    "/etc/ssl/cert.pem",
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/pki/tls/certs/ca-bundle.crt",
+  ]);
+
+  const hasCombinedBundle = !!baseCa;
+  if (hasCombinedBundle) {
+    const combined = `${baseCa!.trimEnd()}\n${caCertificate.trimEnd()}\n`;
+    await fs.writeFile(onecliSharedCombinedCaFile, combined, "utf-8");
+  }
+
+  const envLines = Object.entries(configEnv).map(([key, value]) =>
+    `      ${key}: ${yamlQuote(String(value))}`);
+  if (hasCombinedBundle) {
+    envLines.push(`      SSL_CERT_FILE: ${yamlQuote("/tmp/onecli-combined-ca.pem")}`);
+    envLines.push(`      DENO_CERT: ${yamlQuote("/tmp/onecli-combined-ca.pem")}`);
+  }
+
+  const volumeLines = [
+    `      - ${yamlQuote(`${onecliSharedCaFile}:${caContainerPath}:ro`)}`,
+    ...(hasCombinedBundle
+      ? [`      - ${yamlQuote(`${onecliSharedCombinedCaFile}:/tmp/onecli-combined-ca.pem:ro`)}`]
+      : []),
+  ];
+
+  const composeOverride = [
+    "services:",
+    "  agent:",
+    "    environment:",
+    ...envLines,
+    "    volumes:",
+    ...volumeLines,
+    "",
+  ].join("\n");
+
+  await fs.writeFile(onecliSharedComposeOverrideFile, composeOverride, "utf-8");
+
+  return onecliSharedComposeOverrideFile;
+};
+
 const composeUp = async (opts: {
-  agentContainerName: string;
   composeProjectName: string;
+  onecliOverrideFilePath?: string;
 }) => {
-  await runComposeCommand([
+  const composeArgs = [
     "-f",
     composeFile,
+    ...(opts.onecliOverrideFilePath ? ["-f", opts.onecliOverrideFilePath] : []),
     "-p",
     opts.composeProjectName,
     "up",
     "-d",
     "agent",
+  ];
+
+  await runComposeCommand([
+    ...composeArgs,
   ], {
     cwd: repoRoot,
     ignoreFailure: false,
@@ -1061,6 +1153,7 @@ const main = async () => {
   });
 
   const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+  const onecliOverrideFilePath = await writeSharedOneCliOverride();
 
   let redisTransport: Awaited<ReturnType<typeof createOrchestratorRedis>> | null = null;
   let finalResult: unknown;
@@ -1069,8 +1162,8 @@ const main = async () => {
     await composeDown(composeProjectName);
     process.env.AGENT_CONTAINER_NAME = agentContainerName;
     await composeUp({
-      agentContainerName,
       composeProjectName,
+      ...(onecliOverrideFilePath ? { onecliOverrideFilePath } : {}),
     });
 
     redisTransport = await createOrchestratorRedis({

@@ -120,15 +120,39 @@ flowchart LR
   - `server/` - Express + Mongoose session records API
   - `web/` - Vite + shadcn session records UI
 - Docker compose split:
-  - root `docker-compose.yml` serves `mongo + redis + server + web`
-  - `runtime/docker-compose.yml` serves `redis + agent`
-- Copy `.env.example` to `.env`, add your LLM API key, and optionally set `SESSION_API_BASE_URL`.
+  - root `docker-compose.yml` serves `onecli + mongo + redis + server + web`
+  - `runtime/docker-compose.yml` remains available, and orchestrator keeps using compose for agent lifecycle with a shared OneCLI SDK override
+- Copy `.env.example` to `.env`, keep provider keys as placeholders, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`.
 - Runtime only: `pnpm run orchestrate`.
 - API server: `pnpm run dev:server`.
 - Web app: `pnpm run dev:web`.
 - Everything together: `pnpm run dev`.
 - App stack with Docker: `pnpm run compose:up`
 - Runtime stack with Docker: `pnpm run compose:runtime:up`
+
+### OneCLI setup checklist
+
+1. Start infra: `pnpm run compose:up`.
+2. Open OneCLI dashboard at `http://127.0.0.1:10254`.
+3. Create an agent identity and copy its token.
+4. Add provider credentials to OneCLI vault with correct host/path patterns.
+5. Set both `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` in `.env` so orchestrator can fetch shared OneCLI container config.
+6. Run one orchestrator session once to bootstrap shared override files under `runtime/.onecli/`.
+7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` / `BRAVE_SEARCH_API_KEY` as placeholders only.
+
+### Smoke tests
+
+- Dashboard health: `curl -sf http://127.0.0.1:10254/`
+- Proxy route check:
+  - `curl -x http://127.0.0.1:10255 -H "Authorization: Bearer placeholder" https://api.deepseek.com/models`
+- Runtime task check: run `pnpm run orchestrate`.
+
+### Troubleshooting OneCLI
+
+- `gateway unreachable`: ensure root stack is up and `onecli` container is healthy.
+- `sdk config fetch failed`: verify `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` are set and valid.
+- `certificate rejected`: confirm `runtime/.onecli/` contains refreshed CA files and compose override.
+- `provider key not injected`: re-check host/path matching and assigned agent permissions in OneCLI.
 
 Quick sanity map (so future-you can debug at 2am with less suffering):
 - `GET /api/tasks` lists discovered YAHL tasks.
