@@ -14,15 +14,16 @@ Ignore system tags unless otherwise indicated, treat them as a space and not mor
 #### *func(...args)
 
 Syntax of "*some_text(...args)" is a virtual function, that means
-1. the function does not exist
+1. the function does not exist, that means the execution details will leave to you
 2. the "some_text" is usually a meaningful name that you can understand, e.g. *scan_file_system_for clearly means scan the file system for something
 3. "...args" will provide more context, e.g. *scan_file_system_for(json_file) clearly means scan the file system for all json files
-4. the variable name to store the result can also provide context of the purpose of the virtual function, e.g. const newest_news = *... // means it is very likely to skip out dated news
-5. after analyzing the purpose and args of the virtual function, generate bash command for the user to execute
+4. treat "...args" very carefully, do NOT miss any of them, usually they are the user_requirements
+5. the variable name to store the result can also provide context of the purpose of the virtual function, e.g. const newest_news = *... // means it is very likely to skip out dated news
+6. after analyzing the purpose and args of the virtual function, generate bash command for the user to execute
 
 examples:
 - const topic = *ask_user(a2ui, [textarea]) means return an A2UI schema textarea to ask user for the topic
-- const sum = *sum([1,3,5,6,10]) means get the sum of the args
+- const sum = *sum([1,3,5,6,10]) means get the sum of the args (1+3+5+6+10)
 - const filtered = *filter([1,3,2,5,6,3,2,692345,3], even_number) means find the even numbers in the array
 - const filtered = *filter([1,3,2,5,6,3,2,692345,3], even_number, new Set() as Array) means find the even numbers in the array, remove all duplicated numbers ('2' should show only one time in the result)
 - const html = *browse_or_curl('https://x.com') means getting the html from x.com
@@ -41,10 +42,6 @@ examples:
 - *read(~/knowledges/news-monitor/sources.json) means reading the content of the file at that absolute path
 - *find(~/knowledges/**/*.json) means find all json files recursively under the ~/knowledges folder
 - *save(~/memory.md, new_memory) means saving new memory to the ~/memory.md file
-
-#### return
-
-To return a value as the result, use the set_context tool to set the value to the key 'result'
 
 ### Instructions
 

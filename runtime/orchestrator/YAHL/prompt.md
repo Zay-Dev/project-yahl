@@ -45,12 +45,12 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 When it is a value assignment of all kinds
 
 Examples
-1. const a = 1; // set a to 1
-2. const b = 2; // set b to 2
-3. const content = *read(~/some_file.json); // execute the virtual function '*read' and set the result to the content
-4. const web_result = /web-search; // execute the skill '/web-search' and set the result to the web_result
-5. const escapedArray = array.map(item => *escape(item)); // execute the virtual function to each item of the 'array' and set the new values of array to escapedArray
-6. type TType = {...}; // set the type definition to TType, respect the typescript/javascript type, then python, then dotnet, then Java, fallback to type you think suitable
-7. records = [...records, ...new_records]; // update the records
-8. records = [...records, ...new_records, mandantory_record]; // update the records
-9. value += other_value; // modify and reassign the value
+1. `const a = 1;` -> call `set_context` with `scope="stage"` (or `global` if cross-stage), `key="a"`, `operation="set"`, `value=1`.
+2. `const b = 2;` -> call `set_context` with `scope="stage"` (or `global` if cross-stage), `key="b"`, `operation="set"`, `value=2`.
+3. `const content = *read(~/some_file.json);` -> execute `*read` first, then call `set_context` with `scope="stage"` (or `global`), `key="content"`, `operation="set"`, `value=<result_of_read>`.
+4. `const web_result = /web-search;` -> execute `/web-search` first, then call `set_context` with `scope="stage"` (or `global`), `key="web_result"`, `operation="set"`, `value=<tool_result>`.
+5. `const escapedArray = array.map(item => *escape(item));` -> compute mapped values first, then call `set_context` with `scope="stage"` (or `global`), `key="escapedArray"`, `operation="set"`, `value=<mapped_array>`.
+6. `type TType = {...};` -> call `set_context` with `scope="types"`, `key="TType"`, `operation="set"`, `value=<type_definition_object_or_string>`.
+7. `records = [...records, ...new_records];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array>`.
+8. `records = [...records, ...new_records, mandatory_record];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array_with_mandatory_record>`.
+9. `value += other_value;` -> compute the updated value first (`value + other_value`), then call `set_context` with `scope="stage"` (or `global`), `key="value"`, `operation="set"`, `value=<updated_value>`.

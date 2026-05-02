@@ -175,7 +175,8 @@ export const runStageSession = async (
     ...toApiMessages(messages),
     {
       role: "user",
-      content: `${toolsMd}\n\nInput:\n${payload}`,
+      // content: `${toolsMd}\n\nInput:\n${payload}`,
+      content: `\n\nInput:\n${payload}`
     },
   ];
 
