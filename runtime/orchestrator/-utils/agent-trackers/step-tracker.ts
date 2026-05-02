@@ -3,11 +3,10 @@ import type { TAgentTracker } from "@/orchestrator/-utils/agent-trackers";
 
 import { computeCost } from "@/orchestrator/pricing";
 
-type SessionForkedFrom = {
-  prefixDump: unknown[];
-  requestId: string;
+type SessionForkLineagePayload = {
+  sourceRequestId: string;
   sourceSessionId: string;
-  stepIndex: number;
+  stageIndex: number;
 };
 
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
@@ -18,7 +17,7 @@ export const createStepTracker = () => {
 
   const registerSession = async (
     sessionId: string,
-    opts: { forkedFrom?: SessionForkedFrom; taskYahlPath: string },
+    opts: { forkLineage?: SessionForkLineagePayload; taskYahlPath: string },
   ) => {
     if (!baseUrl) return;
 
@@ -27,7 +26,7 @@ export const createStepTracker = () => {
     try {
       await fetch(url, {
         body: JSON.stringify({
-          ...(opts.forkedFrom ? { forkedFrom: opts.forkedFrom } : {}),
+          ...(opts.forkLineage ? { forkLineage: opts.forkLineage } : {}),
           taskYahlPath: opts.taskYahlPath,
         }),
         headers: {
@@ -40,11 +39,44 @@ export const createStepTracker = () => {
     }
   };
 
+  const patchRuntimeSnapshot = async (
+    sessionId: string,
+    requestId: string,
+    patch: { contextAfter?: unknown; contextBefore?: unknown },
+  ) => {
+    if (!baseUrl) return;
+
+    const sessionUrl = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/usage-events`;
+
+    try {
+      await fetch(sessionUrl, {
+        body: JSON.stringify({
+          ...patch,
+          requestId,
+          runtimeSnapshotPatch: true,
+          sessionId,
+          timestamp: new Date().toISOString(),
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+    } catch (error) {
+      process.stderr.write(`[WARN] failed to persist runtime snapshot patch: ${String(error)}\n`);
+    }
+  };
+
   const postStep = async (trace: StageTokenTrace) => {
     if (!baseUrl) return;
 
     const sessionUrl = `${baseUrl}/api/sessions/${encodeURIComponent(trace.sessionId)}/usage-events`;
     const payload = {
+      chatMessages: trace.chatMessages,
+      contextAfter: trace.contextAfter,
+      contextAfterTruncated: trace.contextAfterTruncated,
+      contextBefore: trace.contextBefore,
+      contextBeforeTruncated: trace.contextBeforeTruncated,
       cost: computeCost(trace.model, trace.usage),
       executionMeta: trace.executionMeta,
       model: trace.model,
@@ -100,16 +132,22 @@ export const createStepTracker = () => {
 
   return {
     finalizeSession,
+    patchRuntimeSnapshot,
     postStep,
     registerSession,
     reset,
     track,
   } satisfies TAgentTracker & {
     finalizeSession: (sessionId: string, opts?: { result?: unknown }) => Promise<void>;
+    patchRuntimeSnapshot: (
+      sessionId: string,
+      requestId: string,
+      patch: { contextAfter?: unknown; contextBefore?: unknown },
+    ) => Promise<void>;
     postStep: (trace: StageTokenTrace) => Promise<void>;
     registerSession: (
       sessionId: string,
-      opts: { forkedFrom?: SessionForkedFrom; taskYahlPath: string },
+      opts: { forkLineage?: SessionForkLineagePayload; taskYahlPath: string },
     ) => Promise<void>;
   };
 };

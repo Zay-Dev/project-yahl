@@ -58,23 +58,53 @@ const isUsageEvent = (value: unknown): value is UsageEvent => {
 
   if (typeof o.sessionId !== "string") return false;
   if (typeof o.requestId !== "string") return false;
+
   if (typeof o.model !== "string") return false;
   if (typeof o.thinkingMode !== "boolean") return false;
   if (!o.usage || typeof o.usage !== "object" || Array.isArray(o.usage)) return false;
   if (o.stageInput !== undefined && !isStageSessionInputLoose(o.stageInput)) return false;
   if (o.stageInputTruncated !== undefined && typeof o.stageInputTruncated !== "boolean") return false;
+  if (o.contextAfterTruncated !== undefined && typeof o.contextAfterTruncated !== "boolean") return false;
+  if (o.contextBeforeTruncated !== undefined && typeof o.contextBeforeTruncated !== "boolean") return false;
+  if (o.chatMessages !== undefined) {
+    if (!Array.isArray(o.chatMessages)) return false;
+    for (const row of o.chatMessages) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) return false;
+      const m = row as Record<string, unknown>;
+      if (typeof m.role !== "string") return false;
+      if (m.toolCallIndex !== undefined && (!Number.isInteger(m.toolCallIndex) || (m.toolCallIndex as number) < 0)) {
+        return false;
+      }
+    }
+  }
   if (o.response !== undefined) {
     if (!o.response || typeof o.response !== "object" || Array.isArray(o.response)) return false;
 
     const response = o.response as Record<string, unknown>;
 
     if (typeof response.durationMs !== "number" || !Number.isFinite(response.durationMs)) return false;
-    if (typeof response.reply !== "string" && response.reply !== null) return false;
-    if (typeof response.reasoning !== "string" && response.reasoning !== null) return false;
+    if (
+      response.reply !== undefined &&
+      typeof response.reply !== "string" &&
+      response.reply !== null
+    ) {
+      return false;
+    }
+    if (
+      response.reasoning !== undefined &&
+      typeof response.reasoning !== "string" &&
+      response.reasoning !== null
+    ) {
+      return false;
+    }
     if (response.toolCalls !== undefined && !Array.isArray(response.toolCalls)) return false;
   }
 
   return true;
+};
+
+export type ExecStageAgentHooks = {
+  onRequestIssued?: (requestId: string) => void | Promise<void>;
 };
 
 export type OrchestratorRedisOptions = {
@@ -88,6 +118,7 @@ export type OrchestratorRedis = {
     sessionId: string,
     stageInput: StageRequestEnvelope["stageInput"],
     executionMeta: StageExecutionMeta,
+    hooks?: ExecStageAgentHooks,
   ) => Promise<StageEnvelope>;
   pingUntilReady: (opts?: { maxAttempts?: number; delayMs?: number }) => Promise<void>;
   subscribeUsage: () => Promise<void>;
@@ -116,8 +147,13 @@ export const createOrchestratorRedis = async (
 
     const executionMeta = requestMeta.get(parsed.requestId);
     if (!executionMeta) return;
-    
+
     options.onUsage({
+      chatMessages: parsed.chatMessages,
+      contextAfter: parsed.contextAfter,
+      contextAfterTruncated: parsed.contextAfterTruncated,
+      contextBefore: parsed.contextBefore,
+      contextBeforeTruncated: parsed.contextBeforeTruncated,
       executionMeta,
       model: parsed.model,
       requestId: parsed.requestId,
@@ -157,6 +193,7 @@ export const createOrchestratorRedis = async (
     sessionId: string,
     stageInput: StageRequestEnvelope["stageInput"],
     executionMeta: StageExecutionMeta,
+    hooks?: ExecStageAgentHooks,
   ): Promise<StageEnvelope> => {
     const requestId = randomUUID();
     const body: StageRequestEnvelope = {
@@ -166,6 +203,8 @@ export const createOrchestratorRedis = async (
       stageInput,
     };
     requestMeta.set(requestId, executionMeta);
+
+    void hooks?.onRequestIssued?.(requestId);
 
     await commands.lpush(REQUEST_QUEUE, JSON.stringify(body));
 
@@ -179,8 +218,9 @@ export const createOrchestratorRedis = async (
       const popped = await commands.brpop(key, sec);
 
       if (popped && popped[1]) {
+        const envelope = parseAgentEnvelope(popped[1]);
         requestMeta.delete(requestId);
-        return parseAgentEnvelope(popped[1]);
+        return envelope;
       }
     }
 

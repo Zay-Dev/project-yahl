@@ -20,6 +20,7 @@ type TMeta = {
 };
 
 type UsageEmitPayload = {
+  chatMessages?: { content?: unknown; role: string; toolCallIndex?: number; usageDelta?: unknown }[];
   model: string;
   response?: {
     durationMs: number;
@@ -93,16 +94,22 @@ const _chat = async (
     if (!!meta && !!usageEmitter) {
       const responsePayload = {
         durationMs,
-        reasoning: reasoning_content,
-        reply: content,
+        reasoning: reasoning_content ?? null,
+        reply: content ?? null,
         toolCalls: tool_calls,
       };
   
       usageEmitter({
+        chatMessages: [
+          {
+            content: content ?? "",
+            role: "assistant",
+          },
+        ],
         model: config.model,
         requestId: meta.requestId,
         sessionId: meta.sessionId,
-  
+
         response: responsePayload,
         thinkingMode: config.thinkingMode,
         usage: normalizeUsage(response.usage),

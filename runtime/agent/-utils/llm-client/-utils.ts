@@ -8,12 +8,16 @@ export const getContentText = (content: unknown): string | null => {
 export const getReasoningText = (message: unknown): string | null => {
   if (!message || typeof message !== "object") return null;
 
-  const reasoningValue =
-    (message as Record<string, unknown>).reasoning_content;
+  const record = message as Record<string, unknown>;
+  const reasoningValue = record.reasoning_content ?? record.reasoning;
 
-  if (typeof reasoningValue === "string" || reasoningValue === null) {
-    return reasoningValue;
+  if (typeof reasoningValue === "string") {
+    const trimmed = reasoningValue.trim();
+
+    return trimmed.length > 0 ? trimmed : null;
   }
+
+  if (reasoningValue === null || reasoningValue === undefined) return null;
 
   return null;
 };

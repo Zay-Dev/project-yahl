@@ -14,6 +14,10 @@ export type SessionListItem = {
 
 export type SessionStepEvent = {
   cost?: number;
+  contextAfter?: unknown;
+  contextAfterTruncated?: boolean;
+  contextBefore?: unknown;
+  contextBeforeTruncated?: boolean;
   executionMeta?: unknown;
   model: string;
   requestId: string;
@@ -24,6 +28,13 @@ export type SessionStepEvent = {
     toolCalls?: unknown[];
   };
   sessionId: string;
+  stageChat?: {
+    content?: unknown;
+    modelSpendId?: string;
+    role: string;
+    toolCallId?: string;
+  }[];
+  stageIndex?: number;
   stageInput?: unknown;
   stageInputTruncated?: boolean;
   thinkingMode: boolean;
@@ -36,18 +47,17 @@ export type SessionStepEvent = {
   };
 };
 
-export type SessionForkedFrom = {
-  prefixDump: SessionStepEvent[];
-  requestId: string;
+export type SessionForkLineage = {
+  sourceRequestId: string;
   sourceSessionId: string;
-  stepIndex: number;
+  stageIndex: number;
 };
 
 export type SessionDetail = {
   createdAt: string;
   events: SessionStepEvent[];
   finalizedAt?: string;
-  forkedFrom?: SessionForkedFrom;
+  forkLineage?: SessionForkLineage;
   modelAggregates: Record<string, {
     cacheHitTokens: number;
     cacheMissTokens: number;

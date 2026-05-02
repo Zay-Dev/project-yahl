@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
-import type { SessionForkedFrom } from "./types";
+import type { SessionForkedFromWire } from "./types";
 
 export type RuntimeTask = {
   id: string;
@@ -39,7 +39,7 @@ type StartRunResult = {
 };
 
 type StartRerunFromRequestInput = {
-  forkedFrom: SessionForkedFrom;
+  forkedFrom: SessionForkedFromWire;
   requestSnapshotOverride: {
     context: Record<string, unknown>;
     currentStage: string;

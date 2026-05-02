@@ -159,6 +159,7 @@ Quick sanity map (so future-you can debug at 2am with less suffering):
 - `POST /api/runs` starts an orchestrator run for a task.
 - SSE streams expose live run logs and session events for the web UI.
 - Session endpoints support inspect, soft-delete, hard-delete, and rerun-from-request flow.
+- Session persistence uses normalized Mongo collections (`sessions`, `session_stages`, `session_tool_calls`, `session_stage_chat_messages`, `session_model_spends`, `session_fork_lineages`). After upgrading, wipe the database or drop those collections so old single-document `sessions` rows do not conflict with the new layout.
 
 ## License
 

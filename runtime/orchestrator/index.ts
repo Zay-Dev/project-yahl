@@ -27,7 +27,9 @@ import {
 } from "./runtime";
 
 import { createStepTracker } from "./-utils/agent-trackers/step-tracker";
-import { createOrchestratorRedis } from "./redis-client";
+import { createOrchestratorRedis, type ExecStageAgentHooks } from "./redis-client";
+
+const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -330,7 +332,18 @@ const resolveReportPromptPath = async (opts: CliOptions) => {
 };
 
 type StageAgentBinding = {
-  execStageAgent: (input: StageSessionInput, executionMeta: StageExecutionMeta) => Promise<StageEnvelope>;
+  execStageAgent: (
+    input: StageSessionInput,
+    executionMeta: StageExecutionMeta,
+    hooks?: ExecStageAgentHooks,
+  ) => Promise<StageEnvelope>;
+};
+
+type RuntimePersistence = {
+  patchRuntimeSnapshot: (
+    requestId: string,
+    patch: { contextAfter?: unknown; contextBefore?: unknown },
+  ) => Promise<void>;
 };
 
 type StageLoopMeta = {
@@ -947,6 +960,7 @@ const execute = async (
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
   resumeState?: ResumeState,
+  runtimePersistence?: RuntimePersistence,
 ) => {
   const aiLogic = extractAiLogic(text);
   if (!aiLogic) {
@@ -997,116 +1011,147 @@ const execute = async (
           stageText: string;
         },
       ) => {
-        const next = filterLines?.(lines);
-        const resumeInput = applyResumeSnapshotIfNeeded(runtime, resumeState);
-        const currentStage = resumeInput?.currentStage || next?.stageText || lines;
-        const stageText = currentStage;
-        const meaningfulOffset = firstTraceableLineOffset(stageText);
-        const sourceLineText = getLineSinceOffset(stageText, meaningfulOffset);
-        const generatedLine = (next?.generatedLine || position.generatedLine) + meaningfulOffset;
-        const sourceLine = (next?.sourceLine || position.sourceLine) + meaningfulOffset;
+        let stageRequestId = "";
 
-        const rawPayload = toStageContextPayload(runtime);
-        const context = {
-          ...rawPayload,
-          context: filterContextByReadUsage(stageText, rawPayload.context),
-          stage: filterContextByReadUsage(stageText, rawPayload.stage),
-        };
-        const executionMeta: StageExecutionMeta = {
-          loopRef: loopMeta ? {
-            arraySnapshot: loopMeta.arraySnapshot,
-            index: loopMeta.index,
-            value: loopMeta.value,
-          } : undefined,
-          runtimeRef: {
-            generatedLine,
-          },
-          sourceRef: {
-            filePath: sourceFilePath,
-            line: sourceLine,
-            text: sourceLineText,
-          },
-          stageId: `${path.basename(sourceFilePath)}:${sourceLine}:${type}`,
-          stageTextHash: toStableHash(stageText),
-        };
+        try {
+          const next = filterLines?.(lines);
+          const resumeInput = applyResumeSnapshotIfNeeded(runtime, resumeState);
+          const currentStage = resumeInput?.currentStage || next?.stageText || lines;
+          const stageText = currentStage;
+          const meaningfulOffset = firstTraceableLineOffset(stageText);
+          const sourceLineText = getLineSinceOffset(stageText, meaningfulOffset);
+          const generatedLine = (next?.generatedLine || position.generatedLine) + meaningfulOffset;
+          const sourceLine = (next?.sourceLine || position.sourceLine) + meaningfulOffset;
 
-        console.log('request', JSON.stringify({ context, currentStage, type }, null, 2));
+          const rawPayload = toStageContextPayload(runtime);
+          const context = {
+            ...rawPayload,
+            context: filterContextByReadUsage(stageText, rawPayload.context),
+            stage: filterContextByReadUsage(stageText, rawPayload.stage),
+          };
+          const executionMeta: StageExecutionMeta = {
+            loopRef: loopMeta ? {
+              arraySnapshot: loopMeta.arraySnapshot,
+              index: loopMeta.index,
+              value: loopMeta.value,
+            } : undefined,
+            runtimeRef: {
+              generatedLine,
+            },
+            sourceRef: {
+              filePath: sourceFilePath,
+              line: sourceLine,
+              text: sourceLineText,
+            },
+            stageId: `${path.basename(sourceFilePath)}:${sourceLine}:${type}`,
+            stageTextHash: toStableHash(stageText),
+          };
 
-        // process.stdout.write('Press [Enter] or [Space] to continue, or any other key to abort...\n');
+          console.log('request', JSON.stringify({ context, currentStage, type }, null, 2));
 
-        // await new Promise<void>((resolve) => {
-        //   process.stdin.setRawMode(true);
-        //   process.stdin.resume();
-        //   process.stdin.once('data', (data: Buffer) => {
-        //     // Accept space or enter or ctrl+c
-        //     if (data[0] === 32 || data[0] === 13 || data[0] === 10) {
-        //       process.stdin.setRawMode(false);
-        //       process.stdin.pause();
-        //       resolve();
-        //     } else {
-        //       process.stdin.setRawMode(false);
-        //       process.stdin.pause();
-        //       process.exit(1);
-        //     }
-        //   });
-        // });
+          // process.stdout.write('Press [Enter] or [Space] to continue, or any other key to abort...\n');
 
-        console.log('\nContinuing...\n');
+          // await new Promise<void>((resolve) => {
+          //   process.stdin.setRawMode(true);
+          //   process.stdin.resume();
+          //   process.stdin.once('data', (data: Buffer) => {
+          //     // Accept space or enter or ctrl+c
+          //     if (data[0] === 32 || data[0] === 13 || data[0] === 10) {
+          //       process.stdin.setRawMode(false);
+          //       process.stdin.pause();
+          //       resolve();
+          //     } else {
+          //       process.stdin.setRawMode(false);
+          //       process.stdin.pause();
+          //       process.exit(1);
+          //     }
+          //   });
+          // });
 
-        const envelope = await stageAgent.execStageAgent({ context, currentStage }, executionMeta);
+          console.log('\nContinuing...\n');
 
-        if (Array.isArray(envelope)) {
-          envelope
-            .filter(item => item.type === 'tool_call' && item.tool === 'set_context')
-            .forEach(item => {
-              setContextValue(
-                runtime,
-                item.arguments.scope === "types" ? "types" : "global",
-                item.arguments.key,
-                item.arguments.value,
-                item.arguments.operation,
-              );
-            });
-          process.stdout.write(`[Orchestrator Stage] set_context calls, length: ${envelope.length}\n`);
-        } else if (envelope.type === 'tool_call' && envelope.tool === 'rag') {
-          const result = await handleRag(
-            runtime,
-            envelope.arguments.lookingFor,
-            envelope.arguments.chunkSize,
-            envelope.arguments.tmp_file_path,
-            envelope.arguments.byteLength,
-            envelope.arguments.context_key,
-            stageAgent,
-            sourceFilePath,
-            sourceLine,
+          const envelope = await stageAgent.execStageAgent(
+            { context, currentStage },
+            executionMeta,
+            runtimePersistence
+              ? {
+                onRequestIssued: (rid) => {
+                  stageRequestId = rid;
+                  void runtimePersistence.patchRuntimeSnapshot(rid, {
+                    contextBefore: cloneJson({ context, currentStage }),
+                  });
+                },
+              }
+              : undefined,
           );
 
-          Object.assign(runtime.get('stage')!, result);
-          delete runtime.get('context')?.lookingFor;
-          delete runtime.get('context')?.chunkSize;
-          delete runtime.get('context')?.tmp_file_path;
-          delete runtime.get('context')?.byteLength;
-          delete runtime.get('context')?.context_key;
+          if (Array.isArray(envelope)) {
+            envelope
+              .filter(item => item.type === 'tool_call' && item.tool === 'set_context')
+              .forEach(item => {
+                setContextValue(
+                  runtime,
+                  item.arguments.scope === "types" ? "types" : "global",
+                  item.arguments.key,
+                  item.arguments.value,
+                  item.arguments.operation,
+                );
+              });
+            process.stdout.write(`[Orchestrator Stage] set_context calls, length: ${envelope.length}\n`);
+          } else if (envelope.type === 'tool_call' && envelope.tool === 'rag') {
+            const result = await handleRag(
+              runtime,
+              envelope.arguments.lookingFor,
+              envelope.arguments.chunkSize,
+              envelope.arguments.tmp_file_path,
+              envelope.arguments.byteLength,
+              envelope.arguments.context_key,
+              stageAgent,
+              sourceFilePath,
+              sourceLine,
+            );
 
-          return await _runStage({
-            generatedLine: sourceLine,
-            sourceLine,
-          }, (rawLines) => {
-            const splitted = rawLines.split('\n');
-            const skipNumberOfLines = splitted.findIndex(line =>
-              line.includes('REPLACE:') &&
-              line.includes(` ${envelope.arguments.context_key} `) &&
-              line.includes(` /rag(`)
-            ) + 1;
+            Object.assign(runtime.get('stage')!, result);
+            delete runtime.get('context')?.lookingFor;
+            delete runtime.get('context')?.chunkSize;
+            delete runtime.get('context')?.tmp_file_path;
+            delete runtime.get('context')?.byteLength;
+            delete runtime.get('context')?.context_key;
 
-            return {
-              generatedLine: skipNumberOfLines + 1,
-              sourceLine: sourceLine + skipNumberOfLines,
-              stageText: splitted.slice(skipNumberOfLines).join('\n'),
-            };
-          });
-        } else {
-          process.stdout.write(`[Orchestrator Stage] ${envelope.type}\n`);
+            if (runtimePersistence && stageRequestId) {
+              const rid = stageRequestId;
+              stageRequestId = "";
+              await runtimePersistence.patchRuntimeSnapshot(rid, {
+                contextAfter: cloneJson(toStageContextPayload(runtime)),
+              });
+            }
+
+            return await _runStage({
+              generatedLine: sourceLine,
+              sourceLine,
+            }, (rawLines) => {
+              const splitted = rawLines.split('\n');
+              const skipNumberOfLines = splitted.findIndex(line =>
+                line.includes('REPLACE:') &&
+                line.includes(` ${envelope.arguments.context_key} `) &&
+                line.includes(` /rag(`)
+              ) + 1;
+
+              return {
+                generatedLine: skipNumberOfLines + 1,
+                sourceLine: sourceLine + skipNumberOfLines,
+                stageText: splitted.slice(skipNumberOfLines).join('\n'),
+              };
+            });
+          } else {
+            process.stdout.write(`[Orchestrator Stage] ${envelope.type}\n`);
+          }
+        } finally {
+          if (runtimePersistence && stageRequestId) {
+            await runtimePersistence.patchRuntimeSnapshot(stageRequestId, {
+              contextAfter: cloneJson(toStageContextPayload(runtime)),
+            });
+          }
         }
       };
 
@@ -1144,7 +1189,15 @@ const main = async () => {
   agentTrackers.add(stepTracker);
 
   await stepTracker.registerSession(sessionId, {
-    ...(cli.forkedFrom ? { forkedFrom: cli.forkedFrom } : {}),
+    ...(cli.forkedFrom
+      ? {
+        forkLineage: {
+          sourceRequestId: cli.forkedFrom.requestId,
+          sourceSessionId: cli.forkedFrom.sourceSessionId,
+          stageIndex: cli.forkedFrom.stepIndex,
+        },
+      }
+      : {}),
     taskYahlPath: reportPath,
   });
 
@@ -1179,8 +1232,8 @@ const main = async () => {
     await redisTransport.subscribeUsage();
 
     const stageAgent: StageAgentBinding = {
-      execStageAgent: (input, executionMeta) =>
-        redisTransport!.execStageAgent(sessionId, input, executionMeta),
+      execStageAgent: (input, executionMeta, hooks) =>
+        redisTransport!.execStageAgent(sessionId, input, executionMeta, hooks),
     };
 
     const resumeState: ResumeState = {
@@ -1198,6 +1251,10 @@ const main = async () => {
       aiLogicStartLine,
       undefined,
       resumeState,
+      {
+        patchRuntimeSnapshot: (requestId, patch) =>
+          stepTracker.patchRuntimeSnapshot(sessionId, requestId, patch),
+      },
     );
 
     finalResult = runtime.get("context")?.result;

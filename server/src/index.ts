@@ -7,9 +7,11 @@ import { createRunManager } from "./run-manager";
 
 import {
   appendUsageEvent,
+  buildPrefixDumpForRerun,
   finalizeSession,
-  hardDeleteSession,
   getSession,
+  getSessionStageForAnchor,
+  hardDeleteSession,
   listSessions,
   registerSessionMetadataWithFork,
   softDeleteSession,
@@ -19,6 +21,7 @@ import type {
   FinalizeSessionPayload,
   RegisterSessionPayload,
   RerunRequestPayload,
+  SessionRuntimeSnapshotPatchPayload,
   SessionUsagePayload,
 } from "./types";
 
@@ -31,12 +34,32 @@ const mongoUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/yahl";
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
+const isRuntimeSnapshotPatchPayload = (value: unknown): value is SessionRuntimeSnapshotPatchPayload => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const obj = value as Record<string, unknown>;
+
+  const hasBefore = "contextBefore" in obj;
+  const hasAfter = "contextAfter" in obj;
+
+  return (
+    obj.runtimeSnapshotPatch === true &&
+    typeof obj.sessionId === "string" &&
+    typeof obj.requestId === "string" &&
+    typeof obj.timestamp === "string" &&
+    (hasBefore || hasAfter)
+  );
+};
+
 const isUsagePayload = (value: unknown): value is SessionUsagePayload => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 
   const obj = value as Record<string, unknown>;
   if (typeof obj.sessionId !== "string") return false;
   if (typeof obj.requestId !== "string") return false;
+
+  if (obj.runtimeSnapshotPatch === true) return false;
+
   if (typeof obj.model !== "string") return false;
   if (typeof obj.thinkingMode !== "boolean") return false;
   if (typeof obj.timestamp !== "string") return false;
@@ -50,6 +73,19 @@ const isUsagePayload = (value: unknown): value is SessionUsagePayload => {
   }
 
   if (obj.stageInputTruncated !== undefined && typeof obj.stageInputTruncated !== "boolean") return false;
+  if (obj.contextAfterTruncated !== undefined && typeof obj.contextAfterTruncated !== "boolean") return false;
+  if (obj.contextBeforeTruncated !== undefined && typeof obj.contextBeforeTruncated !== "boolean") return false;
+  if (obj.chatMessages !== undefined) {
+    if (!Array.isArray(obj.chatMessages)) return false;
+    for (const row of obj.chatMessages) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) return false;
+      const m = row as Record<string, unknown>;
+      if (typeof m.role !== "string") return false;
+      if (m.toolCallIndex !== undefined && (!Number.isInteger(m.toolCallIndex) || (m.toolCallIndex as number) < 0)) {
+        return false;
+      }
+    }
+  }
 
   return true;
 };
@@ -61,16 +97,14 @@ const isRegisterBody = (value: unknown): value is RegisterSessionPayload => {
   if (!isRecord(value)) return false;
 
   if (typeof value.taskYahlPath !== "string") return false;
-  if (value.forkedFrom === undefined) return true;
-  if (!isRecord(value.forkedFrom)) return false;
+  if (value.forkLineage === undefined) return true;
+  if (!isRecord(value.forkLineage)) return false;
 
-  const forkedFrom = value.forkedFrom as Record<string, unknown>;
-  if (typeof forkedFrom.sourceSessionId !== "string") return false;
-  if (typeof forkedFrom.requestId !== "string") return false;
-  if (typeof forkedFrom.stepIndex !== "number" || !Number.isInteger(forkedFrom.stepIndex)) return false;
-  if (!Array.isArray(forkedFrom.prefixDump)) return false;
+  const fork = value.forkLineage as Record<string, unknown>;
+  if (typeof fork.sourceSessionId !== "string") return false;
+  if (typeof fork.sourceRequestId !== "string") return false;
 
-  return true;
+  return typeof fork.stageIndex === "number" && Number.isInteger(fork.stageIndex) && fork.stageIndex >= 0;
 };
 
 const isRerunRequestBody = (value: unknown): value is RerunRequestPayload => {
@@ -226,7 +260,7 @@ app.post("/api/sessions/:sessionId/register", async (req, res) => {
     return;
   }
 
-  await registerSessionMetadataWithFork(routeSessionId, body.taskYahlPath, body.forkedFrom);
+  await registerSessionMetadataWithFork(routeSessionId, body.taskYahlPath, body.forkLineage);
   res.status(202).json({ ok: true });
 });
 
@@ -243,8 +277,8 @@ app.post("/api/requests/rerun", async (req, res) => {
     return;
   }
 
-  const sourceEvent = source.events?.[body.resumeFromStepIndex];
-  if (!sourceEvent || sourceEvent.requestId !== body.sourceRequestId) {
+  const anchorStage = await getSessionStageForAnchor(body.sourceSessionId, body.resumeFromStepIndex);
+  if (!anchorStage || anchorStage.requestId !== body.sourceRequestId) {
     res.status(400).json({ error: "invalid source request anchor" });
     return;
   }
@@ -255,7 +289,7 @@ app.post("/api/requests/rerun", async (req, res) => {
     return;
   }
 
-  const prefixDump = (source.events || []).slice(0, body.resumeFromStepIndex);
+  const prefixDump = await buildPrefixDumpForRerun(body.sourceSessionId, body.resumeFromStepIndex);
   const started = await runManager.startRerunFromRequest({
     forkedFrom: {
       prefixDump,
@@ -264,7 +298,7 @@ app.post("/api/requests/rerun", async (req, res) => {
       stepIndex: body.resumeFromStepIndex,
     },
     requestSnapshotOverride: body.requestSnapshotOverride,
-    resumeExecutionMeta: sourceEvent.executionMeta,
+    resumeExecutionMeta: anchorStage.executionMeta,
     sourceRequestId: body.sourceRequestId,
     sourceSessionId: body.sourceSessionId,
     taskPath,
@@ -280,7 +314,7 @@ app.post("/api/requests/rerun", async (req, res) => {
 app.post("/api/sessions/:sessionId/usage-events", async (req, res) => {
   const payload = req.body as unknown;
   const routeSessionId = req.params.sessionId;
-  if (!isUsagePayload(payload)) {
+  if (!isUsagePayload(payload) && !isRuntimeSnapshotPatchPayload(payload)) {
     res.status(400).json({ error: "invalid payload" });
     return;
   }

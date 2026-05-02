@@ -16,7 +16,19 @@ export type StageRequestEnvelope = {
   stageInput: StageSessionInput;
 };
 
+export type StageChatMessagePayload = {
+  content?: unknown;
+  role: string;
+  toolCallIndex?: number;
+  usageDelta?: unknown;
+};
+
 export type UsageEvent = {
+  chatMessages?: StageChatMessagePayload[];
+  contextAfter?: unknown;
+  contextAfterTruncated?: boolean;
+  contextBefore?: unknown;
+  contextBeforeTruncated?: boolean;
   model: string;
   response?: {
     durationMs: number;
@@ -51,6 +63,11 @@ export type StageExecutionMeta = {
 };
 
 export type StageTokenTrace = {
+  chatMessages?: StageChatMessagePayload[];
+  contextAfter?: unknown;
+  contextAfterTruncated?: boolean;
+  contextBefore?: unknown;
+  contextBeforeTruncated?: boolean;
   executionMeta: StageExecutionMeta;
   model: string;
   response?: UsageEvent["response"];
