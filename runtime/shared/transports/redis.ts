@@ -130,6 +130,10 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
       }
     }
 
+  emitStageFinish: IPublisher['emitStageFinish'] = (envelope) => {
+    this.emit("stageFinish", envelope);
+  }
+
   private async _waitForReply(requestId: string) {
     const brpopSeconds = 30;
     const deadline = Date.now() + 3_600_000;

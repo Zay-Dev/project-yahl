@@ -6,6 +6,12 @@ export type SessionDoc = {
   result?: unknown;
   sessionId: string;
   taskYahlPath?: string;
+
+  stages: {
+    lines: string;
+    sourceStartLine: number;
+    type: "loop" | "plain";
+  }[];
 };
 
 const sessionSchema = new Schema<SessionDoc>(
@@ -15,6 +21,11 @@ const sessionSchema = new Schema<SessionDoc>(
     result: { type: Schema.Types.Mixed },
     sessionId: { index: true, required: true, type: String, unique: true },
     taskYahlPath: { type: String },
+    stages: [{
+      lines: { type: String, required: true },
+      sourceStartLine: { type: Number, required: true },
+      type: { type: String, enum: ['loop', 'plain'], required: true },
+    }],
   },
   { collection: "sessions", timestamps: true },
 );

@@ -28,13 +28,6 @@ export interface CliOptions {
   taskPath: string;
 }
 
-export interface RuntimePersistence {
-  patchRuntimeSnapshot: (
-    requestId: string,
-    patch: { contextAfter?: unknown; contextBefore?: unknown },
-  ) => Promise<void>;
-}
-
 export interface StageLoopMeta {
   arraySnapshot: unknown[];
   index: number;
@@ -90,5 +83,4 @@ export type StageExecuteFn = (
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
   resumeState?: ResumeState,
-  runtimePersistence?: RuntimePersistence,
 ) => Promise<{ runtime: RuntimeContext; stages: ParsedStage[] }>;

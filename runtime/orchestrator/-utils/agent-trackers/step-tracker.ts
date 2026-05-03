@@ -1,4 +1,3 @@
-import type { StageTokenTrace } from "@/shared/transport";
 import type { TAgentTracker } from "@/orchestrator/-utils/agent-trackers";
 
 import { computeCost } from "@/orchestrator/pricing";
@@ -11,9 +10,44 @@ type SessionForkLineagePayload = {
 
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
 
+const _post = async (url: string, body: unknown) => {
+  try {
+    await fetch(url, {
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+  } catch (error) {
+    console.warn(`[WARN] failed POST ${url}: ${String(error)}\n`);
+  }
+};
+
+const _patch = async (url: string, body: unknown) => {
+  try {
+    await fetch(url, {
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+      method: "PATCH",
+    });
+  } catch (error) {
+    console.warn(`[WARN] failed PATCH ${url}: ${String(error)}\n`);
+  }
+};
+
 export const createStepTracker = () => {
   const baseUrlRaw = process.env.SESSION_API_BASE_URL;
   const baseUrl = baseUrlRaw ? normalizeBaseUrl(baseUrlRaw) : "http://localhost:4000";
+
+  let queue: Promise<void> = Promise.resolve();
+
+  const enqueue = (fn: () => Promise<void>) => {
+    queue = queue
+      .then(fn)
+      .catch((error: unknown) => {
+        console.warn(`[WARN] step-tracker queue error: ${String(error)}\n`);
+      });
+    return queue;
+  };
 
   const registerSession = async (
     sessionId: string,
@@ -23,127 +57,115 @@ export const createStepTracker = () => {
 
     const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/register`;
 
-    try {
-      await fetch(url, {
-        body: JSON.stringify({
-          ...(opts.forkLineage ? { forkLineage: opts.forkLineage } : {}),
-          taskYahlPath: opts.taskYahlPath,
-        }),
-        headers: {
-          "content-type": "application/json",
-        },
-        method: "POST",
+    await _post(url, {
+      ...(opts.forkLineage ? { forkLineage: opts.forkLineage } : {}),
+      taskYahlPath: opts.taskYahlPath,
+    });
+  };
+
+  const pushRequest: TAgentTracker["pushRequest"] = (event) =>
+    enqueue(async () => {
+      if (!baseUrl) return;
+
+      const url = `${baseUrl}/api/sessions/${encodeURIComponent(event.sessionId)}/stages`;
+
+      await _post(url, {
+        contextBefore: event.contextBefore,
+        currentStage: event.currentStage,
+        executionMeta: event.executionMeta,
+        requestId: event.requestId,
+        stageId: event.executionMeta.stageId,
+        timestamp: event.timestamp,
       });
-    } catch (error) {
-      console.warn(`[WARN] failed to register session: ${String(error)}\n`);
-    }
-  };
+    });
 
-  const patchRuntimeSnapshot = async (
-    sessionId: string,
-    requestId: string,
-    patch: { contextAfter?: unknown; contextBefore?: unknown },
-  ) => {
-    if (!baseUrl) return;
+  const toolCall: TAgentTracker["toolCall"] = (event) =>
+    enqueue(async () => {
+      if (!baseUrl) return;
+      if (!event.toolCalls.length) return;
 
-    const sessionUrl = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/usage-events`;
+      const url = `${baseUrl}/api/sessions/${encodeURIComponent(event.sessionId)}` +
+        `/stages/${encodeURIComponent(event.stageId)}/tool-calls`;
 
-    try {
-      await fetch(sessionUrl, {
-        body: JSON.stringify({
-          ...patch,
-          requestId,
-          runtimeSnapshotPatch: true,
-          sessionId,
-          timestamp: new Date().toISOString(),
-        }),
-        headers: {
-          "content-type": "application/json",
-        },
-        method: "POST",
+      await _post(url, {
+        requestId: event.requestId,
+        timestamp: event.timestamp,
+        toolCalls: event.toolCalls,
       });
-    } catch (error) {
-      console.warn(`[WARN] failed to persist runtime snapshot patch: ${String(error)}\n`);
-    }
-  };
+    });
 
-  const postStep = async (trace: StageTokenTrace) => {
-    if (!baseUrl) return;
+  const modelResponse: TAgentTracker["modelResponse"] = (event) =>
+    enqueue(async () => {
+      if (!baseUrl) return;
 
-    const sessionUrl = `${baseUrl}/api/sessions/${encodeURIComponent(trace.sessionId)}/usage-events`;
-    const payload = {
-      chatMessages: trace.chatMessages,
-      contextAfter: trace.contextAfter,
-      contextAfterTruncated: trace.contextAfterTruncated,
-      contextBefore: trace.contextBefore,
-      contextBeforeTruncated: trace.contextBeforeTruncated,
-      cost: computeCost(trace.model, trace.usage),
-      executionMeta: trace.executionMeta,
-      model: trace.model,
-      requestId: trace.requestId,
-      sessionId: trace.sessionId,
-      stageInput: trace.stageInput,
-      stageInputTruncated: trace.stageInputTruncated,
-      thinkingMode: trace.thinkingMode,
-      timestamp: trace.timestamp,
-      usage: {
-        cacheHitTokens: trace.usage.cacheHitTokens,
-        cacheMissTokens: trace.usage.cacheMissTokens,
-        completionTokens: trace.usage.completionTokens,
-        reasoningTokens: trace.usage.reasoningTokens,
-      },
-    };
+      const url = `${baseUrl}/api/sessions/${encodeURIComponent(event.sessionId)}` +
+        `/stages/${encodeURIComponent(event.stageId)}/model-responses`;
 
-    try {
-      await fetch(sessionUrl, {
-        body: JSON.stringify(payload),
-        headers: {
-          "content-type": "application/json",
+      const message = event.response.choices?.[0]?.message;
+      const reply = typeof message?.content === "string" ? message.content : null;
+      const toolCalls = message?.tool_calls;
+      const chatMessages = event.response.choices?.map(({ message: m }) => m);
+
+      await _post(url, {
+        chatMessages,
+        cost: computeCost(event.model, event.usage),
+        durationMs: event.durationMs,
+        model: event.model,
+        requestId: event.requestId,
+        response: {
+          durationMs: event.durationMs,
+          reasoning: null,
+          reply,
+          toolCalls,
         },
-        method: "POST",
-      });
-    } catch (error) {
-      console.warn(`[WARN] failed to persist session step: ${String(error)}\n`);
-    }
-  };
-
-  const finalizeSession = async (sessionId: string, opts?: { result?: unknown }) => {
-    if (!baseUrl) return;
-
-    try {
-      await fetch(`${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/finalize`, {
-        body: JSON.stringify({ result: opts?.result }),
-        headers: {
-          "content-type": "application/json",
+        thinkingMode: event.thinkingMode,
+        timestamp: event.timestamp,
+        usage: {
+          cacheHitTokens: event.usage.cacheHitTokens,
+          cacheMissTokens: event.usage.cacheMissTokens,
+          completionTokens: event.usage.completionTokens,
+          reasoningTokens: event.usage.reasoningTokens,
         },
-        method: "POST",
       });
-    } catch (error) {
-      console.warn(`[WARN] failed to finalize session record: ${String(error)}\n`);
-    }
-  };
+    });
 
-  const track: TAgentTracker["track"] = (event) => {
-    void postStep(event);
-  };
+  const stageFinish: TAgentTracker["stageFinish"] = (event) =>
+    enqueue(async () => {
+      if (!baseUrl) return;
+
+      const url = `${baseUrl}/api/sessions/${encodeURIComponent(event.sessionId)}` +
+        `/stages/${encodeURIComponent(event.stageId)}/runtime-snapshot`;
+
+      await _patch(url, {
+        contextAfter: event.contextAfter,
+        requestId: event.requestId,
+        timestamp: event.timestamp,
+      });
+    });
+
+  const finalResult: TAgentTracker["finalResult"] = (event) =>
+    enqueue(async () => {
+      if (!baseUrl) return;
+
+      const url = `${baseUrl}/api/sessions/${encodeURIComponent(event.sessionId)}/finalize`;
+
+      await _post(url, {
+        result: event.result,
+        stages: event.stages,
+      });
+    });
 
   const reset: TAgentTracker["reset"] = () => { };
 
   return {
-    finalizeSession,
-    patchRuntimeSnapshot,
-    postStep,
+    finalResult,
+    modelResponse,
+    pushRequest,
     registerSession,
     reset,
-    track,
+    stageFinish,
+    toolCall,
   } satisfies TAgentTracker & {
-    finalizeSession: (sessionId: string, opts?: { result?: unknown }) => Promise<void>;
-    patchRuntimeSnapshot: (
-      sessionId: string,
-      requestId: string,
-      patch: { contextAfter?: unknown; contextBefore?: unknown },
-    ) => Promise<void>;
-    postStep: (trace: StageTokenTrace) => Promise<void>;
     registerSession: (
       sessionId: string,
       opts: { forkLineage?: SessionForkLineagePayload; taskYahlPath: string },

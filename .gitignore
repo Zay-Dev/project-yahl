@@ -402,3 +402,5 @@ next-env.d.ts
 /workspace/
 /.pnpm-store/
 /mongo_data/
+.onecli/
+.rerun-payloads/

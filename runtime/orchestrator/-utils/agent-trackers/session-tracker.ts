@@ -29,8 +29,8 @@ const emptyRow = (): PerModelTotals => ({
 export const createSessionTracker = () => {
   const byModel = new Map<string, PerModelTotals>();
 
-  const track: TAgentTracker['track'] = (event) => {
-    const { model, usage } = event;
+  const modelResponse: TAgentTracker['modelResponse'] = (event) => {
+    const { durationMs, model, usage } = event;
     const row = byModel.get(model) ?? emptyRow();
 
     row.calls += 1;
@@ -39,9 +39,9 @@ export const createSessionTracker = () => {
     row.completionTokens += usage.completionTokens;
     row.reasoningTokens += usage.reasoningTokens;
     row.cost += computeCost(model, usage);
-    if (typeof event.durationMs === "number") {
+    if (typeof durationMs === "number") {
       row.durationCalls += 1;
-      row.durationTotalMs += event.durationMs;
+      row.durationTotalMs += durationMs;
       row.avgDurationMs = row.durationTotalMs / row.durationCalls;
     }
 
@@ -106,15 +106,15 @@ export const createSessionTracker = () => {
     return lines.join("\n");
   };
 
-  const base = {
-    track,
-    reset: () => {
-      byModel.clear();
-    },
-  } satisfies TAgentTracker;
+  const reset: TAgentTracker['reset'] = () => {
+    byModel.clear();
+  };
 
   return {
-    ...base,
+    modelResponse,
+    reset,
     summaryText,
+  } satisfies TAgentTracker & {
+    summaryText: (sessionId: string) => string;
   };
 };

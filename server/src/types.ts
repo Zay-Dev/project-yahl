@@ -5,17 +5,76 @@ export type SessionChatMessagePayload = {
   usageDelta?: unknown;
 };
 
-export type SessionRuntimeSnapshotPatchPayload = {
-  contextAfter?: unknown;
+export type ParsedStageWire = {
+  lines: string;
+  sourceStartLine: number;
+  type: "loop" | "plain";
+};
+
+export type CreateStagePayload = {
   contextBefore?: unknown;
+  contextBeforeTruncated?: boolean;
+  currentStage: string;
+  executionMeta: {
+    stageId: string;
+    [key: string]: unknown;
+  };
   requestId: string;
-  runtimeSnapshotPatch: true;
-  sessionId: string;
+  stageId: string;
   timestamp: string;
 };
 
-export type SessionUsagePayload = {
+export type ToolCallWire = {
+  function?: {
+    arguments?: unknown;
+    name?: string;
+  };
+  id?: string;
+  type?: string;
+};
+
+export type CreateToolCallsPayload = {
+  requestId: string;
+  timestamp: string;
+  toolCalls: ToolCallWire[];
+};
+
+export type CreateModelResponsePayload = {
   chatMessages?: SessionChatMessagePayload[];
+  cost?: number;
+  durationMs?: number;
+  model: string;
+  requestId: string;
+  response?: {
+    durationMs?: number;
+    reasoning: string | null;
+    reply: string | null;
+    toolCalls?: ToolCallWire[];
+  };
+  thinkingMode: boolean;
+  timestamp: string;
+  usage: {
+    cacheHitTokens: number;
+    cacheMissTokens: number;
+    completionTokens: number;
+    reasoningTokens: number;
+  };
+};
+
+export type PatchStageRuntimeSnapshotPayload = {
+  contextAfter?: unknown;
+  contextBefore?: unknown;
+  requestId?: string;
+  timestamp?: string;
+};
+
+export type SessionForkLineagePayload = {
+  sourceRequestId: string;
+  sourceSessionId: string;
+  stageIndex: number;
+};
+
+export type LegacySessionEventWire = {
   contextAfter?: unknown;
   contextAfterTruncated?: boolean;
   contextBefore?: unknown;
@@ -45,14 +104,8 @@ export type SessionUsagePayload = {
   };
 };
 
-export type SessionForkLineagePayload = {
-  sourceRequestId: string;
-  sourceSessionId: string;
-  stageIndex: number;
-};
-
 export type SessionForkedFromWire = {
-  prefixDump: SessionUsagePayload[];
+  prefixDump: LegacySessionEventWire[];
   requestId: string;
   sourceSessionId: string;
   stepIndex: number;
@@ -60,6 +113,7 @@ export type SessionForkedFromWire = {
 
 export type FinalizeSessionPayload = {
   result?: unknown;
+  stages?: ParsedStageWire[];
 };
 
 export type RegisterSessionPayload = {

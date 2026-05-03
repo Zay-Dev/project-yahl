@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Schema, Types } from "mongoose";
 
 export type LlmReplyEnvelopeSub = {
   durationMs?: number;
@@ -14,13 +14,15 @@ export type SessionStageDoc = {
   cost?: number;
   executionMeta?: unknown;
   llmReplyEnvelope?: LlmReplyEnvelopeSub;
-  model: string;
+  model?: string;
   requestId: string;
+  session: Types.ObjectId;
   sessionId: string;
+  stageId: string;
   stageIndex: number;
-  thinkingMode: boolean;
+  thinkingMode?: boolean;
   timestamp: string;
-  usage: {
+  usage?: {
     cacheHitTokens: number;
     cacheMissTokens: number;
     completionTokens: number;
@@ -56,18 +58,21 @@ const sessionStageSchema = new Schema<SessionStageDoc>(
     cost: { type: Number },
     executionMeta: { type: Schema.Types.Mixed },
     llmReplyEnvelope: { type: llmReplySub },
-    model: { required: true, type: String },
+    model: { type: String },
     requestId: { required: true, type: String },
+    session: { ref: "Session", required: true, type: Schema.Types.ObjectId },
     sessionId: { index: true, required: true, type: String },
+    stageId: { required: true, type: String },
     stageIndex: { required: true, type: Number },
-    thinkingMode: { required: true, type: Boolean },
+    thinkingMode: { type: Boolean },
     timestamp: { required: true, type: String },
-    usage: { required: true, type: usageSub },
+    usage: { type: usageSub },
   },
   { collection: "session_stages", timestamps: true },
 );
 
-sessionStageSchema.index({ sessionId: 1, stageIndex: 1 }, { unique: true });
+sessionStageSchema.index({ sessionId: 1, stageId: 1 }, { unique: true });
+sessionStageSchema.index({ sessionId: 1, stageIndex: 1 });
 sessionStageSchema.index({ sessionId: 1, requestId: 1 });
 
 export const SessionStage = mongoose.model<SessionStageDoc>("SessionStage", sessionStageSchema);

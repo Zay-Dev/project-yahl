@@ -3,464 +3,58 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import mongoose from "mongoose";
+
+import type { ServerRoutesDeps } from "./modules/deps";
+import { registerCreateRunRoute } from "./modules/runs/use-cases/create-run";
+import { registerGetRunRoute } from "./modules/runs/use-cases/get-run";
+import { registerStreamRunLogsSseRoute } from "./modules/runs/use-cases/stream-run-logs-sse";
+import { registerCreateStageRoute } from "./modules/sessions/use-cases/create-stage";
+import { registerCreateStageModelResponseRoute } from "./modules/sessions/use-cases/create-stage-model-response";
+import { registerCreateStageToolCallsRoute } from "./modules/sessions/use-cases/create-stage-tool-calls";
+import { registerFinalizeSessionRoute } from "./modules/sessions/use-cases/finalize-session";
+import { registerGetSessionRoute } from "./modules/sessions/use-cases/get-session";
+import { registerHardDeleteSessionRoute } from "./modules/sessions/use-cases/hard-delete-session";
+import { registerListSessionsRoute } from "./modules/sessions/use-cases/list-sessions";
+import { registerPatchStageRuntimeSnapshotRoute } from "./modules/sessions/use-cases/patch-stage-runtime-snapshot";
+import { registerRegisterSessionRoute } from "./modules/sessions/use-cases/register-session";
+import { registerRerunRequestRoute } from "./modules/sessions/use-cases/rerun-request";
+import { registerSoftDeleteSessionRoute } from "./modules/sessions/use-cases/soft-delete-session";
+import { registerStreamSessionSseRoute } from "./modules/sessions/use-cases/stream-session-sse";
+import { registerStreamSessionsSseRoute } from "./modules/sessions/use-cases/stream-sessions-sse";
+import { registerGetHealthRoute } from "./modules/system/use-cases/get-health";
+import { registerListTasksRoute } from "./modules/tasks/use-cases/list-tasks";
 import { createRunManager } from "./run-manager";
 
-import {
-  appendUsageEvent,
-  buildPrefixDumpForRerun,
-  finalizeSession,
-  getSession,
-  getSessionStageForAnchor,
-  hardDeleteSession,
-  listSessions,
-  registerSessionMetadataWithFork,
-  softDeleteSession,
-} from "./session-service";
-import { subscribeSessionSse, subscribeSessionsSse } from "./session-sse-hub";
-import type {
-  FinalizeSessionPayload,
-  RegisterSessionPayload,
-  RerunRequestPayload,
-  SessionRuntimeSnapshotPatchPayload,
-  SessionUsagePayload,
-} from "./types";
-
 const app = express();
-const runManager = createRunManager();
 
 const port = Number(process.env.PORT || 4000);
 const mongoUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/yahl";
 
+const runManager = createRunManager();
+
+const deps: ServerRoutesDeps = { runManager };
+
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-const isRuntimeSnapshotPatchPayload = (value: unknown): value is SessionRuntimeSnapshotPatchPayload => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-
-  const obj = value as Record<string, unknown>;
-
-  const hasBefore = "contextBefore" in obj;
-  const hasAfter = "contextAfter" in obj;
-
-  return (
-    obj.runtimeSnapshotPatch === true &&
-    typeof obj.sessionId === "string" &&
-    typeof obj.requestId === "string" &&
-    typeof obj.timestamp === "string" &&
-    (hasBefore || hasAfter)
-  );
-};
-
-const isUsagePayload = (value: unknown): value is SessionUsagePayload => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-
-  const obj = value as Record<string, unknown>;
-  if (typeof obj.sessionId !== "string") return false;
-  if (typeof obj.requestId !== "string") return false;
-
-  if (obj.runtimeSnapshotPatch === true) return false;
-
-  if (typeof obj.model !== "string") return false;
-  if (typeof obj.thinkingMode !== "boolean") return false;
-  if (typeof obj.timestamp !== "string") return false;
-  if (!obj.usage || typeof obj.usage !== "object" || Array.isArray(obj.usage)) return false;
-
-  const usage = obj.usage as Record<string, unknown>;
-  const keys = ["cacheHitTokens", "cacheMissTokens", "completionTokens", "reasoningTokens"] as const;
-
-  for (const key of keys) {
-    if (typeof usage[key] !== "number" || !Number.isFinite(usage[key])) return false;
-  }
-
-  if (obj.stageInputTruncated !== undefined && typeof obj.stageInputTruncated !== "boolean") return false;
-  if (obj.contextAfterTruncated !== undefined && typeof obj.contextAfterTruncated !== "boolean") return false;
-  if (obj.contextBeforeTruncated !== undefined && typeof obj.contextBeforeTruncated !== "boolean") return false;
-  if (obj.chatMessages !== undefined) {
-    if (!Array.isArray(obj.chatMessages)) return false;
-    for (const row of obj.chatMessages) {
-      if (!row || typeof row !== "object" || Array.isArray(row)) return false;
-      const m = row as Record<string, unknown>;
-      if (typeof m.role !== "string") return false;
-      if (m.toolCallIndex !== undefined && (!Number.isInteger(m.toolCallIndex) || (m.toolCallIndex as number) < 0)) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === "object" && !Array.isArray(value);
-
-const isRegisterBody = (value: unknown): value is RegisterSessionPayload => {
-  if (!isRecord(value)) return false;
-
-  if (typeof value.taskYahlPath !== "string") return false;
-  if (value.forkLineage === undefined) return true;
-  if (!isRecord(value.forkLineage)) return false;
-
-  const fork = value.forkLineage as Record<string, unknown>;
-  if (typeof fork.sourceSessionId !== "string") return false;
-  if (typeof fork.sourceRequestId !== "string") return false;
-
-  return typeof fork.stageIndex === "number" && Number.isInteger(fork.stageIndex) && fork.stageIndex >= 0;
-};
-
-const isRerunRequestBody = (value: unknown): value is RerunRequestPayload => {
-  if (!isRecord(value)) return false;
-  if (typeof value.sourceSessionId !== "string") return false;
-  if (typeof value.sourceRequestId !== "string") return false;
-  if (typeof value.resumeFromStepIndex !== "number" || !Number.isInteger(value.resumeFromStepIndex)) return false;
-  if (!isRecord(value.requestSnapshotOverride)) return false;
-
-  const override = value.requestSnapshotOverride as Record<string, unknown>;
-  if (typeof override.currentStage !== "string") return false;
-  if (!isRecord(override.context)) return false;
-
-  return true;
-};
-
-const isFinalizeBody = (value: unknown): value is FinalizeSessionPayload => {
-  if (value === undefined) return true;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-
-  return true;
-};
-
-const isCreateRunBody = (value: unknown): value is { taskId: string } => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-
-  const obj = value as Record<string, unknown>;
-  return typeof obj.taskId === "string" && !!obj.taskId.trim();
-};
-
-
-app.get("/health", (_req, res) => {
-  res.json({
-    mongoReadyState: mongoose.connection.readyState,
-    ok: true,
-  });
-});
-
-app.get("/api/tasks", async (_req, res) => {
-  try {
-    const tasks = await runManager.listTasks();
-    res.json({
-      items: tasks,
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: String(error),
-    });
-  }
-});
-
-app.post("/api/runs", async (req, res) => {
-  const body = req.body as unknown;
-  if (!isCreateRunBody(body)) {
-    res.status(400).json({ error: "invalid payload" });
-    return;
-  }
-
-  const started = await runManager.startRun(body.taskId.trim());
-  if (!started) {
-    res.status(404).json({ error: "task not found" });
-    return;
-  }
-
-  res.status(202).json(started);
-});
-
-app.get("/api/runs/:runId", (req, res) => {
-  const run = runManager.getRun(req.params.runId);
-  if (!run) {
-    res.status(404).json({ error: "not found" });
-    return;
-  }
-
-  res.json({
-    createdAt: run.createdAt,
-    exitCode: run.exitCode,
-    runId: run.runId,
-    sessionId: run.sessionId,
-    status: run.status,
-    taskId: run.taskId,
-    taskPath: run.taskPath,
-  });
-});
-
-app.get("/api/runs/:runId/logs/stream", (req, res) => {
-  const { runId } = req.params;
-  const run = runManager.getRun(runId);
-
-  if (!run) {
-    res.status(404).json({ error: "not found" });
-    return;
-  }
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-
-  if (typeof res.flushHeaders === "function") {
-    res.flushHeaders();
-  }
-
-  const writeSse = (event: string, data: unknown) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  writeSse("meta", {
-    createdAt: run.createdAt,
-    runId: run.runId,
-    sessionId: run.sessionId,
-    status: run.status,
-    taskId: run.taskId,
-  });
-
-  const unsubscribe = runManager.subscribeLogs(runId, (event) => {
-    writeSse("log", event);
-  });
-
-  if (!unsubscribe) {
-    res.status(404).json({ error: "not found" });
-    return;
-  }
-
-  const heartbeat = setInterval(() => {
-    res.write(`event: ping\ndata: {}\n\n`);
-  }, 25_000);
-
-  const statusTicker = setInterval(() => {
-    const latest = runManager.getRun(runId);
-    if (!latest) return;
-
-    writeSse("status", {
-      exitCode: latest.exitCode,
-      status: latest.status,
-    });
-  }, 1_000);
-
-  req.on("close", () => {
-    clearInterval(heartbeat);
-    clearInterval(statusTicker);
-    unsubscribe();
-  });
-});
-
-app.post("/api/sessions/:sessionId/register", async (req, res) => {
-  const routeSessionId = req.params.sessionId;
-  const body = req.body as unknown;
-
-  if (!isRegisterBody(body)) {
-    res.status(400).json({ error: "invalid payload" });
-    return;
-  }
-
-  await registerSessionMetadataWithFork(routeSessionId, body.taskYahlPath, body.forkLineage);
-  res.status(202).json({ ok: true });
-});
-
-app.post("/api/requests/rerun", async (req, res) => {
-  const body = req.body as unknown;
-  if (!isRerunRequestBody(body)) {
-    res.status(400).json({ error: "invalid payload" });
-    return;
-  }
-
-  const source = await getSession(body.sourceSessionId);
-  if (!source) {
-    res.status(404).json({ error: "source session not found" });
-    return;
-  }
-
-  const anchorStage = await getSessionStageForAnchor(body.sourceSessionId, body.resumeFromStepIndex);
-  if (!anchorStage || anchorStage.requestId !== body.sourceRequestId) {
-    res.status(400).json({ error: "invalid source request anchor" });
-    return;
-  }
-
-  const taskPath = source.taskYahlPath;
-  if (!taskPath) {
-    res.status(400).json({ error: "source session missing task path" });
-    return;
-  }
-
-  const prefixDump = await buildPrefixDumpForRerun(body.sourceSessionId, body.resumeFromStepIndex);
-  const started = await runManager.startRerunFromRequest({
-    forkedFrom: {
-      prefixDump,
-      requestId: body.sourceRequestId,
-      sourceSessionId: body.sourceSessionId,
-      stepIndex: body.resumeFromStepIndex,
-    },
-    requestSnapshotOverride: body.requestSnapshotOverride,
-    resumeExecutionMeta: anchorStage.executionMeta,
-    sourceRequestId: body.sourceRequestId,
-    sourceSessionId: body.sourceSessionId,
-    taskPath,
-  });
-  if (!started) {
-    res.status(500).json({ error: "failed to start rerun" });
-    return;
-  }
-
-  res.status(202).json(started);
-});
-
-app.post("/api/sessions/:sessionId/usage-events", async (req, res) => {
-  const payload = req.body as unknown;
-  const routeSessionId = req.params.sessionId;
-  if (!isUsagePayload(payload) && !isRuntimeSnapshotPatchPayload(payload)) {
-    res.status(400).json({ error: "invalid payload" });
-    return;
-  }
-
-  if (payload.sessionId !== routeSessionId) {
-    res.status(400).json({ error: "sessionId mismatch" });
-    return;
-  }
-
-  await appendUsageEvent(payload);
-  res.status(202).json({ ok: true });
-});
-
-app.post("/api/sessions/:sessionId/finalize", async (req, res) => {
-  const payload = req.body as unknown;
-  if (!isFinalizeBody(payload)) {
-    res.status(400).json({ error: "invalid payload" });
-    return;
-  }
-
-  const result = payload && typeof payload === "object" && !Array.isArray(payload)
-    ? (payload as FinalizeSessionPayload).result
-    : undefined;
-  await finalizeSession(req.params.sessionId, result);
-  res.json({ ok: true });
-});
-
-app.get("/api/sessions/:sessionId/stream", async (req, res) => {
-  const { sessionId } = req.params;
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-
-  if (typeof res.flushHeaders === "function") {
-    res.flushHeaders();
-  }
-
-  const writeSse = (event: string, data: unknown) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  const row = await getSession(sessionId);
-
-  writeSse("meta", {
-    finalizedAt: row?.finalizedAt ? new Date(row.finalizedAt).toISOString() : null,
-    sessionId,
-    taskYahlPath: row?.taskYahlPath ?? null,
-  });
-
-  const unsubscribe = subscribeSessionSse(sessionId, {
-    onMeta: (meta) => {
-      writeSse("meta", meta);
-    },
-    onStep: (step) => {
-      writeSse("step", step);
-    },
-  });
-
-  const heartbeat = setInterval(() => {
-    res.write(`event: ping\ndata: {}\n\n`);
-  }, 25_000);
-
-  req.on("close", () => {
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
-});
-
-app.get("/api/sessions/stream", (_req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-
-  if (typeof res.flushHeaders === "function") {
-    res.flushHeaders();
-  }
-
-  const writeSse = (event: string, data: unknown) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  const unsubscribe = subscribeSessionsSse({
-    onSession: (payload) => {
-      writeSse("session", payload);
-    },
-  });
-
-  const heartbeat = setInterval(() => {
-    res.write(`event: ping\ndata: {}\n\n`);
-  }, 25_000);
-
-  res.write(`event: ready\ndata: {}\n\n`);
-
-  res.on("close", () => {
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
-});
-
-app.get("/api/sessions", async (req, res) => {
-  const includeArchived = req.query.includeArchived === "true";
-  const limit = Number(req.query.limit || 50);
-  const offset = Number(req.query.offset || 0);
-  const rows = await listSessions(limit, offset, includeArchived);
-
-  res.json({
-    items: rows,
-    limit,
-    offset,
-  });
-});
-
-app.get("/api/sessions/:sessionId", async (req, res) => {
-  const row = await getSession(req.params.sessionId);
-  if (!row) {
-    res.status(404).json({ error: "not found" });
-    return;
-  }
-
-  res.json(row);
-});
-
-app.post("/api/sessions/:sessionId/soft-delete", async (req, res) => {
-  const deleted = await softDeleteSession(req.params.sessionId);
-  if (!deleted) {
-    res.status(404).json({ error: "not found" });
-    return;
-  }
-
-  res.json({ ok: true });
-});
-
-app.delete("/api/sessions/:sessionId", async (req, res) => {
-  const deleted = await hardDeleteSession(req.params.sessionId);
-  if (!deleted) {
-    res.status(404).json({ error: "not found" });
-    return;
-  }
-
-  res.json({ ok: true });
-});
+registerGetHealthRoute(app);
+registerListTasksRoute(app, deps);
+registerCreateRunRoute(app, deps);
+registerGetRunRoute(app, deps);
+registerStreamRunLogsSseRoute(app, deps);
+registerRegisterSessionRoute(app);
+registerRerunRequestRoute(app, deps);
+registerCreateStageRoute(app);
+registerCreateStageToolCallsRoute(app);
+registerCreateStageModelResponseRoute(app);
+registerPatchStageRuntimeSnapshotRoute(app);
+registerFinalizeSessionRoute(app);
+registerStreamSessionSseRoute(app);
+registerStreamSessionsSseRoute(app);
+registerListSessionsRoute(app);
+registerGetSessionRoute(app);
+registerSoftDeleteSessionRoute(app);
+registerHardDeleteSessionRoute(app);
 
 const start = async () => {
   await mongoose.connect(mongoUri);
@@ -470,6 +64,6 @@ const start = async () => {
 };
 
 start().catch((error: unknown) => {
-  process.stderr.write(`[server] failed to boot: ${String(error)}\n`);
+  console.error(`[server] failed to boot: ${String(error)}\n`);
   process.exit(1);
 });

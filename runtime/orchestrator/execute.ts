@@ -26,7 +26,6 @@ import {
 
 import type {
   ResumeState,
-  RuntimePersistence,
   StageExecuteFn,
   StageLoopMeta,
   StagePosition,
@@ -42,7 +41,6 @@ export const execute: StageExecuteFn = async (
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
   resumeState?: ResumeState,
-  runtimePersistence?: RuntimePersistence,
 ) => {
   const aiLogic = extractAiLogic(text);
   if (!aiLogic) {
@@ -118,6 +116,9 @@ export const execute: StageExecuteFn = async (
             context: filterContextByReadUsage(stageText, rawPayload.context),
             stage: filterContextByReadUsage(stageText, rawPayload.stage),
           };
+          const baseStageId = `${path.basename(sourceFilePath)}:${sourceLine}:${type}`;
+          const stageId = loopMeta ? `${baseStageId}#loop:${loopMeta.index}` : baseStageId;
+
           const executionMeta: StageExecutionMeta = {
             loopRef: loopMeta ? {
               arraySnapshot: loopMeta.arraySnapshot,
@@ -132,7 +133,7 @@ export const execute: StageExecuteFn = async (
               line: sourceLine,
               text: sourceLineText,
             },
-            stageId: `${path.basename(sourceFilePath)}:${sourceLine}:${type}`,
+            stageId,
             stageTextHash: toStableHash(stageText),
           };
 
@@ -146,9 +147,7 @@ export const execute: StageExecuteFn = async (
             executionMeta,
           );
 
-          if (runtimePersistence) {
-            stageRequestId = requestId;
-          }
+          stageRequestId = requestId;
 
           if (Array.isArray(envelope)) {
             envelope
@@ -183,11 +182,12 @@ export const execute: StageExecuteFn = async (
             delete runtime.get("context")?.byteLength;
             delete runtime.get("context")?.context_key;
 
-            if (runtimePersistence && stageRequestId) {
+            if (stageRequestId) {
               const rid = stageRequestId;
               stageRequestId = "";
-              await runtimePersistence.patchRuntimeSnapshot(rid, {
+              publisher.emitStageFinish({
                 contextAfter: cloneJson(toStageContextPayload(runtime)),
+                requestId: rid,
               });
             }
 
@@ -212,9 +212,10 @@ export const execute: StageExecuteFn = async (
             process.stdout.write(`[Orchestrator Stage] ${envelope.type}\n`);
           }
         } finally {
-          if (runtimePersistence && stageRequestId) {
-            await runtimePersistence.patchRuntimeSnapshot(stageRequestId, {
+          if (stageRequestId) {
+            publisher.emitStageFinish({
               contextAfter: cloneJson(toStageContextPayload(runtime)),
+              requestId: stageRequestId,
             });
           }
         }

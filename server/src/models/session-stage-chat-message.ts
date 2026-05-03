@@ -5,8 +5,10 @@ export type SessionStageChatMessageDoc = {
   modelSpendId?: Types.ObjectId;
   role: string;
   sequence: number;
+  session: Types.ObjectId;
   sessionId: string;
-  stageIndex: number;
+  stage: Types.ObjectId;
+  stageId: string;
   toolCallId?: Types.ObjectId;
   usageDelta?: unknown;
 };
@@ -17,15 +19,18 @@ const sessionStageChatMessageSchema = new Schema<SessionStageChatMessageDoc>(
     modelSpendId: { ref: "SessionModelSpend", type: Schema.Types.ObjectId },
     role: { required: true, type: String },
     sequence: { required: true, type: Number },
+    session: { ref: "Session", required: true, type: Schema.Types.ObjectId },
     sessionId: { index: true, required: true, type: String },
-    stageIndex: { required: true, type: Number },
+    stage: { ref: "SessionStage", required: true, type: Schema.Types.ObjectId },
+    stageId: { required: true, type: String },
     toolCallId: { ref: "SessionToolCall", type: Schema.Types.ObjectId },
     usageDelta: { type: Schema.Types.Mixed },
   },
   { collection: "session_stage_chat_messages", timestamps: true },
 );
 
-sessionStageChatMessageSchema.index({ sessionId: 1, stageIndex: 1, sequence: 1 }, { unique: true });
+sessionStageChatMessageSchema.index({ sessionId: 1, stageId: 1, sequence: 1 }, { unique: true });
+sessionStageChatMessageSchema.index({ stage: 1 });
 sessionStageChatMessageSchema.index({ toolCallId: 1 });
 sessionStageChatMessageSchema.index({ modelSpendId: 1 });
 

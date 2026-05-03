@@ -1,5 +1,6 @@
 import type { OpenAI } from 'openai';
 import type { StageEnvelope, SetContextToolCallEnvelope } from '@/shared/stage-contract';
+import type { ChatToolCall } from '@/shared/stage-tools';
 
 import { EventEmitter } from 'events';
 
@@ -39,9 +40,10 @@ export type TStageExecutionMeta = {
 };
 
 interface IPublisherEventMap {
-  toolCall: [envelope: { requestId: string, toolCall: unknown[] }];
+  toolCall: [envelope: { requestId: string, toolCalls: ChatToolCall[] }];
   modelResponse: [envelope: { requestId: string, response: TModelResponse }];
   pushRequest: [envelope: { requestId: string, context: TRuntimeContext, currentStage: string, meta: TStageExecutionMeta }];
+  stageFinish: [envelope: { requestId: string, contextAfter: unknown }];
 }
 
 export class PublisherEmitter extends EventEmitter<IPublisherEventMap> { }
@@ -56,6 +58,8 @@ export interface IPublisher extends IBase {
   off: EventEmitter<IPublisherEventMap>['off'];
   once: EventEmitter<IPublisherEventMap>['once'];
   emit: EventEmitter<IPublisherEventMap>['emit'];
+
+  emitStageFinish: (envelope: { requestId: string, contextAfter: unknown }) => void;
 
   pushRequest: (
     context: TRuntimeContext,

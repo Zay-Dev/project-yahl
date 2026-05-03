@@ -1,6 +1,4 @@
-import type { StageExecutionMeta } from "@/shared/transport";
-
-import type { CliOptions } from './orchestrator-types';
+import type { CliOptions, ParsedStage, ResumeState } from './orchestrator-types';
 
 import { promises as fs } from "fs";
 
@@ -14,7 +12,6 @@ import { createStepTracker } from "./-utils/agent-trackers/step-tracker";
 import { normalizeContainerName } from "./cli-options";
 import { composeDown, composeUp, writeSharedOneCliOverride } from "./compose-onecli";
 import { execute } from "./execute";
-import type { ResumeState } from "./orchestrator-types";
 import { workspacePath } from "./paths";
 import { getAiLogicStartLineInFile } from "./stage-parse";
 import { resolveReportPromptPath } from "./task-resolve";
@@ -54,10 +51,10 @@ export const main = async (cli: CliOptions) => {
   const composeProjectName = normalizeContainerName(`${cli.composeProjectPrefix}-${sessionId}`);
   const agentContainerName = normalizeContainerName(`${cli.agentContainerPrefix}-${sessionId}`);
 
-  const tracker = createSessionTracker();
+  const sessionTracker = createSessionTracker();
   const stepTracker = await _createStepTracker(sessionId, reportPath, cli.forkedFrom);
 
-  agentTrackers.add(tracker);
+  agentTrackers.add(sessionTracker);
   agentTrackers.add(createConsoleTracker());
   agentTrackers.add(stepTracker);
 
@@ -67,11 +64,12 @@ export const main = async (cli: CliOptions) => {
 
   const onecliOverrideFilePath = await writeSharedOneCliOverride();
 
+  const requestIdToStageId = new Map<string, string>();
+
   let finalResult: unknown;
+  let parsedStages: ParsedStage[] = [];
 
   try {
-    let executionMeta: StageExecutionMeta;
-
     await composeDown(composeProjectName);
 
     process.env.AGENT_CONTAINER_NAME = agentContainerName;
@@ -83,26 +81,55 @@ export const main = async (cli: CliOptions) => {
     });
 
     publisher
-      .on('pushRequest', envelope => {
-        executionMeta = envelope.meta;
-        console.log('pushRequest', JSON.stringify(envelope, null, 2));
-      })
-      .on('toolCall', envelope => {
-        console.log('toolCall', JSON.stringify(envelope, null, 2));
-      })
-      .on('modelResponse', ({ requestId, response }) => {
-        agentTrackers.track({
+      .on('pushRequest', async ({ requestId, context, currentStage, meta }) => {
+        requestIdToStageId.set(requestId, meta.stageId);
+        await agentTrackers.pushRequest({
+          contextBefore: context,
+          currentStage,
+          executionMeta: meta,
           requestId,
           sessionId,
-          executionMeta,
-
-          durationMs: response.durationMs,
           timestamp: new Date().toISOString(),
+        });
+      })
+      .on('toolCall', async ({ requestId, toolCalls }) => {
+        const stageId = requestIdToStageId.get(requestId);
+        if (!stageId) return;
 
+        await agentTrackers.toolCall({
+          requestId,
+          sessionId,
+          stageId,
+          timestamp: new Date().toISOString(),
+          toolCalls,
+        });
+      })
+      .on('modelResponse', async ({ requestId, response }) => {
+        const stageId = requestIdToStageId.get(requestId);
+        if (!stageId) return;
+
+        await agentTrackers.modelResponse({
+          durationMs: response.durationMs,
           model: response.model,
-          chatMessages: response.choices.map(({ message }) => message),
+          requestId,
+          response,
+          sessionId,
+          stageId,
           thinkingMode: response.thinkingMode,
+          timestamp: new Date().toISOString(),
           usage: normalizeUsage(response.usage),
+        });
+      })
+      .on('stageFinish', async ({ requestId, contextAfter }) => {
+        const stageId = requestIdToStageId.get(requestId);
+        if (!stageId) return;
+
+        await agentTrackers.stageFinish({
+          contextAfter,
+          requestId,
+          sessionId,
+          stageId,
+          timestamp: new Date().toISOString(),
         });
       });
 
@@ -122,20 +149,21 @@ export const main = async (cli: CliOptions) => {
       aiLogicStartLine,
       undefined,
       resumeState,
-      {
-        patchRuntimeSnapshot: (requestId, patch) =>
-          stepTracker.patchRuntimeSnapshot(sessionId, requestId, patch),
-      },
     );
 
     finalResult = runtime.get("context")?.result;
+    parsedStages = stages;
 
     console.log("result", JSON.stringify(runtime.get("context")?.["result"], null, 2));
   } catch (ex) {
     console.error(ex);
   } finally {
-    void stepTracker.finalizeSession(sessionId, { result: finalResult });
-    process.stdout.write(`\n${tracker.summaryText(sessionId)}\n`);
+    await agentTrackers.finalResult({
+      result: finalResult,
+      sessionId,
+      stages: parsedStages,
+    });
+    process.stdout.write(`\n${sessionTracker.summaryText(sessionId)}\n`);
 
     await composeDown(composeProjectName);
   }
