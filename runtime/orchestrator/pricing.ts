@@ -31,7 +31,7 @@ export const computeCost = (model: string, usage: NormalizedUsage): number => {
   if (!price) {
     if (!warnedUnknown.has(model)) {
       warnedUnknown.add(model);
-      process.stderr.write(
+      console.warn(
         `[WARN] unknown model pricing: ${model}; using deepseek-v4-flash cache-miss input rate for all prompt tokens\n`,
       );
     }

@@ -8,6 +8,7 @@ services:
       - ../.env
     environment:
       AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
+      AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     # test llm, in reality do not allow host connection
     extra_hosts:

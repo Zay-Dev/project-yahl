@@ -167,7 +167,7 @@ export const runStageSession = async (
   const maxBashCalls = options.maxBashCalls ?? 24;
   const maxTurns = options.maxTurns ?? 60;
 
-  const toolsMd = await readFileUtf8(path.resolve(config.moduleDir, "Tools.md"));
+  const toolsMd = await readFileUtf8(path.resolve(config.runtimeRoot, "Tools.md"));
 
   const payload = JSON.stringify(stageInput, null, 2);
 
@@ -222,7 +222,7 @@ export const runStageSession = async (
         bashCalls += 1;
         const commandResult = await runner.runCommand(command);
         if (config.debug) {
-          process.stderr.write(`[DEBUG] [RUN_BASH] ${command}: ${commandResult}\n`);
+          console.log(`[DEBUG] [RUN_BASH] ${command}: ${commandResult}\n`);
         }
 
         stageMessages.push({

@@ -22,12 +22,7 @@ type TMeta = {
 type UsageEmitPayload = {
   chatMessages?: { content?: unknown; role: string; toolCallIndex?: number; usageDelta?: unknown }[];
   model: string;
-  response?: {
-    durationMs: number;
-    reasoning: string | null;
-    reply: string | null;
-    toolCalls?: ChatToolCall[];
-  };
+  durationMs: number;
   requestId: string;
   sessionId: string;
   thinkingMode: boolean;
@@ -42,30 +37,18 @@ export const setUsageEmitter = (fn: ((payload: UsageEmitPayload) => void) | null
   usageEmitter = fn;
 };
 
-export const chat = async (
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-  meta?: TMeta,
-) => {
-  const { content } = await _chat(messages, meta);
-
-  return content || "";
-};
-
 export const chatWithTools = async (
   messages: ChatApiMessage[],
-  meta?: TMeta,
 ): Promise<ChatAssistantMessage> => {
-  return await _chat(messages, meta, { allowTools: true });
+  return await _chat(messages, { allowTools: true });
 };
 
 const _chat = async (
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-  meta?: TMeta,
   options: {
     allowTools?: true;
   } = {},
 ) => {
-  const start = Date.now();
   try {
     const response = await _client.chat.completions.create({
       messages,
@@ -80,7 +63,6 @@ const _chat = async (
       thinking: { type: config.thinkingMode ? "enabled" : "disabled" },
     } as any);
     
-    const durationMs = Date.now() - start;
     const message = response.choices?.[0]?.message || null;
   
     if (!message) {
@@ -91,33 +73,9 @@ const _chat = async (
     const reasoning_content = Utils.getReasoningText(message);
     const tool_calls = Utils.normalizeToolCalls(message.tool_calls);
   
-    if (!!meta && !!usageEmitter) {
-      const responsePayload = {
-        durationMs,
-        reasoning: reasoning_content ?? null,
-        reply: content ?? null,
-        toolCalls: tool_calls,
-      };
-  
-      usageEmitter({
-        chatMessages: [
-          {
-            content: content ?? "",
-            role: "assistant",
-          },
-        ],
-        model: config.model,
-        requestId: meta.requestId,
-        sessionId: meta.sessionId,
-
-        response: responsePayload,
-        thinkingMode: config.thinkingMode,
-        usage: normalizeUsage(response.usage),
-      });
-    }
-  
     return {
       content,
+      response,
       tool_calls,
       reasoning_content,
       role: "assistant" as const,

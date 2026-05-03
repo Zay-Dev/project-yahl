@@ -35,7 +35,7 @@ export const createStepTracker = () => {
         method: "POST",
       });
     } catch (error) {
-      process.stderr.write(`[WARN] failed to register session: ${String(error)}\n`);
+      console.warn(`[WARN] failed to register session: ${String(error)}\n`);
     }
   };
 
@@ -63,7 +63,7 @@ export const createStepTracker = () => {
         method: "POST",
       });
     } catch (error) {
-      process.stderr.write(`[WARN] failed to persist runtime snapshot patch: ${String(error)}\n`);
+      console.warn(`[WARN] failed to persist runtime snapshot patch: ${String(error)}\n`);
     }
   };
 
@@ -81,7 +81,6 @@ export const createStepTracker = () => {
       executionMeta: trace.executionMeta,
       model: trace.model,
       requestId: trace.requestId,
-      response: trace.response,
       sessionId: trace.sessionId,
       stageInput: trace.stageInput,
       stageInputTruncated: trace.stageInputTruncated,
@@ -104,7 +103,7 @@ export const createStepTracker = () => {
         method: "POST",
       });
     } catch (error) {
-      process.stderr.write(`[WARN] failed to persist session step: ${String(error)}\n`);
+      console.warn(`[WARN] failed to persist session step: ${String(error)}\n`);
     }
   };
 
@@ -120,7 +119,7 @@ export const createStepTracker = () => {
         method: "POST",
       });
     } catch (error) {
-      process.stderr.write(`[WARN] failed to finalize session record: ${String(error)}\n`);
+      console.warn(`[WARN] failed to finalize session record: ${String(error)}\n`);
     }
   };
 

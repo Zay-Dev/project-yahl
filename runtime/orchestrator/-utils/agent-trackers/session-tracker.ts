@@ -39,9 +39,9 @@ export const createSessionTracker = () => {
     row.completionTokens += usage.completionTokens;
     row.reasoningTokens += usage.reasoningTokens;
     row.cost += computeCost(model, usage);
-    if (typeof event.response?.durationMs === "number") {
+    if (typeof event.durationMs === "number") {
       row.durationCalls += 1;
-      row.durationTotalMs += event.response.durationMs;
+      row.durationTotalMs += event.durationMs;
       row.avgDurationMs = row.durationTotalMs / row.durationCalls;
     }
 

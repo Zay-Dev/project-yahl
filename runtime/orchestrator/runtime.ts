@@ -5,10 +5,12 @@ import type {
   StageContextPayload,
 } from "../shared/stage-contract";
 
+import type { RuntimeContext } from "./runtime-types";
+
 const TAB_SIZE = 2 as const;
 const DEFAULT_END_LINE_WITH = ";" as const;
 
-export type RuntimeContext = Map<RuntimeBucket, Record<string, unknown>>;
+export type { RuntimeContext } from "./runtime-types";
 
 const getBucket = (scope: ContextScope): RuntimeBucket => {
   if (scope === "global") return "context";

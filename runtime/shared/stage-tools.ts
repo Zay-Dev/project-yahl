@@ -1,3 +1,5 @@
+import type OpenAI from "openai";
+
 import {
   CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
@@ -16,6 +18,8 @@ export type ChatToolCall = {
 };
 
 export type ChatAssistantMessage = {
+  response: OpenAI.Chat.Completions.ChatCompletion;
+
   content: string | null;
   reasoning_content?: string | null;
   role: "assistant";
@@ -26,7 +30,7 @@ export type ChatApiMessage =
   | ChatAssistantMessage
   | {
     content: string;
-    role: "system" | "user";
+    role: "system" | "user" | 'assistant';
   }
   | {
     content: string;

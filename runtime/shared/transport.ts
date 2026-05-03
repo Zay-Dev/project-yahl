@@ -3,16 +3,12 @@ import type { StageSessionInput } from "./stage-contract";
 import type { ChatToolCall } from "./stage-tools";
 import type { NormalizedUsage } from "./usage";
 
-export const REQUEST_QUEUE = "yahl:requests";
-
-export const USAGE_CHANNEL = "yahl:usage";
-
 export const replyQueue = (requestId: string) => `yahl:reply:${requestId}`;
+export const requestQueue = (sessionId: string) => `yahl:request:${sessionId}`;
+export const usageChannel = (sessionId: string) => `yahl:usage:${sessionId}`;
 
 export type StageRequestEnvelope = {
-  executionMeta?: StageExecutionMeta;
   requestId: string;
-  sessionId: string;
   stageInput: StageSessionInput;
 };
 
@@ -70,7 +66,7 @@ export type StageTokenTrace = {
   contextBeforeTruncated?: boolean;
   executionMeta: StageExecutionMeta;
   model: string;
-  response?: UsageEvent["response"];
+  durationMs: number;
   requestId: string;
   sessionId: string;
   stageInput?: StageSessionInput;
