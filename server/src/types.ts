@@ -80,6 +80,7 @@ export type LegacySessionEventWire = {
   contextBefore?: unknown;
   contextBeforeTruncated?: boolean;
   cost?: number;
+  currentStage?: string;
   executionMeta?: unknown;
   model: string;
   requestId: string;

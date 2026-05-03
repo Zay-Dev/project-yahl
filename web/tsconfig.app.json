@@ -26,5 +26,8 @@
       "@/*": ["./src/*"]
     }
   },
+  "references": [
+    { "path": "../server" }
+  ],
   "include": ["src"]
 }

@@ -404,3 +404,4 @@ next-env.d.ts
 /mongo_data/
 .onecli/
 .rerun-payloads/
+tsconfig.tsbuildinfo

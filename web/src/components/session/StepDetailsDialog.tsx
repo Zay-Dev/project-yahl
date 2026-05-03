@@ -30,12 +30,15 @@ import {
   stringifyValue,
 } from "@/lib/format";
 import {
+  getContextAfterForDisplay,
+  getContextBeforeForDisplay,
+  getCurrentStageDisplay,
   getInputTokens,
   getRequestGlobalStage,
-  getStagePreview,
   isLoopStep,
   type SessionEventGroup,
 } from "@/lib/session-events";
+import { cn } from "@/lib/utils";
 import type { SessionStepEvent } from "@/types";
 
 type Props = {
@@ -76,7 +79,9 @@ export const StepDetailsDialog = ({
   return (
     <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
-        className="flex max-h-[95vh] w-full flex-col gap-0 p-0 sm:max-w-6xl"
+        className={cn(
+          "flex max-h-[95vh] w-[90vw] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[90vw]",
+        )}
         showCloseButton={false}
       >
         <DialogHeader className="flex flex-row items-start justify-between gap-2 border-b p-4">
@@ -123,14 +128,14 @@ export const StepDetailsDialog = ({
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Stage input payload (request-global)</CardTitle>
+                <CardTitle className="text-sm">Context before (request-global anchor)</CardTitle>
                 <CardDescription className="text-xs">
                   source step #{globalStageIndex}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <pre className="max-h-72 overflow-auto rounded border p-2 text-xs">
-                  {stringifyValue(globalStageEvent.stageInput)}
+                  {stringifyValue(getContextBeforeForDisplay(globalStageEvent))}
                 </pre>
               </CardContent>
             </Card>
@@ -152,6 +157,20 @@ export const StepDetailsDialog = ({
 
           <Card>
             <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Context after (request-global anchor)</CardTitle>
+              <CardDescription className="text-xs">
+                source step #{globalStageIndex}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <pre className="max-h-72 overflow-auto rounded border p-2 text-xs">
+                {stringifyValue(getContextAfterForDisplay(globalStageEvent))}
+              </pre>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm">
                 <span>Current stage (request-global)</span>
                 <Badge variant={isLoopStep(globalStageEvent) ? "default" : "outline"}>
@@ -159,12 +178,12 @@ export const StepDetailsDialog = ({
                 </Badge>
               </CardTitle>
               <CardDescription className="text-xs">
-                source step #{globalStageIndex}
+                source step #{globalStageIndex} · full text
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="max-h-72 overflow-auto rounded border p-3 font-mono text-xs whitespace-pre-wrap">
-                {getStagePreview(globalStageEvent)}
+              <p className="max-h-[min(70vh,48rem)] overflow-auto rounded border p-3 font-mono text-xs whitespace-pre-wrap">
+                {getCurrentStageDisplay(globalStageEvent)}
               </p>
             </CardContent>
           </Card>
@@ -237,6 +256,49 @@ export const StepDetailsDialog = ({
                               <p><span className="font-medium">Stage input truncated:</span> {event.stageInputTruncated ? "true" : "false"}</p>
                               <p><span className="font-medium">Has execution meta:</span> {event.executionMeta ? "true" : "false"}</p>
                               <p><span className="font-medium">Has stage input:</span> {event.stageInput ? "true" : "false"}</p>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm">Current stage (this step)</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="max-h-96 overflow-auto rounded border p-3 font-mono text-xs whitespace-pre-wrap">
+                              {getCurrentStageDisplay(event)}
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm">Context before (this step)</CardTitle>
+                              <CardDescription className="text-xs">
+                                {event.contextBeforeTruncated || event.stageInputTruncated
+                                  ? "Truncated at source"
+                                  : "As stored"}
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <pre className="max-h-72 overflow-auto rounded border p-2 text-xs">
+                                {stringifyValue(getContextBeforeForDisplay(event))}
+                              </pre>
+                            </CardContent>
+                          </Card>
+
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm">Context after (this step)</CardTitle>
+                              <CardDescription className="text-xs">
+                                {event.contextAfterTruncated ? "Truncated at source" : "As stored"}
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <pre className="max-h-72 overflow-auto rounded border p-2 text-xs">
+                                {stringifyValue(getContextAfterForDisplay(event))}
+                              </pre>
                             </CardContent>
                           </Card>
                         </div>

@@ -12,6 +12,7 @@ export type SessionStageDoc = {
   contextBefore?: unknown;
   contextBeforeTruncated?: boolean;
   cost?: number;
+  currentStage?: string;
   executionMeta?: unknown;
   llmReplyEnvelope?: LlmReplyEnvelopeSub;
   model?: string;
@@ -56,6 +57,7 @@ const sessionStageSchema = new Schema<SessionStageDoc>(
     contextBefore: { type: Schema.Types.Mixed },
     contextBeforeTruncated: { type: Boolean },
     cost: { type: Number },
+    currentStage: { type: String },
     executionMeta: { type: Schema.Types.Mixed },
     llmReplyEnvelope: { type: llmReplySub },
     model: { type: String },

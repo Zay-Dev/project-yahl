@@ -1,3 +1,24 @@
+import type {
+  LegacySessionEventWire,
+  RerunRequestPayload as RerunRequestPayloadWire,
+  SessionMetaSsePayload,
+  SessionStepChatMessage,
+  SessionStepSsePayload,
+  SessionsLifecycleSsePayload,
+} from "server/wire";
+
+export type SessionStepEvent = LegacySessionEventWire;
+
+export type SessionMetaSse = SessionMetaSsePayload;
+
+export type SessionStepSse = SessionStepSsePayload;
+
+export type SessionsLifecycleSse = SessionsLifecycleSsePayload;
+
+export type RerunRequestPayload = RerunRequestPayloadWire;
+
+export type SessionStageChatMessage = SessionStepChatMessage;
+
 export type SessionListItem = {
   archivedAt: string | null;
   createdAt: string;
@@ -6,45 +27,10 @@ export type SessionListItem = {
   taskYahlPath: string | null;
   totalCalls: number;
   totalCost: number;
-  totalUsedTimeMs: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+  totalUsedTimeMs: number;
   updatedAt: string;
-};
-
-export type SessionStepEvent = {
-  cost?: number;
-  contextAfter?: unknown;
-  contextAfterTruncated?: boolean;
-  contextBefore?: unknown;
-  contextBeforeTruncated?: boolean;
-  executionMeta?: unknown;
-  model: string;
-  requestId: string;
-  response?: {
-    durationMs: number;
-    reasoning: string | null;
-    reply: string | null;
-    toolCalls?: unknown[];
-  };
-  sessionId: string;
-  stageChat?: {
-    content?: unknown;
-    modelSpendId?: string;
-    role: string;
-    toolCallId?: string;
-  }[];
-  stageIndex?: number;
-  stageInput?: unknown;
-  stageInputTruncated?: boolean;
-  thinkingMode: boolean;
-  timestamp: string;
-  usage: {
-    cacheHitTokens: number;
-    cacheMissTokens: number;
-    completionTokens: number;
-    reasoningTokens: number;
-  };
 };
 
 export type SessionForkLineage = {
@@ -70,39 +56,6 @@ export type SessionDetail = {
   sessionId: string;
   taskYahlPath?: string | null;
   updatedAt: string;
-};
-
-export type SessionMetaSse = {
-  finalizedAt: string | null;
-  sessionId: string;
-  taskYahlPath: string | null;
-};
-
-export type SessionStepSse = {
-  cost: number;
-  durationMs: number | null;
-  executionMeta?: unknown;
-  model: string;
-  requestId?: string;
-  replyPreview: string | null;
-  sessionId: string;
-  stageInput?: unknown;
-  stageInputTruncated?: boolean;
-  stepIndex: number;
-  usage: {
-    cacheHitTokens: number;
-    cacheMissTokens: number;
-    completionTokens: number;
-    reasoningTokens: number;
-  };
-};
-
-export type SessionsLifecycleSse = {
-  eventType: "archived" | "created" | "deleted" | "finalized" | "updated";
-  finalizedAt: string | null;
-  sessionId: string;
-  taskYahlPath: string | null;
-  updatedAt: string | null;
 };
 
 export type RuntimeTask = {
@@ -135,14 +88,4 @@ export type RuntimeRunMetaSse = {
 export type RuntimeRunStatusSse = {
   exitCode: number | null;
   status: "completed" | "failed" | "running";
-};
-
-export type RerunRequestPayload = {
-  requestSnapshotOverride: {
-    context: Record<string, unknown>;
-    currentStage: string;
-  };
-  resumeFromStepIndex: number;
-  sourceRequestId: string;
-  sourceSessionId: string;
 };

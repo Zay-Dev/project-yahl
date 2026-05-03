@@ -1,16 +1,35 @@
 import { EventEmitter } from "events";
 
+export type SessionStepChatMessage = {
+  content?: unknown;
+  modelSpendId?: string;
+  role: string;
+  toolCallId?: string;
+};
+
 export type SessionStepSsePayload = {
+  contextAfter?: unknown;
+  contextAfterTruncated?: boolean;
   cost: number;
+  currentStage: string | null;
   durationMs: number | null;
   executionMeta?: unknown;
   model: string;
-  requestId: string;
   replyPreview: string | null;
+  requestId: string;
+  response: {
+    durationMs: number | null;
+    reasoning: string | null;
+    reply: string | null;
+    toolCalls?: unknown[];
+  } | null;
   sessionId: string;
+  stageChat?: SessionStepChatMessage[];
   stageInput?: unknown;
   stageInputTruncated?: boolean;
   stepIndex: number;
+  thinkingMode: boolean;
+  timestamp: string;
   usage: {
     cacheHitTokens: number;
     cacheMissTokens: number;

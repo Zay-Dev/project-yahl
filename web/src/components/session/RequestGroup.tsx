@@ -21,9 +21,9 @@ import {
 import { EMPTY_VALUE, formatCost, formatNumber, truncateText } from "@/lib/format";
 import type { SessionEventRow } from "@/lib/session-events";
 import {
+  getCurrentStageDisplay,
   getInputTokens,
   getRequestGlobalStage,
-  getStagePreview,
   isLoopStep,
 } from "@/lib/session-events";
 
@@ -86,11 +86,13 @@ export const RequestGroup = ({
                   {isLoopStep(globalStageEvent) ? "loop" : "non-loop"}
                 </Badge>
               </CardTitle>
-              <CardDescription className="text-xs">source step #{sourceIndexLabel}</CardDescription>
+              <CardDescription className="text-xs">
+                source step #{sourceIndexLabel} · first {STAGE_PREVIEW_LIMIT} characters
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <p className="max-h-56 overflow-auto rounded border p-2 font-mono text-xs whitespace-pre-wrap">
-                {truncateText(getStagePreview(globalStageEvent), STAGE_PREVIEW_LIMIT)}
+                {truncateText(getCurrentStageDisplay(globalStageEvent), STAGE_PREVIEW_LIMIT)}
               </p>
             </CardContent>
           </Card>

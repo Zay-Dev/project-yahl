@@ -9,7 +9,11 @@ import {
   SessionToolCall,
 } from "./models";
 import { emitSessionMeta, emitSessionStep, emitSessionsLifecycle } from "./session-sse-hub";
-import type { SessionMetaSsePayload, SessionStepSsePayload } from "./session-sse-hub";
+import type {
+  SessionMetaSsePayload,
+  SessionStepChatMessage,
+  SessionStepSsePayload,
+} from "./session-sse-hub";
 import type {
   CreateModelResponsePayload,
   CreateStagePayload,
@@ -39,35 +43,66 @@ const replyPreview = (reply: string | null | undefined) => {
 const stepSummary = (
   sessionId: string,
   stage: {
-    cost?: number;
+    contextAfter?: unknown;
+    contextAfterTruncated?: boolean;
     contextBefore?: unknown;
     contextBeforeTruncated?: boolean;
+    cost?: number;
+    currentStage?: string;
     executionMeta?: unknown;
     requestId: string;
     stageIndex: number;
   },
   modelEvent: CreateModelResponsePayload,
-): SessionStepSsePayload => ({
-  cost: toNumber(modelEvent.cost ?? stage.cost),
-  durationMs:
+  stageChat: SessionStepChatMessage[],
+): SessionStepSsePayload => {
+  const durationMs =
     typeof modelEvent.durationMs === "number" && Number.isFinite(modelEvent.durationMs)
       ? modelEvent.durationMs
+      : null;
+
+  const responseDurationMs =
+    typeof modelEvent.response?.durationMs === "number" && Number.isFinite(modelEvent.response.durationMs)
+      ? modelEvent.response.durationMs
+      : durationMs;
+
+  const stageInput = stage.currentStage
+    ? { context: stage.contextBefore, currentStage: stage.currentStage }
+    : stage.contextBefore;
+
+  return {
+    contextAfter: stage.contextAfter,
+    contextAfterTruncated: stage.contextAfterTruncated,
+    cost: toNumber(modelEvent.cost ?? stage.cost),
+    currentStage: stage.currentStage ?? null,
+    durationMs,
+    executionMeta: stage.executionMeta,
+    model: modelEvent.model,
+    replyPreview: replyPreview(modelEvent.response?.reply),
+    requestId: stage.requestId,
+    response: modelEvent.response
+      ? {
+        durationMs: responseDurationMs,
+        reasoning: modelEvent.response.reasoning ?? null,
+        reply: modelEvent.response.reply ?? null,
+        toolCalls: modelEvent.response.toolCalls,
+      }
       : null,
-  executionMeta: stage.executionMeta,
-  model: modelEvent.model,
-  replyPreview: replyPreview(modelEvent.response?.reply),
-  requestId: stage.requestId,
-  sessionId,
-  stageInput: stage.contextBefore,
-  stageInputTruncated: stage.contextBeforeTruncated,
-  stepIndex: stage.stageIndex,
-  usage: {
-    cacheHitTokens: modelEvent.usage.cacheHitTokens,
-    cacheMissTokens: modelEvent.usage.cacheMissTokens,
-    completionTokens: modelEvent.usage.completionTokens,
-    reasoningTokens: modelEvent.usage.reasoningTokens,
-  },
-});
+    sessionId,
+    stageChat: stageChat.length ? stageChat : undefined,
+    stageInput,
+    stageInputTruncated: stage.contextBeforeTruncated,
+    stepIndex: stage.stageIndex,
+    thinkingMode: modelEvent.thinkingMode,
+    timestamp: modelEvent.timestamp,
+    usage: {
+      cacheHitTokens: modelEvent.usage.cacheHitTokens,
+      cacheMissTokens: modelEvent.usage.cacheMissTokens,
+      completionTokens: modelEvent.usage.completionTokens,
+      reasoningTokens: modelEvent.usage.reasoningTokens,
+    },
+  };
+};
 
 const metaFromRow = (
   sessionId: string,
@@ -122,6 +157,7 @@ const buildLegacyEvent = (
     contextAfterTruncated?: boolean;
     contextBefore?: unknown;
     contextBeforeTruncated?: boolean;
+    currentStage?: string;
     executionMeta?: unknown;
     llmReplyEnvelope?: { durationMs?: number; reasoning: string | null; reply: string | null };
     model?: string;
@@ -170,12 +206,34 @@ const buildLegacyEvent = (
     }
     : undefined;
 
+  const currentStageFromMeta = () => {
+    const em = stage.executionMeta;
+    if (!em || typeof em !== "object" || Array.isArray(em)) return "";
+
+    const sr = (em as Record<string, unknown>).sourceRef;
+    if (!sr || typeof sr !== "object" || Array.isArray(sr)) return "";
+
+    const text = (sr as Record<string, unknown>).text;
+    return typeof text === "string" ? text : "";
+  };
+
+  const fromDb = typeof stage.currentStage === "string" ? stage.currentStage : "";
+  const fromMeta = currentStageFromMeta();
+  const resolvedCurrentStage = fromDb.trim() || fromMeta.trim() || fromDb;
+  const wireCurrentStage = resolvedCurrentStage.trim() ? resolvedCurrentStage : undefined;
+
+  const stageInput = {
+    context: stage.contextBefore,
+    currentStage: wireCurrentStage ?? "",
+  };
+
   return {
     contextAfter: stage.contextAfter,
     contextAfterTruncated: stage.contextAfterTruncated,
     contextBefore: stage.contextBefore,
     contextBeforeTruncated: stage.contextBeforeTruncated,
     cost: stage.cost,
+    currentStage: wireCurrentStage,
     executionMeta: stage.executionMeta,
     model: stage.model ?? "",
     requestId: stage.requestId,
@@ -183,7 +241,7 @@ const buildLegacyEvent = (
     sessionId,
     stageChat: stageChat.length ? stageChat : undefined,
     stageIndex: stage.stageIndex,
-    stageInput: stage.contextBefore,
+    stageInput,
     stageInputTruncated: stage.contextBeforeTruncated,
     thinkingMode: stage.thinkingMode ?? false,
     timestamp: stage.timestamp,
@@ -281,6 +339,7 @@ export const createStage = async (sessionId: string, payload: CreateStagePayload
   const created = await SessionStage.create({
     contextBefore: payload.contextBefore,
     contextBeforeTruncated: payload.contextBeforeTruncated,
+    currentStage: payload.currentStage,
     executionMeta: payload.executionMeta,
     requestId: payload.requestId,
     session: sessionObjId,
@@ -414,19 +473,30 @@ export const createStageModelResponse = async (
     { $set: { updatedAt: new Date() } },
   );
 
+  const sseChatMessages: SessionStepChatMessage[] = chatDocs.map((doc) => ({
+    content: doc.content,
+    modelSpendId: doc.modelSpendId ? String(doc.modelSpendId) : undefined,
+    role: doc.role,
+    toolCallId: doc.toolCallId ? String(doc.toolCallId) : undefined,
+  }));
+
   emitSessionStep(
     sessionId,
     stepSummary(
       sessionId,
       {
+        contextAfter: stage.contextAfter,
+        contextAfterTruncated: stage.contextAfterTruncated,
         contextBefore: stage.contextBefore,
         contextBeforeTruncated: stage.contextBeforeTruncated,
         cost: safeCost,
+        currentStage: stage.currentStage,
         executionMeta: stage.executionMeta,
         requestId: stage.requestId,
         stageIndex: stage.stageIndex,
       },
       payload,
+      sseChatMessages,
     ),
   );
 
