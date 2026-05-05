@@ -65,31 +65,20 @@ export const resolveCliOptions = async (): Promise<CliOptions> => {
   const taskPath = taskPathRaw
     ? path.resolve(repoRoot, taskPathRaw)
     : path.resolve(tasksRoot, taskId, "SKILL.yahl");
-    
+
   const resumeMode = pairs["resume-mode"] || "";
-  const resumeExecutionMeta =
-    await decodeJsonFile<StageExecutionMeta>(pairs["resume-execution-meta-file"]) ||
-    decodeBase64Json<StageExecutionMeta>(pairs["resume-execution-meta-base64"]);
-  const resumeStageInput =
-    await decodeJsonFile<StageSessionInput>(pairs["resume-stage-input-file"]) ||
-    decodeBase64Json<StageSessionInput>(pairs["resume-stage-input-base64"]);
-  const forkedFrom =
-    await decodeJsonFile<CliForkedFrom>(pairs["forked-from-file"]) ||
-    decodeBase64Json<CliForkedFrom>(pairs["forked-from-base64"]);
 
   return {
     agentContainerPrefix: pairs["agent-container-prefix"] || process.env.AGENT_CONTAINER_PREFIX || "runtime-agent",
     composeProjectPrefix: pairs["compose-project-prefix"] || process.env.COMPOSE_PROJECT_PREFIX || "runtime-agent",
-    forkedFrom,
-    resume: resumeMode === "request" && resumeExecutionMeta && resumeStageInput
-      ? {
-        executionMeta: resumeExecutionMeta,
-        requestSnapshotOverride: resumeStageInput,
-        sourceRequestId: pairs["resume-source-request-id"] || "",
-        sourceSessionId: pairs["resume-source-session-id"] || "",
-        stepIndex: Number(pairs["resume-from-step-index"] || 0),
-      }
-      : undefined,
+
+    resume: resumeMode && pairs["resume-source-session-id"] ? {
+      forkrunFormId: pairs["forkrun-form-id"] || process.env.ORCHESTRATOR_FORKRUN_FORM_ID || "",
+      sourceRequestId: pairs["resume-source-request-id"] || "",
+      sourceSessionId: pairs["resume-source-session-id"] || "",
+      sourceStageId: pairs["resume-source-stage-id"] || "",
+      stepIndex: Number(pairs["resume-from-step-index"] || 0),
+    } : undefined,
     sessionId: normalizeContainerName(pairs["session-id"] || process.env.ORCHESTRATOR_SESSION_ID || randomUUID()),
     taskId,
     taskPath,

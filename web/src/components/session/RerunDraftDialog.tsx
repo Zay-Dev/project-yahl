@@ -42,6 +42,15 @@ const parseJson = (raw: string, label: string) => {
   }
 };
 
+const resolveStageId = (event: SessionStepEvent | null) => {
+  if (!event) return null;
+  if (!isRecord(event.executionMeta)) return null;
+
+  const stageId = event.executionMeta.stageId;
+  if (typeof stageId !== "string" || !stageId.trim()) return null;
+  return stageId;
+};
+
 export const RerunDraftDialog = ({
   groupedEvents,
   modalStep,
@@ -65,6 +74,7 @@ export const RerunDraftDialog = ({
   const globalStageEvent = globalStage?.event ?? modalStep?.event ?? null;
   const globalStageIndex = globalStage?.index ?? modalStep?.index ?? null;
   const snapshot = getRequestSnapshot(requestRows, globalStageEvent);
+  const sourceStageId = resolveStageId(globalStageEvent);
 
   const requestKey = modalStep ? modalStep.event.requestId : null;
 
@@ -79,7 +89,7 @@ export const RerunDraftDialog = ({
   }, [open, requestKey]);
 
   const onSubmit = async () => {
-    if (!modalStep || globalStageIndex === null) {
+    if (!modalStep || globalStageIndex === null || !sourceStageId) {
       setError("Missing source request anchor");
       return;
     }
@@ -97,9 +107,9 @@ export const RerunDraftDialog = ({
           },
           currentStage: stage,
         },
-        resumeFromStepIndex: globalStageIndex,
         sourceRequestId: modalStep.event.requestId,
         sourceSessionId: sessionId,
+        sourceStageId,
       };
 
       const created = await submitRerun(payload);

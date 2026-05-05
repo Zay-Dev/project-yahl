@@ -2,6 +2,7 @@ export type {
   CreateModelResponsePayload,
   CreateStagePayload,
   CreateToolCallsPayload,
+  ForkrunFormWire,
   LegacySessionEventWire,
   RerunRequestPayload,
   SessionChatMessagePayload,

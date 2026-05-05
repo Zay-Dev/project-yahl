@@ -3,25 +3,33 @@ import type { StageExecutionMeta } from "../shared/transport";
 
 import type { RuntimeContext } from "./runtime-types";
 
+export type RerunPrefixSnapshot = {
+  contextAfter?: unknown;
+  contextBefore?: unknown;
+  currentStage?: string;
+  executionMeta?: unknown;
+  stageIndex: number;
+};
+
 export interface CliForkedFrom {
-  prefixDump: unknown[];
+  prefixDump?: unknown[];
+  prefixSnapshots?: RerunPrefixSnapshot[];
   requestId: string;
   sourceSessionId: string;
   stepIndex: number;
 }
 
 export interface CliResume {
-  executionMeta: StageExecutionMeta;
-  requestSnapshotOverride: StageSessionInput;
+  forkrunFormId?: string;
   sourceRequestId: string;
   sourceSessionId: string;
+  sourceStageId: string;
   stepIndex: number;
 }
 
 export interface CliOptions {
   agentContainerPrefix: string;
   composeProjectPrefix: string;
-  forkedFrom?: CliForkedFrom;
   resume?: CliResume;
   sessionId: string;
   taskId: string;
@@ -36,8 +44,11 @@ export interface StageLoopMeta {
 
 export interface ResumeState {
   executionMeta?: StageExecutionMeta;
+  logicalStepCursor?: number;
   pendingStageId: string | null;
+  prefixSnapshots?: RerunPrefixSnapshot[];
   requestSnapshotOverride?: StageSessionInput;
+  resumeFromStepIndex?: number;
   started: boolean;
 }
 
@@ -82,5 +93,4 @@ export type StageExecuteFn = (
   sourceFilePath: string,
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
-  resumeState?: ResumeState,
 ) => Promise<{ runtime: RuntimeContext; stages: ParsedStage[] }>;

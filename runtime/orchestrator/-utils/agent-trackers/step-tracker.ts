@@ -75,6 +75,7 @@ export const createStepTracker = () => {
         executionMeta: event.executionMeta,
         requestId: event.requestId,
         stageId: event.executionMeta.stageId,
+        stageIndex: event.executionMeta.stageIndex,
         timestamp: event.timestamp,
       });
     });

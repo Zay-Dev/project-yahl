@@ -112,7 +112,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     };
 
   pushRequest: IPublisher['pushRequest'] =
-    async (context, currentStage, meta) => {
+    async (context, currentStage, meta, contextAfter) => {
       const requestId = randomUUID();
       this.emit("pushRequest", { requestId, context, currentStage, meta });
 
@@ -121,6 +121,11 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
           context,
           requestId,
           currentStage,
+          contextAfter: !contextAfter ? undefined : {
+            context: contextAfter.context ?? {},
+            stage: contextAfter.stage ?? {},
+            types: contextAfter.types ?? {},
+          },
         })
       );
 

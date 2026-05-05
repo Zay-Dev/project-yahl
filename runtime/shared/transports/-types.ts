@@ -19,6 +19,7 @@ export type TRequestEnvelope = {
   requestId: string;
   context: TRuntimeContext;
   currentStage: string;
+  contextAfter?: TRuntimeContext,
 };
 
 export type TStageExecutionMeta = {
@@ -36,6 +37,7 @@ export type TStageExecutionMeta = {
     text: string;
   };
   stageId: string;
+  stageIndex: number;
   stageTextHash: string;
 };
 
@@ -65,6 +67,7 @@ export interface IPublisher extends IBase {
     context: TRuntimeContext,
     currentStage: string,
     meta: TStageExecutionMeta,
+    contextAfter?: Partial<TRuntimeContext | undefined>,
   ) => Promise<{ requestId: string, envelope: StageEnvelope }>;
 }
 

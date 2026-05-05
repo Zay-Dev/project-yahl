@@ -8,7 +8,10 @@ import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 import { runStageSession } from "./stage-session";
 
 import { runScript } from "./-utils/vm-client";
+import { fastForward } from "./-utils/ff-client";
 import { chatWithTools } from "./-utils/llm-client";
+
+type TReply = ReturnType<typeof subscriber.getReply>;
 
 const execAsync = promisify(exec);
 
@@ -30,6 +33,56 @@ const runCommand = async (command: string) => {
     return `${failed.stdout || ""}${failed.stderr || ""}${failed.message || ""}`;
   }
 };
+
+const _toToolsCall = async (
+  model: 'vm' | 'fast-forward',
+  context: Record<string, unknown>,
+  reply: TReply['reply'],
+  onModelResponse: TReply['onModelResponse'],
+) => {
+  const toolsCall = Object.entries(context)
+    .map(([key, value]) => ({
+      arguments: {
+        key,
+        value,
+        scope: "global" as const,
+        operation: 'set' as const,
+      },
+      tool: "set_context" as const,
+      type: "tool_call" as const,
+    }));
+
+  await reply(toolsCall);
+
+  await onModelResponse({
+    durationMs: 0,
+    thinkingMode: false,
+
+    model,
+    id: model,
+    object: "chat.completion",
+    created: Date.now(),
+
+    choices: [{
+      index: 0,
+      finish_reason: "stop",
+      logprobs: null,
+      message: {
+        content: "",
+        role: "assistant",
+        refusal: null,
+        tool_calls: toolsCall.map((call) => ({
+          id: model,
+          type: 'function',
+          function: {
+            name: call.tool,
+            arguments: JSON.stringify(call.arguments),
+          },
+        })),
+      },
+    }]
+  });
+}
 
 export const startRedisDaemon = async () => {
   if (!config.apiKey) {
@@ -55,62 +108,24 @@ export const startRedisDaemon = async () => {
     const envelope = await subscriber.waitForRequest();
     if (!envelope) continue;
 
-    const { requestId, context, currentStage } = envelope;
+    const { requestId, context, currentStage, contextAfter } = envelope;
     const { reply, error, onModelResponse } = subscriber.getReply(requestId);
 
     try {
       const lines = currentStage.split('\n');
 
-      if (lines[0]?.match(/\s*CONTEXT:/)) {
+      if (!!contextAfter) {
+        const contextOutput = await fastForward(contextAfter);
+        await _toToolsCall('fast-forward', contextOutput, reply, onModelResponse);
+        continue;
+      } else if (lines[0]?.match(/\s*CONTEXT:/)) {
         const contextInput = context;
         const contextOutput = await runScript(
           ['{', ...lines].slice(1).join('\n').trim(),
           contextInput,
         );
 
-        const toolsCall = Object.entries(contextOutput)
-          .map(([key, value]) => ({
-            arguments: {
-              key,
-              value,
-              scope: "global" as const,
-              operation: 'set' as const,
-            },
-            tool: "set_context" as const,
-            type: "tool_call" as const,
-          }));
-
-        await reply(toolsCall);
-        
-        await onModelResponse({
-          durationMs: 0,
-          thinkingMode: false,
-
-          id: 'vm',
-          model: 'vm',
-          object: "chat.completion",
-          created: Date.now(),
-
-          choices: [{
-            index: 0,
-            finish_reason: "stop",
-            logprobs: null,
-            message: {
-              content: "",
-              role: "assistant",
-              refusal: null,
-              tool_calls: toolsCall.map((call) => ({
-                id: 'vm',
-                type: 'function',
-                function: {
-                  name: call.tool,
-                  arguments: JSON.stringify(call.arguments),
-                },
-              })),
-            },
-          }]
-        });
-
+        await _toToolsCall('vm', contextOutput, reply, onModelResponse);
         continue;
       }
 

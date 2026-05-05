@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 import {
+  ForkrunForm,
   Session,
   SessionForkLineage,
   SessionModelSpend,
@@ -18,6 +19,7 @@ import type {
   CreateModelResponsePayload,
   CreateStagePayload,
   CreateToolCallsPayload,
+  ForkrunFormWire,
   LegacySessionEventWire,
   ParsedStageWire,
   PatchStageRuntimeSnapshotPayload,
@@ -159,6 +161,7 @@ const buildLegacyEvent = (
     contextBeforeTruncated?: boolean;
     currentStage?: string;
     executionMeta?: unknown;
+    executionSequence: number;
     llmReplyEnvelope?: { durationMs?: number; reasoning: string | null; reply: string | null };
     model?: string;
     requestId: string;
@@ -183,7 +186,7 @@ const buildLegacyEvent = (
         arguments: typeof row.arguments === "string" ? row.arguments : JSON.stringify(row.arguments ?? {}),
         name: row.name,
       },
-      id: `persisted-${stage.stageIndex}-${row.callIndex}`,
+      id: `persisted-${stage.executionSequence}-${row.callIndex}`,
       type: "function" as const,
     }));
 
@@ -334,18 +337,19 @@ const requireStage = async (sessionId: string, stageId: string) => {
 
 export const createStage = async (sessionId: string, payload: CreateStagePayload) => {
   const sessionObjId = await requireSessionId(sessionId);
-  const stageIndex = await SessionStage.countDocuments({ sessionId });
+  const executionSequence = await SessionStage.countDocuments({ sessionId });
 
   const created = await SessionStage.create({
     contextBefore: payload.contextBefore,
     contextBeforeTruncated: payload.contextBeforeTruncated,
     currentStage: payload.currentStage,
     executionMeta: payload.executionMeta,
+    executionSequence,
     requestId: payload.requestId,
     session: sessionObjId,
     sessionId,
     stageId: payload.stageId,
-    stageIndex,
+    stageIndex: payload.stageIndex,
     timestamp: payload.timestamp,
   });
 
@@ -357,7 +361,11 @@ export const createStage = async (sessionId: string, payload: CreateStagePayload
   const row = await Session.findOne({ sessionId }).lean();
   emitLifecycle("updated", sessionId, row);
 
-  return { stageIndex, _id: created._id as mongoose.Types.ObjectId };
+  return {
+    executionSequence,
+    stageIndex: payload.stageIndex,
+    _id: created._id as mongoose.Types.ObjectId,
+  };
 };
 
 export const createStageToolCalls = async (
@@ -646,12 +654,83 @@ export const listSessions = async (limit: number, offset: number, includeArchive
   }));
 };
 
-export const buildPrefixDumpForRerun = async (sourceSessionId: string, resumeBeforeStageIndex: number) => {
+export const buildPrefixSnapshotsForRerun = async (
+  sourceSessionId: string,
+  resumeBeforeExecutionSequence: number,
+) => {
   const stages = await SessionStage.find({
+    executionSequence: { $lt: resumeBeforeExecutionSequence },
     sessionId: sourceSessionId,
-    stageIndex: { $lt: resumeBeforeStageIndex },
   })
-    .sort({ stageIndex: 1 })
+    .sort({ executionSequence: 1 })
+    .lean();
+
+  return stages.map((s) => ({
+    contextAfter: s.contextAfter,
+    contextAfterTruncated: s.contextAfterTruncated,
+    contextBefore: s.contextBefore,
+    contextBeforeTruncated: s.contextBeforeTruncated,
+    currentStage: s.currentStage,
+    executionMeta: s.executionMeta,
+    stageIndex: s.stageIndex,
+  }));
+};
+
+export const createForkrunForm = async (payload: {
+  anchorStageIndex: number;
+  requestSnapshotOverride: {
+    context: {
+      context: Record<string, unknown>;
+      stage: Record<string, unknown>;
+      types: Record<string, unknown>;
+    };
+    currentStage: string;
+  };
+  sourceRequestId: string;
+  sourceSessionId: string;
+  sourceStageId: string;
+}): Promise<ForkrunFormWire> => {
+  const created = await ForkrunForm.create({
+    anchorStageIndex: payload.anchorStageIndex,
+    requestSnapshotOverride: payload.requestSnapshotOverride,
+    sourceRequestId: payload.sourceRequestId,
+    sourceSessionId: payload.sourceSessionId,
+    sourceStageId: payload.sourceStageId,
+  });
+
+  return {
+    _id: String(created._id),
+    anchorStageIndex: created.anchorStageIndex,
+    requestSnapshotOverride: created.requestSnapshotOverride,
+    sourceRequestId: created.sourceRequestId,
+    sourceSessionId: created.sourceSessionId,
+    sourceStageId: created.sourceStageId,
+  };
+};
+
+export const getForkrunFormById = async (forkrunFormId: string): Promise<ForkrunFormWire | null> => {
+  const row = await ForkrunForm.findById(forkrunFormId).lean();
+  if (!row) return null;
+
+  return {
+    _id: String(row._id),
+    anchorStageIndex: row.anchorStageIndex,
+    requestSnapshotOverride: row.requestSnapshotOverride as ForkrunFormWire["requestSnapshotOverride"],
+    sourceRequestId: row.sourceRequestId,
+    sourceSessionId: row.sourceSessionId,
+    sourceStageId: row.sourceStageId,
+  };
+};
+
+export const buildPrefixDumpForRerun = async (
+  sourceSessionId: string,
+  resumeBeforeExecutionSequence: number,
+) => {
+  const stages = await SessionStage.find({
+    executionSequence: { $lt: resumeBeforeExecutionSequence },
+    sessionId: sourceSessionId,
+  })
+    .sort({ executionSequence: 1 })
     .lean();
 
   const tools = await SessionToolCall.find({ sessionId: sourceSessionId }).lean();
@@ -685,7 +764,7 @@ export const getSession = async (sessionId: string) => {
   const session = await Session.findOne({ sessionId }).lean();
   if (!session) return null;
 
-  const stages = await SessionStage.find({ sessionId }).sort({ stageIndex: 1 }).lean();
+  const stages = await SessionStage.find({ sessionId }).sort({ executionSequence: 1 }).lean();
   const tools = await SessionToolCall.find({ sessionId }).lean();
   const chats = await SessionStageChatMessage.find({ sessionId }).lean();
   const spends = await SessionModelSpend.find({ sessionId }).lean();
@@ -752,8 +831,8 @@ export const getSession = async (sessionId: string) => {
   };
 };
 
-export const getSessionStageForAnchor = async (sourceSessionId: string, stageIndex: number) =>
-  SessionStage.findOne({ sessionId: sourceSessionId, stageIndex }).lean();
+export const getSessionStageById = async (sourceSessionId: string, stageId: string) =>
+  SessionStage.findOne({ sessionId: sourceSessionId, stageId }).lean();
 
 export const softDeleteSession = async (sessionId: string) => {
   const now = new Date();

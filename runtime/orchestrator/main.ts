@@ -1,4 +1,4 @@
-import type { CliOptions, ParsedStage, ResumeState } from './orchestrator-types';
+import type { CliOptions, CliResume, ParsedStage } from './orchestrator-types';
 
 import { promises as fs } from "fs";
 
@@ -11,27 +11,25 @@ import { createStepTracker } from "./-utils/agent-trackers/step-tracker";
 
 import { normalizeContainerName } from "./cli-options";
 import { composeDown, composeUp, writeSharedOneCliOverride } from "./compose-onecli";
-import { execute } from "./execute";
+import { executeAsRoot } from "./execute";
 import { workspacePath } from "./paths";
 import { getAiLogicStartLineInFile } from "./stage-parse";
 import { resolveReportPromptPath } from "./task-resolve";
 
-type CliForkedFrom = CliOptions["forkedFrom"];
-
 const _createStepTracker = async (
   sessionId: string,
   taskYahlPath: string,
-  forkedFrom: CliForkedFrom,
+  resume?: CliResume,
 ) => {
   const tracker = createStepTracker();
 
   await tracker.registerSession(sessionId, {
-    ...(forkedFrom
+    ...(resume
       ? {
         forkLineage: {
-          sourceRequestId: forkedFrom.requestId,
-          sourceSessionId: forkedFrom.sourceSessionId,
-          stageIndex: forkedFrom.stepIndex,
+          sourceRequestId: resume.sourceRequestId,
+          sourceSessionId: resume.sourceSessionId,
+          stageIndex: resume.stepIndex,
         },
       }
       : {}),
@@ -42,9 +40,9 @@ const _createStepTracker = async (
 };
 
 export const main = async (cli: CliOptions) => {
-  const reportPath = await resolveReportPromptPath(cli);
-  const reportSkill = await fs.readFile(reportPath, "utf-8");
-  const aiLogicStartLine = getAiLogicStartLineInFile(reportSkill);
+  const reportPath = forkRunManager?.reportPath || await resolveReportPromptPath(cli);
+  const sourceText = forkRunManager?.aiLogic || await fs.readFile(reportPath, "utf-8");
+  const aiLogicStartLine = getAiLogicStartLineInFile(sourceText);
 
   const startTime = process.hrtime.bigint();
   const sessionId = cli.sessionId;
@@ -52,7 +50,7 @@ export const main = async (cli: CliOptions) => {
   const agentContainerName = normalizeContainerName(`${cli.agentContainerPrefix}-${sessionId}`);
 
   const sessionTracker = createSessionTracker();
-  const stepTracker = await _createStepTracker(sessionId, reportPath, cli.forkedFrom);
+  const stepTracker = await _createStepTracker(sessionId, reportPath, cli.resume);
 
   agentTrackers.add(sessionTracker);
   agentTrackers.add(createConsoleTracker());
@@ -134,21 +132,14 @@ export const main = async (cli: CliOptions) => {
       });
 
     await publisher.waitForReady();
-
-    const resumeState: ResumeState = {
-      ...(cli.resume ? { executionMeta: cli.resume.executionMeta } : {}),
-      pendingStageId: cli.resume?.executionMeta?.stageId || null,
-      ...(cli.resume ? { requestSnapshotOverride: cli.resume.requestSnapshotOverride } : {}),
-      started: !cli.resume,
-    };
-    const { runtime, stages } = await execute(
-      reportSkill,
+    
+    const { runtime, stages } = await executeAsRoot(
+      sourceText,
       {},
       {},
       reportPath,
       aiLogicStartLine,
       undefined,
-      resumeState,
     );
 
     finalResult = runtime.get("context")?.result;

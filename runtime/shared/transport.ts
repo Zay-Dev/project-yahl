@@ -55,6 +55,7 @@ export type StageExecutionMeta = {
     text: string;
   };
   stageId: string;
+  stageIndex: number;
   stageTextHash: string;
 };
 

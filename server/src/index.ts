@@ -12,6 +12,7 @@ import { registerCreateStageRoute } from "./modules/sessions/use-cases/create-st
 import { registerCreateStageModelResponseRoute } from "./modules/sessions/use-cases/create-stage-model-response";
 import { registerCreateStageToolCallsRoute } from "./modules/sessions/use-cases/create-stage-tool-calls";
 import { registerFinalizeSessionRoute } from "./modules/sessions/use-cases/finalize-session";
+import { registerGetForkrunFormRoute } from "./modules/sessions/use-cases/get-forkrun-form";
 import { registerGetSessionRoute } from "./modules/sessions/use-cases/get-session";
 import { registerHardDeleteSessionRoute } from "./modules/sessions/use-cases/hard-delete-session";
 import { registerListSessionsRoute } from "./modules/sessions/use-cases/list-sessions";
@@ -21,6 +22,7 @@ import { registerRerunRequestRoute } from "./modules/sessions/use-cases/rerun-re
 import { registerSoftDeleteSessionRoute } from "./modules/sessions/use-cases/soft-delete-session";
 import { registerStreamSessionSseRoute } from "./modules/sessions/use-cases/stream-session-sse";
 import { registerStreamSessionsSseRoute } from "./modules/sessions/use-cases/stream-sessions-sse";
+import { registerErrorHandler } from "./modules/system/use-cases/register-error-handler";
 import { registerGetHealthRoute } from "./modules/system/use-cases/get-health";
 import { registerListTasksRoute } from "./modules/tasks/use-cases/list-tasks";
 import { createRunManager } from "./run-manager";
@@ -49,12 +51,14 @@ registerCreateStageToolCallsRoute(app);
 registerCreateStageModelResponseRoute(app);
 registerPatchStageRuntimeSnapshotRoute(app);
 registerFinalizeSessionRoute(app);
+registerGetForkrunFormRoute(app);
 registerStreamSessionSseRoute(app);
 registerStreamSessionsSseRoute(app);
 registerListSessionsRoute(app);
 registerGetSessionRoute(app);
 registerSoftDeleteSessionRoute(app);
 registerHardDeleteSessionRoute(app);
+registerErrorHandler(app);
 
 const start = async () => {
   await mongoose.connect(mongoUri);

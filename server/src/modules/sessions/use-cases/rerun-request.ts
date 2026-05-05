@@ -2,9 +2,10 @@ import type { Express } from "express";
 
 import type { ServerRoutesDeps } from "../../deps";
 import {
-  buildPrefixDumpForRerun,
+  buildPrefixSnapshotsForRerun,
+  createForkrunForm,
   getSession,
-  getSessionStageForAnchor,
+  getSessionStageById,
 } from "../../../session-service";
 import { isRerunRequestBody } from "../validation/payload-guards";
 
@@ -22,36 +23,73 @@ export const registerRerunRequestRoute = (app: Express, deps: ServerRoutesDeps) 
       return;
     }
 
-    const anchorStage = await getSessionStageForAnchor(body.sourceSessionId, body.resumeFromStepIndex);
+    const parsedStages = source.stages;
+    if (!parsedStages?.length) {
+      res.status(400).json({
+        error: "source session has no finalized stages; finalize the session before rerun",
+      });
+      return;
+    }
+
+    const anchorStage = await getSessionStageById(body.sourceSessionId, body.sourceStageId);
     if (!anchorStage || anchorStage.requestId !== body.sourceRequestId) {
       res.status(400).json({ error: "invalid source request anchor" });
       return;
     }
 
-    const taskPath = source.taskYahlPath;
-    if (!taskPath) {
-      res.status(400).json({ error: "source session missing task path" });
+    if (typeof anchorStage.executionSequence !== "number") {
+      res.status(400).json({ error: "anchor stage missing executionSequence" });
       return;
     }
 
-    const prefixDump = await buildPrefixDumpForRerun(body.sourceSessionId, body.resumeFromStepIndex);
+    const prefixSnapshots = await buildPrefixSnapshotsForRerun(
+      body.sourceSessionId,
+      anchorStage.executionSequence,
+    );
+
+    const hasTruncatedPrefix = prefixSnapshots.some(
+      (row) => row.contextAfterTruncated === true || row.contextBeforeTruncated === true,
+    );
+    if (hasTruncatedPrefix) {
+      res.status(400).json({ error: "prefix stages include truncated context; cannot replay safely" });
+      return;
+    }
+
+    const missingAfter = prefixSnapshots.some((s) => s.contextAfter === undefined || s.contextAfter === null);
+    if (missingAfter && anchorStage.executionSequence > 0) {
+      res.status(400).json({ error: "prefix stages missing contextAfter; cannot fast-forward" });
+      return;
+    }
+
+    const forkrunForm = await createForkrunForm({
+      anchorStageIndex: anchorStage.stageIndex,
+      requestSnapshotOverride: body.requestSnapshotOverride as {
+        context: {
+          context: Record<string, unknown>;
+          stage: Record<string, unknown>;
+          types: Record<string, unknown>;
+        };
+        currentStage: string;
+      },
+      sourceRequestId: body.sourceRequestId,
+      sourceSessionId: body.sourceSessionId,
+      sourceStageId: body.sourceStageId,
+    });
+
     const started = await deps.runManager.startRerunFromRequest({
+      forkrunFormId: forkrunForm._id,
       forkedFrom: {
-        prefixDump,
+        prefixSnapshots,
         requestId: body.sourceRequestId,
         sourceSessionId: body.sourceSessionId,
-        stepIndex: body.resumeFromStepIndex,
+        stepIndex: anchorStage.stageIndex,
       },
       requestSnapshotOverride: body.requestSnapshotOverride,
       resumeExecutionMeta: anchorStage.executionMeta,
       sourceRequestId: body.sourceRequestId,
       sourceSessionId: body.sourceSessionId,
-      taskPath,
+      sourceStageId: body.sourceStageId,
     });
-    if (!started) {
-      res.status(500).json({ error: "failed to start rerun" });
-      return;
-    }
 
     res.status(202).json(started);
   });

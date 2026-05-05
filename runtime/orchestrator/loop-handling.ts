@@ -1,14 +1,9 @@
 import { filterContextByReadUsage } from "./context-filter";
 import { applyKnowledgeUpdate, parseKnowledgeUpdate } from "./loop-knowledge";
-import {
-  resolveResumeLoopStep,
-  runSnapshotStageOnce,
-} from "./resume-context";
 import { parseLoop, toAiLogic } from "./stage-parse";
 
 import type {
   LoopKnowledge,
-  ResumeState,
   StageExecuteFn,
   StageLoopMeta,
 } from "./orchestrator-types";
@@ -23,7 +18,6 @@ const _runLoopIteration = async (
   indexName: string,
   currentValue: unknown,
   loopMeta: StageLoopMeta,
-  resumeState: ResumeState,
   execute: StageExecuteFn,
 ) => {
   const firstLine = lines.split("\n")[0];
@@ -45,7 +39,6 @@ const _runLoopIteration = async (
     sourceFilePath,
     loopSourceLine + 1,
     loopMeta,
-    resumeState,
   );
 
   const myContext = runtime.get("context")!;
@@ -88,55 +81,8 @@ export const handleLoop = async (
   runtime: RuntimeContext,
   sourceFilePath: string,
   loopSourceLine: number,
-  resumeState: ResumeState,
   execute: StageExecuteFn,
 ) => {
-  if (resumeState.pendingStageId && resumeState.executionMeta?.loopRef) {
-    const matchMeta = lines.match(/^\s*for each (\w+) of (\[.*\])/i);
-    if (!matchMeta) {
-      console.error(lines);
-      throw new Error("Invalid loop setup occurred in the above stage");
-    }
-
-    const indexName = matchMeta[1];
-    const loopRef = resumeState.executionMeta.loopRef;
-    const snapshot = Array.isArray(loopRef.arraySnapshot) ? loopRef.arraySnapshot : [];
-    const step = resolveResumeLoopStep(lines, loopRef);
-    const knowledge: LoopKnowledge = {
-      issues: {},
-      notes: [],
-    };
-
-    await runSnapshotStageOnce(runtime, resumeState);
-    resumeState.pendingStageId = null;
-
-    for (
-      let i = loopRef.index + step;
-      step >= 0 ? i < snapshot.length : i >= 0;
-      i += step
-    ) {
-      const currentValue = snapshot[i] ?? null;
-      await _runLoopIteration(
-        lines,
-        runtime,
-        sourceFilePath,
-        loopSourceLine,
-        knowledge,
-        indexName,
-        currentValue,
-        {
-          arraySnapshot: snapshot,
-          index: i,
-          value: currentValue,
-        },
-        resumeState,
-        execute,
-      );
-    }
-
-    return;
-  }
-
   const loopSetup = parseLoop(lines, runtime);
   if (!loopSetup) {
     console.error(lines);
@@ -165,7 +111,6 @@ export const handleLoop = async (
         index: i,
         value: currentValue,
       },
-      resumeState,
       execute,
     );
 

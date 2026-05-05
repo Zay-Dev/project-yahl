@@ -18,9 +18,18 @@ export const registerCreateStageRoute = (app: Express) => {
       return;
     }
 
+    if (payload.stageIndex !== payload.executionMeta.stageIndex) {
+      res.status(400).json({ error: "stageIndex mismatch with executionMeta" });
+      return;
+    }
+
     try {
       const created = await createStage(sessionId, payload);
-      res.status(202).json({ ok: true, stageIndex: created.stageIndex });
+      res.status(202).json({
+        executionSequence: created.executionSequence,
+        ok: true,
+        stageIndex: created.stageIndex,
+      });
     } catch (error) {
       res.status(409).json({ error: String(error) });
     }

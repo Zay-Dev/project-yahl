@@ -6,10 +6,6 @@ import { filterContextByReadUsage } from "./context-filter";
 import { handleLoop } from "./loop-handling";
 import { handleRag } from "./rag-handling";
 import {
-  applyResumeSnapshotIfNeeded,
-  primeResumeContextIfNeeded,
-} from "./resume-context";
-import {
   firstTraceableLineOffset,
   getLineSinceOffset,
   parseStages,
@@ -25,7 +21,6 @@ import {
 } from "./runtime";
 
 import type {
-  ResumeState,
   StageExecuteFn,
   StageLoopMeta,
   StagePosition,
@@ -33,14 +28,25 @@ import type {
 
 const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-export const execute: StageExecuteFn = async (
+type StageFilterFn = (lines: string) => {
+  generatedLine: number;
+  sourceLine: number;
+  stageText: string;
+};
+
+let _stageIndex = -1;
+
+export const execute: StageExecuteFn = (...args) => _execute(false, ...args);
+export const executeAsRoot: StageExecuteFn = (...args) => _execute(true, ...args);
+
+const _execute = async (
+  manageStageIndex: boolean,
   text: string,
   stageContext: Record<string, unknown> = {},
   seedTypes: Record<string, unknown> = {},
   sourceFilePath: string,
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
-  resumeState?: ResumeState,
 ) => {
   const aiLogic = extractAiLogic(text);
   if (!aiLogic) {
@@ -53,6 +59,10 @@ export const execute: StageExecuteFn = async (
     throw new Error("No stages parsed from ai.logic");
   }
 
+  if (manageStageIndex) {
+    _stageIndex = -1;
+  }
+
   try {
     const runtime = createRuntimeContext();
     Object.assign(runtime.get("types")!, seedTypes);
@@ -62,27 +72,16 @@ export const execute: StageExecuteFn = async (
       Object.assign(runtime.get("stage")!, stageContext);
       const absoluteSourceStartLine = sourceBaseLine + sourceStartLine - 1;
 
-      const stageId = `${path.basename(sourceFilePath)}:${absoluteSourceStartLine}:${type}`;
-      if (type !== "loop" && resumeState?.pendingStageId && resumeState.pendingStageId !== stageId) {
-        continue;
-      }
-      if (type !== "loop" && resumeState?.pendingStageId === stageId) {
-        resumeState.pendingStageId = null;
+      if (manageStageIndex) {
+        _stageIndex += 1;
       }
 
       if (type === "loop") {
-        if (resumeState?.pendingStageId) {
-          primeResumeContextIfNeeded(runtime, resumeState);
-        }
         await handleLoop(
           lines,
           runtime,
           sourceFilePath,
           absoluteSourceStartLine,
-          resumeState || {
-            pendingStageId: null,
-            started: true,
-          },
           execute,
         );
         continue;
@@ -90,20 +89,27 @@ export const execute: StageExecuteFn = async (
 
       console.log("\n", "----- Stage -----", "\n");
 
-      const _runStage = async (
+      const runStageOnce = async (
         position: StagePosition,
-        filterLines?: (lines: string) => {
-          generatedLine: number;
-          sourceLine: number;
-          stageText: string;
-        },
+        filterLines?: StageFilterFn,
       ) => {
         let stageRequestId = "";
 
         try {
-          const next = filterLines?.(lines);
-          const resumeInput = applyResumeSnapshotIfNeeded(runtime, resumeState);
-          const currentStage = resumeInput?.currentStage || next?.stageText || lines;
+          const override = forkRunManager?.getOverride(_stageIndex, loopMeta?.index);
+
+          Object.keys(override?.context ?? {}).forEach((contextKey: any) => {
+            Object.keys(override?.context?.[contextKey]).forEach((key) => {
+              runtime.set(contextKey, {
+                ...runtime.get(contextKey) ?? {},
+                [key]: override?.context?.[contextKey]?.[key],
+              });
+            });
+          });
+          
+          const next = filterLines?.(override?.currentStage || lines);
+          const currentStage = next?.stageText || override?.currentStage || lines;
+
           const stageText = currentStage;
           const meaningfulOffset = firstTraceableLineOffset(stageText);
           const sourceLineText = getLineSinceOffset(stageText, meaningfulOffset);
@@ -117,7 +123,7 @@ export const execute: StageExecuteFn = async (
             stage: filterContextByReadUsage(stageText, rawPayload.stage),
           };
           const baseStageId = `${path.basename(sourceFilePath)}:${sourceLine}:${type}`;
-          const stageId = loopMeta ? `${baseStageId}#loop:${loopMeta.index}` : baseStageId;
+          const computedStageId = loopMeta ? `${baseStageId}#loop:${loopMeta.index}` : baseStageId;
 
           const executionMeta: StageExecutionMeta = {
             loopRef: loopMeta ? {
@@ -133,7 +139,8 @@ export const execute: StageExecuteFn = async (
               line: sourceLine,
               text: sourceLineText,
             },
-            stageId,
+            stageId: computedStageId,
+            stageIndex: _stageIndex,
             stageTextHash: toStableHash(stageText),
           };
 
@@ -145,6 +152,9 @@ export const execute: StageExecuteFn = async (
             context,
             currentStage,
             executionMeta,
+            forkRunManager?.isFastForward(_stageIndex, loopMeta?.index) ?
+              forkRunManager?.getContextAfter(_stageIndex, loopMeta?.index) :
+              undefined,
           );
 
           stageRequestId = requestId;
@@ -191,23 +201,28 @@ export const execute: StageExecuteFn = async (
               });
             }
 
-            return await _runStage({
-              generatedLine: sourceLine,
-              sourceLine,
-            }, (rawLines) => {
-              const splitted = rawLines.split("\n");
-              const skipNumberOfLines = splitted.findIndex((line) =>
-                line.includes("REPLACE:") &&
-                line.includes(` ${envelope.arguments.context_key} `) &&
-                line.includes(" /rag("),
-              ) + 1;
+            await runStageOnce(
+              {
+                generatedLine: sourceLine,
+                sourceLine,
+              },
+              (rawLines) => {
+                const splitted = rawLines.split("\n");
+                const skipNumberOfLines = splitted.findIndex((line) =>
+                  line.includes("REPLACE:") &&
+                  line.includes(` ${envelope.arguments.context_key} `) &&
+                  line.includes(" /rag("),
+                ) + 1;
 
-              return {
-                generatedLine: skipNumberOfLines + 1,
-                sourceLine: sourceLine + skipNumberOfLines,
-                stageText: splitted.slice(skipNumberOfLines).join("\n"),
-              };
-            });
+                return {
+                  generatedLine: skipNumberOfLines + 1,
+                  sourceLine: sourceLine + skipNumberOfLines,
+                  stageText: splitted.slice(skipNumberOfLines).join("\n"),
+                };
+              },
+            );
+
+            return undefined;
           } else {
             process.stdout.write(`[Orchestrator Stage] ${envelope.type}\n`);
           }
@@ -221,7 +236,7 @@ export const execute: StageExecuteFn = async (
         }
       };
 
-      await _runStage({
+      await runStageOnce({
         generatedLine: 1,
         sourceLine: absoluteSourceStartLine,
       });

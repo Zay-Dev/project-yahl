@@ -79,6 +79,7 @@ export const handleRag = async (
         accTypes,
         sourceFilePath,
         sourceBaseLine,
+        undefined,
       );
 
       result.push(innerRuntime.get("context")?.result || "");

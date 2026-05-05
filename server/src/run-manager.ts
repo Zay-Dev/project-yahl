@@ -39,6 +39,7 @@ type StartRunResult = {
 };
 
 type StartRerunFromRequestInput = {
+  forkrunFormId: string;
   forkedFrom: SessionForkedFromWire;
   requestSnapshotOverride: {
     context: Record<string, unknown>;
@@ -47,7 +48,7 @@ type StartRerunFromRequestInput = {
   resumeExecutionMeta: unknown;
   sourceRequestId: string;
   sourceSessionId: string;
-  taskPath: string;
+  sourceStageId: string;
 };
 
 const MAX_LOG_EVENTS = 1000;
@@ -75,7 +76,10 @@ const discoverTasks = async (tasksRoot: string): Promise<RuntimeTask[]> => {
   const files = await listFilesRecursively(tasksRoot);
 
   return files
-    .filter((filePath) => path.basename(filePath) === TASK_FILE_NAME)
+    .filter((filePath) =>
+      path.basename(filePath) === TASK_FILE_NAME &&
+      !filePath.split(path.sep).includes(".fork-snapshots"),
+    )
     .map((filePath) => {
       const id = toTaskId(filePath, tasksRoot);
       return {
@@ -232,7 +236,8 @@ export const createRunManager = () => {
   const startRerunFromRequest = async (
     input: StartRerunFromRequestInput,
   ) => {
-    const taskId = toTaskId(input.taskPath, tasksRoot);
+    const taskId = `rerun/${input.sourceSessionId}`;
+    const taskPath = `rerun:${input.sourceSessionId}:${input.sourceStageId}`;
     const payloadRoot = path.resolve(runtimeRoot, ".rerun-payloads");
     const payloadId = randomUUID();
     const executionMetaPath = await writeJsonFile(
@@ -240,32 +245,27 @@ export const createRunManager = () => {
       `${payloadId}-execution-meta.json`,
       input.resumeExecutionMeta,
     );
-    const stageInputPath = await writeJsonFile(
-      payloadRoot,
-      `${payloadId}-stage-input.json`,
-      input.requestSnapshotOverride,
-    );
     const forkedFromPath = await writeJsonFile(
       payloadRoot,
       `${payloadId}-forked-from.json`,
       input.forkedFrom,
     );
 
-    return startProcess(taskId, input.taskPath, [
-      "--task-path",
-      input.taskPath,
+    return startProcess(taskId, taskPath, [
       "--resume-mode",
       "request",
       "--resume-source-session-id",
       input.sourceSessionId,
       "--resume-source-request-id",
       input.sourceRequestId,
+      "--resume-source-stage-id",
+      input.sourceStageId,
       "--resume-from-step-index",
       String(input.forkedFrom.stepIndex),
+      "--forkrun-form-id",
+      input.forkrunFormId,
       "--resume-execution-meta-file",
       executionMetaPath,
-      "--resume-stage-input-file",
-      stageInputPath,
       "--forked-from-file",
       forkedFromPath,
     ]);

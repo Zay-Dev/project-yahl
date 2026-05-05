@@ -14,6 +14,7 @@ export type SessionStageDoc = {
   cost?: number;
   currentStage?: string;
   executionMeta?: unknown;
+  executionSequence: number;
   llmReplyEnvelope?: LlmReplyEnvelopeSub;
   model?: string;
   requestId: string;
@@ -59,6 +60,7 @@ const sessionStageSchema = new Schema<SessionStageDoc>(
     cost: { type: Number },
     currentStage: { type: String },
     executionMeta: { type: Schema.Types.Mixed },
+    executionSequence: { required: true, type: Number },
     llmReplyEnvelope: { type: llmReplySub },
     model: { type: String },
     requestId: { required: true, type: String },
@@ -74,6 +76,7 @@ const sessionStageSchema = new Schema<SessionStageDoc>(
 );
 
 sessionStageSchema.index({ sessionId: 1, stageId: 1 }, { unique: true });
+sessionStageSchema.index({ sessionId: 1, executionSequence: 1 });
 sessionStageSchema.index({ sessionId: 1, stageIndex: 1 });
 sessionStageSchema.index({ sessionId: 1, requestId: 1 });
 

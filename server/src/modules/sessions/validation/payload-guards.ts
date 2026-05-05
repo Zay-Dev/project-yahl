@@ -35,6 +35,7 @@ const chatMessageRowSchema = Joi.object({
 
 const executionMetaSchema = Joi.object({
   stageId: Joi.string().required(),
+  stageIndex: Joi.number().integer().min(0).required(),
 }).unknown(true);
 
 const createStageBodySchema = Joi.object({
@@ -44,6 +45,7 @@ const createStageBodySchema = Joi.object({
   executionMeta: executionMetaSchema.required(),
   requestId: Joi.string().required(),
   stageId: Joi.string().required(),
+  stageIndex: Joi.number().integer().min(0).required(),
   timestamp: Joi.string().required(),
 }).unknown(true);
 
@@ -112,7 +114,7 @@ const requestSnapshotOverrideSchema = Joi.object({
 const rerunRequestBodySchema = Joi.object({
   sourceSessionId: Joi.string().required(),
   sourceRequestId: Joi.string().required(),
-  resumeFromStepIndex: Joi.number().integer().required(),
+  sourceStageId: Joi.string().required(),
   requestSnapshotOverride: requestSnapshotOverrideSchema.required(),
 }).unknown(true);
 

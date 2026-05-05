@@ -113,8 +113,14 @@ export const RunnerPage = () => {
           <div>
             <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">Run logs</p>
             {runLogs.length ? (
-              <pre className="max-h-72 overflow-auto rounded-md border bg-slate-50 p-3 text-xs dark:bg-slate-900">
-                {runLogs.map((entry) => `[${entry.ts}] ${entry.line}`).join("\n")}
+              <pre className="whitespace-pre-wrap rounded-md border bg-slate-50 p-3 text-xs dark:bg-slate-900">
+                {runLogs.map((entry) => 
+                  <div key={entry.ts}
+                    className="pl-7 -indent-7"
+                  >
+                    [{entry.ts}] {entry.line}
+                  </div>
+                )}
               </pre>
             ) : (
               <p className="rounded-md border border-dashed p-6 text-center text-sm text-slate-500 dark:text-slate-400">

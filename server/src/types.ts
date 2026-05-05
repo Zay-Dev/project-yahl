@@ -17,10 +17,12 @@ export type CreateStagePayload = {
   currentStage: string;
   executionMeta: {
     stageId: string;
+    stageIndex: number;
     [key: string]: unknown;
   };
   requestId: string;
   stageId: string;
+  stageIndex: number;
   timestamp: string;
 };
 
@@ -105,8 +107,19 @@ export type LegacySessionEventWire = {
   };
 };
 
+export type RerunPrefixSnapshotWire = {
+  contextAfter?: unknown;
+  contextAfterTruncated?: boolean;
+  contextBefore?: unknown;
+  contextBeforeTruncated?: boolean;
+  currentStage?: string;
+  executionMeta?: unknown;
+  stageIndex: number;
+};
+
 export type SessionForkedFromWire = {
-  prefixDump: LegacySessionEventWire[];
+  prefixDump?: LegacySessionEventWire[];
+  prefixSnapshots: RerunPrefixSnapshotWire[];
   requestId: string;
   sourceSessionId: string;
   stepIndex: number;
@@ -127,7 +140,23 @@ export type RerunRequestPayload = {
     context: Record<string, unknown>;
     currentStage: string;
   };
-  resumeFromStepIndex: number;
   sourceRequestId: string;
   sourceSessionId: string;
+  sourceStageId: string;
+};
+
+export type ForkrunFormWire = {
+  _id: string;
+  anchorStageIndex: number;
+  requestSnapshotOverride: {
+    context: {
+      context: Record<string, unknown>;
+      stage: Record<string, unknown>;
+      types: Record<string, unknown>;
+    };
+    currentStage: string;
+  };
+  sourceRequestId: string;
+  sourceSessionId: string;
+  sourceStageId: string;
 };
