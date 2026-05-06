@@ -176,7 +176,14 @@ const buildLegacyEvent = (
     };
   },
   toolRows: { arguments?: unknown; callIndex: number; name: string; result?: unknown }[],
-  chatRows: { content?: unknown; modelSpendId?: unknown; role: string; sequence: number; toolCallId?: unknown }[],
+  chatRows: {
+    content?: unknown;
+    modelSpendId?: unknown;
+    reasoning?: string | null;
+    role: string;
+    sequence: number;
+    toolCallId?: unknown;
+  }[],
 ): LegacySessionEventWire => {
   const toolCalls = toolRows
     .slice()
@@ -196,6 +203,7 @@ const buildLegacyEvent = (
     .map((row) => ({
       content: row.content,
       modelSpendId: row.modelSpendId ? String(row.modelSpendId) : undefined,
+      reasoning: row.reasoning ?? null,
       role: row.role,
       toolCallId: row.toolCallId ? String(row.toolCallId) : undefined,
     }));
@@ -209,34 +217,13 @@ const buildLegacyEvent = (
     }
     : undefined;
 
-  const currentStageFromMeta = () => {
-    const em = stage.executionMeta;
-    if (!em || typeof em !== "object" || Array.isArray(em)) return "";
-
-    const sr = (em as Record<string, unknown>).sourceRef;
-    if (!sr || typeof sr !== "object" || Array.isArray(sr)) return "";
-
-    const text = (sr as Record<string, unknown>).text;
-    return typeof text === "string" ? text : "";
-  };
-
-  const fromDb = typeof stage.currentStage === "string" ? stage.currentStage : "";
-  const fromMeta = currentStageFromMeta();
-  const resolvedCurrentStage = fromDb.trim() || fromMeta.trim() || fromDb;
-  const wireCurrentStage = resolvedCurrentStage.trim() ? resolvedCurrentStage : undefined;
-
-  const stageInput = {
-    context: stage.contextBefore,
-    currentStage: wireCurrentStage ?? "",
-  };
-
   return {
     contextAfter: stage.contextAfter,
     contextAfterTruncated: stage.contextAfterTruncated,
     contextBefore: stage.contextBefore,
     contextBeforeTruncated: stage.contextBeforeTruncated,
     cost: stage.cost,
-    currentStage: wireCurrentStage,
+    currentStage: stage.currentStage,
     executionMeta: stage.executionMeta,
     model: stage.model ?? "",
     requestId: stage.requestId,
@@ -244,8 +231,6 @@ const buildLegacyEvent = (
     sessionId,
     stageChat: stageChat.length ? stageChat : undefined,
     stageIndex: stage.stageIndex,
-    stageInput,
-    stageInputTruncated: stage.contextBeforeTruncated,
     thinkingMode: stage.thinkingMode ?? false,
     timestamp: stage.timestamp,
     usage: stage.usage ?? {
@@ -255,6 +240,12 @@ const buildLegacyEvent = (
       reasoningTokens: 0,
     },
   };
+};
+
+const stageKey = (value: unknown) => {
+  if (value instanceof mongoose.Types.ObjectId) return String(value);
+  if (typeof value === "string" && value.trim()) return value;
+  return "";
 };
 
 export const registerSessionMetadata = async (sessionId: string, taskYahlPath: string) => {
@@ -400,6 +391,8 @@ export const createStageModelResponse = async (
   const sessionObjId = stage.session as mongoose.Types.ObjectId;
   const stageObjId = stage._id as mongoose.Types.ObjectId;
   const safeCost = toNumber(payload.cost);
+  const resolvedRequestId =
+    typeof stage.requestId === "string" && stage.requestId.trim() ? stage.requestId : payload.requestId;
 
   const spend = await SessionModelSpend.create({
     cacheHitTokens: payload.usage.cacheHitTokens,
@@ -431,11 +424,25 @@ export const createStageModelResponse = async (
       },
     ];
 
+  const lastChat = await SessionStageChatMessage.findOne({
+    requestId: resolvedRequestId,
+    sessionId,
+  })
+    .sort({ sequence: -1 })
+    .select({ sequence: 1 })
+    .lean();
+  const baseSequence = typeof lastChat?.sequence === "number" ? lastChat.sequence + 1 : 0;
+
   const chatDocs = chatIncoming.map((msg, sequence) => ({
     content: msg.content,
     modelSpendId: spend._id as mongoose.Types.ObjectId,
+    reasoning:
+      typeof msg.reasoning === "string" || msg.reasoning === null
+        ? msg.reasoning
+        : (msg.role === "assistant" ? payload.response?.reasoning ?? null : null),
+    requestId: resolvedRequestId,
     role: msg.role,
-    sequence,
+    sequence: baseSequence + sequence,
     session: sessionObjId,
     sessionId,
     stage: stageObjId,
@@ -738,24 +745,30 @@ export const buildPrefixDumpForRerun = async (
 
   const toolsByStage = new Map<string, typeof tools>();
   for (const t of tools) {
-    const list = toolsByStage.get(t.stageId) ?? [];
+    const key = stageKey(t.stage);
+    if (!key) continue;
+
+    const list = toolsByStage.get(key) ?? [];
     list.push(t);
-    toolsByStage.set(t.stageId, list);
+    toolsByStage.set(key, list);
   }
 
   const chatsByStage = new Map<string, typeof chats>();
   for (const c of chats) {
-    const list = chatsByStage.get(c.stageId) ?? [];
+    const key = stageKey(c.stage);
+    if (!key) continue;
+
+    const list = chatsByStage.get(key) ?? [];
     list.push(c);
-    chatsByStage.set(c.stageId, list);
+    chatsByStage.set(key, list);
   }
 
   return stages.map((stage) =>
     buildLegacyEvent(
       sourceSessionId,
       stage,
-      toolsByStage.get(stage.stageId) ?? [],
-      chatsByStage.get(stage.stageId) ?? [],
+      toolsByStage.get(stageKey(stage._id)) ?? [],
+      chatsByStage.get(stageKey(stage._id)) ?? [],
     ),
   );
 };
@@ -772,16 +785,22 @@ export const getSession = async (sessionId: string) => {
 
   const toolsByStage = new Map<string, typeof tools>();
   for (const t of tools) {
-    const list = toolsByStage.get(t.stageId) ?? [];
+    const key = stageKey(t.stage);
+    if (!key) continue;
+
+    const list = toolsByStage.get(key) ?? [];
     list.push(t);
-    toolsByStage.set(t.stageId, list);
+    toolsByStage.set(key, list);
   }
 
   const chatsByStage = new Map<string, typeof chats>();
   for (const c of chats) {
-    const list = chatsByStage.get(c.stageId) ?? [];
+    const key = stageKey(c.stage);
+    if (!key) continue;
+
+    const list = chatsByStage.get(key) ?? [];
     list.push(c);
-    chatsByStage.set(c.stageId, list);
+    chatsByStage.set(key, list);
   }
 
   const modelAggregates: Record<string, {
@@ -814,7 +833,12 @@ export const getSession = async (sessionId: string) => {
   }
 
   const events = stages.map((stage) =>
-    buildLegacyEvent(sessionId, stage, toolsByStage.get(stage.stageId) ?? [], chatsByStage.get(stage.stageId) ?? []),
+    buildLegacyEvent(
+      sessionId,
+      stage,
+      toolsByStage.get(stageKey(stage._id)) ?? [],
+      chatsByStage.get(stageKey(stage._id)) ?? [],
+    ),
   );
 
   return {

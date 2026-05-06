@@ -15,23 +15,48 @@ export type SessionEventGroup = [requestId: string, rows: SessionEventRow[]];
 export const getInputTokens = (event: SessionStepEvent) =>
   event.usage.cacheHitTokens + event.usage.cacheMissTokens;
 
+const toChatContentText = (content: unknown): string | null => {
+  if (typeof content === "string") return content.trim() ? content : null;
+  if (content === null || content === undefined) return null;
+
+  if (Array.isArray(content)) {
+    const merged = content
+      .map((item) => toChatContentText(item))
+      .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      .join("\n");
+
+    return merged.trim() ? merged : null;
+  }
+
+  if (isRecord(content)) {
+    if (typeof content.text === "string" && content.text.trim()) return content.text;
+  }
+
+  const serialized = JSON.stringify(content);
+  return serialized && serialized !== "{}" && serialized !== "[]" ? serialized : null;
+};
+
+export const getStageChatTranscript = (event: SessionStepEvent): string | null => {
+  if (!Array.isArray(event.stageChat) || !event.stageChat.length) return null;
+
+  const merged = event.stageChat
+    .map((row) => toChatContentText(row.content))
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .join("\n\n");
+
+  return merged.trim() ? merged : null;
+};
+
 const currentStageFromSourceRef = (event: SessionStepEvent): string | null => {
   if (!isRecord(event.executionMeta)) return null;
+  const sourceRef = event.executionMeta.sourceRef;
+  if (!isRecord(sourceRef) || typeof sourceRef.text !== "string") return null;
 
-  const sr = event.executionMeta.sourceRef;
-  if (!isRecord(sr) || typeof sr.text !== "string") return null;
-
-  const t = sr.text.trim();
-  return t ? sr.text : null;
+  return sourceRef.text.trim() ? sourceRef.text : null;
 };
 
 export const getCurrentStage = (event: SessionStepEvent): string | null => {
   if (typeof event.currentStage === "string" && event.currentStage.trim()) return event.currentStage;
-
-  if (isRecord(event.stageInput) && typeof event.stageInput.currentStage === "string") {
-    const v = event.stageInput.currentStage;
-    if (v.trim()) return v;
-  }
 
   return currentStageFromSourceRef(event);
 };
@@ -43,12 +68,13 @@ export const getCurrentStageDisplay = (event: SessionStepEvent): string => {
 
 export const getStagePreview = (event: SessionStepEvent) => getCurrentStageDisplay(event);
 
+export const getStageChatDisplay = (event: SessionStepEvent): string => {
+  const raw = getStageChatTranscript(event);
+  return raw ? raw : EMPTY_VALUE;
+};
+
 export const getContextBeforeForDisplay = (event: SessionStepEvent): unknown => {
-  if (event.contextBefore !== undefined) return event.contextBefore;
-
-  if (isRecord(event.stageInput) && "context" in event.stageInput) return event.stageInput.context;
-
-  return event.stageInput;
+  return event.contextBefore;
 };
 
 export const getContextAfterForDisplay = (event: SessionStepEvent): unknown => event.contextAfter;
@@ -73,12 +99,7 @@ export const groupEventsByRequestId = (events: SessionStepEvent[]): SessionEvent
 };
 
 const extractContext = (event: SessionStepEvent): Record<string, unknown> | null => {
-  if (isRecord(event.stageInput) && isRecord(event.stageInput.context)) {
-    return event.stageInput.context;
-  }
-
   if (isRecord(event.contextBefore)) return event.contextBefore;
-  if (isRecord(event.stageInput)) return event.stageInput;
 
   return null;
 };
@@ -153,7 +174,6 @@ export const toLiveEvent = (step: SessionStepSse): SessionStepEvent => {
     contextBefore,
     contextBeforeTruncated: step.stageInputTruncated,
     cost: step.cost,
-    currentStage: step.currentStage ?? undefined,
     executionMeta: step.executionMeta,
     model: step.model,
     requestId: step.requestId || `live-${step.sessionId}-${step.stepIndex}`,
@@ -161,8 +181,6 @@ export const toLiveEvent = (step: SessionStepSse): SessionStepEvent => {
     sessionId: step.sessionId,
     stageChat: step.stageChat,
     stageIndex: step.stepIndex,
-    stageInput: step.stageInput,
-    stageInputTruncated: step.stageInputTruncated,
     thinkingMode: step.thinkingMode,
     timestamp: step.timestamp,
     usage: {

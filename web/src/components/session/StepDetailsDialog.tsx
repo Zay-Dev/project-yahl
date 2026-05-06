@@ -32,6 +32,7 @@ import {
 import {
   getContextAfterForDisplay,
   getContextBeforeForDisplay,
+  getStageChatDisplay,
   getCurrentStageDisplay,
   getInputTokens,
   getRequestGlobalStage,
@@ -118,12 +119,6 @@ export const StepDetailsDialog = ({
               Rerun from here
             </Button>
           </div>
-
-          {globalStageEvent.stageInputTruncated ? (
-            <p className="text-xs text-amber-600">
-              Snapshot was marked truncated in source event. Review and edit carefully before rerun.
-            </p>
-          ) : null}
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             <Card>
@@ -253,9 +248,7 @@ export const StepDetailsDialog = ({
                             </CardHeader>
                             <CardContent className="space-y-2 text-xs">
                               <p><span className="font-medium">Thinking mode:</span> {event.thinkingMode ? "true" : "false"}</p>
-                              <p><span className="font-medium">Stage input truncated:</span> {event.stageInputTruncated ? "true" : "false"}</p>
                               <p><span className="font-medium">Has execution meta:</span> {event.executionMeta ? "true" : "false"}</p>
-                              <p><span className="font-medium">Has stage input:</span> {event.stageInput ? "true" : "false"}</p>
                             </CardContent>
                           </Card>
                         </div>
@@ -271,12 +264,23 @@ export const StepDetailsDialog = ({
                           </CardContent>
                         </Card>
 
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm">Stage chat transcript (this step)</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="max-h-96 overflow-auto rounded border p-3 font-mono text-xs whitespace-pre-wrap">
+                              {getStageChatDisplay(event)}
+                            </p>
+                          </CardContent>
+                        </Card>
+
                         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                           <Card>
                             <CardHeader className="pb-3">
                               <CardTitle className="text-sm">Context before (this step)</CardTitle>
                               <CardDescription className="text-xs">
-                                {event.contextBeforeTruncated || event.stageInputTruncated
+                                {event.contextBeforeTruncated
                                   ? "Truncated at source"
                                   : "As stored"}
                               </CardDescription>

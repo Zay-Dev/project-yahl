@@ -1,5 +1,6 @@
 export type SessionChatMessagePayload = {
   content?: unknown;
+  reasoning?: string | null;
   role: string;
   toolCallIndex?: number;
   usageDelta?: unknown;
@@ -93,10 +94,14 @@ export type LegacySessionEventWire = {
     toolCalls?: unknown[];
   };
   sessionId: string;
-  stageChat?: unknown[];
+  stageChat?: {
+    content?: unknown;
+    modelSpendId?: string;
+    reasoning?: string | null;
+    role: string;
+    toolCallId?: string;
+  }[];
   stageIndex?: number;
-  stageInput?: unknown;
-  stageInputTruncated?: boolean;
   thinkingMode: boolean;
   timestamp: string;
   usage: {
