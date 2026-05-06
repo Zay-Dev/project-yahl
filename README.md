@@ -32,17 +32,20 @@ But more important is - it does feel like patching to the right direction! no mo
 
 Stuff that already works (aka things that surprisingly do not explode):
 - Redis transport between orchestrator and stage agent.
-- Task discovery from `runtime/orchestrator/TASKS` (instead of fixed hardcoded task IDs).
+- Task discovery from `runtime/orchestrator/TASKS`, with resolver support for `SKILL.md`, `index.md`, and `SKILL.yahl` (plus optional direct `--task-path` override when you're feeling fancy).
 - Session/event tracking with replayable step history and usage/cost visibility.
-- Web UI for task runs, live logs, session streams, and rerun/fork from a request boundary.
-- Fork-run flow where you can modify `currentStage` YAHL snapshot before rerun, which makes debugging way less painful.
+- Web UI now has proper Runner + Sessions + Session Detail flow with live logs/status and jump-to-session links.
+- Session detail view includes live stream panel, model aggregate table, step details dialog, and final result dialog (aka less guessing, more actual receipts).
+- Fork-run flow supports editing structured request snapshots (`currentStage`, `context.context`, `context.stage`, `context.types`) before rerun, which makes debugging way less painful.
+- Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
 - You can attach the orchestrator to a debugger, hit breakpoints, and even poke variables manually while tracing execution. (sounds pretty like coding right?)
 
 Stuff to build:
 - Better nested stage ergonomics and debugging flow.
 - More granular per-line or per-step error visibility.
 - Full input/output logs per stage (so debugging is less detective work, more replay button).
-- OneCLI integration for safer secret handling.
+- OneCLI integration for safer secret handling (ongoing polish, fewer paper cuts).
+- Migrate vm-client from `node:vm` to `isolated-vm` as defense-in-depth hardening for runtime-evaluated logic.
 - A2UI protocol support for richer interactive (getting approval, clarify questions, etc).
 - Friendlier UI polish around authoring and inspecting YAHL scripts.
 
@@ -68,6 +71,8 @@ A quick tour of the shapes:
 - `return value` — the result of the whole script.
 - `~/something` — the workspace; the AI can read and write here, but only here.
 - `for each i of [0..100]` and `for each x of [array]` — loops, with an optional step like `,+2`.
+- `CONTEXT: ...` — run deterministic context mutation in the VM before the next AI stage (handy for surgical fixes).
+- `IF:` / `ELSE IF:` / `ELSE:` / `END:` — stage branching; condition decides which block actually runs.
 - `REPLACE: ...` — a tiny system tag the runtime uses when a step needs a second pass after a tool call.
 - `/skill_name(...)` — call into a skill from the skills folder; think of it as a named, well-documented capability.
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
@@ -100,7 +105,7 @@ for each source of [parsed_news_source] {
 ## How it feels under the hood
 
 - A YAHL script is just a markdown file with a code block of pseudo code.
-- The runtime reads it, slices it into stages, and hands each stage to the AI in a clean sandbox.
+- The runtime reads it, slices it into stages, runs VM-evaluable control blocks (`CONTEXT` / `IF` family), then hands AI stages to the model in a clean sandbox.
 - Anything worth keeping goes into a shared bucket; everything else is forgotten between stages.
 - The AI talks back through a few structured tools — set a variable, run a shell command, ask for a chunked extraction.
 
@@ -118,7 +123,7 @@ flowchart LR
 - Repo shape (pnpm workspace):
   - `runtime/` - YAHL runtime + orchestrator
   - `server/` - Express + Mongoose session records API
-  - `web/` - Vite + shadcn session records UI
+  - `web/` - Vite + shadcn app for runner, sessions list, and deep session inspection
 - Docker compose split:
   - root `docker-compose.yml` serves `onecli + mongo + redis + server + web`
   - `runtime/docker-compose.yml` remains available, and orchestrator keeps using compose for agent lifecycle with a shared OneCLI SDK override
@@ -129,6 +134,15 @@ flowchart LR
 - Everything together: `pnpm run dev`.
 - App stack with Docker: `pnpm run compose:up`
 - Runtime stack with Docker: `pnpm run compose:runtime:up`
+
+### Advanced orchestrate flags
+
+- Run a specific task file directly: `pnpm run orchestrate -- --task-path runtime/orchestrator/TASKS/test/SKILL.yahl`
+- Pin session id for easier debugging: `pnpm run orchestrate -- --session-id my-debug-session`
+- Resume/fork flow inputs:
+  - `--resume-source-session-id <sessionId>`
+  - `--resume-source-request-id <requestId>`
+  - `--forkrun-form-id <forkrunFormId>`
 
 ### OneCLI setup checklist
 
@@ -157,8 +171,10 @@ flowchart LR
 Quick sanity map (so future-you can debug at 2am with less suffering):
 - `GET /api/tasks` lists discovered YAHL tasks.
 - `POST /api/runs` starts an orchestrator run for a task.
-- SSE streams expose live run logs and session events for the web UI.
-- Session endpoints support inspect, soft-delete, hard-delete, and rerun-from-request flow.
+- SSE streams expose live run logs (`meta` / `log` / `status`) and session events for the web UI.
+- `GET /api/sessions?includeArchived=true` includes archived sessions; default list hides archived rows.
+- `GET /api/forkrun-forms/:forkrunFormId` fetches saved rerun draft payloads.
+- Session endpoints support inspect, soft-delete, hard-delete, and rerun-from-request flow with safety guardrails (rerun rejects non-finalized, truncated, or missing-prefix-context snapshots).
 - Session persistence uses normalized Mongo collections (`sessions`, `session_stages`, `session_tool_calls`, `session_stage_chat_messages`, `session_model_spends`, `session_fork_lineages`). After upgrading, wipe the database or drop those collections so old single-document `sessions` rows do not conflict with the new layout.
 
 ## License
