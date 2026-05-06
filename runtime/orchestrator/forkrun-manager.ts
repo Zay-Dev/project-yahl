@@ -103,18 +103,18 @@ class ForkRunManager {
       return false;
     }
 
-    return iterationIndex === undefined ||
-      iterationIndex < this._forkMeta.loopRef.index;
+    if (iterationIndex === undefined) {
+      return false;
+    }
+
+    return iterationIndex < (this._forkMeta.loopRef?.index ?? 0);
   }
 
   getContextAfter(stageIndex: number, iterationIndex?: number) {
     return this._allEvents
       .find(event => {
         return event.executionMeta?.stageIndex === stageIndex &&
-          (
-            iterationIndex === undefined ||
-            iterationIndex === event.executionMeta.loopRef.index
-          );
+          iterationIndex === (event.executionMeta.loopRef?.index ?? undefined);
       })
       ?.contextAfter;
   }
