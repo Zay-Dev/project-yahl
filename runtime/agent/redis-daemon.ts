@@ -7,9 +7,9 @@ import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 
 import { runStageSession } from "./stage-session";
 
-import { runScript } from "./-utils/vm-client";
 import { fastForward } from "./-utils/ff-client";
 import { chatWithTools } from "./-utils/llm-client";
+import { runScript, runConditionScript } from "./-utils/vm-client";
 
 type TReply = ReturnType<typeof subscriber.getReply>;
 
@@ -110,47 +110,59 @@ export const startRedisDaemon = async () => {
 
     const { requestId, context, currentStage, contextAfter } = envelope;
     const { reply, error, onModelResponse } = subscriber.getReply(requestId);
-
     try {
-      const lines = currentStage.split('\n');
+      const _runStage = async (script: string = currentStage) => {
+        const lines = script.split('\n');
 
-      if (!!contextAfter) {
-        const contextOutput = await fastForward(contextAfter);
-        await _toToolsCall('fast-forward', contextOutput, reply, onModelResponse);
-        continue;
-      } else if (lines[0]?.match(/\s*CONTEXT:/)) {
-        const contextInput = context;
-        const contextOutput = await runScript(
-          ['{', ...lines].slice(1).join('\n').trim(),
-          contextInput,
-        );
+        if (!!contextAfter) {
+          const contextOutput = await fastForward(contextAfter);
+          await _toToolsCall('fast-forward', contextOutput, reply, onModelResponse);
+          return;
+        } else if (lines[0]?.match(/\s*CONTEXT:/)) {
+          const contextInput = context;
+          const contextOutput = await runScript(
+            ['{', ...lines].slice(1).join('\n').trim(),
+            contextInput,
+          );
+  
+          await _toToolsCall('vm', contextOutput, reply, onModelResponse);
+          return;
+        } else if (lines[0]?.match(/^\s*IF:/)) {
+          const winningCondition = await runConditionScript(script, context);
+          
+          if (winningCondition) {
+            await _runStage(winningCondition);
+          }
 
-        await _toToolsCall('vm', contextOutput, reply, onModelResponse);
-        continue;
-      }
-
-      const out = await runStageSession(
-        { context, currentStage },
-        messages,
-        {
-          runCommand,
-          chatWithTools: async (messages) => {
-            const start = Date.now();
-            const result = await chatWithTools(messages);
-
-            await onModelResponse({
-              ...result.response,
-              durationMs: Date.now() - start,
-              thinkingMode: config.thinkingMode,
-            });
-
-            return result;
+          return;
+        }
+  
+        const out = await runStageSession(
+          { context, currentStage: script },
+          messages,
+          {
+            runCommand,
+            chatWithTools: async (messages) => {
+              const start = Date.now();
+              const result = await chatWithTools(messages);
+  
+              await onModelResponse({
+                ...result.response,
+                durationMs: Date.now() - start,
+                thinkingMode: config.thinkingMode,
+              });
+  
+              return result;
+            },
           },
-        },
-      );
+        );
+  
+        await reply(out);
+      };
 
-      await reply(out);
+      await _runStage();
     } catch (err: any) {
+      console.error(err);
       await error(err);
     }
   }
