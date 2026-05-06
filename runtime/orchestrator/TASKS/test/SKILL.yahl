@@ -20,6 +20,14 @@ for each i of [1..5,+2] {
   c += i;
 }
 
+IF: this.context.c % 2 === 0;
+   c *= 2;
+ ELSE IF: this.context.c > 30;
+   c -= 2;
+ ELSE:
+   c /= 2;
+ END:
+
 const result = {a,b,c};
 
 CONTEXT: {
