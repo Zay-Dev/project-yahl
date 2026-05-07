@@ -6,31 +6,35 @@ description: Testing
 ```ai.logic
 
 CONTEXT: {
-  this.a = 1;
-  this.b = 2;
+  const base = { a: 1, b: 2 };
 
-  this.c = a + b;
+  (() => ({
+    ...base,
+    c: base.a + base.b,
+  }))
 }
 
 for each i of [1..5] CONTEXT: {
-    this.c = this.stage.c + this.stage.i;
+  (() => ({
+    c: context.stage.c + context.stage.i,
+  }));
 }
 
 for each i of [1..5,+2] {
   c += i;
 }
 
-IF: this.context.c % 2 === 0;
-   c *= 2;
- ELSE IF: this.context.c > 30;
-   c -= 2;
+IF: context.context.c % 2 === 0;
+   c = context.context.c * 2;
+ ELSE IF: context.context.c > 30;
+   c = context.context.c - 2;
  ELSE:
-   c /= 2;
+   c = context.context.c / 2;
  END:
 
 const result = {a,b,c};
 
 CONTEXT: {
-  this.result = this.context.result;
+  (() => ({ result: this.context.result }));
 }
 ```

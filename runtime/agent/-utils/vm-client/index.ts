@@ -1,29 +1,49 @@
 import type { StageContextPayload } from "@/shared/stage-contract";
 
-import * as vm from 'node:vm';
+import ivm from 'isolated-vm';
 
-const _tools = {
-  setTimeout,
+const _createVm = async (
+  externalContext: StageContextPayload,
+  vmOptions: ivm.IsolateOptions = { memoryLimit: 8 },
+) => {
+  const isolated = new ivm.Isolate(vmOptions);
+  const context = await isolated.createContext();
+
+  const jail = context.global;
+
+  await jail.set(
+    'context',
+    new ivm.ExternalCopy(externalContext).copyInto(),
+  );
+
+  return { isolated, context };
 };
 
 export const runScript = async (
   script: string,
   _context: StageContextPayload,
+  vmOptions?: ivm.IsolateOptions,
 ) => {
-  const context = {
-    ...JSON.parse(JSON.stringify(_context)),
-    _tools,
-  };
+  const { isolated, context } = await _createVm(_context, vmOptions);
 
-  vm.createContext(context);
-  await new vm.Script(script).runInContext(context);
+  const compiled = await isolated.compileScript(script);
+  const result = await compiled.run(context, { timeout: 10 }) as unknown;
 
-  delete context._tools;
-  delete context.context;
-  delete context.stage;
-  delete context.types;
+  const objectOrFunction = ['object', 'function'].includes(typeof result);
+
+  if (!result || !objectOrFunction || Array.isArray(result)) {
+    isolated.dispose();
+    return { result };
+  }
+
+  const normalizedResult = typeof result === 'function' ? result() : result;
+
+  isolated.dispose();
   
-  return context as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(normalizedResult)
+      .map(([key, value]) => [key, value as unknown])
+  );
 };
 
 export const runConditionScript = async (
@@ -32,12 +52,12 @@ export const runConditionScript = async (
 ) => {
   const prefixes = ["IF:", "ELSE IF:", "ELSE:", "END:"]
     .map(prefix => new RegExp(`^\\s*${prefix}`));
-  
+
   const stages = new Array<{
     condition: string;
     script: string;
   }>();
-  
+
   for (const line of script.split("\n")) {
     if (prefixes.some(prefix => prefix.test(line))) {
       stages.push({
@@ -48,14 +68,12 @@ export const runConditionScript = async (
       stages.at(-1)!.script += line + "\n";
     }
   }
-  
+
   const { result } = await runScript(
     `
-    this.result = undefined;
-
-    for (const [i, condition] of this.stage.conditions.entries()) {
+    for (const [i, condition] of context.stage.conditions.entries()) {
       if (eval(condition || '1 == 1')) {
-        this.result = i;
+        result = i;
         break;
       }
     }
@@ -70,7 +88,7 @@ export const runConditionScript = async (
       types: {},
     },
   );
-  
+
   if (typeof result != 'number') {
     return '';
   }
