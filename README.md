@@ -33,11 +33,13 @@ But more important is - it does feel like patching to the right direction! no mo
 Stuff that already works (aka things that surprisingly do not explode):
 - Redis transport between orchestrator and stage agent.
 - Task discovery from `runtime/orchestrator/TASKS`, with resolver support for `SKILL.md`, `index.md`, and `SKILL.yahl` (plus optional direct `--task-path` override when you're feeling fancy).
+- Runtime `ask-user` flow is live: stages can pause for a real user decision and continue with deterministic answer ids (finally, less mind-reading).
 - Session/event tracking with replayable step history and usage/cost visibility.
 - Web UI now has proper Runner + Sessions + Session Detail flow with live logs/status and jump-to-session links.
 - Session detail view includes live stream panel, model aggregate table, step details dialog, and final result dialog (aka less guessing, more actual receipts).
 - Fork-run flow supports editing structured request snapshots (`currentStage`, `context.context`, `context.stage`, `context.types`) before rerun, which makes debugging way less painful.
 - Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
+- VM client now runs on `isolated-vm` for stronger sandbox boundaries and fewer "hope-this-is-fine" moments.
 - You can attach the orchestrator to a debugger, hit breakpoints, and even poke variables manually while tracing execution. (sounds pretty like coding right?)
 
 Stuff to build:
@@ -45,69 +47,79 @@ Stuff to build:
 - More granular per-line or per-step error visibility.
 - Full input/output logs per stage (so debugging is less detective work, more replay button).
 - OneCLI integration for safer secret handling (ongoing polish, fewer paper cuts).
-- Migrate vm-client from `node:vm` to `isolated-vm` as defense-in-depth hardening for runtime-evaluated logic.
-- A2UI protocol support for richer interactive (getting approval, clarify questions, etc).
+- Extend A2UI beyond current `ask-user` multiple-choice flow (richer approvals, clarifications, and multi-step interactions).
 - Friendlier UI polish around authoring and inspecting YAHL scripts.
 
 ## Some catchy syntax
 
-Here are some examples that will (very likely) works like magic.
+Here are some examples that now survive contact with reality a little better.
 
-1. const data = *get_data_from_yahoo_finance( within_1hour, stocks: [tesla, meta, google], open_close_high_low );
-  - none of the variables exist, but the AI of cause can handle them, what's magic is the line will works most of the time!
-2. const {html, javascript, css} = *get_or_create_python_tool(~/tools, split_html_js_css, *run_bash(curl, https://www.omniflex.io/, timeout: 5s));
-  - this is my recent favourite to see the AI can understand the get_or_create almost too perfect!
+1. `CONTEXT` + `IF/ELSE` + inline user input (from `TASKS/test`):
+  - yes, you can branch logic and still ask a human for one number before the final state lands.
+2. nested loops + `EXTENDS:` + typed extraction pipeline (from `TASKS/competitor_intel`):
+  - yes, this one reads like pseudo-code fan fiction, and yes, it still compiles into a useful run.
 
-If you don't care about token or just to see how stable the AI can be, you could even try
+If you want a quick stress test with less chaos and more signal, try this:
 
 ```
-for each i of [0..100] {
-  *write_to_stderr(i); // -- disclaimer: I've never tried ask printing to the stderr
+for each i of [1..5,+2] {
+  c += i;
 }
 ```
 
 A quick tour of the shapes:
 
-- `return value` — the result of the whole script.
 - `~/something` — the workspace; the AI can read and write here, but only here.
 - `for each i of [0..100]` and `for each x of [array]` — loops, with an optional step like `,+2`.
 - `CONTEXT: ...` — run deterministic context mutation in the VM before the next AI stage (handy for surgical fixes).
 - `IF:` / `ELSE IF:` / `ELSE:` / `END:` — stage branching; condition decides which block actually runs.
 - `REPLACE: ...` — a tiny system tag the runtime uses when a step needs a second pass after a tool call.
+- `EXTENDS: ...` — append or merge into an existing context value without nuking what you already built.
+- `/ask-user(...)` — pause the run, ask one multiple-choice question, then resume with the selected answer.
 - `/skill_name(...)` — call into a skill from the skills folder; think of it as a named, well-documented capability.
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 
-A trimmed look at a real task pulling news from multiple sources:
+A trimmed look at current task shapes (`test` + `competitor_intel` energy):
 
 ```
-const news_sources_knowledge = *read(~/knowledges/news-monitor/sources.json);
+CONTEXT: {
+  const base = { a: 1, b: 2 };
 
-for each source of [news_sources] {
-  const parsed_source = /web-search(source);
-  const safe_url = *safe(parsed_source);
-
-  parsed_news_source = [...parsed_news_source, safe_url];
+  (() => ({
+    ...base,
+    c: base.a + base.b,
+  }))
 }
 
-for each source of [parsed_news_source] {
-  const tmp_file_path = *save(*browse_or_curl(source), `~/tmp/${*uuidgen()}`);
-  const byte_length = *get_byte_length(tmp_file_path);
+for each i of [1..5,+2] {
+  c += i;
+}
 
-  REPLACE: const website = /rag( chunkSize: 49600, tmp_file_path, byte_length, within_24hours, keep_full_url );
+IF: context.context.c % 2 === 0;
+   c = context.context.c * 2;
+ELSE IF: context.context.c > 30;
+   c = context.context.c - 2;
+ELSE:
+   c = context.context.c / 2;
+END:
 
-  const extracted_news = *extract_news(website);
+c += /ask-user(which number of 1,2,3,4,5);
 
-  news = *combine([...news, ...extracted_news]);
-  website = null;
+for each competitor of [competitors] {
+  for each source of [competitor.news_sources] {
+    raw_articles = /web-search(query: `${competitor.name} news last 7 days`, source: source);
+
+    EXTENDS: intel = *extract_intel(raw_articles, flat_map_to: TIntelItem, set_competitor: competitor.name);
+  }
 }
 ```
 
 ## How it feels under the hood
 
 - A YAHL script is just a markdown file with a code block of pseudo code.
-- The runtime reads it, slices it into stages, runs VM-evaluable control blocks (`CONTEXT` / `IF` family), then hands AI stages to the model in a clean sandbox.
+- The runtime reads it, slices it into stages, runs VM-evaluable control blocks (`CONTEXT` / `IF` family) inside `isolated-vm`, then hands AI stages to the model in a clean sandbox.
 - Anything worth keeping goes into a shared bucket; everything else is forgotten between stages.
-- The AI talks back through a few structured tools — set a variable, run a shell command, ask for a chunked extraction.
+- The AI talks back through a few structured tools — set a variable, run a shell command, ask user choices, ask for chunked extraction.
 
 ```mermaid
 flowchart LR
