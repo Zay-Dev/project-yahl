@@ -121,7 +121,7 @@ export const startRedisDaemon = async () => {
         } else if (lines[0]?.match(/\s*CONTEXT:/)) {
           const contextInput = context;
           const contextOutput = await runScript(
-            ['{', ...lines].slice(1).join('\n').trim(),
+            ['{', ...lines.slice(1)].join('\n').trim(),
             contextInput,
           );
   
