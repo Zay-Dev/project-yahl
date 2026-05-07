@@ -19,9 +19,9 @@ export const SessionsPage = () => {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div className="space-y-1.5">
-          <CardTitle>Sessions</CardTitle>
+          <CardTitle>Backstage sessions</CardTitle>
           <CardDescription>
-            All persisted runtime sessions. Click a row to inspect a session.
+            Runtime sessions and debug traces. Click a row to inspect details.
           </CardDescription>
         </div>
 

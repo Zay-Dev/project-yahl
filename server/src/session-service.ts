@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import {
   ForkrunForm,
   Session,
+  SessionAskUserQuestion,
   SessionForkLineage,
   SessionModelSpend,
   SessionStage,
@@ -23,6 +24,7 @@ import type {
   LegacySessionEventWire,
   ParsedStageWire,
   PatchStageRuntimeSnapshotPayload,
+  CreateAskUserQuestionPayload,
   SessionChatMessagePayload,
   SessionForkLineagePayload,
   ToolCallWire,
@@ -40,6 +42,25 @@ const replyPreview = (reply: string | null | undefined) => {
   const max = 200;
 
   return reply.length <= max ? reply : `${reply.slice(0, max)}…`;
+};
+
+const normalizeTitle = (value: string) => {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) return null;
+  return trimmed.slice(0, 120);
+};
+
+const fallbackTitleFromTaskPath = (taskYahlPath: string | null | undefined) => {
+  if (!taskYahlPath) return null;
+  const bySlash = taskYahlPath.split("/").filter(Boolean).pop();
+  if (!bySlash) return null;
+  return normalizeTitle(bySlash.replace(/\.yahl$/i, "").replace(/[_-]+/g, " "));
+};
+
+const titleFromReply = (reply: string | null | undefined) => {
+  if (!reply) return null;
+  const firstLine = reply.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
+  return normalizeTitle(firstLine.replace(/^#+\s*/, ""));
 };
 
 const stepSummary = (
@@ -108,23 +129,38 @@ const stepSummary = (
 
 const metaFromRow = (
   sessionId: string,
-  row: { finalizedAt?: Date | null; taskYahlPath?: string | null } | null,
+  row: {
+    finalizedAt?: Date | null;
+    taskYahlPath?: string | null;
+    title?: string | null;
+    titleSource?: "auto" | "manual" | null;
+  } | null,
 ): SessionMetaSsePayload => ({
   finalizedAt: row?.finalizedAt ? new Date(row.finalizedAt).toISOString() : null,
   sessionId,
   taskYahlPath: typeof row?.taskYahlPath === "string" ? row.taskYahlPath : null,
+  title: typeof row?.title === "string" ? row.title : null,
+  titleSource: row?.titleSource === "auto" || row?.titleSource === "manual" ? row.titleSource : null,
 });
 
 const emitLifecycle = (
   eventType: "archived" | "created" | "deleted" | "finalized" | "updated",
   sessionId: string,
-  row: { finalizedAt?: Date | null; taskYahlPath?: string | null; updatedAt?: Date | null } | null,
+  row: {
+    finalizedAt?: Date | null;
+    taskYahlPath?: string | null;
+    title?: string | null;
+    titleSource?: "auto" | "manual" | null;
+    updatedAt?: Date | null;
+  } | null,
 ) => {
   emitSessionsLifecycle({
     eventType,
     finalizedAt: row?.finalizedAt ? new Date(row.finalizedAt).toISOString() : null,
     sessionId,
     taskYahlPath: typeof row?.taskYahlPath === "string" ? row.taskYahlPath : null,
+    title: typeof row?.title === "string" ? row.title : null,
+    titleSource: row?.titleSource === "auto" || row?.titleSource === "manual" ? row.titleSource : null,
     updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
   });
 };
@@ -391,6 +427,7 @@ export const createStageModelResponse = async (
   const sessionObjId = stage.session as mongoose.Types.ObjectId;
   const stageObjId = stage._id as mongoose.Types.ObjectId;
   const safeCost = toNumber(payload.cost);
+  const maybeAutoTitle = titleFromReply(payload.response?.reply);
   const resolvedRequestId =
     typeof stage.requestId === "string" && stage.requestId.trim() ? stage.requestId : payload.requestId;
 
@@ -485,8 +522,35 @@ export const createStageModelResponse = async (
 
   await Session.updateOne(
     { sessionId },
-    { $set: { updatedAt: new Date() } },
+    {
+      $set: {
+        updatedAt: new Date(),
+      },
+      ...(maybeAutoTitle
+        ? {
+          $setOnInsert: {
+            title: maybeAutoTitle,
+            titleGeneratedAt: new Date(),
+            titleSource: "auto",
+          },
+        }
+        : {}),
+    },
   );
+
+  if (maybeAutoTitle) {
+    await Session.updateOne(
+      { sessionId, $or: [{ title: { $exists: false } }, { title: null }, { title: "" }] },
+      {
+        $set: {
+          title: maybeAutoTitle,
+          titleGeneratedAt: new Date(),
+          titleSource: "auto",
+          updatedAt: new Date(),
+        },
+      },
+    );
+  }
 
   const sseChatMessages: SessionStepChatMessage[] = chatDocs.map((doc) => ({
     content: doc.content,
@@ -538,6 +602,13 @@ export const finalizeSession = async (
   const updateSet: Record<string, unknown> = {
     finalizedAt: new Date(),
   };
+  const rowBefore = await Session.findOne({ sessionId }).lean();
+  const fallbackTitle = fallbackTitleFromTaskPath(rowBefore?.taskYahlPath ?? null);
+  if ((!rowBefore?.title || !String(rowBefore.title).trim()) && fallbackTitle) {
+    updateSet.title = fallbackTitle;
+    updateSet.titleGeneratedAt = new Date();
+    updateSet.titleSource = "auto";
+  }
   if (opts?.result !== undefined) {
     updateSet.result = opts.result;
   }
@@ -566,6 +637,8 @@ export const listSessions = async (limit: number, offset: number, includeArchive
     finalizedAt: Date | null;
     sessionId: string;
     taskYahlPath: string | null;
+    title: string | null;
+    titleSource: "auto" | "manual" | null;
     totalCalls: number;
     totalCost: number;
     totalInputTokens: number;
@@ -636,6 +709,8 @@ export const listSessions = async (limit: number, offset: number, includeArchive
         finalizedAt: 1,
         sessionId: 1,
         taskYahlPath: 1,
+        title: 1,
+        titleSource: 1,
         totalCalls: 1,
         totalCost: 1,
         totalInputTokens: 1,
@@ -652,6 +727,8 @@ export const listSessions = async (limit: number, offset: number, includeArchive
     finalizedAt: row.finalizedAt || null,
     sessionId: row.sessionId,
     taskYahlPath: row.taskYahlPath ?? null,
+    title: row.title ?? null,
+    titleSource: row.titleSource ?? null,
     totalCalls: row.totalCalls,
     totalCost: row.totalCost,
     totalInputTokens: row.totalInputTokens,
@@ -782,6 +859,7 @@ export const getSession = async (sessionId: string) => {
   const chats = await SessionStageChatMessage.find({ sessionId }).lean();
   const spends = await SessionModelSpend.find({ sessionId }).lean();
   const fork = await SessionForkLineage.findOne({ sessionId }).lean();
+  const askUserQuestions = await SessionAskUserQuestion.find({ sessionId }).sort({ createdAt: -1 }).lean();
 
   const toolsByStage = new Map<string, typeof tools>();
   for (const t of tools) {
@@ -852,7 +930,93 @@ export const getSession = async (sessionId: string) => {
       }
       : undefined,
     modelAggregates,
+    askUserQuestions: askUserQuestions.map((row) => ({
+      allowMultiple: row.allowMultiple,
+      answerIds: row.answerIds ?? [],
+      answeredAt: row.answeredAt ?? null,
+      description: row.description ?? null,
+      maxChoices: row.maxChoices ?? null,
+      minChoices: row.minChoices ?? null,
+      options: row.options,
+      questionId: row.questionId,
+      requestId: row.requestId,
+      stageId: row.stageId,
+      status: row.status,
+      title: row.title,
+    })),
   };
+};
+
+export const createAskUserQuestion = async (sessionId: string, payload: CreateAskUserQuestionPayload) => {
+  const sessionObjId = await requireSessionId(sessionId);
+  const questionId = `${payload.requestId}:${payload.stageId}`;
+  await SessionAskUserQuestion.updateOne(
+    { questionId, sessionId },
+    {
+      $set: {
+        allowMultiple: Boolean(payload.question.allowMultiple),
+        answerIds: [],
+        answeredAt: null,
+        description: payload.question.description ?? null,
+        maxChoices: payload.question.maxChoices ?? null,
+        minChoices: payload.question.minChoices ?? null,
+        options: payload.question.options,
+        requestId: payload.requestId,
+        session: sessionObjId,
+        sessionId,
+        stageId: payload.stageId,
+        status: "pending",
+        title: payload.question.title,
+      },
+      $setOnInsert: {
+        questionId,
+      },
+    },
+    { upsert: true },
+  );
+  emitLifecycle("updated", sessionId, await Session.findOne({ sessionId }).lean());
+  return questionId;
+};
+
+export const answerAskUserQuestion = async (sessionId: string, questionId: string, answerIds: string[]) => {
+  const row = await SessionAskUserQuestion.findOneAndUpdate(
+    { questionId, sessionId },
+    {
+      $set: {
+        answerIds,
+        answeredAt: new Date(),
+        status: "answered",
+      },
+    },
+    { new: true },
+  ).lean();
+  if (!row) return null;
+  emitLifecycle("updated", sessionId, await Session.findOne({ sessionId }).lean());
+  return row;
+};
+
+export const getAskUserQuestion = async (sessionId: string, questionId: string) =>
+  SessionAskUserQuestion.findOne({ questionId, sessionId }).lean();
+
+export const renameSessionTitle = async (sessionId: string, title: string) => {
+  const normalized = normalizeTitle(title);
+  if (!normalized) throw new Error("invalid title");
+  const now = new Date();
+  const row = await Session.findOneAndUpdate(
+    { sessionId },
+    {
+      $set: {
+        title: normalized,
+        titleSource: "manual",
+        updatedAt: now,
+      },
+    },
+    { new: true },
+  ).lean();
+  if (!row) return null;
+  emitSessionMeta(sessionId, metaFromRow(sessionId, row));
+  emitLifecycle("updated", sessionId, row);
+  return row;
 };
 
 export const getSessionStageById = async (sourceSessionId: string, stageId: string) =>
@@ -889,6 +1053,7 @@ export const hardDeleteSession = async (sessionId: string) => {
     SessionStage.deleteMany({ sessionId }),
     SessionModelSpend.deleteMany({ sessionId }),
     SessionForkLineage.deleteMany({ sessionId }),
+    SessionAskUserQuestion.deleteMany({ sessionId }),
     Session.deleteOne({ sessionId }),
   ]);
 

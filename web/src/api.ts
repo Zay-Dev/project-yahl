@@ -77,6 +77,41 @@ export const hardDeleteSession = async (sessionId: string) => {
   if (!response.ok) throw new Error("Failed to hard delete session");
 };
 
+export const updateSessionTitle = async (sessionId: string, title: string) => {
+  const response = await fetch(`${apiBaseUrl}/api/sessions/${sessionId}/title`, {
+    body: JSON.stringify({ title }),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "PATCH",
+  });
+  if (!response.ok) throw new Error("Failed to update session title");
+};
+
+export const answerAskUserQuestion = async (
+  sessionId: string,
+  questionId: string,
+  answerIds: string[],
+) => {
+  const response = await fetch(
+    `${apiBaseUrl}/api/sessions/${sessionId}/ask-user/questions/${questionId}/answer`,
+    {
+      body: JSON.stringify({ answerIds }),
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+    },
+  );
+  if (!response.ok) throw new Error("Failed to answer ask-user question");
+  return await response.json() as {
+    answeredAt: string;
+    ok: true;
+    questionId: string;
+    selectedLabels: string[];
+  };
+};
+
 export const openSessionSse = (
   sessionId: string,
   handlers: {

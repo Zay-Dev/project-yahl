@@ -24,9 +24,17 @@ export const SessionResultDialog = ({ detail, onClose, open }: Props) => (
         ) : null}
       </DialogHeader>
 
-      <pre className="max-h-[70vh] overflow-auto rounded-md border p-3 text-xs">
-        {stringifyValue(detail?.result)}
-      </pre>
+      <div className="grid max-h-[70vh] gap-3 overflow-auto">
+        <pre className="rounded-md border p-3 text-xs">
+          {stringifyValue((detail?.result as { raw?: unknown; ui?: unknown } | undefined)?.raw ?? detail?.result)}
+        </pre>
+
+        {(detail?.result as { ui?: unknown } | undefined)?.ui !== undefined ? (
+          <pre className="rounded-md border p-3 text-xs">
+            {stringifyValue((detail?.result as { ui?: unknown }).ui)}
+          </pre>
+        ) : null}
+      </div>
     </DialogContent>
   </Dialog>
 );

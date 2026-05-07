@@ -40,7 +40,7 @@ export const SessionsTable = ({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Session</TableHead>
+          <TableHead>Backstage session</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="text-right">Calls</TableHead>
           <TableHead className="text-right">Cost</TableHead>
@@ -59,7 +59,14 @@ export const SessionsTable = ({
               key={session.sessionId}
               onClick={() => navigate(`/sessions/${session.sessionId}`)}
             >
-              <TableCell className="font-mono text-xs">{session.sessionId.slice(0, 8)}</TableCell>
+              <TableCell>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm">{session.title || "Untitled session"}</span>
+                  <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+                    {session.sessionId.slice(0, 8)}
+                  </span>
+                </div>
+              </TableCell>
               <TableCell>
                 <Badge variant={session.finalizedAt ? "default" : "outline"}>
                   {session.finalizedAt ? "finalized" : "active"}

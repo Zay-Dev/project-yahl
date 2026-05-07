@@ -21,7 +21,7 @@ const navMain = [
   },
   {
     icon: ListChecks,
-    title: "Sessions",
+    title: "Backstage",
     to: "/sessions",
   },
 ];

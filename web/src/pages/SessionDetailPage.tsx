@@ -2,8 +2,9 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useRunnerContext } from "@/app/RunnerContext";
-import { hardDeleteSession, softDeleteSession } from "@/api";
+import { hardDeleteSession, softDeleteSession, updateSessionTitle } from "@/api";
 import { LiveStreamPanel } from "@/components/session/LiveStreamPanel";
+import { AskUserPanel } from "@/components/session/AskUserPanel";
 import { ModelAggregatesTable } from "@/components/session/ModelAggregatesTable";
 import { RequestGroup } from "@/components/session/RequestGroup";
 import { RerunDraftDialog } from "@/components/session/RerunDraftDialog";
@@ -108,6 +109,17 @@ export const SessionDetailPage = () => {
     }
   }, [navigate, sessionId]);
 
+  const onRenameTitle = useCallback(async (title: string) => {
+    if (!sessionId) return;
+    setActionError(null);
+    try {
+      await updateSessionTitle(sessionId, title);
+      await refresh();
+    } catch (renameError) {
+      setActionError(String(renameError));
+    }
+  }, [refresh, sessionId]);
+
   if (!sessionId) {
     return (
       <Card>
@@ -131,6 +143,7 @@ export const SessionDetailPage = () => {
           detail={detail}
           hasStoredResult={hasStoredResult}
           onHardDelete={onHardDelete}
+          onRenameTitle={onRenameTitle}
           onSoftDelete={onSoftDelete}
           onViewResult={() => setResultOpen(true)}
           taskPath={taskPath}
@@ -172,6 +185,14 @@ export const SessionDetailPage = () => {
                 liveSteps={liveSteps}
                 onOpenLiveRequestDetails={(requestId) => void openLiveRequestDetails(requestId)}
               />
+
+              {detail?.askUserQuestions?.length ? (
+                <AskUserPanel
+                  onAnswered={() => refresh()}
+                  questions={detail.askUserQuestions}
+                  sessionId={sessionId}
+                />
+              ) : null}
             </>
           )}
         </CardContent>

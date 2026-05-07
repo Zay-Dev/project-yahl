@@ -6,6 +6,9 @@ export type SessionDoc = {
   result?: unknown;
   sessionId: string;
   taskYahlPath?: string;
+  title?: string | null;
+  titleGeneratedAt?: Date | null;
+  titleSource?: "auto" | "manual";
 
   stages: {
     lines: string;
@@ -21,6 +24,9 @@ const sessionSchema = new Schema<SessionDoc>(
     result: { type: Schema.Types.Mixed },
     sessionId: { index: true, required: true, type: String, unique: true },
     taskYahlPath: { type: String },
+    title: { type: String },
+    titleGeneratedAt: { type: Date },
+    titleSource: { enum: ["auto", "manual"], type: String },
     stages: [{
       lines: { type: String, required: true },
       sourceStartLine: { type: Number, required: true },

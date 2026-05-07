@@ -32,9 +32,11 @@ IF: context.context.c % 2 === 0;
    c = context.context.c / 2;
  END:
 
+c += /ask-user(which number of 1,2,3,4,5);
+
 const result = {a,b,c};
 
 CONTEXT: {
-  (() => ({ result: this.context.result }));
+  (() => ({ result: context.context.result }));
 }
 ```

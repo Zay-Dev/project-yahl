@@ -16,6 +16,8 @@ import {
   parseRagToolArguments,
   parseRunBashToolArguments,
   parseSetContextToolArguments,
+  parseAskUserToolArguments,
+  askUserArgumentsToEnvelope,
   ragArgumentsToEnvelope,
   setContextArgumentsToEnvelope,
 } from "../shared/stage-tools";
@@ -247,6 +249,19 @@ export const runStageSession = async (
         }
 
         return ragArgumentsToEnvelope(args);
+      }
+
+      if (name === "ask_user") {
+        const args = parseAskUserToolArguments(rawArgs);
+        if (!args) {
+          stageMessages.push({
+            content: toolErrorContent("ask_user: invalid arguments"),
+            role: "tool",
+            tool_call_id: call.id,
+          });
+          continue;
+        }
+        return askUserArgumentsToEnvelope(args);
       }
 
       if (name === "set_context") {

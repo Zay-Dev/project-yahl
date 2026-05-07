@@ -47,9 +47,29 @@ export type RagToolCallEnvelope = {
   type: "tool_call";
 };
 
+export type AskUserToolCallEnvelope = {
+  arguments: {
+    allowMultiple?: boolean;
+    description?: string;
+    kind: "multipleChoice";
+    maxChoices?: number;
+    minChoices?: number;
+    options: {
+      description?: string;
+      id: string;
+      label: string;
+    }[];
+    title: string;
+    version: "askUser.v1";
+  };
+  tool: "ask_user";
+  type: "tool_call";
+};
+
 export type StageEnvelope = StageResultEnvelope |
   SetContextToolCallEnvelope[] |
-  RagToolCallEnvelope;
+  RagToolCallEnvelope |
+  AskUserToolCallEnvelope;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -85,6 +105,42 @@ export const parseStageEnvelope = (value: string): StageEnvelope | null => {
     }
 
     if (isValidTool(parsed)) {
+      const parsedArgs = parsed.arguments as Record<string, unknown>;
+
+      if (
+        parsed.tool === "ask_user" &&
+        typeof parsedArgs.version === "string" &&
+        parsedArgs.version === "askUser.v1" &&
+        parsedArgs.kind === "multipleChoice" &&
+        typeof parsedArgs.title === "string" &&
+        Array.isArray(parsedArgs.options)
+      ) {
+        return {
+          arguments: {
+            allowMultiple: Boolean(parsedArgs.allowMultiple),
+            description:
+              typeof parsedArgs.description === "string" ? parsedArgs.description : undefined,
+            kind: "multipleChoice",
+            maxChoices:
+              typeof parsedArgs.maxChoices === "number" ? parsedArgs.maxChoices : undefined,
+            minChoices:
+              typeof parsedArgs.minChoices === "number" ? parsedArgs.minChoices : undefined,
+            options: parsedArgs.options
+              .filter((option) => option && typeof option === "object")
+              .map((option: any) => ({
+                description: typeof option.description === "string" ? option.description : undefined,
+                id: String(option.id || ""),
+                label: String(option.label || ""),
+              }))
+              .filter((option) => option.id && option.label),
+            title: parsedArgs.title,
+            version: "askUser.v1",
+          },
+          tool: "ask_user",
+          type: "tool_call",
+        };
+      }
+
       return [parsed]
         .filter(item => {
           return item.tool === "rag" &&

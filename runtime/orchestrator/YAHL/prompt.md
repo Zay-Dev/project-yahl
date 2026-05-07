@@ -33,6 +33,27 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 - Do not use bash for durable context writes; use **`set_context`**.
 - After `run_bash`, continue reasoning, then finish the stage with final **`content`** JSON: `{"type":"result","output":"<text>"}` when no further context mutation is needed, or rely on the last successful **`set_context`** tool call as documented in Agent.md.
 
+## ask_user (API tool)
+
+Use the **`ask_user`** tool when user choice is required before proceeding.
+
+- Required arguments:
+  - `version: "askUser.v1"`
+  - `kind: "multipleChoice"`
+  - `title: "<non-empty>"`
+  - `options: [{ "id":"<non-empty>", "label":"<non-empty>" }, ...]` with at least 2 options
+- Optional arguments:
+  - `description`, `allowMultiple`, `minChoices`, `maxChoices`
+- Validation constraints:
+  - do not omit `version` or `kind`
+  - do not send fewer than 2 options
+  - do not send empty option ids or labels
+- Runtime behavior:
+  - orchestrator will pause and wait for user answer after this tool call
+  - continuation resumes the same stage by replacing the inline `/ask-user(...)` expression with the selected answer value
+  - selected answer value is persisted as `ask_user_last_answer` in global context
+  - `ask_user_last_answer` is a scalar only (number when option id is numeric, otherwise string)
+
 ### Examples (conceptual tool arguments)
 
 - `set_context`: `scope=global`, `key=topic`, `value="AI agents"`

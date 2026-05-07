@@ -3,6 +3,7 @@ import type OpenAI from "openai";
 import {
   CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
+  AskUserToolCallEnvelope,
   RagToolCallEnvelope,
   type ContextScope,
   type SetContextToolCallEnvelope,
@@ -51,6 +52,39 @@ const isSetOperation = (value: unknown): value is SetContextToolArguments["opera
 export type SetContextToolArguments = SetContextToolCallEnvelope["arguments"];
 
 export const STAGE_TOOLS = [
+  {
+    function: {
+      description:
+        "Ask user a structured multiple-choice question. Use this when you need a human decision before continuing.",
+      name: "ask_user",
+      parameters: {
+        properties: {
+          allowMultiple: { type: "boolean" },
+          description: { type: "string" },
+          kind: { enum: ["multipleChoice"], type: "string" },
+          maxChoices: { type: "number" },
+          minChoices: { type: "number" },
+          options: {
+            items: {
+              properties: {
+                description: { type: "string" },
+                id: { type: "string" },
+                label: { type: "string" },
+              },
+              required: ["id", "label"],
+              type: "object",
+            },
+            type: "array",
+          },
+          title: { type: "string" },
+          version: { enum: ["askUser.v1"], type: "string" },
+        },
+        required: ["version", "kind", "title", "options"],
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
   {
     function: {
       description:
@@ -205,6 +239,40 @@ export const parseRunBashToolArguments = (raw: string): string | null => {
   return parsed.command;
 };
 
+export const parseAskUserToolArguments = (
+  raw: string,
+): AskUserToolCallEnvelope["arguments"] | null => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed)) return null;
+  if (parsed.version !== "askUser.v1" || parsed.kind !== "multipleChoice") return null;
+  if (typeof parsed.title !== "string" || !parsed.title.trim()) return null;
+  if (!Array.isArray(parsed.options) || parsed.options.length < 2) return null;
+  const options = parsed.options
+    .filter((option) => isRecord(option))
+    .map((option) => ({
+      description: typeof option.description === "string" ? option.description : undefined,
+      id: typeof option.id === "string" ? option.id.trim() : "",
+      label: typeof option.label === "string" ? option.label.trim() : "",
+    }))
+    .filter((option) => option.id && option.label);
+  if (options.length < 2) return null;
+  return {
+    allowMultiple: Boolean(parsed.allowMultiple),
+    description: typeof parsed.description === "string" ? parsed.description : undefined,
+    kind: "multipleChoice",
+    maxChoices: typeof parsed.maxChoices === "number" ? parsed.maxChoices : undefined,
+    minChoices: typeof parsed.minChoices === "number" ? parsed.minChoices : undefined,
+    options,
+    title: parsed.title.trim(),
+    version: "askUser.v1",
+  };
+};
+
 export const setContextArgumentsToEnvelope = (
   arguments_: SetContextToolArguments,
 ): SetContextToolCallEnvelope => ({
@@ -218,5 +286,13 @@ export const ragArgumentsToEnvelope = (
 ): RagToolCallEnvelope => ({
   arguments: arguments_,
   tool: "rag",
+  type: "tool_call",
+});
+
+export const askUserArgumentsToEnvelope = (
+  arguments_: AskUserToolCallEnvelope["arguments"],
+): AskUserToolCallEnvelope => ({
+  arguments: arguments_,
+  tool: "ask_user",
   type: "tool_call",
 });

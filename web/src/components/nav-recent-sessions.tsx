@@ -20,7 +20,7 @@ export const NavRecentSessions = () => {
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Recent sessions</SidebarGroupLabel>
+      <SidebarGroupLabel>Recent backstage sessions</SidebarGroupLabel>
 
       <SidebarMenu>
         {loading && !recent.length ? (
@@ -45,7 +45,11 @@ export const NavRecentSessions = () => {
 
           return (
             <SidebarMenuItem key={session.sessionId}>
-              <SidebarMenuButton asChild isActive={isActive} tooltip={session.sessionId}>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive}
+                tooltip={session.title || session.sessionId}
+              >
                 <NavLink to={`/sessions/${session.sessionId}`}>
                   <Icon
                     className={
@@ -54,7 +58,7 @@ export const NavRecentSessions = () => {
                         : "text-amber-500"
                     }
                   />
-                  <span className="font-mono text-xs">{session.sessionId.slice(0, 8)}</span>
+                  <span className="truncate text-xs">{session.title || session.sessionId.slice(0, 8)}</span>
                 </NavLink>
               </SidebarMenuButton>
             </SidebarMenuItem>

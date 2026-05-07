@@ -59,6 +59,7 @@ services:
       REDIS_URL: redis://redis:6379
       RUNTIME_REPO_ROOT: ${HOST_REPO_ROOT}
       RUNTIME_SHARED_NETWORK: yahl_shared
+      YAHL_ENABLE_ASK_USER: ${YAHL_ENABLE_ASK_USER:-false}
     ports:
       - "4000:4000"
     depends_on:

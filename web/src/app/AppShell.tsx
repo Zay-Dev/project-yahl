@@ -28,12 +28,12 @@ const buildCrumbs = (pathname: string, sessionId: string | undefined): Crumb[] =
   if (pathname.startsWith("/sessions")) {
     if (sessionId) {
       return [
-        { href: "/sessions", label: "Sessions" },
+        { href: "/sessions", label: "Backstage" },
         { label: sessionId.slice(0, 8) },
       ];
     }
 
-    return [{ label: "Sessions" }];
+    return [{ label: "Backstage" }];
   }
 
   return [{ label: "Home" }];

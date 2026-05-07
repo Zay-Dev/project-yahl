@@ -140,6 +140,37 @@ export type RegisterSessionPayload = {
   taskYahlPath: string;
 };
 
+export type UpdateSessionTitlePayload = {
+  title: string;
+};
+
+export type AskUserOptionPayload = {
+  description?: string;
+  id: string;
+  label: string;
+};
+
+export type AskUserMultipleChoicePayload = {
+  allowMultiple?: boolean;
+  description?: string;
+  kind: "multipleChoice";
+  maxChoices?: number;
+  minChoices?: number;
+  options: AskUserOptionPayload[];
+  title: string;
+  version: "askUser.v1";
+};
+
+export type CreateAskUserQuestionPayload = {
+  question: AskUserMultipleChoicePayload;
+  requestId: string;
+  stageId: string;
+};
+
+export type AnswerAskUserQuestionPayload = {
+  answerIds: string[];
+};
+
 export type RerunRequestPayload = {
   requestSnapshotOverride: {
     context: Record<string, unknown>;

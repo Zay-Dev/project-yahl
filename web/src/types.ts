@@ -25,6 +25,8 @@ export type SessionListItem = {
   finalizedAt: string | null;
   sessionId: string;
   taskYahlPath: string | null;
+  title: string | null;
+  titleSource: "auto" | "manual" | null;
   totalCalls: number;
   totalCost: number;
   totalInputTokens: number;
@@ -37,6 +39,21 @@ export type SessionForkLineage = {
   sourceRequestId: string;
   sourceSessionId: string;
   stageIndex: number;
+};
+
+export type AskUserQuestion = {
+  allowMultiple: boolean;
+  answerIds: string[];
+  answeredAt: string | null;
+  description: string | null;
+  maxChoices: number | null;
+  minChoices: number | null;
+  options: { description?: string | null; id: string; label: string }[];
+  questionId: string;
+  requestId: string;
+  stageId: string;
+  status: "answered" | "pending";
+  title: string;
 };
 
 export type SessionDetail = {
@@ -53,8 +70,11 @@ export type SessionDetail = {
     reasoningTokens: number;
   }>;
   result?: unknown;
+  askUserQuestions?: AskUserQuestion[];
   sessionId: string;
   taskYahlPath?: string | null;
+  title?: string | null;
+  titleSource?: "auto" | "manual" | null;
   updatedAt: string;
 };
 

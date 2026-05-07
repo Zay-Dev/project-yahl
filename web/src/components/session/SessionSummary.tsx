@@ -1,7 +1,9 @@
 import { Eye, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   CardDescription,
   CardHeader,
@@ -22,6 +24,7 @@ type Props = {
   hasStoredResult: boolean;
   onHardDelete: () => void | Promise<void>;
   onSoftDelete: () => void | Promise<void>;
+  onRenameTitle: (title: string) => void | Promise<void>;
   onViewResult: () => void;
   taskPath: string | null;
   totalUsedMs: number;
@@ -32,13 +35,36 @@ export const SessionSummary = ({
   hasStoredResult,
   onHardDelete,
   onSoftDelete,
+  onRenameTitle,
   onViewResult,
   taskPath,
   totalUsedMs,
-}: Props) => (
-  <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+}: Props) => {
+  const [draftTitle, setDraftTitle] = useState("");
+  const activeTitle = detail?.title || "Untitled session";
+
+  return (
+    <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
     <div className="space-y-2">
-      <CardTitle>Session detail</CardTitle>
+      <CardTitle>Backstage detail</CardTitle>
+      <div className="flex items-center gap-2">
+        <Input
+          className="h-8 max-w-sm"
+          onChange={(event) => setDraftTitle(event.target.value)}
+          placeholder={activeTitle}
+          value={draftTitle}
+        />
+        <Button
+          disabled={!draftTitle.trim()}
+          onClick={() => {
+            void Promise.resolve(onRenameTitle(draftTitle)).then(() => setDraftTitle(""));
+          }}
+          size="sm"
+          variant="outline"
+        >
+          Rename
+        </Button>
+      </div>
       {detail?.sessionId ? (
         <CardDescription className="font-mono text-xs">{detail.sessionId}</CardDescription>
       ) : null}
@@ -93,4 +119,5 @@ export const SessionSummary = ({
       </DropdownMenu>
     </div>
   </CardHeader>
-);
+  );
+};

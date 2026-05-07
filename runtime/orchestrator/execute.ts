@@ -1,6 +1,7 @@
 import path from "path";
 
 import type { StageExecutionMeta } from "../shared/transport";
+import type { AskUserToolCallEnvelope } from "../shared/stage-contract";
 
 import { filterContextByReadUsage } from "./context-filter";
 import { handleLoop } from "./loop-handling";
@@ -27,6 +28,83 @@ import type {
 } from "./orchestrator-types";
 
 const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const sessionApiBaseUrl = (process.env.SESSION_API_BASE_URL || "http://localhost:4000").replace(/\/+$/, "");
+const askUserEnabled = process.env.YAHL_ENABLE_ASK_USER !== "false";
+const inlineAskUserPattern = /\/ask-user\(([^)]*)\)/;
+
+const postAskUserQuestion = async (
+  sessionId: string,
+  requestId: string,
+  stageId: string,
+  question: AskUserToolCallEnvelope["arguments"],
+) => {
+  const response = await fetch(`${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/ask-user/questions`, {
+    body: JSON.stringify({ question, requestId, stageId }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`ask_user create failed (${response.status})`);
+  }
+  const json = await response.json() as { questionId: string };
+  return json.questionId;
+};
+
+const waitForAskUserAnswer = async (sessionId: string, questionId: string) => {
+  const maxAttempts = 600;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const response = await fetch(
+      `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/ask-user/questions/${encodeURIComponent(questionId)}`,
+    );
+    if (response.ok) {
+      const json = await response.json() as {
+        answerIds: string[];
+        options: { id: string; label: string }[];
+        status: "answered" | "pending";
+      };
+      if (json.status === "answered") {
+        const selected = json.options.filter((option) => json.answerIds.includes(option.id));
+        return {
+          selectedLabels: selected.map((option) => option.label),
+          selectedOptionIds: json.answerIds,
+        };
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("ask_user timeout waiting for answer");
+};
+
+export const toAskUserAnswerValue = (optionId: string | undefined) => {
+  if (!optionId) return "";
+  const trimmed = optionId.trim();
+  if (/^-?(?:\d+|\d*\.\d+)$/.test(trimmed)) {
+    const asNumber = Number(trimmed);
+    if (Number.isFinite(asNumber)) return asNumber;
+  }
+  return trimmed;
+};
+
+export const buildAskUserContinuation = (
+  rawLines: string,
+  answerValue: number | string,
+) => {
+  const splitted = rawLines.split("\n");
+  const askUserLineIndex = splitted.findIndex((line) => inlineAskUserPattern.test(line));
+  if (askUserLineIndex < 0) {
+    return null;
+  }
+
+  const askUserLine = splitted[askUserLineIndex] || "";
+  const serialized = JSON.stringify(answerValue);
+  const patchedAskUserLine = askUserLine.replace(inlineAskUserPattern, serialized);
+  const stageText = [patchedAskUserLine, ...splitted.slice(askUserLineIndex + 1)].join("\n");
+
+  return {
+    skipNumberOfLines: askUserLineIndex,
+    stageText,
+  };
+};
 
 type StageFilterFn = (lines: string) => {
   generatedLine: number;
@@ -221,6 +299,52 @@ const _execute = async (
                 };
               },
             );
+
+            return undefined;
+          } else if (envelope.type === "tool_call" && envelope.tool === "ask_user") {
+            if (!askUserEnabled) {
+              throw new Error("ask_user is disabled (YAHL_ENABLE_ASK_USER=false)");
+            }
+            const sessionId = process.env.AGENT_SESSION_ID;
+            if (!sessionId) {
+              throw new Error("AGENT_SESSION_ID missing for ask_user tool");
+            }
+            const questionId = await postAskUserQuestion(
+              sessionId,
+              requestId,
+              executionMeta.stageId,
+              envelope.arguments,
+            );
+            const answer = await waitForAskUserAnswer(sessionId, questionId);
+
+            const answerValue = toAskUserAnswerValue(answer.selectedOptionIds[0]);
+            setContextValue(runtime, "stage", "ask_user_last_answer", answerValue);
+
+            const continuation = buildAskUserContinuation(currentStage, answerValue);
+            if (continuation && stageRequestId) {
+              const rid = stageRequestId;
+              stageRequestId = "";
+              publisher.emitStageFinish({
+                contextAfter: cloneJson(toStageContextPayload(runtime)),
+                requestId: rid,
+              });
+
+              await runStageOnce(
+                {
+                  generatedLine: sourceLine,
+                  sourceLine,
+                },
+                (rawLines) => {
+                  const nextContinuation = buildAskUserContinuation(rawLines, answerValue) || continuation;
+                  const nextGeneratedLine = nextContinuation.skipNumberOfLines + 1;
+                  return {
+                    generatedLine: nextGeneratedLine,
+                    sourceLine: sourceLine + nextContinuation.skipNumberOfLines,
+                    stageText: nextContinuation.stageText,
+                  };
+                },
+              );
+            }
 
             return undefined;
           } else {

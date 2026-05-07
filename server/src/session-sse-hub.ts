@@ -42,6 +42,8 @@ export type SessionMetaSsePayload = {
   finalizedAt: string | null;
   sessionId: string;
   taskYahlPath: string | null;
+  title: string | null;
+  titleSource: "auto" | "manual" | null;
 };
 
 export type SessionsLifecycleSsePayload = {
@@ -49,6 +51,8 @@ export type SessionsLifecycleSsePayload = {
   finalizedAt: string | null;
   sessionId: string;
   taskYahlPath: string | null;
+  title: string | null;
+  titleSource: "auto" | "manual" | null;
   updatedAt: string | null;
 };
 
