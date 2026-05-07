@@ -12,11 +12,17 @@ const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
 
 const _post = async (url: string, body: unknown) => {
   try {
-    await fetch(url, {
+    const response = await fetch(url, {
       body: JSON.stringify(body),
       headers: { "content-type": "application/json" },
       method: "POST",
     });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.warn(
+        `[WARN] POST ${url} failed with ${response.status} ${response.statusText}: ${detail || "<empty body>"}\n`,
+      );
+    }
   } catch (error) {
     console.warn(`[WARN] failed POST ${url}: ${String(error)}\n`);
   }

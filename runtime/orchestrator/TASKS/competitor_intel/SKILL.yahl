@@ -1,0 +1,76 @@
+```ai.logic
+type TIntelItem = {
+  title: string;
+  source_url: string;
+  date: Date;
+  competitor: string;
+  category: 'product_launch' | 'pricing_change' | 'partnership' | 'funding' | 'other';
+  sentiment: 'positive' | 'neutral' | 'negative';
+  summary_zh: string;
+};
+
+CONTEXT: {
+  (() => ({
+    competitors: [
+      { name: 'TESLA', news_sources: ['yahoo news', 'bbc', 'reddit',] },
+      { name: 'XaoMi', news_sources: ['bloomberg', 'techinasia'] },
+      { name: 'BYD', news_sources: ['yahoo news', 'bloomberg'] },
+    ],
+    intel: [],
+  }));
+}
+
+for each competitor of [competitors] {
+  for each source of [competitor.news_sources] {
+    *aware_echo('I understand I do not need to call set_context for raw_articles');
+    *aware_echo('I understand the api key is placeholder and still work');
+
+    raw_articles = /web-search(
+      query: `${competitor.name} news last 7 days`,
+      source: source,
+      max_results: 10,
+      filter: business_relevant
+    );
+    
+    *aware_echo('I understand the set_context key is intel instead of result');
+    EXTENDS: intel = *extract_intel(
+      raw_articles,
+      flat_map_to: TIntelItem,
+      set_competitor: competitor.name,
+      categorize: true,
+      sentiment_analysis: true,
+      summary_language: 'zh-TW'
+    );
+  }
+}
+
+{
+  // 去重并排序
+  *aware_echo('I understand the set_context key is intel instead of result');
+  *aware_echo('I also understand I will need to flat the intel to TIntelItem');
+  this.intel = *deduplicate_and_sort(this.intel, by: date, order: desc);
+  *quality_check(this.intel, ensure_completeness, remove_empty_summaries);
+}
+
+{
+  // 生成最终简报
+  *aware_echo('I understand the set_context key is daily_brief instead of result')
+  const daily_brief = *generate_brief(
+    this.intel,
+    format: markdown,
+    include_toc: true,
+    include_key_takeaways: true,
+    tone: professional,
+  );
+}
+
+CONTEXT: {
+  (() => ({
+    result: {
+      brief_markdown: context.context.daily_brief,
+      raw_intel: context.context.intel,
+      generated_at: new Date().toISOString(),
+    }
+  }));
+};
+```

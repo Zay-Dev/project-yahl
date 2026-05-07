@@ -36,18 +36,20 @@ const runCommand = async (command: string) => {
 
 const _toToolsCall = async (
   model: 'vm' | 'fast-forward',
+  requestId: string,
   context: Record<string, unknown>,
   reply: TReply['reply'],
   onModelResponse: TReply['onModelResponse'],
 ) => {
   const toolsCall = Object.entries(context)
-    .map(([key, value]) => ({
+    .map(([key, value], index) => ({
       arguments: {
         key,
         value,
         scope: "global" as const,
         operation: 'set' as const,
       },
+      id: `${model}-${requestId}-${index}`,
       tool: "set_context" as const,
       type: "tool_call" as const,
     }));
@@ -72,7 +74,7 @@ const _toToolsCall = async (
         role: "assistant",
         refusal: null,
         tool_calls: toolsCall.map((call) => ({
-          id: model,
+          id: call.id,
           type: 'function',
           function: {
             name: call.tool,
@@ -116,7 +118,7 @@ export const startRedisDaemon = async () => {
 
         if (!!contextAfter) {
           const contextOutput = await fastForward(contextAfter);
-          await _toToolsCall('fast-forward', contextOutput, reply, onModelResponse);
+          await _toToolsCall('fast-forward', requestId, contextOutput, reply, onModelResponse);
           return;
         } else if (lines[0]?.match(/\s*CONTEXT:/)) {
           const contextInput = context;
@@ -125,7 +127,7 @@ export const startRedisDaemon = async () => {
             contextInput,
           );
   
-          await _toToolsCall('vm', contextOutput, reply, onModelResponse);
+          await _toToolsCall('vm', requestId, contextOutput, reply, onModelResponse);
           return;
         } else if (lines[0]?.match(/^\s*IF:/)) {
           const winningCondition = await runConditionScript(script, context);

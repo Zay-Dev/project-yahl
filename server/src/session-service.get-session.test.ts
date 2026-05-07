@@ -10,7 +10,7 @@ import {
   SessionStageChatMessage,
   SessionToolCall,
 } from "./models";
-import { getSession } from "./session-service";
+import { createStageToolCalls, getSession } from "./session-service";
 
 type Restorer = () => void;
 
@@ -26,6 +26,7 @@ const mockMethod = <T extends object, K extends keyof T>(obj: T, key: K, value: 
 
 const chain = (result: unknown) => ({
   lean: async () => result,
+  select: () => chain(result),
   sort: () => chain(result),
 });
 
@@ -77,5 +78,47 @@ describe("getSession persisted event contract", () => {
     assert.equal(event.currentStage, "stage-source");
     assert.equal("stageInput" in event, false);
     assert.equal("stageInputTruncated" in event, false);
+  });
+});
+
+describe("createStageToolCalls", () => {
+  it("appends callIndex across batches and ignores already persisted external ids", async () => {
+    const sessionObjectId = new mongoose.Types.ObjectId();
+    const stageObjectId = new mongoose.Types.ObjectId();
+    const inserted: unknown[] = [];
+
+    mockMethod(SessionStage, "findOne", (() => chain({
+      _id: stageObjectId,
+      session: sessionObjectId,
+    })) as never);
+    mockMethod(SessionToolCall, "find", (() => chain([
+      { callIndex: 0, externalToolCallId: "call-1" },
+      { callIndex: 1, externalToolCallId: "call-2" },
+    ])) as never);
+    mockMethod(SessionToolCall, "insertMany", (async (docs: unknown[]) => {
+      inserted.push(...docs);
+      return docs;
+    }) as never);
+
+    await createStageToolCalls("s1", "stage-1", {
+      requestId: "req-1",
+      timestamp: new Date().toISOString(),
+      toolCalls: [
+        {
+          function: { arguments: "{\"a\":1}", name: "alpha" },
+          id: "call-2",
+          type: "function",
+        },
+        {
+          function: { arguments: "{\"b\":2}", name: "beta" },
+          id: "call-3",
+          type: "function",
+        },
+      ],
+    });
+
+    assert.equal(inserted.length, 1);
+    assert.equal((inserted[0] as { callIndex: number }).callIndex, 2);
+    assert.equal((inserted[0] as { externalToolCallId: string }).externalToolCallId, "call-3");
   });
 });

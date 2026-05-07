@@ -5,6 +5,7 @@ import { EMPTY_VALUE } from "../src/lib/format.ts";
 import {
   getCurrentStage,
   getCurrentStageDisplay,
+  groupEventsByRequestId,
   getStageChatDisplay,
   getStageChatTranscript,
 } from "../src/lib/session-events.ts";
@@ -67,5 +68,40 @@ describe("session-events stage and chat display", () => {
 
     assert.equal(getStageChatTranscript(event), null);
     assert.equal(getStageChatDisplay(event), EMPTY_VALUE);
+  });
+});
+
+describe("groupEventsByRequestId", () => {
+  it("falls back only when requestId is missing", () => {
+    const grouped = groupEventsByRequestId([
+      {
+        requestId: "",
+        sessionId: "s1",
+        stageIndex: 0,
+        usage: { cacheHitTokens: 0, cacheMissTokens: 0, completionTokens: 0, reasoningTokens: 0 },
+      },
+      {
+        requestId: "req-dup",
+        sessionId: "s1",
+        stageIndex: 1,
+        usage: { cacheHitTokens: 0, cacheMissTokens: 0, completionTokens: 0, reasoningTokens: 0 },
+      },
+      {
+        requestId: "req-dup",
+        sessionId: "s1",
+        stageIndex: 2,
+        usage: { cacheHitTokens: 0, cacheMissTokens: 0, completionTokens: 0, reasoningTokens: 0 },
+      },
+      {
+        requestId: "req-unique",
+        sessionId: "s1",
+        stageIndex: 3,
+        usage: { cacheHitTokens: 0, cacheMissTokens: 0, completionTokens: 0, reasoningTokens: 0 },
+      },
+    ]);
+
+    assert.equal(grouped.length, 3);
+    assert.equal(grouped[1][1].length, 2);
+    assert.equal(grouped[2][0], "req-unique");
   });
 });

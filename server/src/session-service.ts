@@ -405,9 +405,29 @@ export const createStageToolCalls = async (
   const stage = await requireStage(sessionId, stageId);
   const sessionObjId = stage.session as mongoose.Types.ObjectId;
   const stageObjId = stage._id as mongoose.Types.ObjectId;
+  const existingToolCalls = await SessionToolCall.find({ sessionId, stageId })
+    .select({ callIndex: 1, externalToolCallId: 1 })
+    .lean();
+  const existingExternalIds = new Set(
+    existingToolCalls
+      .map((row) => row.externalToolCallId)
+      .filter((row): row is string => typeof row === "string" && row.trim().length > 0),
+  );
+  const maxCallIndex = existingToolCalls.reduce(
+    (max, row) => (row.callIndex > max ? row.callIndex : max),
+    -1,
+  );
+  let nextCallIndex = maxCallIndex + 1;
+  const seenIncomingExternalIds = new Set<string>();
+  const incoming = payload.toolCalls.filter((raw) => {
+    if (typeof raw.id !== "string" || !raw.id.trim()) return true;
+    if (existingExternalIds.has(raw.id) || seenIncomingExternalIds.has(raw.id)) return false;
+    seenIncomingExternalIds.add(raw.id);
+    return true;
+  });
 
-  const docs = payload.toolCalls.map((raw, callIndex) =>
-    toolDocFrom(raw, callIndex, {
+  const docs = incoming.map((raw) =>
+    toolDocFrom(raw, nextCallIndex++, {
       session: sessionObjId,
       sessionId,
       stage: stageObjId,
@@ -415,6 +435,7 @@ export const createStageToolCalls = async (
     }),
   );
 
+  if (!docs.length) return;
   await SessionToolCall.insertMany(docs, { ordered: false });
 };
 

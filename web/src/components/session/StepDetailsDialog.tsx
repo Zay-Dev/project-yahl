@@ -32,7 +32,7 @@ import {
 import {
   getContextAfterForDisplay,
   getContextBeforeForDisplay,
-  getStageChatDisplay,
+  getStageChatRows,
   getCurrentStageDisplay,
   getInputTokens,
   getRequestGlobalStage,
@@ -60,8 +60,10 @@ export const StepDetailsDialog = ({
   if (!modalStep) return null;
 
   const requestId = modalStep.event.requestId;
-  const requestRows = groupedEvents.find(([id]) => id === requestId)?.[1] ?? [];
-  const requestIndex = groupedEvents.findIndex(([id]) => id === requestId);
+  const requestIndex = groupedEvents.findIndex(([, rows]) =>
+    rows.some((row) => row.index === modalStep.index),
+  );
+  const requestRows = requestIndex >= 0 ? groupedEvents[requestIndex][1] : [];
   const canPrev = requestIndex > 0;
   const canNext = requestIndex >= 0 && requestIndex < groupedEvents.length - 1;
 
@@ -266,12 +268,21 @@ export const StepDetailsDialog = ({
 
                         <Card>
                           <CardHeader className="pb-3">
-                            <CardTitle className="text-sm">Stage chat transcript (this step)</CardTitle>
+                            <CardTitle className="text-sm">Stage chat messages (this step)</CardTitle>
                           </CardHeader>
                           <CardContent>
-                            <p className="max-h-96 overflow-auto rounded border p-3 font-mono text-xs whitespace-pre-wrap">
-                              {getStageChatDisplay(event)}
-                            </p>
+                            <div className="max-h-96 space-y-2 overflow-auto rounded border p-3 text-xs">
+                              {getStageChatRows(event).length ? (
+                                getStageChatRows(event).map((row, messageIndex) => (
+                                  <div className="space-y-1 rounded border p-2" key={`${index}-chat-${messageIndex}`}>
+                                    <Badge variant="outline">{row.role}</Badge>
+                                    <p className="font-mono whitespace-pre-wrap">{row.content}</p>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="font-mono">{EMPTY_VALUE}</p>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
 

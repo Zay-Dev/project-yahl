@@ -24,6 +24,7 @@ import {
   getCurrentStageDisplay,
   getInputTokens,
   getRequestGlobalStage,
+  getStageChatRows,
   isLoopStep,
 } from "@/lib/session-events";
 
@@ -105,7 +106,7 @@ export const RequestGroup = ({
                 <TableHead className="text-right">ms</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
                 <TableHead className="text-right">Tokens in</TableHead>
-                <TableHead>Reply</TableHead>
+                <TableHead>Stage chat messages</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -120,8 +121,18 @@ export const RequestGroup = ({
                   </TableCell>
                   <TableCell className="text-right">{formatCost(event.cost ?? 0)}</TableCell>
                   <TableCell className="text-right">{formatNumber(getInputTokens(event))}</TableCell>
-                  <TableCell className="max-w-[240px] truncate text-xs">
-                    {event.response?.reply ?? EMPTY_VALUE}
+                  <TableCell className="max-w-[360px] text-xs">
+                    <div className="max-h-28 space-y-1 overflow-auto">
+                      {getStageChatRows(event).length ? (
+                        getStageChatRows(event).map((row, messageIndex) => (
+                          <p className="truncate font-mono" key={`${index}-chat-${messageIndex}`}>
+                            [{row.role}] {row.content}
+                          </p>
+                        ))
+                      ) : (
+                        <p className="truncate font-mono">{EMPTY_VALUE}</p>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

@@ -90,12 +90,25 @@ export const groupEventsByRequestId = (events: SessionStepEvent[]): SessionEvent
 
   const groups = new Map<string, SessionEventRow[]>();
   events.forEach((event, index) => {
-    const row = groups.get(event.requestId) || [];
+    const trimmed = event.requestId.trim();
+    const groupId = trimmed || `persisted-${event.sessionId}-${event.stageIndex}-${index}`;
+    const row = groups.get(groupId) || [];
     row.push({ event, index });
-    groups.set(event.requestId, row);
+    groups.set(groupId, row);
   });
 
   return Array.from(groups.entries());
+};
+
+export const getStageChatRows = (event: SessionStepEvent): { content: string; role: string }[] => {
+  if (!Array.isArray(event.stageChat) || !event.stageChat.length) return [];
+
+  return event.stageChat.reduce<{ content: string; role: string }[]>((rows, row) => {
+    const content = toChatContentText(row.content);
+    if (!content) return rows;
+    rows.push({ content, role: row.role || "unknown" });
+    return rows;
+  }, []);
 };
 
 const extractContext = (event: SessionStepEvent): Record<string, unknown> | null => {
