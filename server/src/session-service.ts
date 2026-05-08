@@ -16,7 +16,11 @@ import type {
   SessionStepChatMessage,
   SessionStepSsePayload,
 } from "./session-sse-hub";
+import { publishAskUserAnswered } from "./ask-user-redis";
+
 import type {
+  AskUserTimedOutRecoveryPayload,
+  CreateAskUserQuestionPayload,
   CreateModelResponsePayload,
   CreateStagePayload,
   CreateToolCallsPayload,
@@ -24,7 +28,6 @@ import type {
   LegacySessionEventWire,
   ParsedStageWire,
   PatchStageRuntimeSnapshotPayload,
-  CreateAskUserQuestionPayload,
   SessionChatMessagePayload,
   SessionForkLineagePayload,
   ToolCallWire,
@@ -352,6 +355,10 @@ const requireSessionId = async (sessionId: string) => {
     throw new Error(`session not found: ${sessionId}`);
   }
   return session._id as mongoose.Types.ObjectId;
+};
+
+export const requireSessionExists = async (sessionId: string) => {
+  await requireSessionId(sessionId);
 };
 
 const requireStage = async (sessionId: string, stageId: string) => {
@@ -940,8 +947,43 @@ export const getSession = async (sessionId: string) => {
     ),
   );
 
+  const { askUserRecovery: recoveryRaw, ...sessionRest } = session;
+  const recovery = recoveryRaw ?? null;
+  const recoverySourceRef = recovery?.sourceRef ?? null;
+  const hasRecoverySourceRef = Boolean(
+    recoverySourceRef &&
+    typeof recoverySourceRef.filePath === "string" &&
+    recoverySourceRef.filePath.trim() &&
+    typeof recoverySourceRef.line === "number",
+  );
+  let recoverySourceFilePath = "";
+  let recoverySourceLine = 0;
+
+  if (hasRecoverySourceRef && recoverySourceRef) {
+    recoverySourceFilePath = recoverySourceRef.filePath;
+    recoverySourceLine = recoverySourceRef.line;
+  }
+
   return {
-    ...session,
+    ...sessionRest,
+    askUserRecovery: recovery && hasRecoverySourceRef
+      ? {
+        currentStageText: recovery.currentStageText,
+        questionId: recovery.questionId,
+        requestId: recovery.requestId,
+        runtimeSnapshot: {
+          context: recovery.runtimeSnapshot.context ?? {},
+          stage: recovery.runtimeSnapshot.stage ?? {},
+          types: recovery.runtimeSnapshot.types ?? {},
+        },
+        sourceRef: {
+          filePath: recoverySourceFilePath,
+          line: recoverySourceLine,
+        },
+        stageId: recovery.stageId,
+        timedOutAt: recovery.timedOutAt ? new Date(recovery.timedOutAt).toISOString() : null,
+      }
+      : null,
     events,
     forkLineage: fork
       ? {
@@ -1012,8 +1054,51 @@ export const answerAskUserQuestion = async (sessionId: string, questionId: strin
     { new: true },
   ).lean();
   if (!row) return null;
+  await publishAskUserAnswered(sessionId, row.questionId);
   emitLifecycle("updated", sessionId, await Session.findOne({ sessionId }).lean());
   return row;
+};
+
+export const persistAskUserTimedOutRecovery = async (
+  sessionId: string,
+  payload: AskUserTimedOutRecoveryPayload,
+) => {
+  const timedOutAt = new Date();
+
+  await Session.updateOne(
+    { sessionId },
+    {
+      $set: {
+        askUserRecovery: {
+          currentStageText: payload.currentStageText,
+          questionId: payload.questionId,
+          requestId: payload.requestId,
+          runtimeSnapshot: {
+            context: payload.runtimeSnapshot.context ?? {},
+            stage: payload.runtimeSnapshot.stage ?? {},
+            types: payload.runtimeSnapshot.types ?? {},
+          },
+          sourceRef: {
+            filePath: payload.sourceRef.filePath,
+            line: payload.sourceRef.line,
+          },
+          stageId: payload.stageId,
+          timedOutAt,
+        },
+        updatedAt: new Date(),
+      },
+    },
+    { upsert: true },
+  );
+  emitLifecycle("updated", sessionId, await Session.findOne({ sessionId }).lean());
+};
+
+export const clearAskUserRecovery = async (sessionId: string) => {
+  await Session.updateOne(
+    { sessionId },
+    { $set: { updatedAt: new Date() }, $unset: { askUserRecovery: "" } },
+  );
+  emitLifecycle("updated", sessionId, await Session.findOne({ sessionId }).lean());
 };
 
 export const getAskUserQuestion = async (sessionId: string, questionId: string) =>

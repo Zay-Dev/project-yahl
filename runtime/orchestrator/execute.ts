@@ -1,7 +1,9 @@
 import path from "path";
 
+import Redis from "ioredis";
+
 import type { StageExecutionMeta } from "../shared/transport";
-import type { AskUserToolCallEnvelope } from "../shared/stage-contract";
+import type { AskUserToolCallEnvelope, StageContextPayload } from "../shared/stage-contract";
 
 import { filterContextByReadUsage } from "./context-filter";
 import { handleLoop } from "./loop-handling";
@@ -32,6 +34,18 @@ const sessionApiBaseUrl = (process.env.SESSION_API_BASE_URL || "http://localhost
 const askUserEnabled = process.env.YAHL_ENABLE_ASK_USER !== "false";
 const inlineAskUserPattern = /\/ask-user\(([^)]*)\)/;
 
+export const askUserAnsweredChannelId = (sessionId: string) =>
+  `yahl:ask-user-answered:${sessionId}`;
+
+const parsePollEnv = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const ASK_USER_POLL_MS = parsePollEnv(process.env.YAHL_ASK_USER_POLL_MS, 250);
+const ASK_USER_MAX_WAIT_MS = parsePollEnv(process.env.YAHL_ASK_USER_MAX_WAIT_MS, 1000);
+// const ASK_USER_MAX_WAIT_MS = parsePollEnv(process.env.YAHL_ASK_USER_MAX_WAIT_MS, 600_000);
+
 const postAskUserQuestion = async (
   sessionId: string,
   requestId: string,
@@ -50,29 +64,124 @@ const postAskUserQuestion = async (
   return json.questionId;
 };
 
+const fetchAskUserAnswerState = async (sessionId: string, questionId: string) => {
+  const response = await fetch(
+    `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/ask-user/questions/${encodeURIComponent(questionId)}`,
+  );
+  if (!response.ok) return null;
+  const json = await response.json() as {
+    answerIds: string[];
+    options: { id: string; label: string }[];
+    status: "answered" | "pending";
+  };
+  if (json.status !== "answered") return null;
+  const selected = json.options.filter((option) => json.answerIds.includes(option.id));
+  return {
+    selectedLabels: selected.map((option) => option.label),
+    selectedOptionIds: json.answerIds,
+  };
+};
+
 const waitForAskUserAnswer = async (sessionId: string, questionId: string) => {
-  const maxAttempts = 600;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const response = await fetch(
-      `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/ask-user/questions/${encodeURIComponent(questionId)}`,
-    );
-    if (response.ok) {
-      const json = await response.json() as {
-        answerIds: string[];
-        options: { id: string; label: string }[];
-        status: "answered" | "pending";
-      };
-      if (json.status === "answered") {
-        const selected = json.options.filter((option) => json.answerIds.includes(option.id));
-        return {
-          selectedLabels: selected.map((option) => option.label),
-          selectedOptionIds: json.answerIds,
-        };
-      }
+  const redisUrl = process.env.REDIS_URL?.trim();
+  const channel = askUserAnsweredChannelId(sessionId);
+  const deadline = Date.now() + ASK_USER_MAX_WAIT_MS;
+  let sub: Redis | null = null;
+  let wake: (() => void) | null = null;
+
+  const bump = () => {
+    wake?.();
+  };
+
+  const teardown = async () => {
+    wake = null;
+    if (!sub) return;
+
+    try {
+      await sub.unsubscribe(channel);
+      sub.removeAllListeners();
+      await sub.quit();
+    } catch {
+      void sub.disconnect();
+    } finally {
+      sub = null;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  };
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  if (redisUrl) {
+    try {
+      sub = new Redis(redisUrl, { maxRetriesPerRequest: 2 });
+      await sub.subscribe(channel);
+      sub.on("message", (topic, payload) => {
+        if (topic !== channel) return;
+
+        try {
+          const parsed = JSON.parse(payload) as { questionId?: string };
+          if (parsed.questionId === questionId) bump();
+        } catch {
+          return;
+        }
+      });
+    } catch {
+      await teardown();
+    }
   }
-  throw new Error("ask_user timeout waiting for answer");
+
+  try {
+    while (Date.now() < deadline) {
+      const hit = await fetchAskUserAnswerState(sessionId, questionId);
+      if (hit) return hit;
+
+      const sleepMs = Math.min(ASK_USER_POLL_MS, Math.max(0, deadline - Date.now()));
+      if (sleepMs <= 0) break;
+
+      const bumped = new Promise<void>((resolve) => {
+        wake = resolve;
+      });
+
+      await (sub ? Promise.race([sleep(sleepMs), bumped]) : sleep(sleepMs));
+      wake = null;
+    }
+
+    throw new Error("ask_user timeout waiting for answer");
+  } finally {
+    await teardown();
+  }
+};
+
+const persistTimedOutAskUserRecovery = async (params: {
+  currentStageText: string;
+  questionId: string;
+  requestId: string;
+  sessionId: string;
+  snapshot: StageContextPayload;
+  sourceRef: { filePath: string; line: number };
+  stageId: string;
+}) => {
+  try {
+    const response = await fetch(
+      `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(params.sessionId)}/ask-user/recovery/timed-out`,
+      {
+        body: JSON.stringify({
+          currentStageText: params.currentStageText,
+          questionId: params.questionId,
+          requestId: params.requestId,
+          runtimeSnapshot: params.snapshot,
+          sourceRef: params.sourceRef,
+          stageId: params.stageId,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      },
+    );
+    if (!response.ok) {
+      process.stderr.write(`[ask-user] timed-out recovery persist failed (${response.status})\n`);
+    }
+  } catch (error) {
+    process.stderr.write(`[ask-user] timed-out recovery persist error: ${String(error)}\n`);
+  }
 };
 
 export const toAskUserAnswerValue = (optionId: string | undefined) => {
@@ -106,6 +215,23 @@ export const buildAskUserContinuation = (
   };
 };
 
+export const buildAskUserContinuationWithContext = (rawLines: string) => {
+  const splitted = rawLines.split("\n");
+  const askUserLineIndex = splitted.findIndex((line) => inlineAskUserPattern.test(line));
+  if (askUserLineIndex < 0) {
+    return null;
+  }
+
+  const askUserLine = splitted[askUserLineIndex] || "";
+  const patchedAskUserLine = askUserLine.replace(inlineAskUserPattern, "ask_user_last_answer");
+  const stageText = [patchedAskUserLine, ...splitted.slice(askUserLineIndex + 1)].join("\n");
+
+  return {
+    skipNumberOfLines: askUserLineIndex,
+    stageText,
+  };
+};
+
 type StageFilterFn = (lines: string) => {
   generatedLine: number;
   sourceLine: number;
@@ -114,8 +240,10 @@ type StageFilterFn = (lines: string) => {
 
 let _stageIndex = -1;
 
-export const execute: StageExecuteFn = (...args) => _execute(false, ...args);
-export const executeAsRoot: StageExecuteFn = (...args) => _execute(true, ...args);
+export const execute: StageExecuteFn = (text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate) =>
+  _execute(false, text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate);
+export const executeAsRoot: StageExecuteFn = (text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate) =>
+  _execute(true, text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate);
 
 const _execute = async (
   manageStageIndex: boolean,
@@ -125,6 +253,7 @@ const _execute = async (
   sourceFilePath: string,
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
+  resumeHydrate?: StageContextPayload | null,
 ) => {
   const aiLogic = extractAiLogic(text);
   if (!aiLogic) {
@@ -143,11 +272,21 @@ const _execute = async (
 
   try {
     const runtime = createRuntimeContext();
+    if (resumeHydrate) {
+      Object.assign(runtime.get("context")!, resumeHydrate.context ?? {});
+      Object.assign(runtime.get("types")!, resumeHydrate.types ?? {});
+    }
     Object.assign(runtime.get("types")!, seedTypes);
+
+    let appliedResumeHydrateStage = false;
 
     for (const { type, lines, sourceStartLine } of stages) {
       resetStageContext(runtime);
       Object.assign(runtime.get("stage")!, stageContext);
+      if (resumeHydrate && !appliedResumeHydrateStage) {
+        Object.assign(runtime.get("stage")!, resumeHydrate.stage ?? {});
+        appliedResumeHydrateStage = true;
+      }
       const absoluteSourceStartLine = sourceBaseLine + sourceStartLine - 1;
 
       if (manageStageIndex) {
@@ -315,7 +454,26 @@ const _execute = async (
               executionMeta.stageId,
               envelope.arguments,
             );
-            const answer = await waitForAskUserAnswer(sessionId, questionId);
+            let answer: { selectedLabels: string[]; selectedOptionIds: string[] };
+            try {
+              answer = await waitForAskUserAnswer(sessionId, questionId);
+            } catch (error) {
+              if (error instanceof Error && error.message === "ask_user timeout waiting for answer") {
+                await persistTimedOutAskUserRecovery({
+                  currentStageText: currentStage,
+                  questionId,
+                  requestId,
+                  sessionId,
+                  snapshot: cloneJson(toStageContextPayload(runtime)),
+                  sourceRef: {
+                    filePath: executionMeta.sourceRef.filePath,
+                    line: executionMeta.sourceRef.line,
+                  },
+                  stageId: executionMeta.stageId,
+                });
+              }
+              throw error;
+            }
 
             const answerValue = toAskUserAnswerValue(answer.selectedOptionIds[0]);
             setContextValue(runtime, "stage", "ask_user_last_answer", answerValue);

@@ -38,6 +38,23 @@ type StartRunResult = {
   taskId: string;
 };
 
+export type AskUserResumeFilePayload = {
+  currentStageText: string;
+  questionId: string;
+  requestId: string;
+  runtimeSnapshot: {
+    context: Record<string, unknown>;
+    stage: Record<string, unknown>;
+    types: Record<string, unknown>;
+  };
+  sourceRef: {
+    filePath: string;
+    line: number;
+  };
+  stageId: string;
+  version: "askUserResume.v1";
+};
+
 type StartRerunFromRequestInput = {
   forkrunFormId: string;
   forkedFrom: SessionForkedFromWire;
@@ -139,9 +156,12 @@ export const createRunManager = () => {
     taskId: string,
     taskPath: string,
     args: string[],
+    opts?: { sessionId?: string },
   ): StartRunResult => {
     const runId = randomUUID();
-    const sessionId = normalizeSessionId(randomUUID());
+    const sessionId = opts?.sessionId
+      ? normalizeSessionId(opts.sessionId)
+      : normalizeSessionId(randomUUID());
     const run: RunState = {
       createdAt: new Date().toISOString(),
       exitCode: null,
@@ -233,6 +253,36 @@ export const createRunManager = () => {
     ]);
   };
 
+  const startAskUserResume = async (
+    rawSessionId: string,
+    taskYahlPathRaw: string,
+    recovery: Omit<AskUserResumeFilePayload, "version">,
+  ) => {
+    const sessionId = normalizeSessionId(rawSessionId);
+    const taskPathResolved = path.isAbsolute(taskYahlPathRaw)
+      ? taskYahlPathRaw
+      : path.resolve(repoRoot, taskYahlPathRaw);
+
+    const payloadRoot = path.resolve(runtimeRoot, ".ask-user-resume");
+    const payloadId = randomUUID();
+    const diskPath = await writeJsonFile(payloadRoot, `${payloadId}-ask-user-resume.json`, {
+      version: "askUserResume.v1",
+      ...recovery,
+    });
+
+    return startProcess(
+      `ask-user-resume/${sessionId}`,
+      taskPathResolved,
+      [
+        "--task-path",
+        taskPathResolved,
+        "--resume-ask-user-recovery",
+        diskPath,
+      ],
+      { sessionId },
+    );
+  };
+
   const startRerunFromRequest = async (
     input: StartRerunFromRequestInput,
   ) => {
@@ -291,6 +341,7 @@ export const createRunManager = () => {
   return {
     getRun,
     listTasks,
+    startAskUserResume,
     startRerunFromRequest,
     startRun,
     subscribeLogs,

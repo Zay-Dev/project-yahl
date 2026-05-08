@@ -33,7 +33,7 @@ But more important is - it does feel like patching to the right direction! no mo
 Stuff that already works (aka things that surprisingly do not explode):
 - Redis transport between orchestrator and stage agent.
 - Task discovery from `runtime/orchestrator/TASKS`, with resolver support for `SKILL.md`, `index.md`, and `SKILL.yahl` (plus optional direct `--task-path` override when you're feeling fancy).
-- Runtime `ask-user` flow is live: stages can pause for a real user decision and continue with deterministic answer ids (finally, less mind-reading).
+- Runtime `ask-user` flow is live: stages can pause for a real user decision and continue with deterministic answer ids (finally, less mind-reading). If the orchestrator times out waiting, the session saves a checkpoint; after you answer, **Resume from checkpoint** in Session Detail kicks off continuation (Redis push wakes an in-flight wait faster when `REDIS_URL` is aligned).
 - Session/event tracking with replayable step history and usage/cost visibility.
 - Web UI now has proper Runner + Sessions + Session Detail flow with live logs/status and jump-to-session links.
 - Session detail view includes live stream panel, model aggregate table, step details dialog, and final result dialog (aka less guessing, more actual receipts).
@@ -188,6 +188,12 @@ Quick sanity map (so future-you can debug at 2am with less suffering):
 - `GET /api/forkrun-forms/:forkrunFormId` fetches saved rerun draft payloads.
 - Session endpoints support inspect, soft-delete, hard-delete, and rerun-from-request flow with safety guardrails (rerun rejects non-finalized, truncated, or missing-prefix-context snapshots).
 - Session persistence uses normalized Mongo collections (`sessions`, `session_stages`, `session_tool_calls`, `session_stage_chat_messages`, `session_model_spends`, `session_fork_lineages`). After upgrading, wipe the database or drop those collections so old single-document `sessions` rows do not conflict with the new layout.
+
+### Ask-user timeout and recovery (env)
+
+Orchestrator waits at most `YAHL_ASK_USER_MAX_WAIT_MS` (default `600000`) and polls every `YAHL_ASK_USER_POLL_MS` (default `250`). After a timeout it stores a checkpoint on the session; the web UI **Resume from checkpoint** POSTs `/api/sessions/:sessionId/ask-user/resume`.
+
+With `REDIS_URL` set consistently on **server** and **orchestrator/agent**, answering an ask-user question publishes to `yahl:ask-user-answered:<sessionId>` so an in-flight wait can wake before the next poll interval.
 
 ## License
 

@@ -25,6 +25,9 @@ import { registerSoftDeleteSessionRoute } from "./modules/sessions/use-cases/sof
 import { registerStreamSessionSseRoute } from "./modules/sessions/use-cases/stream-session-sse";
 import { registerStreamSessionsSseRoute } from "./modules/sessions/use-cases/stream-sessions-sse";
 import { registerAnswerAskUserQuestionRoute } from "./modules/sessions/use-cases/answer-ask-user-question";
+import { registerDeleteAskUserRecoveryRoute } from "./modules/sessions/use-cases/delete-ask-user-recovery";
+import { registerPostAskUserTimedOutRecoveryRoute } from "./modules/sessions/use-cases/post-ask-user-timed-out-recovery";
+import { registerResumeAskUserRoute } from "./modules/sessions/use-cases/resume-ask-user";
 import { registerUpdateSessionTitleRoute } from "./modules/sessions/use-cases/update-session-title";
 import { registerErrorHandler } from "./modules/system/use-cases/register-error-handler";
 import { registerGetHealthRoute } from "./modules/system/use-cases/get-health";
@@ -65,6 +68,9 @@ registerGetSessionRoute(app);
 registerSoftDeleteSessionRoute(app);
 registerHardDeleteSessionRoute(app);
 registerAnswerAskUserQuestionRoute(app);
+registerPostAskUserTimedOutRecoveryRoute(app);
+registerDeleteAskUserRecoveryRoute(app);
+registerResumeAskUserRoute(app, deps);
 registerUpdateSessionTitleRoute(app);
 registerErrorHandler(app);
 

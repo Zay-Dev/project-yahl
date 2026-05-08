@@ -1,6 +1,9 @@
 import Joi from "joi";
 
 import type {
+  AnswerAskUserQuestionPayload,
+  AskUserTimedOutRecoveryPayload,
+  CreateAskUserQuestionPayload,
   CreateModelResponsePayload,
   CreateStagePayload,
   CreateToolCallsPayload,
@@ -8,8 +11,6 @@ import type {
   PatchStageRuntimeSnapshotPayload,
   RegisterSessionPayload,
   RerunRequestPayload,
-  CreateAskUserQuestionPayload,
-  AnswerAskUserQuestionPayload,
   UpdateSessionTitlePayload,
 } from "../../../types";
 
@@ -163,6 +164,26 @@ const answerAskUserQuestionBodySchema = Joi.object({
   answerIds: Joi.array().items(Joi.string().trim().min(1)).min(1).required(),
 }).unknown(false);
 
+const timedOutRecoveryBodySchema = Joi.object({
+  currentStageText: Joi.string().required(),
+  questionId: Joi.string().trim().min(1).required(),
+  requestId: Joi.string().trim().min(1).required(),
+  runtimeSnapshot: Joi.object({
+    context: Joi.object().unknown(true).required(),
+    stage: Joi.object().unknown(true).required(),
+    types: Joi.object().unknown(true).required(),
+  }).required(),
+  sourceRef: Joi.object({
+    filePath: Joi.string().trim().min(1).required(),
+    line: Joi.number().integer().min(0).required(),
+  }).required(),
+  stageId: Joi.string().trim().min(1).required(),
+}).unknown(false);
+
+const resumeAskUserBodySchema = Joi.object({
+  questionId: Joi.string().trim().min(1).optional(),
+}).unknown(false);
+
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 
@@ -198,3 +219,9 @@ export const isCreateAskUserQuestionBody = (value: unknown): value is CreateAskU
 
 export const isAnswerAskUserQuestionBody = (value: unknown): value is AnswerAskUserQuestionPayload =>
   passes(answerAskUserQuestionBodySchema, value);
+
+export const isTimedOutRecoveryBody = (value: unknown): value is AskUserTimedOutRecoveryPayload =>
+  passes(timedOutRecoveryBodySchema, value);
+
+export const isResumeAskUserBody = (value: unknown): value is { questionId?: string } =>
+  passes(resumeAskUserBodySchema, value);

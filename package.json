@@ -14,6 +14,7 @@
     "dev:web": "pnpm --filter web run dev",
     "orchestrate": "pnpm --filter runtime run orchestrate",
     "test": "pnpm --filter runtime run test",
+    "test:server": "pnpm --filter server run test",
     "typecheck": "pnpm -r run typecheck"
   },
   "keywords": [],

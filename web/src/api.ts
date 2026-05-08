@@ -88,6 +88,24 @@ export const updateSessionTitle = async (sessionId: string, title: string) => {
   if (!response.ok) throw new Error("Failed to update session title");
 };
 
+export const resumeAskUserAfterTimeout = async (sessionId: string, questionId?: string) => {
+  const response = await fetch(
+    `${apiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/ask-user/resume`,
+    {
+      body: JSON.stringify(questionId ? { questionId } : {}),
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+    },
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to resume (${response.status})`);
+  }
+  return await response.json() as RuntimeRun;
+};
+
 export const answerAskUserQuestion = async (
   sessionId: string,
   questionId: string,

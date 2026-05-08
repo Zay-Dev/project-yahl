@@ -13,7 +13,15 @@ type Props = {
 };
 
 export const AskUserPanel = ({ onAnswered, questions, sessionId }: Props) => {
-  const pending = useMemo(() => questions.filter((question) => question.status === "pending"), [questions]);
+  const [answeredLocally, setAnsweredLocally] = useState<Record<string, boolean>>({});
+  const pending = useMemo(
+    () =>
+      questions.filter((question) =>
+        question.status === "pending" &&
+        !answeredLocally[question.questionId]
+      ),
+    [answeredLocally, questions],
+  );
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [savingQuestionId, setSavingQuestionId] = useState<string | null>(null);
 
@@ -38,6 +46,7 @@ export const AskUserPanel = ({ onAnswered, questions, sessionId }: Props) => {
     setSavingQuestionId(question.questionId);
     try {
       await answerAskUserQuestion(sessionId, question.questionId, answerIds);
+      setAnsweredLocally((prev) => ({ ...prev, [question.questionId]: true }));
       await onAnswered();
     } finally {
       setSavingQuestionId(null);

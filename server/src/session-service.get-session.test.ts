@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 
 import {
   Session,
+  SessionAskUserQuestion,
   SessionForkLineage,
   SessionModelSpend,
   SessionStage,
@@ -65,6 +66,9 @@ describe("getSession persisted event contract", () => {
     ])) as never);
     mockMethod(SessionModelSpend, "find", (() => chain([])) as never);
     mockMethod(SessionForkLineage, "findOne", (() => chain(null)) as never);
+    mockMethod(SessionAskUserQuestion, "find", (() => ({
+      sort: () => ({ lean: async () => [] }),
+    })) as never);
 
     const session = await getSession("s1");
     assert.ok(session);

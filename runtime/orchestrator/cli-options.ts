@@ -79,6 +79,8 @@ export const resolveCliOptions = async (): Promise<CliOptions> => {
       sourceStageId: pairs["resume-source-stage-id"] || "",
       stepIndex: Number(pairs["resume-from-step-index"] || 0),
     } : undefined,
+    resumeAskUserRecoveryPath:
+      (pairs["resume-ask-user-recovery"] || process.env.YAHL_RESUME_ASK_USER_RECOVERY)?.trim() || undefined,
     sessionId: normalizeContainerName(pairs["session-id"] || process.env.ORCHESTRATOR_SESSION_ID || randomUUID()),
     taskId,
     taskPath,

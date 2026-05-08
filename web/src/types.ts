@@ -41,6 +41,23 @@ export type SessionForkLineage = {
   stageIndex: number;
 };
 
+export type SessionAskUserRecovery = {
+  currentStageText: string;
+  questionId: string;
+  requestId: string;
+  runtimeSnapshot: {
+    context: Record<string, unknown>;
+    stage: Record<string, unknown>;
+    types: Record<string, unknown>;
+  };
+  sourceRef: {
+    filePath: string;
+    line: number;
+  };
+  stageId: string;
+  timedOutAt: string | null;
+};
+
 export type AskUserQuestion = {
   allowMultiple: boolean;
   answerIds: string[];
@@ -57,6 +74,7 @@ export type AskUserQuestion = {
 };
 
 export type SessionDetail = {
+  askUserRecovery?: SessionAskUserRecovery | null;
   createdAt: string;
   events: SessionStepEvent[];
   finalizedAt?: string;

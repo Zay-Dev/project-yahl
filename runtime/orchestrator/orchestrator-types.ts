@@ -1,4 +1,4 @@
-import type { StageSessionInput } from "../shared/stage-contract";
+import type { StageContextPayload, StageSessionInput } from "../shared/stage-contract";
 import type { StageExecutionMeta } from "../shared/transport";
 
 import type { RuntimeContext } from "./runtime-types";
@@ -31,6 +31,7 @@ export interface CliOptions {
   agentContainerPrefix: string;
   composeProjectPrefix: string;
   resume?: CliResume;
+  resumeAskUserRecoveryPath?: string;
   sessionId: string;
   taskId: string;
   taskPath: string;
@@ -93,4 +94,5 @@ export type StageExecuteFn = (
   sourceFilePath: string,
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
+  resumeHydrate?: StageContextPayload,
 ) => Promise<{ runtime: RuntimeContext; stages: ParsedStage[] }>;

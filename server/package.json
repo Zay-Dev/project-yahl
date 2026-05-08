@@ -12,6 +12,7 @@
   "types": "./dist/wire.d.ts",
   "scripts": {
     "build:types": "tsc -b",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit"
@@ -19,6 +20,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
+    "ioredis": "^5.8.2",
     "express": "^5.1.0",
     "joi": "^18.1.2",
     "mongoose": "^8.19.2"

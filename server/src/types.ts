@@ -171,6 +171,22 @@ export type AnswerAskUserQuestionPayload = {
   answerIds: string[];
 };
 
+export type AskUserTimedOutRecoveryPayload = {
+  currentStageText: string;
+  questionId: string;
+  requestId: string;
+  runtimeSnapshot: {
+    context: Record<string, unknown>;
+    stage: Record<string, unknown>;
+    types: Record<string, unknown>;
+  };
+  sourceRef: {
+    filePath: string;
+    line: number;
+  };
+  stageId: string;
+};
+
 export type RerunRequestPayload = {
   requestSnapshotOverride: {
     context: Record<string, unknown>;

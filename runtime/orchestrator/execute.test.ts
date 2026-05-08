@@ -38,7 +38,7 @@ describe("buildAskUserContinuation", () => {
   });
 
   it("returns null when stage has no ask-user call", () => {
-    const next = buildAskUserContinuation("const c = 1;\nconst r = c;");
+    const next = buildAskUserContinuation("const c = 1;\nconst r = c;", "");
     assert.equal(next, null);
   });
 });
