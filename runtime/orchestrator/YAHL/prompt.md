@@ -24,6 +24,8 @@ Use the **`set_context`** tool when you need to persist data to runtime context 
 
 The stage agent exposes this as a **Chat Completions function tool** named `set_context`. Only this tool (or the legacy final JSON envelope) is consumed by the orchestrator for context mutation.
 
+Do not try to validate persisted context from inside the same sandbox run after calling `set_context`. Context mutation is applied by orchestrator boundaries outside the sandbox, so in-run read-after-write checks are not authoritative.
+
 ## Internal shell (API tool)
 
 Use the **`run_bash`** tool when you need command execution inside the `@agent/` container.
@@ -53,6 +55,23 @@ Use the **`ask_user`** tool when user choice is required before proceeding.
   - continuation resumes the same stage by replacing the inline `/ask-user(...)` expression with the selected answer value
   - selected answer value is persisted as `ask_user_last_answer` in global context
   - `ask_user_last_answer` is a scalar only (number when option id is numeric, otherwise string)
+
+## `/a2ui(...)` skill and `render_a2ui_plan` (API tool)
+
+The **`render_a2ui_plan`** tool is only provided when the stage text includes **`/a2ui(<key>)`** (e.g. `/a2ui(result)`). When `/a2ui(...)` is absent, do not call or simulate this tool.
+
+When the stage text includes **`/a2ui(<key>)`**, follow **`SKILLS/a2ui/SKILL.md`**. You may use **`run_bash`** only to **read** that file from `/opt/skills` if you need it on disk; you must still invoke the **`render_a2ui_plan`** function tool with JSON arguments (same as `set_context` / `ask_user`). **Do not** use `run_bash` to `echo` a tool-call JSON line — that is not executed as A2UI.
+
+**A2UI v0.8** for the session is stored when the run **finalizes** (`resultA2ui` on the session document), not on per-stage runtime snapshots and not via stage PATCH.
+
+Put `/a2ui(...)` in an **AI stage after** the data exists (e.g. after a `CONTEXT:` block wrote global `result`).
+
+Underlying tool **`render_a2ui_plan`**:
+
+- Required: `version: "renderA2uiPlan.v1"`, `dataRef: { scope, key }` (must point at JSON already stored via **`set_context`**), `plan` matching **`a2uiPlan.v1`** (`version`, `surfaceId`, `ui_kind`, `bindings` with JSON Pointer values).
+- `ui_kind`: `summary_card` | `detail_card` (bindings: `title`, `body`, optional `subtitle`), `list_cards` (`items`, `item_title`, optional `item_subtitle`), `metric_cards` (`items`, optional `item_label` default `/label`, `item_value` default `/value`), `table` (`rows` + top-level `column_bindings` with row-relative paths).
+- Optional: `surfaceId` on the tool call overrides `plan.surfaceId`.
+- Optional: `limits.maxItems` (capped server-side).
 
 ### Examples (conceptual tool arguments)
 

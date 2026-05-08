@@ -88,6 +88,7 @@ export type SessionDetail = {
     reasoningTokens: number;
   }>;
   result?: unknown;
+  resultA2ui?: unknown;
   askUserQuestions?: AskUserQuestion[];
   sessionId: string;
   taskYahlPath?: string | null;

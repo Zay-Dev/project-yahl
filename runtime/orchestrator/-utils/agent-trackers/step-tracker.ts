@@ -158,6 +158,7 @@ export const createStepTracker = () => {
 
       await _post(url, {
         result: event.result,
+        ...(event.resultA2ui !== undefined ? { resultA2ui: event.resultA2ui } : {}),
         stages: event.stages,
       });
     });

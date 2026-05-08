@@ -45,7 +45,7 @@ interface IPublisherEventMap {
   toolCall: [envelope: { requestId: string, toolCalls: ChatToolCall[] }];
   modelResponse: [envelope: { requestId: string, response: TModelResponse }];
   pushRequest: [envelope: { requestId: string, context: TRuntimeContext, currentStage: string, meta: TStageExecutionMeta }];
-  stageFinish: [envelope: { requestId: string, contextAfter: unknown }];
+  stageFinish: [envelope: { contextAfter: unknown; requestId: string }];
 }
 
 export class PublisherEmitter extends EventEmitter<IPublisherEventMap> { }
@@ -61,7 +61,7 @@ export interface IPublisher extends IBase {
   once: EventEmitter<IPublisherEventMap>['once'];
   emit: EventEmitter<IPublisherEventMap>['emit'];
 
-  emitStageFinish: (envelope: { requestId: string, contextAfter: unknown }) => void;
+  emitStageFinish: (envelope: { contextAfter: unknown; requestId: string }) => void;
 
   pushRequest: (
     context: TRuntimeContext,

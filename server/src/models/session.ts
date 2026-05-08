@@ -22,6 +22,7 @@ export type SessionDoc = {
   askUserRecovery?: SessionAskUserRecoveryDoc | null;
   finalizedAt?: Date | null;
   result?: unknown;
+  resultA2ui?: unknown;
   sessionId: string;
   taskYahlPath?: string;
   title?: string | null;
@@ -56,6 +57,7 @@ const sessionSchema = new Schema<SessionDoc>(
     },
     finalizedAt: { type: Date },
     result: { type: Schema.Types.Mixed },
+    resultA2ui: { type: Schema.Types.Mixed },
     sessionId: { index: true, required: true, type: String, unique: true },
     taskYahlPath: { type: String },
     title: { type: String },

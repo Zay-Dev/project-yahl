@@ -39,4 +39,6 @@ const result = {a,b,c};
 CONTEXT: {
   (() => ({ result: context.context.result }));
 }
+
+/a2ui(result)
 ```

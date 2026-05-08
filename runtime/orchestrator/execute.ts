@@ -2,8 +2,10 @@ import path from "path";
 
 import Redis from "ioredis";
 
-import type { StageExecutionMeta } from "../shared/transport";
 import type { AskUserToolCallEnvelope, StageContextPayload } from "../shared/stage-contract";
+import type { StageExecutionMeta } from "../shared/transport";
+
+import { toA2uiFromPlan } from "../shared/a2ui-from-plan";
 
 import { filterContextByReadUsage } from "./context-filter";
 import { handleLoop } from "./loop-handling";
@@ -18,10 +20,13 @@ import {
 import {
   createRuntimeContext,
   extractAiLogic,
+  getBucketForScope,
   resetStageContext,
   setContextValue,
   toStageContextPayload,
 } from "./runtime";
+
+import * as agentTrackers from "./-utils/agent-trackers";
 
 import type {
   StageExecuteFn,
@@ -439,6 +444,48 @@ const _execute = async (
               },
             );
 
+            return undefined;
+          } else if (envelope.type === "tool_call" && envelope.tool === "render_a2ui_plan") {
+            const { dataRef, plan } = envelope.arguments;
+            const bucket = getBucketForScope(dataRef.scope);
+            const rootData = runtime.get(bucket)?.[dataRef.key];
+            const surfaceOverride = envelope.arguments.surfaceId?.trim();
+            const mergedPlan = {
+              ...plan,
+              surfaceId: surfaceOverride || plan.surfaceId,
+            };
+            try {
+              const resultA2ui = toA2uiFromPlan(rootData, mergedPlan);
+              if (!resultA2ui.length) {
+                process.stderr.write(
+                  `[render_a2ui_plan] empty output ui_kind=${mergedPlan.ui_kind} ` +
+                    `dataRef=${JSON.stringify(dataRef)}\n`,
+                );
+              } else {
+                const sessionId = process.env.AGENT_SESSION_ID?.trim();
+                if (sessionId) {
+                  await agentTrackers.sessionA2ui({
+                    envelopes: resultA2ui,
+                    sessionId,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              process.stderr.write(
+                `[render_a2ui_plan] error ui_kind=${mergedPlan.ui_kind} ` +
+                  `dataRef=${JSON.stringify(dataRef)}: ${msg}\n`,
+              );
+            }
+            if (stageRequestId) {
+              const rid = stageRequestId;
+              stageRequestId = "";
+              publisher.emitStageFinish({
+                contextAfter: cloneJson(toStageContextPayload(runtime)),
+                requestId: rid,
+              });
+            }
             return undefined;
           } else if (envelope.type === "tool_call" && envelope.tool === "ask_user") {
             if (!askUserEnabled) {

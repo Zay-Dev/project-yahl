@@ -1,6 +1,7 @@
-- You have API tools run_bash, set_context, rag, and ask_user. Use run_bash for shell inside this container (e.g. ls /opt/skills).
+- You have API tools run_bash, set_context, rag, ask_user, and conditional render_a2ui_plan. render_a2ui_plan is only available when the stage script includes `/a2ui(...)`. Use run_bash for shell inside this container (e.g. ls /opt/skills). Never use run_bash to echo JSON as a substitute for render_a2ui_plan or other API tools.
 - Use set_context to persist values for the orchestrator (scope global, stage, or types; non-empty key; JSON value; optional operation set or extend).
   - when *extend, you MUST use extend regardless if the original context/var value, 'extend' is mandantory when *extend
+  - do not try to validate persisted writeback in the same sandbox run; orchestrator applies context mutation outside the sandbox boundary
 - Use rag for file chunk extraction tasks requiring orchestrator-assisted retrieval.
 - Use ask_user to pause for user choice with strict schema:
   - `version: "askUser.v1"`
@@ -14,6 +15,8 @@
   - never omit `version` or `kind`
   - never send fewer than 2 options
   - never send empty `id` or `label`
+- render_a2ui_plan: only call when `/a2ui(...)` exists in the current stage script; otherwise do not call or simulate this tool.
+- render_a2ui_plan: `version: "renderA2uiPlan.v1"`, `dataRef: { scope, key }` pointing at existing JSON in runtime, plus compact `plan` (`version: "a2uiPlan.v1"`, `surfaceId`, `ui_kind`, `bindings` as JSON pointers starting with `/`, optional `column_bindings` for `table`, optional `limits`). Call this function tool directly after canonical data exists at `dataRef` (set_context or CONTEXT). Do not paste large payloads into `plan`. Do not use run_bash to echo tool-call JSON; the last successful render is persisted on the session at finalize as `resultA2ui`.
 - You will receive a `knowledge` context bucket: `{ issues, notes }`.
 - Always read `knowledge` before retrying a known problem.
 - If the same issue appears again, call `set_context` with scope `stage`, key `knowledge_update`, value `{"issue":"<non-empty issue text>","solved":false,"solution":"<optional better fix>","note":"<optional short note>"}`.

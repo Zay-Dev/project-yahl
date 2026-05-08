@@ -625,7 +625,7 @@ export const patchStageRuntimeSnapshot = async (
 
 export const finalizeSession = async (
   sessionId: string,
-  opts?: { result?: unknown; stages?: ParsedStageWire[] },
+  opts?: { result?: unknown; resultA2ui?: unknown; stages?: ParsedStageWire[] },
 ) => {
   const updateSet: Record<string, unknown> = {
     finalizedAt: new Date(),
@@ -639,6 +639,9 @@ export const finalizeSession = async (
   }
   if (opts?.result !== undefined) {
     updateSet.result = opts.result;
+  }
+  if (opts?.resultA2ui !== undefined) {
+    updateSet.resultA2ui = opts.resultA2ui;
   }
   if (opts?.stages) {
     updateSet.stages = opts.stages;

@@ -18,6 +18,7 @@ export const registerFinalizeSessionRoute = (app: Express) => {
 
     await finalizeSession(req.params.sessionId, {
       ...(body.result !== undefined ? { result: body.result } : {}),
+      ...(body.resultA2ui !== undefined ? { resultA2ui: body.resultA2ui } : {}),
       ...(body.stages ? { stages: body.stages } : {}),
     });
     res.json({ ok: true });

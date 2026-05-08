@@ -12,7 +12,7 @@ const DEFAULT_END_LINE_WITH = ";" as const;
 
 export type { RuntimeContext } from "./runtime-types";
 
-const getBucket = (scope: ContextScope): RuntimeBucket => {
+export const getBucketForScope = (scope: ContextScope): RuntimeBucket => {
   if (scope === "global") return "context";
   if (scope === "types") return "types";
 
@@ -36,7 +36,7 @@ export const setContextValue = (
   value: unknown,
   operation: ContextSetOperation = "set",
 ) => {
-  const bucketKey = getBucket(scope);
+  const bucketKey = getBucketForScope(scope);
   const current = runtime.get(bucketKey) || {};
   const nextValue = operation === "extend"
     ? [current[key], value]

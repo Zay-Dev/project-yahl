@@ -1,3 +1,5 @@
+import { parseA2uiPlanV1, type A2uiPlanV1 } from "./a2ui-plan";
+
 export const CONTEXT_SCOPES = ["global", "stage", "types"] as const;
 export const CONTEXT_SET_OPERATIONS = ["set", "extend"] as const;
 export const RUNTIME_BUCKETS = ["context", "stage", "types"] as const;
@@ -66,10 +68,25 @@ export type AskUserToolCallEnvelope = {
   type: "tool_call";
 };
 
+export type RenderA2uiPlanToolCallEnvelope = {
+  arguments: {
+    dataRef: {
+      key: string;
+      scope: ContextScope;
+    };
+    plan: A2uiPlanV1;
+    surfaceId?: string;
+    version: "renderA2uiPlan.v1";
+  };
+  tool: "render_a2ui_plan";
+  type: "tool_call";
+};
+
 export type StageEnvelope = StageResultEnvelope |
   SetContextToolCallEnvelope[] |
   RagToolCallEnvelope |
-  AskUserToolCallEnvelope;
+  AskUserToolCallEnvelope |
+  RenderA2uiPlanToolCallEnvelope;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -139,6 +156,29 @@ export const parseStageEnvelope = (value: string): StageEnvelope | null => {
           tool: "ask_user",
           type: "tool_call",
         };
+      }
+
+      if (parsed.tool === "render_a2ui_plan" && parsedArgs.version === "renderA2uiPlan.v1") {
+        const dr = parsedArgs.dataRef;
+        const planParsed = parseA2uiPlanV1(parsedArgs.plan);
+        if (
+          isRecord(dr) &&
+          isScope(dr.scope) &&
+          typeof dr.key === "string" &&
+          dr.key.trim() &&
+          planParsed
+        ) {
+          return {
+            arguments: {
+              dataRef: { key: dr.key.trim(), scope: dr.scope },
+              plan: planParsed,
+              surfaceId: typeof parsedArgs.surfaceId === "string" ? parsedArgs.surfaceId.trim() : undefined,
+              version: "renderA2uiPlan.v1",
+            },
+            tool: "render_a2ui_plan",
+            type: "tool_call",
+          };
+        }
       }
 
       return [parsed]

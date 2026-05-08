@@ -13,12 +13,14 @@ import {
   type ChatAssistantMessage,
   type ChatToolCall,
   type SetContextToolArguments,
+  parseAskUserToolArguments,
   parseRagToolArguments,
+  parseRenderA2uiPlanToolArguments,
   parseRunBashToolArguments,
   parseSetContextToolArguments,
-  parseAskUserToolArguments,
   askUserArgumentsToEnvelope,
   ragArgumentsToEnvelope,
+  renderA2uiPlanArgumentsToEnvelope,
   setContextArgumentsToEnvelope,
 } from "../shared/stage-tools";
 
@@ -262,6 +264,19 @@ export const runStageSession = async (
           continue;
         }
         return askUserArgumentsToEnvelope(args);
+      }
+
+      if (name === "render_a2ui_plan") {
+        const args = parseRenderA2uiPlanToolArguments(rawArgs);
+        if (!args) {
+          stageMessages.push({
+            content: toolErrorContent("render_a2ui_plan: invalid arguments"),
+            role: "tool",
+            tool_call_id: call.id,
+          });
+          continue;
+        }
+        return renderA2uiPlanArgumentsToEnvelope(args);
       }
 
       if (name === "set_context") {

@@ -13,7 +13,7 @@ CONTEXT: {
   (() => ({
     competitors: [
       { name: 'TESLA', news_sources: ['yahoo news', 'bbc', 'reddit',] },
-      { name: 'XaoMi', news_sources: ['bloomberg', 'techinasia'] },
+      { name: 'XiaoMi', news_sources: ['bloomberg', 'techinasia'] },
       { name: 'BYD', news_sources: ['yahoo news', 'bloomberg'] },
     ],
     intel: [],
@@ -33,6 +33,7 @@ for each competitor of [competitors] {
     );
     
     *aware_echo('I understand the set_context key is intel instead of result');
+    *aware_echo('I also understand the summary language is zh-TW');
     EXTENDS: intel = *extract_intel(
       raw_articles,
       flat_map_to: TIntelItem,
@@ -55,6 +56,7 @@ for each competitor of [competitors] {
 {
   // 生成最终简报
   *aware_echo('I understand the set_context key is daily_brief instead of result')
+  *aware_echo('I also understand the brief language is zh-TW');
   const daily_brief = *generate_brief(
     this.intel,
     format: markdown,
@@ -73,4 +75,6 @@ CONTEXT: {
     }
   }));
 };
+
+/a2ui(result)
 ```

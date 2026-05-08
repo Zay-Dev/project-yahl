@@ -130,6 +130,7 @@ const parsedStageWireSchema = Joi.object({
 
 const finalizeBodySchema = Joi.object({
   result: Joi.any().optional(),
+  resultA2ui: Joi.any().optional(),
   stages: Joi.array().items(parsedStageWireSchema).optional(),
 }).unknown(true);
 

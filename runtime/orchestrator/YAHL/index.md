@@ -37,6 +37,9 @@ Syntax of "/skill(...args)" is a skill, that means
 1. search SKILLS/ for the skill, (e.g. /web-search('apple new CEO') means there is a skill 'web-search')
 2. follow the skill instruction to complete the command and return the result (e.g. const result = /web-search('apple new CEO'))
 
+examples:
+- `/a2ui(result)` — skill **a2ui** in `SKILLS/a2ui/`; use in an **AI stage after** `CONTEXT:` (or `set_context`) has written `context.context.result`, then call the **`render_a2ui_plan`** API tool per the skill (session stores A2UI at finalize). Unlike `*func` virtual calls, this skill is completed by a **registered function tool**, not by generating a shell command that echoes JSON. The `render_a2ui_plan` tool is only available when `/a2ui(...)` exists in the stage script.
+
 #### ~/file-system
 
 Syntax of "~/some-text" means the workspace, it takes the linux's home (~/) syntax sematically, usually means accessing (read/write) the file system, we only access file-system when this syntax presents, and ~/ means our workspace (user's home), use bash command to validate if you have written content correctly if it is a write virtual function

@@ -146,6 +146,11 @@ export const main = async (cli: CliOptions) => {
   agentTrackers.add(sessionTracker);
   agentTrackers.add(createConsoleTracker());
   agentTrackers.add(stepTracker);
+  agentTrackers.add({
+    sessionA2ui: (event) => {
+      lastSessionA2ui = event.envelopes;
+    },
+  });
 
   await fs.mkdir(workspacePath, {
     recursive: true,
@@ -156,6 +161,7 @@ export const main = async (cli: CliOptions) => {
   const requestIdToStageId = new Map<string, string>();
 
   let finalResult: unknown;
+  let lastSessionA2ui: unknown | undefined;
   let parsedStages: ParsedStage[] = [];
 
   try {
@@ -253,6 +259,7 @@ export const main = async (cli: CliOptions) => {
   } finally {
     await agentTrackers.finalResult({
       result: finalResult,
+      resultA2ui: lastSessionA2ui,
       sessionId,
       stages: parsedStages,
     });

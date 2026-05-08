@@ -132,6 +132,7 @@ export type SessionForkedFromWire = {
 
 export type FinalizeSessionPayload = {
   result?: unknown;
+  resultA2ui?: unknown;
   stages?: ParsedStageWire[];
 };
 

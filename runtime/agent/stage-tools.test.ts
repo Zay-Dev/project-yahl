@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   parseAskUserToolArguments,
+  parseRenderA2uiPlanToolArguments,
   parseRunBashToolArguments,
   parseSetContextToolArguments,
   setContextArgumentsToEnvelope,
@@ -136,5 +137,24 @@ describe("parseAskUserToolArguments", () => {
       }),
     );
     assert.equal(parsed, null);
+  });
+});
+
+describe("parseRenderA2uiPlanToolArguments", () => {
+  it("parses valid render_a2ui_plan arguments", () => {
+    const parsed = parseRenderA2uiPlanToolArguments(
+      JSON.stringify({
+        dataRef: { key: "out", scope: "stage" },
+        plan: {
+          bindings: { body: "/b", title: "/t" },
+          surfaceId: "surf",
+          ui_kind: "summary_card",
+          version: "a2uiPlan.v1",
+        },
+        version: "renderA2uiPlan.v1",
+      }),
+    );
+    assert.ok(parsed);
+    assert.equal(parsed!.plan.ui_kind, "summary_card");
   });
 });
