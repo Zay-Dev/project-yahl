@@ -65,6 +65,8 @@ export const SessionDetailPage = () => {
   );
 
   const taskPath = liveMeta?.taskYahlPath ?? detail?.taskYahlPath ?? null;
+  const hasA2uiResult = detail?.resultA2ui !== undefined && detail?.resultA2ui !== null;
+  const a2uiHref = sessionId && hasA2uiResult ? `/sessions/${sessionId}/a2ui` : null;
   const hasStoredResult = detail?.result !== undefined && detail?.result !== null;
 
   const askUserRecoveryResume = useMemo(() => {
@@ -207,6 +209,7 @@ export const SessionDetailPage = () => {
 
       <Card>
         <SessionSummary
+          a2uiHref={a2uiHref}
           detail={detail}
           hasStoredResult={hasStoredResult}
           onHardDelete={onHardDelete}

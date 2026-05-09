@@ -1,4 +1,4 @@
-import { Eye, Trash2 } from "lucide-react";
+import { ExternalLink, Eye, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import { formatDuration, formatNumber } from "@/lib/format";
 import type { SessionDetail } from "@/types";
 
 type Props = {
+  a2uiHref: string | null;
   detail: SessionDetail | null;
   hasStoredResult: boolean;
   onHardDelete: () => void | Promise<void>;
@@ -31,6 +32,7 @@ type Props = {
 };
 
 export const SessionSummary = ({
+  a2uiHref,
   detail,
   hasStoredResult,
   onHardDelete,
@@ -83,6 +85,19 @@ export const SessionSummary = ({
     </div>
 
     <div className="flex items-center gap-2">
+      {a2uiHref ? (
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+        >
+          <a href={a2uiHref} rel="noreferrer" target="_blank">
+            <ExternalLink />
+            Open A2UI
+          </a>
+        </Button>
+      ) : null}
+
       <Button
         disabled={!hasStoredResult}
         onClick={onViewResult}

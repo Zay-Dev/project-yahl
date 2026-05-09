@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { buildA2uiPreviewModel } from "@/lib/a2ui-v08-preview";
+import { buildA2uiPreviewModels } from "@/lib/a2ui-v08-preview";
 import { stringifyValue } from "@/lib/format";
 import type { SessionDetail } from "@/types";
 
@@ -25,11 +25,11 @@ type A2uiResultView = "preview" | "raw";
 export const SessionResultDialog = ({ detail, onClose, open }: Props) => {
   const [a2uiView, setA2uiView] = useState<A2uiResultView>("preview");
   const hasA2ui = detail?.resultA2ui !== undefined && detail?.resultA2ui !== null;
-  const a2uiPreviewModel = useMemo(
-    () => (hasA2ui ? buildA2uiPreviewModel(detail.resultA2ui) : null),
+  const a2uiPreviewModels = useMemo(
+    () => (hasA2ui ? buildA2uiPreviewModels(detail.resultA2ui) : []),
     [detail?.resultA2ui, hasA2ui],
   );
-  const canPreviewA2ui = a2uiPreviewModel !== null;
+  const canPreviewA2ui = a2uiPreviewModels.some((entry) => !entry.model.diagnostics.missingRoot);
 
   useEffect(() => {
     if (open) setA2uiView("preview");
@@ -80,11 +80,31 @@ export const SessionResultDialog = ({ detail, onClose, open }: Props) => {
                   </Button>
                 </div>
               </div>
-              {a2uiView === "preview" && canPreviewA2ui && a2uiPreviewModel ? (
-                <A2uiV08Preview model={a2uiPreviewModel} />
+              {a2uiPreviewModels.length ? (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Parsed {a2uiPreviewModels.length} surface{a2uiPreviewModels.length > 1 ? "s" : ""}.
+                </p>
+              ) : null}
+              {a2uiView === "preview" && canPreviewA2ui ? (
+                <div className="space-y-3">
+                  {a2uiPreviewModels.map(({ model, surfaceId }) => (
+                    <div className="space-y-2 rounded-md border p-3" key={surfaceId}>
+                      <p className="font-mono text-xs text-slate-500 dark:text-slate-400">{surfaceId}</p>
+                      {model.diagnostics.missingRoot ? (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Preview unavailable: no renderable root container found.
+                        </p>
+                      ) : (
+                        <A2uiV08Preview model={model} />
+                      )}
+                    </div>
+                  ))}
+                </div>
               ) : null}
               {a2uiView === "preview" && !canPreviewA2ui ? (
-                <p className="text-xs text-slate-500 dark:text-slate-400">Preview unavailable for this payload.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Preview unavailable for this payload.
+                </p>
               ) : null}
               {a2uiView === "raw" ? (
                 <pre className="rounded-md border p-3 text-xs">

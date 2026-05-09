@@ -4,6 +4,8 @@ import path from "path";
 
 import {
   parseStageEnvelope,
+  type RenderA2uiPlanToolCallEnvelope,
+  type SetContextToolCallEnvelope,
   type StageEnvelope,
   type StageSessionInput,
 } from "../shared/stage-contract";
@@ -12,10 +14,9 @@ import {
   type ChatApiMessage,
   type ChatAssistantMessage,
   type ChatToolCall,
-  type SetContextToolArguments,
   parseAskUserToolArguments,
   parseRagToolArguments,
-  parseRenderA2uiPlanToolArguments,
+  parseRenderA2uiPlanToolArgumentsDetailed,
   parseRunBashToolArguments,
   parseSetContextToolArguments,
   askUserArgumentsToEnvelope,
@@ -23,6 +24,7 @@ import {
   renderA2uiPlanArgumentsToEnvelope,
   setContextArgumentsToEnvelope,
 } from "../shared/stage-tools";
+import { buildA2uiTranslatorSystemMessage, buildA2uiTranslatorUserMessage } from "../orchestrator/-utils/a2ui-plan-translator";
 
 import { readFileUtf8 } from "./-utils/prompts";
 
@@ -41,6 +43,29 @@ type StageRunner = {
 type StageSessionOptions = {
   maxBashCalls?: number;
   maxTurns?: number;
+};
+
+const a2uiStagePattern = /\/a2ui\(\s*([a-zA-Z0-9_.-]+)\s*\)/;
+
+const summarizeNodeShape = (value: unknown): unknown => {
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  if (Array.isArray(value)) {
+    if (!value.length) return [];
+    return [{ item: summarizeNodeShape(value[0]) }];
+  }
+  if (typeof value === "object") {
+    const input = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    Object.keys(input)
+      .sort()
+      .slice(0, 30)
+      .forEach((key) => {
+        out[key] = summarizeNodeShape(input[key]);
+      });
+    return out;
+  }
+  return typeof value;
 };
 
 const toApiMessages = (messages: BootstrapMessage[]): ChatApiMessage[] =>
@@ -128,12 +153,12 @@ export const normalizeToolCalls = (raw: unknown): ChatToolCall[] | undefined => 
 
 const finalizeEnvelope = (
   content: string | null,
-  contextsToSet: SetContextToolArguments[],
+  toolEnvelopes: Array<RenderA2uiPlanToolCallEnvelope | SetContextToolCallEnvelope>,
 ): StageEnvelope => {
   const trimmed = (content ?? "").trim();
 
-  if (contextsToSet.length > 0) {
-    return contextsToSet.map(toSet => setContextArgumentsToEnvelope(toSet));
+  if (toolEnvelopes.length > 0) {
+    return toolEnvelopes;
   }
 
   if (trimmed) {
@@ -174,9 +199,31 @@ export const runStageSession = async (
   const toolsMd = await readFileUtf8(path.resolve(config.runtimeRoot, "Tools.md"));
 
   const payload = JSON.stringify(stageInput, null, 2);
+  const a2uiMatch = stageInput.currentStage.match(a2uiStagePattern);
+  const a2uiKey = a2uiMatch?.[1]?.trim();
+  const a2uiRootData = a2uiKey ? stageInput.context.context[a2uiKey] : undefined;
+  const a2uiSchemaSummary =
+    a2uiRootData === undefined ? undefined : JSON.stringify(summarizeNodeShape(a2uiRootData));
+  const a2uiTranslatorMessages: ChatApiMessage[] =
+    a2uiKey
+      ? [
+        {
+          content: buildA2uiTranslatorSystemMessage(),
+          role: "system",
+        },
+        {
+          content: buildA2uiTranslatorUserMessage({
+            dataRef: { key: a2uiKey, scope: "global" },
+            schemaSummary: a2uiSchemaSummary,
+          }),
+          role: "system",
+        },
+      ]
+      : [];
 
   const stageMessages: ChatApiMessage[] = [
     ...toApiMessages(messages),
+    ...a2uiTranslatorMessages,
     {
       role: "user",
       // content: `${toolsMd}\n\nInput:\n${payload}`,
@@ -186,7 +233,9 @@ export const runStageSession = async (
 
   let bashCalls = 0;
   let turns = 0;
-  const contextsToSet: SetContextToolArguments[] = [];
+  const toolEnvelopes: Array<RenderA2uiPlanToolCallEnvelope | SetContextToolCallEnvelope> = [];
+  const invalidRenderArgsAttempts = new Map<string, number>();
+  const maxSameInvalidRenderAttempts = 3;
 
   while (turns < maxTurns) {
     turns += 1;
@@ -267,16 +316,37 @@ export const runStageSession = async (
       }
 
       if (name === "render_a2ui_plan") {
-        const args = parseRenderA2uiPlanToolArguments(rawArgs);
-        if (!args) {
+        const parsed = parseRenderA2uiPlanToolArgumentsDetailed(rawArgs);
+        if (!parsed.ok) {
+          const signature = `${parsed.issue.code}:${rawArgs}`;
+          const attempts = (invalidRenderArgsAttempts.get(signature) ?? 0) + 1;
+          invalidRenderArgsAttempts.set(signature, attempts);
           stageMessages.push({
-            content: toolErrorContent("render_a2ui_plan: invalid arguments"),
+            content: toolErrorContent(
+              `render_a2ui_plan: ${parsed.issue.code}: ${parsed.issue.message}`,
+            ),
             role: "tool",
             tool_call_id: call.id,
           });
+
+          if (attempts >= maxSameInvalidRenderAttempts) {
+            return {
+              output:
+                `执行失败 render_a2ui_plan repeated invalid arguments (${parsed.issue.code}) ` +
+                `${attempts} times: ${parsed.issue.message}`,
+              type: "result",
+            };
+          }
+
           continue;
         }
-        return renderA2uiPlanArgumentsToEnvelope(args);
+        toolEnvelopes.push(renderA2uiPlanArgumentsToEnvelope(parsed.arguments));
+        stageMessages.push({
+          content: toolOkContent(),
+          role: "tool",
+          tool_call_id: call.id,
+        });
+        continue;
       }
 
       if (name === "set_context") {
@@ -292,7 +362,7 @@ export const runStageSession = async (
           continue;
         }
 
-        contextsToSet.push(args);
+        toolEnvelopes.push(setContextArgumentsToEnvelope(args));
         stageMessages.push({
           content: toolOkContent(),
           role: "tool",
@@ -311,7 +381,7 @@ export const runStageSession = async (
 
     if (toolCalls.length > 0) continue;
 
-    return finalizeEnvelope(assistantMessage.content, contextsToSet);
+    return finalizeEnvelope(assistantMessage.content, toolEnvelopes);
   }
 
   return {

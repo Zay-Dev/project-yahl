@@ -19,6 +19,7 @@ import { workspacePath } from "./paths";
 import { getAiLogicStartLineInFile, parseStages } from "./stage-parse";
 import { resolveReportPromptPath } from "./task-resolve";
 import { extractAiLogic } from "./runtime";
+import { createSessionA2uiState, flattenSessionA2ui, mergeSessionA2uiSurface } from "./-utils/a2ui-session-merge";
 
 type AskUserResumePayloadV1 = {
   currentStageText: string;
@@ -59,6 +60,9 @@ const _createStepTracker = async (
 
   return tracker;
 };
+
+const MAX_A2UI_ENVELOPES_PER_SURFACE = 2000;
+const MAX_A2UI_ENVELOPES_TOTAL = 8000;
 
 export const main = async (cli: CliOptions) => {
   const startTime = process.hrtime.bigint();
@@ -142,13 +146,33 @@ export const main = async (cli: CliOptions) => {
 
   const sessionTracker = createSessionTracker();
   const stepTracker = await _createStepTracker(sessionId, reportPath, cli.resume);
+  let finalResult: unknown;
+  const parsedStages: ParsedStage[] = [];
+  const sessionA2uiState = createSessionA2uiState();
 
   agentTrackers.add(sessionTracker);
   agentTrackers.add(createConsoleTracker());
   agentTrackers.add(stepTracker);
   agentTrackers.add({
     sessionA2ui: (event) => {
-      lastSessionA2ui = event.envelopes;
+      const envelopes = Array.isArray(event.envelopes) ? event.envelopes : [];
+      if (!envelopes.length) return;
+      const result = mergeSessionA2uiSurface(sessionA2uiState, {
+        envelopes,
+        maxPerSurface: MAX_A2UI_ENVELOPES_PER_SURFACE,
+        mode: event.mode,
+        surfaceId: event.surfaceId,
+      });
+      if (result.truncated) {
+        process.stderr.write(
+          `[render_a2ui_plan] capped envelopes for surfaceId=${event.surfaceId} ` +
+            `at ${MAX_A2UI_ENVELOPES_PER_SURFACE}\n`,
+        );
+      }
+      process.stdout.write(
+        `[render_a2ui_plan] mode=${event.mode} surfaceId=${event.surfaceId} ` +
+          `prev=${result.prevCount} next=${result.nextCount}\n`,
+      );
     },
   });
 
@@ -159,10 +183,6 @@ export const main = async (cli: CliOptions) => {
   const onecliOverrideFilePath = await writeSharedOneCliOverride();
 
   const requestIdToStageId = new Map<string, string>();
-
-  let finalResult: unknown;
-  let lastSessionA2ui: unknown | undefined;
-  let parsedStages: ParsedStage[] = [];
 
   try {
     await composeDown(composeProjectName);
@@ -251,15 +271,21 @@ export const main = async (cli: CliOptions) => {
     }
 
     finalResult = runtime.get("context")?.result;
-    parsedStages = stages;
+    parsedStages.push(...stages);
 
     console.log("result", JSON.stringify(runtime.get("context")?.["result"], null, 2));
   } catch (ex) {
     console.error(ex);
   } finally {
+    const flattenedSessionA2ui = flattenSessionA2ui(sessionA2uiState, MAX_A2UI_ENVELOPES_TOTAL);
+    if (flattenedSessionA2ui.truncated) {
+      process.stderr.write(
+        `[render_a2ui_plan] capped total session envelopes at ${MAX_A2UI_ENVELOPES_TOTAL}\n`,
+      );
+    }
     await agentTrackers.finalResult({
       result: finalResult,
-      resultA2ui: lastSessionA2ui,
+      resultA2ui: flattenedSessionA2ui.envelopes.length ? flattenedSessionA2ui.envelopes : undefined,
       sessionId,
       stages: parsedStages,
     });

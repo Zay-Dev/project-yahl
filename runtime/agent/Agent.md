@@ -15,7 +15,7 @@
   - `id` 与 `label` 不能为空。
   - 需要用户决策时优先使用该工具，而不是猜测或直接继续。
   - 调用后 orchestrator 会进入等待用户回答的流程。
-- **`render_a2ui_plan`**：参数 `{ "version":"renderA2uiPlan.v1", "dataRef":{ "scope":"global"|"stage"|"types", "key":"<非空>" }, "plan": <a2uiPlan.v1 对象>, "surfaceId"?: "<可选覆盖>" }`。仅当当前 stage 脚本包含 `/a2ui(...)` 时才可调用。`plan` 为紧凑 UI 计划（`version:"a2uiPlan.v1"`、`surfaceId`、`ui_kind`、`bindings` 为 JSON Pointer；`table` 时带 `column_bindings`）。在 **`set_context` 或 CONTEXT 已写入 canonical 数据** 后调用本**函数工具**，用于生成 A2UI v0.8 信封；**最后一次成功调用**会在会话 **finalize** 时写入会话文档的 `resultA2ui`，勿在 `plan` 里重复贴大段正文。不要用 `run_bash` echo 假 JSON 代替本工具。
+- **`render_a2ui_plan`**：参数 `{ "version":"renderA2uiPlan.v1", "dataRef":{ "scope":"global"|"stage"|"types", "key":"<非空>" }, "plan": <a2uiPlan.v1 对象>, "surfaceId"?: "<可选覆盖>" }`。仅当当前 stage 脚本包含 `/a2ui(...)` 时才可调用。`plan` 为紧凑 UI 计划（`version:"a2uiPlan.v1"`、`surfaceId`、`ui_kind`、`bindings` 为 JSON Pointer；`table` 时带 `column_bindings`）。在 **`set_context` 或 CONTEXT 已写入 canonical 数据** 后调用本**函数工具**，用于生成 A2UI v0.8 信封；**成功调用会按顺序合并**并在会话 **finalize** 时写入会话文档的 `resultA2ui`，勿在 `plan` 里重复贴大段正文。不要用 `run_bash` echo 假 JSON 代替本工具。若 stage 要求多个 surface，需连续调用多次 `render_a2ui_plan`，不要在第一次成功后提前结束。
 
 ## During the steps per stage
 

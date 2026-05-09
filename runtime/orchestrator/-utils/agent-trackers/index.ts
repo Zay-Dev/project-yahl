@@ -44,7 +44,9 @@ export type StageFinishEvent = {
 
 export type SessionA2uiEvent = {
   envelopes: unknown;
+  mode: "append" | "replace";
   sessionId: string;
+  surfaceId: string;
   timestamp: string;
 };
 

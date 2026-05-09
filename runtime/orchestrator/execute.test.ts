@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildAskUserContinuation, toAskUserAnswerValue } from "./execute";
+import {
+  buildAskUserContinuation,
+  toAskUserAnswerValue,
+  validateSurfaceUiKindConflict,
+} from "./execute";
 
 describe("toAskUserAnswerValue", () => {
   it("coerces numeric ids to numbers", () => {
@@ -40,5 +44,23 @@ describe("buildAskUserContinuation", () => {
   it("returns null when stage has no ask-user call", () => {
     const next = buildAskUserContinuation("const c = 1;\nconst r = c;", "");
     assert.equal(next, null);
+  });
+});
+
+describe("validateSurfaceUiKindConflict", () => {
+  it("returns null for unseen surface", () => {
+    const known = new Map<string, string>();
+    assert.equal(validateSurfaceUiKindConflict(known, "surface-1", "summary_card"), null);
+  });
+
+  it("returns null for same ui_kind reuse", () => {
+    const known = new Map<string, string>([["surface-1", "summary_card"]]);
+    assert.equal(validateSurfaceUiKindConflict(known, "surface-1", "summary_card"), null);
+  });
+
+  it("returns message for conflicting ui_kind reuse", () => {
+    const known = new Map<string, string>([["surface-1", "summary_card"]]);
+    const conflict = validateSurfaceUiKindConflict(known, "surface-1", "table");
+    assert.ok(conflict?.includes("surfaceId \"surface-1\" already initialized as summary_card"));
   });
 });

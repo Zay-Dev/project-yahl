@@ -218,31 +218,107 @@ export const toA2uiFromPlan = (rootData: unknown, plan: A2uiPlanV1): A2uiEnvelop
     if (!Array.isArray(rawRows)) return [];
 
     const slice = rawRows.slice(0, maxItems);
-    const rows = slice.map((row) =>
-      cols.map((col) => toDisplayString(getByRelativePointer(row, col.path), 800)),
-    );
+    const rootChildren: string[] = [];
+    const components: unknown[] = [
+      {
+        children: rootChildren,
+        component: "Column",
+        id: "root",
+      },
+    ];
 
-    const headerLine = cols.map((c) => c.header).join(" | ");
-    const bodyLines = rows.map((cells) => cells.join(" | "));
-    const tableText = [headerLine, bodyLines.join("\n")].filter(Boolean).join("\n");
+    const headerId = "tbl_header";
+    const headerChildren: string[] = [];
+    rootChildren.push(headerId);
+    components.push({
+      children: headerChildren,
+      component: "Row",
+      id: headerId,
+    });
+    cols.forEach((col, colIndex) => {
+      const cellWrapId = `tbl_header_cell_${colIndex}`;
+      const textId = `tbl_header_text_${colIndex}`;
+      headerChildren.push(cellWrapId);
+      components.push({
+        children: [textId],
+        component: "Column",
+        id: cellWrapId,
+      });
+      components.push({
+        component: "Text",
+        id: textId,
+        text: col.header,
+        variant: "h4",
+      });
+    });
+
+    slice.forEach((row, rowIndex) => {
+      const rowId = `tbl_row_${rowIndex}`;
+      const rowChildren: string[] = [];
+      rootChildren.push(rowId);
+      components.push({
+        children: rowChildren,
+        component: "Row",
+        id: rowId,
+      });
+
+      cols.forEach((col, colIndex) => {
+        const cellWrapId = `tbl_cell_${rowIndex}_${colIndex}`;
+        const cellId = `tbl_cell_text_${rowIndex}_${colIndex}`;
+        rowChildren.push(cellWrapId);
+
+        components.push({
+          children: [cellId],
+          component: "Column",
+          id: cellWrapId,
+        });
+
+        if (col.kind === "link") {
+          const buttonId = `tbl_btn_${rowIndex}_${colIndex}`;
+          const buttonLabel =
+            toDisplayString(
+              getByRelativePointer(row, col.labelPath || col.path),
+              200,
+            ) || "Open";
+          const url = toDisplayString(
+            getByRelativePointer(row, col.urlPath || col.path),
+            500,
+          );
+
+          components.push({
+            children: [buttonId],
+            component: "Column",
+            id: cellId,
+          });
+          components.push({
+            action: url
+              ? {
+                open_url: { url },
+                type: "open_url",
+              }
+              : undefined,
+            component: "Button",
+            id: buttonId,
+            label: buttonLabel,
+            variant: "outline",
+          });
+          return;
+        }
+
+        components.push({
+          component: "Text",
+          id: cellId,
+          text: toDisplayString(getByRelativePointer(row, col.path), 800),
+          variant: "body",
+        });
+      });
+    });
 
     return [
       ...surfaceHeader(surfaceId),
       {
         updateComponents: {
-          components: [
-            {
-              children: ["tbl"],
-              component: "Column",
-              id: "root",
-            },
-            {
-              component: "Text",
-              id: "tbl",
-              text: tableText,
-              variant: "body",
-            },
-          ],
+          components,
           surfaceId,
         },
         version: "v0.8",

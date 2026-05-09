@@ -9,6 +9,13 @@ type TIntelItem = {
   summary_zh: string;
 };
 
+type TResult = {
+  title: string;
+  brief_markdown: string<Markdown>;
+  raw_intel: TIntelItem[];
+  generated_at: string<Date>;
+};
+
 CONTEXT: {
   (() => ({
     competitors: [
@@ -32,6 +39,7 @@ for each competitor of [competitors] {
       filter: business_relevant
     );
     
+    *aware_echo('I understand set_context writes runtime context outside the sandbox, so I will not self-validate writeback in-run');
     *aware_echo('I understand the set_context key is intel instead of result');
     *aware_echo('I also understand the summary language is zh-TW');
     EXTENDS: intel = *extract_intel(
@@ -47,6 +55,7 @@ for each competitor of [competitors] {
 
 {
   // 去重并排序
+  *aware_echo('I understand set_context writes runtime context outside the sandbox, so I will not self-validate writeback in-run');
   *aware_echo('I understand the set_context key is intel instead of result');
   *aware_echo('I also understand I will need to flat the intel to TIntelItem');
   this.intel = *deduplicate_and_sort(this.intel, by: date, order: desc);
@@ -55,8 +64,10 @@ for each competitor of [competitors] {
 
 {
   // 生成最终简报
+  *aware_echo('I understand set_context writes runtime context outside the sandbox, so I will not self-validate writeback in-run');
   *aware_echo('I understand the set_context key is daily_brief instead of result')
   *aware_echo('I also understand the brief language is zh-TW');
+  const title = *summary(concise_title, lang: zh-TW);
   const daily_brief = *generate_brief(
     this.intel,
     format: markdown,
@@ -69,6 +80,7 @@ for each competitor of [competitors] {
 CONTEXT: {
   (() => ({
     result: {
+      title: context.context.title,
       brief_markdown: context.context.daily_brief,
       raw_intel: context.context.intel,
       generated_at: new Date().toISOString(),
@@ -76,5 +88,5 @@ CONTEXT: {
   }));
 };
 
-/a2ui(result)
+/a2ui(TResult, raw_intel_as_table_with_button_links)
 ```

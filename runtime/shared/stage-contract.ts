@@ -74,6 +74,7 @@ export type RenderA2uiPlanToolCallEnvelope = {
       key: string;
       scope: ContextScope;
     };
+    mode: "append" | "replace";
     plan: A2uiPlanV1;
     surfaceId?: string;
     version: "renderA2uiPlan.v1";
@@ -82,11 +83,14 @@ export type RenderA2uiPlanToolCallEnvelope = {
   type: "tool_call";
 };
 
-export type StageEnvelope = StageResultEnvelope |
-  SetContextToolCallEnvelope[] |
+export type StageToolCallEnvelope = SetContextToolCallEnvelope |
   RagToolCallEnvelope |
   AskUserToolCallEnvelope |
   RenderA2uiPlanToolCallEnvelope;
+
+export type StageEnvelope = StageResultEnvelope |
+  StageToolCallEnvelope[] |
+  StageToolCallEnvelope;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -98,6 +102,126 @@ const isSetOperation = (value: unknown): value is ContextSetOperation =>
   typeof value === "string" &&
   CONTEXT_SET_OPERATIONS.includes(value as ContextSetOperation);
 
+const isRenderMode = (value: unknown): value is RenderA2uiPlanToolCallEnvelope["arguments"]["mode"] =>
+  value === "append" || value === "replace";
+
+const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
+  if (!isRecord(item)) return null;
+  if (item.type !== "tool_call") return null;
+  if (!isRecord(item.arguments)) return null;
+
+  const parsedArgs = item.arguments as Record<string, unknown>;
+
+  if (
+    item.tool === "ask_user" &&
+    typeof parsedArgs.version === "string" &&
+    parsedArgs.version === "askUser.v1" &&
+    parsedArgs.kind === "multipleChoice" &&
+    typeof parsedArgs.title === "string" &&
+    Array.isArray(parsedArgs.options)
+  ) {
+    return {
+      arguments: {
+        allowMultiple: Boolean(parsedArgs.allowMultiple),
+        description:
+          typeof parsedArgs.description === "string" ? parsedArgs.description : undefined,
+        kind: "multipleChoice",
+        maxChoices:
+          typeof parsedArgs.maxChoices === "number" ? parsedArgs.maxChoices : undefined,
+        minChoices:
+          typeof parsedArgs.minChoices === "number" ? parsedArgs.minChoices : undefined,
+        options: parsedArgs.options
+          .filter((option) => option && typeof option === "object")
+          .map((option: any) => ({
+            description: typeof option.description === "string" ? option.description : undefined,
+            id: String(option.id || ""),
+            label: String(option.label || ""),
+          }))
+          .filter((option) => option.id && option.label),
+        title: parsedArgs.title,
+        version: "askUser.v1",
+      },
+      tool: "ask_user",
+      type: "tool_call",
+    };
+  }
+
+  if (item.tool === "render_a2ui_plan" && parsedArgs.version === "renderA2uiPlan.v1") {
+    const dr = parsedArgs.dataRef;
+    const planParsed = parseA2uiPlanV1(parsedArgs.plan);
+    const mode = parsedArgs.mode;
+    const parsedMode = mode === undefined ? "replace" : mode;
+    if (
+      isRecord(dr) &&
+      isScope(dr.scope) &&
+      typeof dr.key === "string" &&
+      dr.key.trim() &&
+      planParsed &&
+      isRenderMode(parsedMode)
+    ) {
+      return {
+        arguments: {
+          dataRef: { key: dr.key.trim(), scope: dr.scope },
+          mode: parsedMode,
+          plan: planParsed,
+          surfaceId: typeof parsedArgs.surfaceId === "string" ? parsedArgs.surfaceId.trim() : undefined,
+          version: "renderA2uiPlan.v1",
+        },
+        tool: "render_a2ui_plan",
+        type: "tool_call",
+      };
+    }
+    return null;
+  }
+
+  if (
+    item.tool === "rag" &&
+    typeof parsedArgs.lookingFor === "string" &&
+    typeof parsedArgs.chunkSize === "number" &&
+    typeof parsedArgs.tmp_file_path === "string" &&
+    typeof parsedArgs.byteLength === "number" &&
+    typeof parsedArgs.context_key === "string" &&
+    !!parsedArgs.lookingFor.trim() &&
+    parsedArgs.chunkSize > 0 &&
+    !!parsedArgs.tmp_file_path.trim() &&
+    parsedArgs.byteLength > 0 &&
+    !!parsedArgs.context_key.trim()
+  ) {
+    return {
+      arguments: {
+        lookingFor: parsedArgs.lookingFor,
+        chunkSize: parsedArgs.chunkSize,
+        tmp_file_path: parsedArgs.tmp_file_path,
+        byteLength: parsedArgs.byteLength,
+        context_key: parsedArgs.context_key,
+      },
+      tool: "rag",
+      type: "tool_call",
+    };
+  }
+
+  if (
+    item.tool === "set_context" &&
+    isScope(parsedArgs.scope) &&
+    (parsedArgs.operation === undefined || isSetOperation(parsedArgs.operation)) &&
+    typeof parsedArgs.key === "string" &&
+    parsedArgs.key.trim()
+  ) {
+    return {
+      arguments: {
+        key: parsedArgs.key,
+        operation: parsedArgs.operation || "set",
+        scope: parsedArgs.scope,
+        value: parsedArgs.value,
+      },
+      tool: "set_context",
+      type: "tool_call",
+    };
+  }
+
+  return null;
+};
+
 export const parseStageEnvelope = (value: string): StageEnvelope | null => {
   let parsed: unknown;
 
@@ -107,12 +231,6 @@ export const parseStageEnvelope = (value: string): StageEnvelope | null => {
     return null;
   }
 
-  const isValidTool = (item: unknown) => {
-    return isRecord(item) &&
-      item.type === "tool_call" &&
-      isRecord(item.arguments);
-  };
-
   if (isRecord(parsed)) {
     if (parsed.type === "result") {
       return {
@@ -121,115 +239,15 @@ export const parseStageEnvelope = (value: string): StageEnvelope | null => {
       };
     }
 
-    if (isValidTool(parsed)) {
-      const parsedArgs = parsed.arguments as Record<string, unknown>;
-
-      if (
-        parsed.tool === "ask_user" &&
-        typeof parsedArgs.version === "string" &&
-        parsedArgs.version === "askUser.v1" &&
-        parsedArgs.kind === "multipleChoice" &&
-        typeof parsedArgs.title === "string" &&
-        Array.isArray(parsedArgs.options)
-      ) {
-        return {
-          arguments: {
-            allowMultiple: Boolean(parsedArgs.allowMultiple),
-            description:
-              typeof parsedArgs.description === "string" ? parsedArgs.description : undefined,
-            kind: "multipleChoice",
-            maxChoices:
-              typeof parsedArgs.maxChoices === "number" ? parsedArgs.maxChoices : undefined,
-            minChoices:
-              typeof parsedArgs.minChoices === "number" ? parsedArgs.minChoices : undefined,
-            options: parsedArgs.options
-              .filter((option) => option && typeof option === "object")
-              .map((option: any) => ({
-                description: typeof option.description === "string" ? option.description : undefined,
-                id: String(option.id || ""),
-                label: String(option.label || ""),
-              }))
-              .filter((option) => option.id && option.label),
-            title: parsedArgs.title,
-            version: "askUser.v1",
-          },
-          tool: "ask_user",
-          type: "tool_call",
-        };
-      }
-
-      if (parsed.tool === "render_a2ui_plan" && parsedArgs.version === "renderA2uiPlan.v1") {
-        const dr = parsedArgs.dataRef;
-        const planParsed = parseA2uiPlanV1(parsedArgs.plan);
-        if (
-          isRecord(dr) &&
-          isScope(dr.scope) &&
-          typeof dr.key === "string" &&
-          dr.key.trim() &&
-          planParsed
-        ) {
-          return {
-            arguments: {
-              dataRef: { key: dr.key.trim(), scope: dr.scope },
-              plan: planParsed,
-              surfaceId: typeof parsedArgs.surfaceId === "string" ? parsedArgs.surfaceId.trim() : undefined,
-              version: "renderA2uiPlan.v1",
-            },
-            tool: "render_a2ui_plan",
-            type: "tool_call",
-          };
-        }
-      }
-
-      return [parsed]
-        .filter(item => {
-          return item.tool === "rag" &&
-            isRecord(item.arguments) &&
-            typeof item.arguments.lookingFor === 'string' &&
-            typeof item.arguments.chunkSize === 'number' &&
-            typeof item.arguments.tmp_file_path === 'string' &&
-            typeof item.arguments.byteLength === 'number' &&
-            typeof item.arguments.context_key === 'string' &&
-            !!item.arguments.lookingFor.trim() &&
-            item.arguments.chunkSize > 0 &&
-            !!item.arguments.tmp_file_path.trim() &&
-            item.arguments.byteLength > 0 &&
-            !!item.arguments.context_key.trim();
-        })
-        .map((item: any) => ({
-          arguments: {
-            lookingFor: item.arguments.lookingFor,
-            chunkSize: item.arguments.chunkSize,
-            tmp_file_path: item.arguments.tmp_file_path,
-            byteLength: item.arguments.byteLength,
-            context_key: item.arguments.context_key,
-          },
-          tool: "rag" as const,
-          type: "tool_call" as const,
-        }))[0];
-    }
+    return parseToolCallEnvelope(parsed);
   }
 
   if (!Array.isArray(parsed)) return null;
 
-  return parsed
-    .filter(item => {
-      return isValidTool(item) &&
-        item.tool === "set_context" &&
-        isScope(item.arguments.scope) &&
-        (item.arguments.operation === undefined || isSetOperation(item.arguments.operation)) &&
-        typeof item.arguments.key === 'string' &&
-        item.arguments.key.trim();
-    })
-    .map(item => ({
-      arguments: {
-        key: item.arguments.key,
-        operation: item.arguments.operation || "set",
-        scope: item.arguments.scope,
-        value: item.arguments.value,
-      },
-      tool: "set_context",
-      type: "tool_call",
-    }));
+  const envelopes = parsed
+    .map((item) => parseToolCallEnvelope(item))
+    .filter((item): item is StageToolCallEnvelope => !!item);
+
+  return envelopes.length ? envelopes : null;
 
 };

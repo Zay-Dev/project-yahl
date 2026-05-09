@@ -2,7 +2,12 @@ import path from "path";
 
 import Redis from "ioredis";
 
-import type { AskUserToolCallEnvelope, StageContextPayload } from "../shared/stage-contract";
+import type {
+  AskUserToolCallEnvelope,
+  RenderA2uiPlanToolCallEnvelope,
+  SetContextToolCallEnvelope,
+  StageContextPayload,
+} from "../shared/stage-contract";
 import type { StageExecutionMeta } from "../shared/transport";
 
 import { toA2uiFromPlan } from "../shared/a2ui-from-plan";
@@ -237,6 +242,20 @@ export const buildAskUserContinuationWithContext = (rawLines: string) => {
   };
 };
 
+export const validateSurfaceUiKindConflict = (
+  knownSurfaceUiKinds: Map<string, string>,
+  surfaceId: string,
+  uiKind: string,
+) => {
+  const existingUiKind = knownSurfaceUiKinds.get(surfaceId);
+  if (!existingUiKind || existingUiKind === uiKind) return null;
+
+  return (
+    `surfaceId "${surfaceId}" already initialized as ${existingUiKind}; ` +
+    `cannot re-create with ${uiKind}. Use a new surfaceId.`
+  );
+};
+
 type StageFilterFn = (lines: string) => {
   generatedLine: number;
   sourceLine: number;
@@ -277,6 +296,7 @@ const _execute = async (
 
   try {
     const runtime = createRuntimeContext();
+    const surfaceUiKinds = new Map<string, string>();
     if (resumeHydrate) {
       Object.assign(runtime.get("context")!, resumeHydrate.context ?? {});
       Object.assign(runtime.get("types")!, resumeHydrate.types ?? {});
@@ -316,6 +336,49 @@ const _execute = async (
         filterLines?: StageFilterFn,
       ) => {
         let stageRequestId = "";
+        const applyRenderA2uiEnvelope = async (renderEnvelope: RenderA2uiPlanToolCallEnvelope) => {
+          const { dataRef, mode, plan } = renderEnvelope.arguments;
+          const bucket = getBucketForScope(dataRef.scope);
+          const rootData = runtime.get(bucket)?.[dataRef.key];
+          const surfaceOverride = renderEnvelope.arguments.surfaceId?.trim();
+          const mergedPlan = {
+            ...plan,
+            surfaceId: surfaceOverride || plan.surfaceId,
+          };
+          const logMeta =
+            `mode=${mode} ui_kind=${mergedPlan.ui_kind} surfaceId=${mergedPlan.surfaceId} ` +
+            `dataRefScope=${dataRef.scope} dataRefKey=${dataRef.key}`;
+          const conflictMessage = validateSurfaceUiKindConflict(
+            surfaceUiKinds,
+            mergedPlan.surfaceId,
+            mergedPlan.ui_kind,
+          );
+          if (conflictMessage) {
+            process.stderr.write(`[render_a2ui_plan] conflict ${logMeta}: ${conflictMessage}\n`);
+            throw new Error(conflictMessage);
+          }
+
+          const resultA2ui = toA2uiFromPlan(rootData, mergedPlan);
+          if (!resultA2ui.length) {
+            process.stderr.write(
+              `[render_a2ui_plan] empty output ${logMeta}\n`,
+            );
+            return;
+          }
+
+          surfaceUiKinds.set(mergedPlan.surfaceId, mergedPlan.ui_kind);
+
+          const sessionId = process.env.AGENT_SESSION_ID?.trim();
+          if (sessionId) {
+            await agentTrackers.sessionA2ui({
+              envelopes: resultA2ui,
+              mode,
+              sessionId,
+              surfaceId: mergedPlan.surfaceId,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        };
 
         try {
           const override = forkRunManager?.getOverride(_stageIndex, loopMeta?.index);
@@ -383,7 +446,10 @@ const _execute = async (
 
           if (Array.isArray(envelope)) {
             envelope
-              .filter((item) => item.type === "tool_call" && item.tool === "set_context")
+              .filter(
+                (item): item is SetContextToolCallEnvelope =>
+                  item.type === "tool_call" && item.tool === "set_context",
+              )
               .forEach((item) => {
                 setContextValue(
                   runtime,
@@ -393,7 +459,19 @@ const _execute = async (
                   item.arguments.operation,
                 );
               });
-            process.stdout.write(`[Orchestrator Stage] set_context calls, length: ${envelope.length}\n`);
+            const renderCalls = envelope
+              .filter(
+                (item): item is RenderA2uiPlanToolCallEnvelope =>
+                  item.type === "tool_call" && item.tool === "render_a2ui_plan",
+              );
+            for (const renderEnvelope of renderCalls) {
+              await applyRenderA2uiEnvelope(renderEnvelope);
+            }
+            process.stdout.write(
+              `[Orchestrator Stage] tool_call array length: ${envelope.length} ` +
+                `(set_context=${envelope.filter((item) => item.type === "tool_call" && item.tool === "set_context").length}, ` +
+                `render_a2ui_plan=${renderCalls.length})\n`,
+            );
           } else if (envelope.type === "tool_call" && envelope.tool === "rag") {
             const result = await handleRag(
               runtime,
@@ -446,38 +524,7 @@ const _execute = async (
 
             return undefined;
           } else if (envelope.type === "tool_call" && envelope.tool === "render_a2ui_plan") {
-            const { dataRef, plan } = envelope.arguments;
-            const bucket = getBucketForScope(dataRef.scope);
-            const rootData = runtime.get(bucket)?.[dataRef.key];
-            const surfaceOverride = envelope.arguments.surfaceId?.trim();
-            const mergedPlan = {
-              ...plan,
-              surfaceId: surfaceOverride || plan.surfaceId,
-            };
-            try {
-              const resultA2ui = toA2uiFromPlan(rootData, mergedPlan);
-              if (!resultA2ui.length) {
-                process.stderr.write(
-                  `[render_a2ui_plan] empty output ui_kind=${mergedPlan.ui_kind} ` +
-                    `dataRef=${JSON.stringify(dataRef)}\n`,
-                );
-              } else {
-                const sessionId = process.env.AGENT_SESSION_ID?.trim();
-                if (sessionId) {
-                  await agentTrackers.sessionA2ui({
-                    envelopes: resultA2ui,
-                    sessionId,
-                    timestamp: new Date().toISOString(),
-                  });
-                }
-              }
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              process.stderr.write(
-                `[render_a2ui_plan] error ui_kind=${mergedPlan.ui_kind} ` +
-                  `dataRef=${JSON.stringify(dataRef)}: ${msg}\n`,
-              );
-            }
+            await applyRenderA2uiEnvelope(envelope);
             if (stageRequestId) {
               const rid = stageRequestId;
               stageRequestId = "";

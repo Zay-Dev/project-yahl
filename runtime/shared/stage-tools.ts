@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 
-import { parseA2uiPlanV1 } from "./a2ui-plan";
+import { parseA2uiPlanV1Detailed, type A2uiPlanParseIssueCode } from "./a2ui-plan";
 import {
   CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
@@ -52,6 +52,19 @@ const isSetOperation = (value: unknown): value is SetContextToolArguments["opera
   CONTEXT_SET_OPERATIONS.includes(value as SetContextToolArguments["operation"]);
 
 export type SetContextToolArguments = SetContextToolCallEnvelope["arguments"];
+export type RenderA2uiPlanToolArgumentsParseIssue = {
+  code: A2uiPlanParseIssueCode | "INVALID_JSON" | "INVALID_ROOT" | "INVALID_VERSION" | "INVALID_DATA_REF";
+  message: string;
+};
+
+export type RenderA2uiPlanToolArgumentsParseResult =
+  | { issue: RenderA2uiPlanToolArgumentsParseIssue; ok: false }
+  | { arguments: RenderA2uiPlanToolCallEnvelope["arguments"]; ok: true };
+
+const RENDER_A2UI_PLAN_MODES = ["append", "replace"] as const;
+type RenderA2uiPlanMode = (typeof RENDER_A2UI_PLAN_MODES)[number];
+const isRenderA2uiPlanMode = (value: unknown): value is RenderA2uiPlanMode =>
+  typeof value === "string" && RENDER_A2UI_PLAN_MODES.includes(value as RenderA2uiPlanMode);
 
 export const STAGE_TOOLS = [
   {
@@ -173,7 +186,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Emit A2UI v0.8 surfaces from structured context data using a compact plan (bindings are JSON pointers). Invoke this function tool directly after canonical JSON exists at dataRef (e.g. via set_context or CONTEXT). Do not emit via run_bash or echo. Last successful render is stored on the session at finalize. Does not duplicate large payloads.",
+        "Emit A2UI v0.8 surfaces from structured context data using a compact plan (bindings are JSON pointers). Invoke this function tool directly after canonical JSON exists at dataRef (e.g. via set_context or CONTEXT). Do not emit via run_bash or echo. Multiple successful calls are merged per surface and stored on the session at finalize. Does not duplicate large payloads.",
       name: "render_a2ui_plan",
       parameters: {
         properties: {
@@ -185,6 +198,11 @@ export const STAGE_TOOLS = [
             },
             required: ["scope", "key"],
             type: "object",
+          },
+          mode: {
+            description: "Optional merge mode. replace overwrites target surface; append keeps prior envelopes and adds new ones.",
+            enum: [...RENDER_A2UI_PLAN_MODES],
+            type: "string",
           },
           plan: {
             description:
@@ -335,26 +353,72 @@ export const askUserArgumentsToEnvelope = (
 export const parseRenderA2uiPlanToolArguments = (
   raw: string,
 ): RenderA2uiPlanToolCallEnvelope["arguments"] | null => {
+  const parsed = parseRenderA2uiPlanToolArgumentsDetailed(raw);
+  return parsed.ok ? parsed.arguments : null;
+};
+
+export const parseRenderA2uiPlanToolArgumentsDetailed = (
+  raw: string,
+): RenderA2uiPlanToolArgumentsParseResult => {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw) as unknown;
   } catch {
-    return null;
+    return {
+      issue: { code: "INVALID_JSON", message: "arguments must be valid JSON" },
+      ok: false,
+    };
   }
-  if (!isRecord(parsed)) return null;
-  if (parsed.version !== "renderA2uiPlan.v1") return null;
-  const planParsed = parseA2uiPlanV1(parsed.plan);
-  if (!planParsed) return null;
+  if (!isRecord(parsed)) {
+    return {
+      issue: { code: "INVALID_ROOT", message: "arguments must be an object" },
+      ok: false,
+    };
+  }
+  if (parsed.version !== "renderA2uiPlan.v1") {
+    return {
+      issue: { code: "INVALID_VERSION", message: "version must be renderA2uiPlan.v1" },
+      ok: false,
+    };
+  }
+  const planParsed = parseA2uiPlanV1Detailed(parsed.plan);
+  if (!planParsed.ok) {
+    return {
+      issue: { code: planParsed.issueCode, message: planParsed.message },
+      ok: false,
+    };
+  }
   const dr = parsed.dataRef;
-  if (!isRecord(dr)) return null;
-  if (!isScope(dr.scope)) return null;
-  if (typeof dr.key !== "string" || !dr.key.trim()) return null;
+  if (!isRecord(dr) || !isScope(dr.scope) || typeof dr.key !== "string" || !dr.key.trim()) {
+    return {
+      issue: {
+        code: "INVALID_DATA_REF",
+        message: "dataRef requires valid scope and non-empty key",
+      },
+      ok: false,
+    };
+  }
+  const modeRaw = parsed.mode;
+  const mode: RenderA2uiPlanMode = modeRaw === undefined ? "replace" : modeRaw;
+  if (!isRenderA2uiPlanMode(mode)) {
+    return {
+      issue: {
+        code: "INVALID_ROOT",
+        message: "mode must be append or replace",
+      },
+      ok: false,
+    };
+  }
 
   return {
-    dataRef: { key: dr.key.trim(), scope: dr.scope },
-    plan: planParsed,
-    surfaceId: typeof parsed.surfaceId === "string" ? parsed.surfaceId.trim() : undefined,
-    version: "renderA2uiPlan.v1",
+    arguments: {
+      dataRef: { key: dr.key.trim(), scope: dr.scope },
+      mode,
+      plan: planParsed.plan,
+      surfaceId: typeof parsed.surfaceId === "string" ? parsed.surfaceId.trim() : undefined,
+      version: "renderA2uiPlan.v1",
+    },
+    ok: true,
   };
 };
 

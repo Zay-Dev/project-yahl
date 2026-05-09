@@ -19,8 +19,43 @@ The `render_a2ui_plan` tool is available only in that case. If `/a2ui(...)` is n
 ## Steps
 
 1. Confirm `context.context.<key>` (global bucket) holds the JSON you want to visualize. If missing, use `set_context` with `scope: "global"` first. Do not attempt to verify persisted writeback from inside the same sandbox run; runtime context mutation is finalized outside the sandbox.
-2. Choose a compact **`a2uiPlan.v1`**: `surfaceId`, `ui_kind`, `bindings` as JSON pointers (`/` or `/path/...`), optional `column_bindings` for `table`, optional `limits.maxItems`.
-3. Call the registered function tool **`render_a2ui_plan`** once with JSON arguments (see below). The orchestrator buffers the last successful render and persists it on the **session** at finalize (not on stage runtime snapshots).
+2. Prefer translator-first planning: infer a compact **`a2uiPlan.v1`** from schema shape (not payload literals), then emit `surfaceId`, `ui_kind`, `bindings` as JSON pointers (`/` or `/path/...`), optional `column_bindings` for `table`, optional `limits.maxItems`.
+3. Call the registered function tool **`render_a2ui_plan`** with JSON arguments (see below). You may call it multiple times in one run. The orchestrator persists merged successful renders on the **session** at finalize (not on stage runtime snapshots).
+
+## Supported components (canonical)
+
+Use only these `ui_kind` values and binding shapes. Do not invent component names.
+
+- `summary_card`
+  - required: `bindings.title`, `bindings.body`
+  - optional: `bindings.subtitle`
+- `detail_card`
+  - required: `bindings.title`, `bindings.body`
+  - optional: `bindings.subtitle`
+- `list_cards`
+  - required: `bindings.items`, `bindings.item_title`
+  - optional: `bindings.item_subtitle`
+- `metric_cards`
+  - required: `bindings.items`
+  - optional: `bindings.item_label` (default `/label`), `bindings.item_value` (default `/value`)
+- `table`
+  - required: `bindings.rows`, `column_bindings`
+  - optional: none
+  - link column extension: `{"header":"Source","path":"/source_url","kind":"link","urlPath":"/source_url","labelPath":"/title"}`
+
+All binding values must be JSON Pointers.
+
+## Markdown mapping guide
+
+Choose `ui_kind` by data shape, not by preferred visual style:
+
+- Full markdown document/string (for example `brief_markdown`) -> `summary_card` or `detail_card` with `bindings.title` + `bindings.body` (optional `subtitle`).
+- Array of repeated textual sections -> `list_cards` with `items` + `item_title` (+ optional `item_subtitle`).
+- Array of KPI rows (`label/value`) -> `metric_cards`.
+- Array of tabular rows with stable columns -> `table` + `column_bindings`.
+
+If markdown is already final, bind the whole markdown field into `body`. Do not re-parse markdown into synthetic arrays inside `plan`.
+Avoid putting long markdown or row literals in the plan itself.
 
 ## Do not
 
@@ -59,8 +94,67 @@ If your stack also shows an internal envelope shape `{ "type": "tool_call", "too
 
 Replace pointers and `ui_kind` to match the actual shape of your `<key>` value.
 
+## Validity examples
+
+Valid markdown-oriented call (single document):
+
+```json
+{
+  "version": "renderA2uiPlan.v1",
+  "dataRef": { "scope": "global", "key": "result" },
+  "plan": {
+    "version": "a2uiPlan.v1",
+    "surfaceId": "ev-daily-brief",
+    "ui_kind": "summary_card",
+    "bindings": {
+      "title": "/title",
+      "body": "/brief_markdown",
+      "subtitle": "/generated_at"
+    }
+  }
+}
+```
+
+Valid append call (same surface incremental update):
+
+```json
+{
+  "version": "renderA2uiPlan.v1",
+  "dataRef": { "scope": "global", "key": "result" },
+  "mode": "append",
+  "plan": {
+    "version": "a2uiPlan.v1",
+    "surfaceId": "ev-daily-brief",
+    "ui_kind": "metric_cards",
+    "bindings": {
+      "items": "/raw_intel",
+      "item_label": "/title",
+      "item_value": "/summary_zh"
+    }
+  }
+}
+```
+
+Invalid (missing required `items` for metric cards):
+
+```json
+{
+  "version": "renderA2uiPlan.v1",
+  "dataRef": { "scope": "global", "key": "result" },
+  "plan": {
+    "version": "a2uiPlan.v1",
+    "surfaceId": "ev-daily-brief",
+    "ui_kind": "metric_cards",
+    "bindings": { "body": "/brief_markdown" }
+  }
+}
+```
+
 ## Rules
 
 - `dataRef.scope` should be **`global`** for session-final surfaces unless the task intentionally uses another bucket.
+- `mode` is optional. Default is `replace` (replace only the same `surfaceId`). Set `mode: "append"` to keep existing envelopes and append new ones for the same `surfaceId`.
+- Use a unique `surfaceId` per distinct section/component tree. Reuse the same `surfaceId` only when continuing the same surface (same UI intent/kind), not for unrelated blocks.
 - **`metric_cards`**: `bindings.items` must resolve to a **JSON array** of row objects (each row uses `item_label` / `item_value` pointers, defaulting to `/label` and `/value`). If `<key>` is a single object (not an array), use **`summary_card`** or **`detail_card`** with `title` / `body` (and optional `subtitle`) pointers instead.
 - Shorthand: **`/a2ui(result)`** means `key: "result"`.
+- For `table`, do not flatten headers/rows into one `Text` string like `A | B | C`. Keep headers and row cells as structured components.

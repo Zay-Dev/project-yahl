@@ -3,11 +3,13 @@ import { describe, it } from "node:test";
 
 import {
   parseAskUserToolArguments,
+  parseRenderA2uiPlanToolArgumentsDetailed,
   parseRenderA2uiPlanToolArguments,
   parseRunBashToolArguments,
   parseSetContextToolArguments,
   setContextArgumentsToEnvelope,
 } from "../shared/stage-tools";
+import { parseStageEnvelope } from "../shared/stage-contract";
 
 describe("parseSetContextToolArguments", () => {
   it("parses valid arguments", () => {
@@ -156,5 +158,123 @@ describe("parseRenderA2uiPlanToolArguments", () => {
     );
     assert.ok(parsed);
     assert.equal(parsed!.plan.ui_kind, "summary_card");
+    assert.equal(parsed!.mode, "replace");
+  });
+
+  it("parses explicit append mode", () => {
+    const parsed = parseRenderA2uiPlanToolArguments(
+      JSON.stringify({
+        dataRef: { key: "out", scope: "stage" },
+        mode: "append",
+        plan: {
+          bindings: { body: "/b", title: "/t" },
+          surfaceId: "surf",
+          ui_kind: "summary_card",
+          version: "a2uiPlan.v1",
+        },
+        version: "renderA2uiPlan.v1",
+      }),
+    );
+    assert.ok(parsed);
+    assert.equal(parsed!.mode, "append");
+  });
+
+  it("rejects invalid mode", () => {
+    const parsed = parseRenderA2uiPlanToolArguments(
+      JSON.stringify({
+        dataRef: { key: "out", scope: "stage" },
+        mode: "merge",
+        plan: {
+          bindings: { body: "/b", title: "/t" },
+          surfaceId: "surf",
+          ui_kind: "summary_card",
+          version: "a2uiPlan.v1",
+        },
+        version: "renderA2uiPlan.v1",
+      }),
+    );
+    assert.equal(parsed, null);
+  });
+
+  it("returns detailed issue for table without column_bindings", () => {
+    const parsed = parseRenderA2uiPlanToolArgumentsDetailed(
+      JSON.stringify({
+        dataRef: { key: "out", scope: "stage" },
+        plan: {
+          bindings: { rows: "/rows" },
+          surfaceId: "surf",
+          ui_kind: "table",
+          version: "a2uiPlan.v1",
+        },
+        version: "renderA2uiPlan.v1",
+      }),
+    );
+    assert.equal(parsed.ok, false);
+    if (!parsed.ok) {
+      assert.equal(parsed.issue.code, "TABLE_COLUMN_BINDINGS_REQUIRED");
+    }
+  });
+
+  it("parses link-enabled table columns", () => {
+    const parsed = parseRenderA2uiPlanToolArguments(
+      JSON.stringify({
+        dataRef: { key: "out", scope: "stage" },
+        plan: {
+          bindings: { rows: "/rows" },
+          column_bindings: [
+            {
+              header: "Source",
+              kind: "link",
+              labelPath: "/title",
+              path: "/source_url",
+              urlPath: "/source_url",
+            },
+          ],
+          surfaceId: "surf",
+          ui_kind: "table",
+          version: "a2uiPlan.v1",
+        },
+        version: "renderA2uiPlan.v1",
+      }),
+    );
+    assert.ok(parsed);
+    assert.equal(parsed!.plan.column_bindings?.[0]?.kind, "link");
+  });
+});
+
+describe("parseStageEnvelope (tool_call arrays)", () => {
+  it("parses mixed set_context and render_a2ui_plan array in order", () => {
+    const env = parseStageEnvelope(
+      JSON.stringify([
+        {
+          arguments: {
+            key: "title",
+            scope: "global",
+            value: "daily",
+          },
+          tool: "set_context",
+          type: "tool_call",
+        },
+        {
+          arguments: {
+            dataRef: { key: "result", scope: "global" },
+            plan: {
+              bindings: { body: "/brief_markdown", title: "/title" },
+              surfaceId: "surf",
+              ui_kind: "summary_card",
+              version: "a2uiPlan.v1",
+            },
+            version: "renderA2uiPlan.v1",
+          },
+          tool: "render_a2ui_plan",
+          type: "tool_call",
+        },
+      ]),
+    );
+
+    assert.ok(Array.isArray(env));
+    assert.equal(env.length, 2);
+    assert.equal(env[0]?.tool, "set_context");
+    assert.equal(env[1]?.tool, "render_a2ui_plan");
   });
 });
