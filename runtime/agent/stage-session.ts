@@ -35,9 +35,11 @@ type BootstrapMessage = {
 
 type StageRunner = {
   runCommand: (command: string) => Promise<string>;
-  
-  chatWithTools: (messages: ChatApiMessage[]) =>
-    Promise<ChatAssistantMessage>;
+
+  chatWithTools: (
+    messages: ChatApiMessage[],
+    options?: { temperature?: number },
+  ) => Promise<ChatAssistantMessage>;
 };
 
 type StageSessionOptions = {
@@ -107,6 +109,10 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
       ? (types as Record<string, unknown>)
       : {};
 
+  const temperatureRaw = parsed.temperature;
+  const temperature =
+    typeof temperatureRaw === "number" && Number.isFinite(temperatureRaw) ? temperatureRaw : undefined;
+
   return {
     context: {
       context: context.context as Record<string, unknown>,
@@ -114,6 +120,7 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
       types: typesRecord,
     },
     currentStage: parsed.currentStage,
+    ...(temperature === undefined ? {} : { temperature }),
   };
 };
 
@@ -240,7 +247,9 @@ export const runStageSession = async (
   while (turns < maxTurns) {
     turns += 1;
 
-    const assistantMessage = await runner.chatWithTools(stageMessages);
+    const chatOpts =
+      stageInput.temperature === undefined ? undefined : { temperature: stageInput.temperature };
+    const assistantMessage = await runner.chatWithTools(stageMessages, chatOpts);
     stageMessages.push(assistantMessage);
 
     const toolCalls = assistantMessage.tool_calls || [];

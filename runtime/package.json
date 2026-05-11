@@ -8,7 +8,7 @@
     "agent": "tsx agent/index.ts",
     "dev": "tsx watch orchestrator/index.ts",
     "orchestrate": "tsx orchestrator/index.ts",
-    "test": "tsx --test \"agent/**/*.test.ts\" \"orchestrator/**/*.test.ts\"",
+    "test": "AGENT_SESSION_ID=test-session tsx --test \"agent/**/*.test.ts\" \"orchestrator/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

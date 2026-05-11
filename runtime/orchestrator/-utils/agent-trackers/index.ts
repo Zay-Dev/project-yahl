@@ -11,6 +11,7 @@ export type PushRequestEvent = {
   executionMeta: StageExecutionMeta;
   requestId: string;
   sessionId: string;
+  temperature?: number;
   timestamp: string;
 };
 

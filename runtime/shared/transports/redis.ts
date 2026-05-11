@@ -112,9 +112,9 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     };
 
   pushRequest: IPublisher['pushRequest'] =
-    async (context, currentStage, meta, contextAfter) => {
+    async (context, currentStage, meta, contextAfter, temperature) => {
       const requestId = randomUUID();
-      this.emit("pushRequest", { requestId, context, currentStage, meta });
+      this.emit("pushRequest", { context, currentStage, meta, requestId, temperature });
 
       await this.redis.lpush(this.requestQueue,
         JSON.stringify({
@@ -126,6 +126,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
             stage: contextAfter.stage ?? {},
             types: contextAfter.types ?? {},
           },
+          temperature,
         })
       );
 

@@ -19,6 +19,7 @@ export type StageContextPayload = {
 export type StageSessionInput = {
   context: StageContextPayload;
   currentStage: string;
+  temperature?: number;
 };
 
 export type StageResultEnvelope = {

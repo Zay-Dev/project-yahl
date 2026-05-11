@@ -33,6 +33,36 @@ export const getAiLogicStartLineInFile = (text: string) => {
   return fenceIndex + 2;
 };
 
+const leadingTemperaturePattern = /^\s*@temperature\s*\(\s*([0-9]+(?:\.[0-9]+)?)\s*\)\s*/;
+
+export const stripLeadingTemperature = (block: string): { temperature?: number; text: string } => {
+  const lines = block.split("\n");
+  if (!lines.length) return { text: block };
+
+  const firstLine = lines[0] ?? "";
+  const hasContext = !!firstLine.match(/\s*CONTEXT:/);
+  const matchTemp = firstLine.match(leadingTemperaturePattern);
+
+  if (!matchTemp) {
+    return { text: block };
+  }
+
+  const strippedFirst = firstLine.replace(leadingTemperaturePattern, "");
+  const text = [strippedFirst, ...lines.slice(1)].join("\n");
+
+  if (hasContext) {
+    return { text };
+  }
+
+  const temperature = Number(matchTemp[1]);
+
+  if (!Number.isFinite(temperature)) {
+    return { text };
+  }
+
+  return { temperature, text };
+};
+
 const isLoopStage = (block: string) =>
   !!block.match(/^\s*for each\s+(\w+)\s+of\s+(\[.*\])/i) &&
   !!["{", "}"].find((char) => block.trim().endsWith(char));
@@ -87,10 +117,13 @@ export const parseStages = (aiLogic: string): ParsedStage[] => {
     const { nextCursor, sourceStartLine } = resolveBlockSourceStartLine(aiLines, blockLines, cursor);
 
     cursor = nextCursor;
+    const { temperature, text } = stripLeadingTemperature(block);
+
     stages.push({
-      lines: block,
+      lines: text,
       sourceStartLine,
-      type: isLoopStage(block) ? "loop" : "plain",
+      type: isLoopStage(text) ? "loop" : "plain",
+      ...(temperature === undefined ? {} : { temperature }),
     });
   }
 

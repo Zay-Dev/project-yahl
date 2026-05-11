@@ -82,6 +82,7 @@ export const handleLoop = async (
   sourceFilePath: string,
   loopSourceLine: number,
   execute: StageExecuteFn,
+  loopStageTemperature?: number,
 ) => {
   const loopSetup = parseLoop(lines, runtime);
   if (!loopSetup) {
@@ -110,6 +111,7 @@ export const handleLoop = async (
         arraySnapshot: Array.isArray(array) ? JSON.parse(JSON.stringify(array)) : [],
         index: i,
         value: currentValue,
+        ...(loopStageTemperature === undefined ? {} : { temperature: loopStageTemperature }),
       },
       execute,
     );

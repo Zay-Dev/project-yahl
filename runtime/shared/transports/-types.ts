@@ -19,7 +19,8 @@ export type TRequestEnvelope = {
   requestId: string;
   context: TRuntimeContext;
   currentStage: string;
-  contextAfter?: TRuntimeContext,
+  contextAfter?: TRuntimeContext;
+  temperature?: number;
 };
 
 export type TStageExecutionMeta = {
@@ -44,7 +45,13 @@ export type TStageExecutionMeta = {
 interface IPublisherEventMap {
   toolCall: [envelope: { requestId: string, toolCalls: ChatToolCall[] }];
   modelResponse: [envelope: { requestId: string, response: TModelResponse }];
-  pushRequest: [envelope: { requestId: string, context: TRuntimeContext, currentStage: string, meta: TStageExecutionMeta }];
+  pushRequest: [envelope: {
+    context: TRuntimeContext;
+    currentStage: string;
+    meta: TStageExecutionMeta;
+    requestId: string;
+    temperature?: number;
+  }];
   stageFinish: [envelope: { contextAfter: unknown; requestId: string }];
 }
 
@@ -68,6 +75,7 @@ export interface IPublisher extends IBase {
     currentStage: string,
     meta: TStageExecutionMeta,
     contextAfter?: Partial<TRuntimeContext | undefined>,
+    temperature?: number,
   ) => Promise<{ requestId: string, envelope: StageEnvelope }>;
 }
 

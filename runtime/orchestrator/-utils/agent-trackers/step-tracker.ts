@@ -82,6 +82,7 @@ export const createStepTracker = () => {
         requestId: event.requestId,
         stageId: event.executionMeta.stageId,
         stageIndex: event.executionMeta.stageIndex,
+        temperature: event.temperature,
         timestamp: event.timestamp,
       });
     });

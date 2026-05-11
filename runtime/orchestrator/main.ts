@@ -196,7 +196,7 @@ export const main = async (cli: CliOptions) => {
     });
 
     publisher
-      .on('pushRequest', async ({ requestId, context, currentStage, meta }) => {
+      .on('pushRequest', async ({ requestId, context, currentStage, meta, temperature }) => {
         requestIdToStageId.set(requestId, meta.stageId);
         await agentTrackers.pushRequest({
           contextBefore: context,
@@ -204,6 +204,7 @@ export const main = async (cli: CliOptions) => {
           executionMeta: meta,
           requestId,
           sessionId,
+          temperature,
           timestamp: new Date().toISOString(),
         });
       })

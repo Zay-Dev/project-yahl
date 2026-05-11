@@ -40,6 +40,7 @@ export interface CliOptions {
 export interface StageLoopMeta {
   arraySnapshot: unknown[];
   index: number;
+  temperature?: number;
   value: unknown;
 }
 
@@ -61,6 +62,7 @@ export interface StagePosition {
 export interface ParsedStage {
   lines: string;
   sourceStartLine: number;
+  temperature?: number;
   type: "loop" | "plain";
 }
 

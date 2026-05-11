@@ -399,8 +399,8 @@ export const parseRenderA2uiPlanToolArgumentsDetailed = (
     };
   }
   const modeRaw = parsed.mode;
-  const mode: RenderA2uiPlanMode = modeRaw === undefined ? "replace" : modeRaw;
-  if (!isRenderA2uiPlanMode(mode)) {
+  const modeCandidate = modeRaw === undefined || modeRaw === null ? "replace" : modeRaw;
+  if (!isRenderA2uiPlanMode(modeCandidate)) {
     return {
       issue: {
         code: "INVALID_ROOT",
@@ -409,6 +409,8 @@ export const parseRenderA2uiPlanToolArgumentsDetailed = (
       ok: false,
     };
   }
+
+  const mode = modeCandidate;
 
   return {
     arguments: {

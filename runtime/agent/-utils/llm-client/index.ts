@@ -39,14 +39,16 @@ export const setUsageEmitter = (fn: ((payload: UsageEmitPayload) => void) | null
 
 export const chatWithTools = async (
   messages: ChatApiMessage[],
+  options?: { temperature?: number },
 ): Promise<ChatAssistantMessage> => {
-  return await _chat(messages, { allowTools: true });
+  return await _chat(messages, { allowTools: true, ...options });
 };
 
 const _chat = async (
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
   options: {
     allowTools?: true;
+    temperature?: number;
   } = {},
 ) => {
   try {
@@ -54,12 +56,14 @@ const _chat = async (
       messages,
       model: config.model,
       stream: false,
-  
+
       ...options.allowTools && {
         tool_choice: "auto",
         tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
       },
-  
+
+      ...options.temperature !== undefined && { temperature: options.temperature },
+
       thinking: { type: config.thinkingMode ? "enabled" : "disabled" },
     } as any);
     

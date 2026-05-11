@@ -110,7 +110,7 @@ export const startRedisDaemon = async () => {
     const envelope = await subscriber.waitForRequest();
     if (!envelope) continue;
 
-    const { requestId, context, currentStage, contextAfter } = envelope;
+    const { context, contextAfter, currentStage, requestId, temperature } = envelope;
     const { reply, error, onModelResponse } = subscriber.getReply(requestId);
     try {
       const _runStage = async (script: string = currentStage) => {
@@ -140,14 +140,18 @@ export const startRedisDaemon = async () => {
         }
   
         const out = await runStageSession(
-          { context, currentStage: script },
+          {
+            context,
+            currentStage: script,
+            ...(temperature === undefined ? {} : { temperature }),
+          },
           messages,
           {
             runCommand,
-            chatWithTools: async (messages) => {
+            chatWithTools: async (messages, opts) => {
               const start = Date.now();
-              const result = await chatWithTools(messages);
-  
+              const result = await chatWithTools(messages, opts);
+
               await onModelResponse({
                 ...result.response,
                 durationMs: Date.now() - start,

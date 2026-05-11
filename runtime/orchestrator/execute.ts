@@ -19,6 +19,7 @@ import {
   firstTraceableLineOffset,
   getLineSinceOffset,
   parseStages,
+  stripLeadingTemperature,
   toStableHash,
 } from "./stage-parse";
 
@@ -305,7 +306,7 @@ const _execute = async (
 
     let appliedResumeHydrateStage = false;
 
-    for (const { type, lines, sourceStartLine } of stages) {
+    for (const { lines, sourceStartLine, temperature: stageTemperature, type } of stages) {
       resetStageContext(runtime);
       Object.assign(runtime.get("stage")!, stageContext);
       if (resumeHydrate && !appliedResumeHydrateStage) {
@@ -325,6 +326,7 @@ const _execute = async (
           sourceFilePath,
           absoluteSourceStartLine,
           execute,
+          stageTemperature,
         );
         continue;
       }
@@ -393,7 +395,9 @@ const _execute = async (
           });
           
           const next = filterLines?.(override?.currentStage || lines);
-          const currentStage = next?.stageText || override?.currentStage || lines;
+          const rawStage = next?.stageText || override?.currentStage || lines;
+          const { temperature: restripTemp, text: currentStage } = stripLeadingTemperature(rawStage);
+          const effectiveTemperature = restripTemp ?? stageTemperature ?? loopMeta?.temperature;
 
           const stageText = currentStage;
           const meaningfulOffset = firstTraceableLineOffset(stageText);
@@ -440,6 +444,7 @@ const _execute = async (
             forkRunManager?.isFastForward(_stageIndex, loopMeta?.index) ?
               forkRunManager?.getContextAfter(_stageIndex, loopMeta?.index) :
               undefined,
+            effectiveTemperature,
           );
 
           stageRequestId = requestId;

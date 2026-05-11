@@ -38,8 +38,8 @@ const cliOptions = (() => {
   const defaultAgentMdPath = path.resolve(__dirname, 'agent', "Agent.md");
   const defaultYahlDirPath = path.resolve(__dirname, 'orchestrator', "YAHL");
 
-  const sessionId = pairs["session-id"] || process.env.AGENT_SESSION_ID || '';
-console.log(process.env);
+  const sessionId = pairs["session-id"] || process.env.AGENT_SESSION_ID || "";
+
   if (!sessionId) {
     throw new Error("Session ID is required");
   }
