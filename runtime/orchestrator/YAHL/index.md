@@ -17,7 +17,7 @@ Per-stage fields:
 | `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
 | `contextMode` | VM-only `CONTEXT: { ... }` before the next AI stage |
 | `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` |
-| `loopSetup` | e.g. `for each i of [1..5,+2]`; body compiled inside `{ }` |
+| `loopSetup` | Orchestrator-only (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
 | `temperature` | Model temperature for AI stages (0–2) |
 | `contextKeys` | Allowlist of context/stage keys passed into the runner |
 | `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |

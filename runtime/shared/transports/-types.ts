@@ -90,6 +90,7 @@ export interface IPublisher extends IBase {
       contextAfter?: TStorage | undefined,
       executionMeta?: StageExecutionMeta,
       loopMeta?: TLoopMeta | undefined,
+      persistedStage?: YahlStage,
     },
   ) => Promise<{
     requestId: string,

@@ -104,4 +104,5 @@ export type StageExecuteFn = (
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
   resumeHydrate?: StageContextPayload,
+  stagesOverride?: ParsedStage[],
 ) => Promise<{ runtime: RuntimeContext; stages: ParsedStage[] }>;

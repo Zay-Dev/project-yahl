@@ -34,11 +34,11 @@ stages:
     updateContextKeys: [c]
     logic: |
       IF: context.context.c % 2 === 0;
-         c = context.context.c * 2;
+        (() => ({ c: context.context.c * 2 }));
       ELSE IF: context.context.c > 30;
-         c = context.context.c - 2;
+        (() => ({ c: context.context.c - 2 }));
       ELSE:
-         c = context.context.c / 2;
+        (() => ({ c: context.context.c / 2 }));
       END:
 
   - contextKeys: [c]
@@ -48,7 +48,7 @@ stages:
 
   - temperature: 2
     contextKeys: [a, b, c]
-    updateContextKeys: [result]
+    produceContextKeys: [result]
     logic: |
       const result = {a,b,c};
 

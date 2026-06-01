@@ -10,7 +10,7 @@ import type {
 } from "../shared/stage-contract";
 import type { TStorage } from "../shared/transports/-types";
 import type { StageExecutionMeta } from "../shared/transport";
-import { validateYahlStage } from "../shared/yahl-stage";
+import { toAgentStage, validateYahlStage } from "../shared/yahl-stage";
 
 import { toA2uiFromPlan } from "../shared/a2ui-from-plan";
 
@@ -308,10 +308,28 @@ type StageFilterFn = (lines: string) => {
 
 let _stageIndex = -1;
 
-export const execute: StageExecuteFn = (text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate) =>
-  _execute(false, text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate);
-export const executeAsRoot: StageExecuteFn = (text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate) =>
-  _execute(true, text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate);
+export const execute: StageExecuteFn = (
+  text,
+  stageContext,
+  seedTypes,
+  sourceFilePath,
+  sourceBaseLine,
+  loopMeta,
+  hydrate,
+  stagesOverride,
+) =>
+  _execute(false, text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate, stagesOverride);
+export const executeAsRoot: StageExecuteFn = (
+  text,
+  stageContext,
+  seedTypes,
+  sourceFilePath,
+  sourceBaseLine,
+  loopMeta,
+  hydrate,
+  stagesOverride,
+) =>
+  _execute(true, text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate, stagesOverride);
 
 export const executeAsRootFromStages = (
   stages: ParsedStage[],
@@ -322,6 +340,17 @@ export const executeAsRootFromStages = (
   hydrate?: StageContextPayload | null,
 ) =>
   _execute(true, "", stageContext, seedTypes, sourceFilePath, sourceBaseLine, undefined, hydrate, stages);
+
+export const executeStages = (
+  stages: ParsedStage[],
+  stageContext: Record<string, unknown>,
+  seedTypes: Record<string, unknown>,
+  sourceFilePath: string,
+  sourceBaseLine: number,
+  loopMeta?: StageLoopMeta,
+  hydrate?: StageContextPayload | null,
+) =>
+  _execute(false, "", stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate, stages);
 
 const _execute = async (
   manageStageIndex: boolean,
@@ -494,14 +523,16 @@ const _execute = async (
             stageTextHash: toStableHash(stageText),
           };
 
-          console.log("request", JSON.stringify({ context, stage: effectiveSpec, type }, null, 2));
+          const agentSpec = toAgentStage(effectiveSpec);
+
+          console.log("request", JSON.stringify({ context, stage: agentSpec, type }, null, 2));
 
           console.log("\nContinuing...\n");
 
           const pushStorage = toPushStorage(context);
           const { requestId, wait, getWaitForToolCall } = await publisher.pushRequest(
             pushStorage,
-            effectiveSpec,
+            agentSpec,
             effectiveTemperature,
             {
               contextAfter: forkRunManager?.isFastForward(_stageIndex, loopMeta?.index)
@@ -511,6 +542,7 @@ const _execute = async (
                 : undefined,
               executionMeta,
               loopMeta,
+              persistedStage: effectiveSpec,
             },
           );
 

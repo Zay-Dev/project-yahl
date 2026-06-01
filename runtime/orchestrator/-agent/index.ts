@@ -1,6 +1,7 @@
 import type { TRunYahl } from './-types';
 
 import { resolveStagesFromText } from '@/orchestrator/yahl-parse';
+import { toAgentStage } from '@/shared/yahl-stage';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import {
   applySetContextToolCall,
@@ -17,7 +18,7 @@ export const runYahl: TRunYahl = async (
   } = {},
 ) => {
   const storage = useStorage();
-  const stages = resolveStagesFromText(yahl);
+  const stages = options?.stages ?? resolveStagesFromText(yahl);
 
   for (const stage of stages) {
     const temperature = options?.temperature ?? stage.temperature;
@@ -36,9 +37,9 @@ export const runYahl: TRunYahl = async (
 
     const { requestId, wait, getWaitForToolCall } = await publisher.pushRequest(
       filteredStorage,
-      stage.spec,
+      toAgentStage(stage.spec),
       temperature,
-      { loopMeta: options?.loopMeta },
+      { loopMeta: options?.loopMeta, persistedStage: stage.spec },
     );
 
     const toolCallHandlers = getWaitForToolCall(async (toolCall) => {

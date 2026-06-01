@@ -46,6 +46,16 @@ export const compileStageLines = (stage: YahlStage): string => {
   return wrapPlainLogic(logic);
 };
 
+export const toLoopIterationStage = (
+  parent: ParsedStage,
+  bodyLines: string,
+): ParsedStage => ({
+  ...parent,
+  lines: bodyLines,
+  spec: parent.spec,
+  type: "plain",
+});
+
 export const compileStage = (
   stage: YahlStage,
   sourceStartLine: number,

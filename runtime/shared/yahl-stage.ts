@@ -70,6 +70,12 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
   };
 };
 
+export const toAgentStage = (stage: YahlStage): YahlStage => {
+  const { loopSetup: _loopSetup, ...rest } = stage;
+
+  return validateYahlStage(rest);
+};
+
 export const validateYahlStage = (raw: unknown, index?: number): YahlStage => {
   if (!raw || typeof raw !== "object") {
     throw new Error(index === undefined ? "stage: expected an object" : `stages[${index}]: expected an object`);

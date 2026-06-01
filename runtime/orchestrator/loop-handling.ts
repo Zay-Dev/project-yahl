@@ -2,6 +2,7 @@ import { pickContextUpdates } from "./context-filter";
 import { filterLoopBucket } from "./stage-field-policy";
 import { applyKnowledgeUpdate, parseKnowledgeUpdate } from "./loop-knowledge";
 import { parseLoop } from "./stage-parse";
+import { toLoopIterationStage } from "./yahl-parse";
 
 import type {
   LoopKnowledge,
@@ -45,12 +46,14 @@ const _runLoopIteration = async (
     }, {} as Record<string, unknown>);
 
   const { runtime: loopRuntime } = await execute(
-    compiledBody,
+    "",
     stageInput,
     { ...(runtime.get("types") || {}) },
     sourceFilePath,
     loopSourceLine + 1,
     loopMeta,
+    undefined,
+    [toLoopIterationStage(stage, compiledBody)],
   );
 
   const myContext = runtime.get("context")!;

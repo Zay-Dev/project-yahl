@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 
+import { toAgentStage } from "../shared/yahl-stage";
+
 import {
   compileStage,
   compileStageLines,
   parseYahlDocument,
   parseYahlFile,
+  toLoopIterationStage,
 } from "./yahl-parse";
 
 import { fileURLToPath } from "node:url";
@@ -105,6 +108,40 @@ stages:
 
     assert.equal(stages.length, 2);
     assert.match(stages[0]?.lines ?? "", /type T/);
+  });
+});
+
+describe("toAgentStage", () => {
+  it("omits loopSetup for agent/redis payloads", () => {
+    const agent = toAgentStage({
+      contextKeys: ["c"],
+      logic: "c += i;",
+      loopSetup: "for each i of [1..5,+2]",
+      updateContextKeys: ["c"],
+    });
+
+    assert.equal(agent.logic, "c += i;");
+    assert.equal(agent.loopSetup, undefined);
+    assert.deepEqual(agent.contextKeys, ["c"]);
+  });
+});
+
+describe("toLoopIterationStage", () => {
+  it("keeps parent spec for loop body pushes", () => {
+    const parent = compileStage({
+      contextKeys: ["c"],
+      contextMode: true,
+      logic: "(() => ({ c: 1 }))",
+      loopSetup: "for each i of [1..5]",
+      updateContextKeys: ["c"],
+    }, 16);
+
+    const iteration = toLoopIterationStage(parent, "CONTEXT: { c: 1 }");
+
+    assert.equal(iteration.type, "plain");
+    assert.equal(iteration.spec.contextMode, true);
+    assert.equal(iteration.spec.loopSetup, "for each i of [1..5]");
+    assert.deepEqual(iteration.spec.contextKeys, ["c"]);
   });
 });
 

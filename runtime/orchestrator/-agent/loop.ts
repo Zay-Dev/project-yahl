@@ -5,6 +5,7 @@ import {
   filterLoopBucket,
   pickContextUpdates,
 } from '@/orchestrator/stage-field-policy';
+import { toLoopIterationStage } from '@/orchestrator/yahl-parse';
 
 const _parseLoop = (yahl: string, storage: TStorage) => {
   const matchMeta = yahl.match(/^\s*for each (\w+) of (\[.*\])/i);
@@ -106,7 +107,7 @@ const _runLoopIteration = async (
     }, {} as Record<string, unknown>);
 
   const result = await runner(
-    compiledBody,
+    "",
     {
       loopMeta: {
         arraySnapshot: loopMeta.arraySnapshot,
@@ -115,6 +116,7 @@ const _runLoopIteration = async (
         temperature: loopMeta.temperature,
         value: loopMeta.value,
       },
+      stages: [toLoopIterationStage(stage, compiledBody)],
       temperature,
       useStorage: () => ({
         context: new Map(Object.entries(stageInput)),
