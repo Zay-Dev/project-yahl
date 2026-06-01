@@ -17,19 +17,24 @@ const assistant = (content: string | null, toolCalls?: ChatAssistantMessage["too
   tool_calls: toolCalls,
 });
 
+const emptyContext = () => ({
+  context: new Map<string, unknown>(),
+  types: new Map<string, unknown>(),
+});
+
 describe("runStageSession", () => {
   it("stops after repeated invalid render_a2ui_plan calls", async () => {
     let turns = 0;
     const result = await runStageSession(
       {
-        context: { context: {}, stage: {}, types: {} },
-        currentStage: "/a2ui(result)",
+        context: emptyContext(),
+        stage: { logic: "/a2ui(result)" },
       },
       [],
       {
         chatWithTools: async (_messages, _opts) => {
           turns += 1;
-          return assistant(null, [
+          return [assistant(null, [
             {
               function: {
                 arguments: JSON.stringify({
@@ -47,7 +52,7 @@ describe("runStageSession", () => {
               id: `tool-${turns}`,
               type: "function",
             },
-          ]);
+          ])];
         },
         runCommand: async () => "",
       },
@@ -64,17 +69,18 @@ describe("runStageSession", () => {
     const result = await runStageSession(
       {
         context: {
-          context: { result: { brief_markdown: "# brief", raw_intel: [{ title: "t" }] } },
-          stage: {},
-          types: {},
+          context: new Map([
+            ["result", { brief_markdown: "# brief", raw_intel: [{ title: "t" }] }],
+          ]),
+          types: new Map(),
         },
-        currentStage: "/a2ui(result)",
+        stage: { logic: "/a2ui(result)" },
       },
       [],
       {
         chatWithTools: async (messages, _opts) => {
           observed = messages;
-          return assistant(JSON.stringify({ output: "ok", type: "result" }));
+          return [assistant(JSON.stringify({ output: "ok", type: "result" }))];
         },
         runCommand: async () => "",
       },
@@ -96,15 +102,15 @@ describe("runStageSession", () => {
 
     await runStageSession(
       {
-        context: { context: {}, stage: {}, types: {} },
-        currentStage: "noop",
+        context: emptyContext(),
+        stage: { logic: "noop" },
         temperature: 0.25,
       },
       [],
       {
         chatWithTools: async (_messages, opts) => {
           received = opts;
-          return assistant(JSON.stringify({ output: "ok", type: "result" }));
+          return [assistant(JSON.stringify({ output: "ok", type: "result" }))];
         },
         runCommand: async () => "",
       },
@@ -116,12 +122,13 @@ describe("runStageSession", () => {
 
   it("parseStageSessionInput preserves numeric temperature", () => {
     const json = JSON.stringify({
-      context: { context: {}, stage: {} },
-      currentStage: "x",
+      context: { context: {} },
+      stage: { logic: "x" },
       temperature: 0.7,
     });
     const parsed = parseStageSessionInput(json);
 
     assert.equal(parsed?.temperature, 0.7);
+    assert.equal(parsed?.stage.logic, "x");
   });
 });

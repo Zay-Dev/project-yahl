@@ -1,3 +1,5 @@
+import type { YahlStage } from '../shared/yahl-stage';
+
 import type { ParsedStage } from './orchestrator-types';
 
 type SessionStagesResponse = {
@@ -23,7 +25,7 @@ type ForkrunFormResponse = {
       stage: Record<string, unknown>;
       types: Record<string, unknown>;
     };
-    currentStage: string;
+    stage: YahlStage;
   };
   sourceRequestId: string;
 };
@@ -82,8 +84,8 @@ class ForkRunManager {
     return `session-stages://${this._sessionId || "unknown"}`;
   }
 
-  get aiLogic() {
-    return `\`\`\`ai.logic\n${this._savedSession.stages.map((stage) => stage.lines).join("\n\n")}\n\`\`\``;
+  get parsedStages() {
+    return this._savedSession.stages;
   }
 
   getOverride(stageIndex: number, iterationIndex?: number) {

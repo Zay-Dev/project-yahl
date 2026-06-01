@@ -35,3 +35,39 @@ export const filterContextByReadUsage = (
       acc[key] = records[key];
       return acc;
     }, {} as Record<string, unknown>);
+
+export const filterContextByKeys = (
+  records: Record<string, unknown>,
+  keys: string[] | undefined,
+  extraKeys: string[] = [],
+) => {
+  if (!keys?.length) {
+    return records;
+  }
+
+  const allow = new Set([...keys, ...extraKeys]);
+
+  return Object.keys(records)
+    .filter((key) => allow.has(key))
+    .reduce((acc, key) => {
+      acc[key] = records[key];
+      return acc;
+    }, {} as Record<string, unknown>);
+};
+
+export const pickContextUpdates = (
+  records: Record<string, unknown>,
+  updateKeys: string[] | undefined,
+) => {
+  if (!updateKeys?.length) {
+    return records;
+  }
+
+  return updateKeys.reduce((acc, key) => {
+    if (key in records) {
+      acc[key] = records[key];
+    }
+
+    return acc;
+  }, {} as Record<string, unknown>);
+};

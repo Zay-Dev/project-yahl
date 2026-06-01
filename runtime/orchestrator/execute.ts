@@ -8,24 +8,32 @@ import type {
   SetContextToolCallEnvelope,
   StageContextPayload,
 } from "../shared/stage-contract";
+import type { TStorage } from "../shared/transports/-types";
 import type { StageExecutionMeta } from "../shared/transport";
+import { validateYahlStage } from "../shared/yahl-stage";
 
 import { toA2uiFromPlan } from "../shared/a2ui-from-plan";
 
-import { filterContextByReadUsage } from "./context-filter";
+import { parseAskUserToolArguments } from "../shared/stage-tools";
+
+import {
+  applySetContextToolCall,
+  filterStageContextPayload,
+  resolveSetContextScope,
+  shouldApplySetContext,
+} from "./stage-field-policy";
 import { handleLoop } from "./loop-handling";
 import { handleRag } from "./rag-handling";
 import {
   firstTraceableLineOffset,
   getLineSinceOffset,
-  parseStages,
   stripLeadingTemperature,
   toStableHash,
 } from "./stage-parse";
+import { compileStageLines, resolveStagesFromText } from "./yahl-parse";
 
 import {
   createRuntimeContext,
-  extractAiLogic,
   getBucketForScope,
   resetStageContext,
   setContextValue,
@@ -35,12 +43,47 @@ import {
 import * as agentTrackers from "./-utils/agent-trackers";
 
 import type {
+  ParsedStage,
   StageExecuteFn,
   StageLoopMeta,
   StagePosition,
 } from "./orchestrator-types";
 
 const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const toPushStorage = (payload: StageContextPayload): TStorage => ({
+  context: new Map(Object.entries({
+    ...payload.context,
+    ...payload.stage,
+  })),
+  types: new Map(Object.entries(payload.types)),
+});
+
+const toPushStorageFromSnapshot = (snapshot: unknown): TStorage | undefined => {
+  if (!snapshot || typeof snapshot !== "object") return undefined;
+
+  const record = snapshot as Record<string, unknown>;
+  const context = record.context;
+  const stageBucket = record.stage;
+  const types = record.types;
+
+  return {
+    context: new Map(Object.entries({
+      ...(context && typeof context === "object" && !Array.isArray(context)
+        ? context as Record<string, unknown>
+        : {}),
+      ...(stageBucket && typeof stageBucket === "object" && !Array.isArray(stageBucket)
+        ? stageBucket as Record<string, unknown>
+        : {}),
+    })),
+    types: new Map(Object.entries(
+      types && typeof types === "object" && !Array.isArray(types)
+        ? types as Record<string, unknown>
+        : {},
+    )),
+  };
+};
+
 const sessionApiBaseUrl = (process.env.SESSION_API_BASE_URL || "http://localhost:4000").replace(/\/+$/, "");
 const askUserEnabled = process.env.YAHL_ENABLE_ASK_USER !== "false";
 const inlineAskUserPattern = /\/ask-user\(([^)]*)\)/;
@@ -57,7 +100,7 @@ const ASK_USER_POLL_MS = parsePollEnv(process.env.YAHL_ASK_USER_POLL_MS, 250);
 const ASK_USER_MAX_WAIT_MS = parsePollEnv(process.env.YAHL_ASK_USER_MAX_WAIT_MS, 1000);
 // const ASK_USER_MAX_WAIT_MS = parsePollEnv(process.env.YAHL_ASK_USER_MAX_WAIT_MS, 600_000);
 
-const postAskUserQuestion = async (
+export const postAskUserQuestion = async (
   sessionId: string,
   requestId: string,
   stageId: string,
@@ -93,7 +136,7 @@ const fetchAskUserAnswerState = async (sessionId: string, questionId: string) =>
   };
 };
 
-const waitForAskUserAnswer = async (sessionId: string, questionId: string) => {
+export const waitForAskUserAnswer = async (sessionId: string, questionId: string) => {
   const redisUrl = process.env.REDIS_URL?.trim();
   const channel = askUserAnsweredChannelId(sessionId);
   const deadline = Date.now() + ASK_USER_MAX_WAIT_MS;
@@ -270,6 +313,16 @@ export const execute: StageExecuteFn = (text, stageContext, seedTypes, sourceFil
 export const executeAsRoot: StageExecuteFn = (text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate) =>
   _execute(true, text, stageContext, seedTypes, sourceFilePath, sourceBaseLine, loopMeta, hydrate);
 
+export const executeAsRootFromStages = (
+  stages: ParsedStage[],
+  stageContext: Record<string, unknown>,
+  seedTypes: Record<string, unknown>,
+  sourceFilePath: string,
+  sourceBaseLine: number,
+  hydrate?: StageContextPayload | null,
+) =>
+  _execute(true, "", stageContext, seedTypes, sourceFilePath, sourceBaseLine, undefined, hydrate, stages);
+
 const _execute = async (
   manageStageIndex: boolean,
   text: string,
@@ -279,16 +332,13 @@ const _execute = async (
   sourceBaseLine: number,
   loopMeta?: StageLoopMeta,
   resumeHydrate?: StageContextPayload | null,
+  stagesOverride?: ParsedStage[],
 ) => {
-  const aiLogic = extractAiLogic(text);
-  if (!aiLogic) {
-    throw new Error("No ai.logic block found");
-  }
+  const stages = (stagesOverride ?? resolveStagesFromText(text))
+    .filter((stage) => stage.lines !== "}");
 
-  const stages = parseStages(aiLogic).filter((stage) => stage.lines != "}");
-  
   if (stages.length <= 0) {
-    throw new Error("No stages parsed from ai.logic");
+    throw new Error("No stages parsed from SKILL.yahl");
   }
 
   if (manageStageIndex) {
@@ -306,7 +356,8 @@ const _execute = async (
 
     let appliedResumeHydrateStage = false;
 
-    for (const { lines, sourceStartLine, temperature: stageTemperature, type } of stages) {
+    for (const stage of stages) {
+      const { lines, sourceStartLine, temperature: stageTemperature, type } = stage;
       resetStageContext(runtime);
       Object.assign(runtime.get("stage")!, stageContext);
       if (resumeHydrate && !appliedResumeHydrateStage) {
@@ -321,7 +372,7 @@ const _execute = async (
 
       if (type === "loop") {
         await handleLoop(
-          lines,
+          stage,
           runtime,
           sourceFilePath,
           absoluteSourceStartLine,
@@ -394,22 +445,32 @@ const _execute = async (
             });
           });
           
-          const next = filterLines?.(override?.currentStage || lines);
-          const rawStage = next?.stageText || override?.currentStage || lines;
-          const { temperature: restripTemp, text: currentStage } = stripLeadingTemperature(rawStage);
-          const effectiveTemperature = restripTemp ?? stageTemperature ?? loopMeta?.temperature;
-
-          const stageText = currentStage;
+          const effectiveSpec = override?.stage
+            ? validateYahlStage(override.stage)
+            : stage.spec;
+          const effectiveLines = compileStageLines(effectiveSpec);
+          const next = filterLines?.(effectiveLines);
+          const rawStage = next?.stageText || effectiveLines;
+          const { temperature: restripTemp, text: stageText } = stripLeadingTemperature(rawStage);
+          const effectiveTemperature =
+            effectiveSpec.temperature ?? restripTemp ?? stageTemperature ?? loopMeta?.temperature;
           const meaningfulOffset = firstTraceableLineOffset(stageText);
           const sourceLineText = getLineSinceOffset(stageText, meaningfulOffset);
           const generatedLine = (next?.generatedLine || position.generatedLine) + meaningfulOffset;
           const sourceLine = (next?.sourceLine || position.sourceLine) + meaningfulOffset;
 
           const rawPayload = toStageContextPayload(runtime);
+          const filtered = filterStageContextPayload(
+            stageText,
+            rawPayload.context,
+            rawPayload.stage,
+            rawPayload.types,
+            stage,
+            loopMeta,
+          );
           const context = {
             ...rawPayload,
-            context: filterContextByReadUsage(stageText, rawPayload.context),
-            stage: filterContextByReadUsage(stageText, rawPayload.stage),
+            ...filtered,
           };
           const baseStageId = `${path.basename(sourceFilePath)}:${sourceLine}:${type}`;
           const computedStageId = loopMeta ? `${baseStageId}#loop:${loopMeta.index}` : baseStageId;
@@ -433,184 +494,92 @@ const _execute = async (
             stageTextHash: toStableHash(stageText),
           };
 
-          console.log("request", JSON.stringify({ context, currentStage, type }, null, 2));
+          console.log("request", JSON.stringify({ context, stage: effectiveSpec, type }, null, 2));
 
           console.log("\nContinuing...\n");
 
-          const { requestId, envelope } = await publisher.pushRequest(
-            context,
-            currentStage,
-            executionMeta,
-            forkRunManager?.isFastForward(_stageIndex, loopMeta?.index) ?
-              forkRunManager?.getContextAfter(_stageIndex, loopMeta?.index) :
-              undefined,
+          const pushStorage = toPushStorage(context);
+          const { requestId, wait, getWaitForToolCall } = await publisher.pushRequest(
+            pushStorage,
+            effectiveSpec,
             effectiveTemperature,
+            {
+              contextAfter: forkRunManager?.isFastForward(_stageIndex, loopMeta?.index)
+                ? toPushStorageFromSnapshot(
+                  forkRunManager.getContextAfter(_stageIndex, loopMeta?.index),
+                )
+                : undefined,
+              executionMeta,
+              loopMeta,
+            },
           );
 
           stageRequestId = requestId;
 
-          if (Array.isArray(envelope)) {
-            envelope
-              .filter(
-                (item): item is SetContextToolCallEnvelope =>
-                  item.type === "tool_call" && item.tool === "set_context",
-              )
-              .forEach((item) => {
-                setContextValue(
-                  runtime,
-                  item.arguments.scope === "types" ? "types" : "global",
-                  item.arguments.key,
-                  item.arguments.value,
-                  item.arguments.operation,
-                );
-              });
-            const renderCalls = envelope
-              .filter(
-                (item): item is RenderA2uiPlanToolCallEnvelope =>
-                  item.type === "tool_call" && item.tool === "render_a2ui_plan",
-              );
-            for (const renderEnvelope of renderCalls) {
-              await applyRenderA2uiEnvelope(renderEnvelope);
-            }
-            process.stdout.write(
-              `[Orchestrator Stage] tool_call array length: ${envelope.length} ` +
-                `(set_context=${envelope.filter((item) => item.type === "tool_call" && item.tool === "set_context").length}, ` +
-                `render_a2ui_plan=${renderCalls.length})\n`,
-            );
-          } else if (envelope.type === "tool_call" && envelope.tool === "rag") {
-            const result = await handleRag(
-              runtime,
-              envelope.arguments.lookingFor,
-              envelope.arguments.chunkSize,
-              envelope.arguments.tmp_file_path,
-              envelope.arguments.byteLength,
-              envelope.arguments.context_key,
-              sourceFilePath,
-              sourceLine,
-              execute,
-            );
+          const toolCallHandlers = getWaitForToolCall(async (toolCall) => {
+            if (toolCall.function.name === "set_context") {
+              const applied = await applySetContextToolCall(pushStorage, toolCall, stage);
 
-            Object.assign(runtime.get("stage")!, result);
-            delete runtime.get("context")?.lookingFor;
-            delete runtime.get("context")?.chunkSize;
-            delete runtime.get("context")?.tmp_file_path;
-            delete runtime.get("context")?.byteLength;
-            delete runtime.get("context")?.context_key;
-
-            if (stageRequestId) {
-              const rid = stageRequestId;
-              stageRequestId = "";
-              publisher.emitStageFinish({
-                contextAfter: cloneJson(toStageContextPayload(runtime)),
-                requestId: rid,
-              });
+              return {
+                hasError: false,
+                newStorage: pushStorage,
+                result: applied ? "OK" : "skipped",
+              };
             }
 
-            await runStageOnce(
-              {
-                generatedLine: sourceLine,
-                sourceLine,
-              },
-              (rawLines) => {
-                const splitted = rawLines.split("\n");
-                const skipNumberOfLines = splitted.findIndex((line) =>
-                  line.includes("REPLACE:") &&
-                  line.includes(` ${envelope.arguments.context_key} `) &&
-                  line.includes(" /rag("),
-                ) + 1;
-
-                return {
-                  generatedLine: skipNumberOfLines + 1,
-                  sourceLine: sourceLine + skipNumberOfLines,
-                  stageText: splitted.slice(skipNumberOfLines).join("\n"),
-                };
-              },
-            );
-
-            return undefined;
-          } else if (envelope.type === "tool_call" && envelope.tool === "render_a2ui_plan") {
-            await applyRenderA2uiEnvelope(envelope);
-            if (stageRequestId) {
-              const rid = stageRequestId;
-              stageRequestId = "";
-              publisher.emitStageFinish({
-                contextAfter: cloneJson(toStageContextPayload(runtime)),
-                requestId: rid,
-              });
-            }
-            return undefined;
-          } else if (envelope.type === "tool_call" && envelope.tool === "ask_user") {
-            if (!askUserEnabled) {
-              throw new Error("ask_user is disabled (YAHL_ENABLE_ASK_USER=false)");
-            }
-            const sessionId = process.env.AGENT_SESSION_ID;
-            if (!sessionId) {
-              throw new Error("AGENT_SESSION_ID missing for ask_user tool");
-            }
-            const questionId = await postAskUserQuestion(
-              sessionId,
-              requestId,
-              executionMeta.stageId,
-              envelope.arguments,
-            );
-            let answer: { selectedLabels: string[]; selectedOptionIds: string[] };
-            try {
-              answer = await waitForAskUserAnswer(sessionId, questionId);
-            } catch (error) {
-              if (error instanceof Error && error.message === "ask_user timeout waiting for answer") {
-                await persistTimedOutAskUserRecovery({
-                  currentStageText: currentStage,
-                  questionId,
-                  requestId,
-                  sessionId,
-                  snapshot: cloneJson(toStageContextPayload(runtime)),
-                  sourceRef: {
-                    filePath: executionMeta.sourceRef.filePath,
-                    line: executionMeta.sourceRef.line,
-                  },
-                  stageId: executionMeta.stageId,
-                });
+            if (toolCall.function.name === "ask_user") {
+              if (!askUserEnabled) {
+                return { hasError: true, result: "ask_user is disabled" };
               }
-              throw error;
-            }
 
-            const answerValue = toAskUserAnswerValue(answer.selectedOptionIds[0]);
-            setContextValue(runtime, "stage", "ask_user_last_answer", answerValue);
+              const sessionId = process.env.AGENT_SESSION_ID?.trim();
+              if (!sessionId) {
+                return { hasError: true, result: "AGENT_SESSION_ID missing for ask_user" };
+              }
 
-            const continuation = buildAskUserContinuation(currentStage, answerValue);
-            if (continuation && stageRequestId) {
-              const rid = stageRequestId;
-              stageRequestId = "";
-              publisher.emitStageFinish({
-                contextAfter: cloneJson(toStageContextPayload(runtime)),
-                requestId: rid,
-              });
+              const args = parseAskUserToolArguments(toolCall.function.arguments ?? "");
+              if (!args) {
+                return { hasError: true, result: "ask_user: invalid arguments" };
+              }
 
-              await runStageOnce(
-                {
-                  generatedLine: sourceLine,
-                  sourceLine,
-                },
-                (rawLines) => {
-                  const nextContinuation = buildAskUserContinuation(rawLines, answerValue) || continuation;
-                  const nextGeneratedLine = nextContinuation.skipNumberOfLines + 1;
-                  return {
-                    generatedLine: nextGeneratedLine,
-                    sourceLine: sourceLine + nextContinuation.skipNumberOfLines,
-                    stageText: nextContinuation.stageText,
-                  };
-                },
+              const questionId = await postAskUserQuestion(
+                sessionId,
+                requestId,
+                executionMeta.stageId,
+                args,
               );
+              const answer = await waitForAskUserAnswer(sessionId, questionId);
+              const answerValue = toAskUserAnswerValue(answer.selectedOptionIds[0]);
+
+              pushStorage.context.set("ask_user_last_answer", answerValue);
+              runtime.get("stage")!.ask_user_last_answer = answerValue;
+
+              return {
+                hasError: false,
+                newStorage: pushStorage,
+                result: JSON.stringify({
+                  selectedLabels: answer.selectedLabels,
+                  selectedOptionIds: answer.selectedOptionIds,
+                }),
+              };
             }
 
-            return undefined;
-          } else {
-            process.stdout.write(`[Orchestrator Stage] ${envelope.type}\n`);
-          }
+            return {
+              hasError: true,
+              result: `No such tool: ${toolCall.function.name}`,
+            };
+          });
+
+          toolCallHandlers.wait();
+          await wait();
+          toolCallHandlers.dispose();
+
+          Object.assign(runtime.get("context")!, Object.fromEntries(pushStorage.context));
+          Object.assign(runtime.get("types")!, Object.fromEntries(pushStorage.types));
         } finally {
           if (stageRequestId) {
             publisher.emitStageFinish({
-              contextAfter: cloneJson(toStageContextPayload(runtime)),
+              contextAfter: toPushStorage(cloneJson(toStageContextPayload(runtime))),
               requestId: stageRequestId,
             });
           }

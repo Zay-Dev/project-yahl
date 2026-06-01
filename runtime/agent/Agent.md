@@ -1,5 +1,5 @@
 - 你只运行 Stage 模式。API 已注册工具 **`run_bash`**、**`set_context`**、**`rag`**、**`ask_user`**，以及条件工具 **`render_a2ui_plan`**（仅当 stage 脚本包含 `/a2ui(...)` 时提供）；不要再用纯文本假装工具 JSON。
-- You will only run **one stage** of the YAHL script, treat the 'currentStage' as the only scope, anything else are just background information, you are forbidden from doing stuffs that are not serving the purpose of the 'currentStage'
+- You will only run **one stage** of the YAHL script, treat the `stage` object (especially `stage.logic`) as the only scope, anything else are just background information, you are forbidden from doing stuffs that are not serving the purpose of the stage
 
 ## 工具
 

@@ -1,9 +1,11 @@
-import { filterContextByReadUsage } from "./context-filter";
+import { pickContextUpdates } from "./context-filter";
+import { filterLoopBucket } from "./stage-field-policy";
 import { applyKnowledgeUpdate, parseKnowledgeUpdate } from "./loop-knowledge";
-import { parseLoop, toAiLogic } from "./stage-parse";
+import { parseLoop } from "./stage-parse";
 
 import type {
   LoopKnowledge,
+  ParsedStage,
   StageExecuteFn,
   StageLoopMeta,
 } from "./orchestrator-types";
@@ -18,20 +20,20 @@ const _runLoopIteration = async (
   indexName: string,
   currentValue: unknown,
   loopMeta: StageLoopMeta,
+  stage: ParsedStage,
   execute: StageExecuteFn,
 ) => {
   const firstLine = lines.split("\n")[0];
   const mode = firstLine.match(/\s+[A-Z_]+:\s*{/)?.[0]?.replace("{", "") || "";
-  const aiBlock = toAiLogic(
-    `${mode} ${lines.substring(lines.indexOf("{"))}`,
-  );
+  const body = lines.substring(lines.indexOf("{"));
+  const compiledBody = mode ? `${mode} ${body}` : body;
 
   const isExtends = (key: string) => lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`));
 
   const stageInput = Object
     .entries({
-      ...filterContextByReadUsage(aiBlock, runtime.get("context")!),
-      ...filterContextByReadUsage(aiBlock, runtime.get("stage")!),
+      ...filterLoopBucket(compiledBody, runtime.get("context")!, stage, indexName),
+      ...filterLoopBucket(compiledBody, runtime.get("stage")!, stage, indexName),
 
       knowledge: JSON.parse(JSON.stringify(knowledge)),
       [indexName]: currentValue,
@@ -43,7 +45,7 @@ const _runLoopIteration = async (
     }, {} as Record<string, unknown>);
 
   const { runtime: loopRuntime } = await execute(
-    aiBlock,
+    compiledBody,
     stageInput,
     { ...(runtime.get("types") || {}) },
     sourceFilePath,
@@ -52,9 +54,15 @@ const _runLoopIteration = async (
   );
 
   const myContext = runtime.get("context")!;
-  const loopContext = loopRuntime.get("context")!;
+  const loopContext = pickContextUpdates(
+    loopRuntime.get("context")!,
+    stage.updateContextKeys,
+  );
   const myStage = runtime.get("stage")!;
-  const loopStage = loopRuntime.get("stage")!;
+  const loopStage = pickContextUpdates(
+    loopRuntime.get("stage")!,
+    stage.updateContextKeys,
+  );
 
   for (const key of Object.keys(loopContext)) {
     if (Object.keys(myContext).includes(key)) {
@@ -87,14 +95,16 @@ const _runLoopIteration = async (
 };
 
 export const handleLoop = async (
-  lines: string,
+  stage: ParsedStage,
   runtime: RuntimeContext,
   sourceFilePath: string,
   loopSourceLine: number,
   execute: StageExecuteFn,
   loopStageTemperature?: number,
 ) => {
+  const lines = stage.lines;
   const loopSetup = parseLoop(lines, runtime);
+
   if (!loopSetup) {
     console.error(lines);
     throw new Error("Invalid loop setup occurred in the above stage");
@@ -120,9 +130,11 @@ export const handleLoop = async (
       {
         arraySnapshot: Array.isArray(array) ? JSON.parse(JSON.stringify(array)) : [],
         index: i,
+        indexName,
         value: currentValue,
         ...(loopStageTemperature === undefined ? {} : { temperature: loopStageTemperature }),
       },
+      stage,
       execute,
     );
 

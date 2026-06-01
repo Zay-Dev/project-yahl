@@ -37,7 +37,8 @@ Stuff that already works (aka things that surprisingly do not explode):
 - Session/event tracking with replayable step history and usage/cost visibility.
 - Web UI now has proper Runner + Sessions + Session Detail flow with live logs/status and jump-to-session links.
 - Session detail view includes live stream panel, model aggregate table, step details dialog, and final result dialog (aka less guessing, more actual receipts).
-- Fork-run flow supports editing structured request snapshots (`currentStage`, `context.context`, `context.stage`, `context.types`) before rerun, which makes debugging way less painful.
+- Fork-run flow supports editing structured request snapshots (`stage` YAHL object, `context.context`, `context.stage`, `context.types`) before rerun, which makes debugging way less painful.
+- Session `Stages` documents store `stage` as structured JSON (`logic`, `contextMode`, `loopSetup`, key allowlists, etc.), not compiled pseudo-code strings. Existing Mongo rows with `currentStage` strings are incompatible; reset stage collections in dev or run a one-off migration.
 - Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
 - VM client now runs on `isolated-vm` for stronger sandbox boundaries and fewer "hope-this-is-fine" moments.
 - You can attach the orchestrator to a debugger, hit breakpoints, and even poke variables manually while tracing execution. (sounds pretty like coding right?)
@@ -79,44 +80,11 @@ A quick tour of the shapes:
 - `/skill_name(...)` — call into a skill from the skills folder; think of it as a named, well-documented capability.
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 
-A trimmed look at current task shapes (`test` + `competitor_intel` energy):
-
-```
-CONTEXT: {
-  const base = { a: 1, b: 2 };
-
-  (() => ({
-    ...base,
-    c: base.a + base.b,
-  }))
-}
-
-for each i of [1..5,+2] {
-  c += i;
-}
-
-IF: context.context.c % 2 === 0;
-   c = context.context.c * 2;
-ELSE IF: context.context.c > 30;
-   c = context.context.c - 2;
-ELSE:
-   c = context.context.c / 2;
-END:
-
-c += /ask-user(which number of 1,2,3,4,5);
-
-for each competitor of [competitors] {
-  for each source of [competitor.news_sources] {
-    raw_articles = /web-search(query: `${competitor.name} news last 7 days`, source: source);
-
-    EXTENDS: intel = *extract_intel(raw_articles, flat_map_to: TIntelItem, set_competitor: competitor.name);
-  }
-}
-```
+`SKILL.yahl` is a single YAML document (`name`, `description`, optional `types`, and a `stages` list). Each stage has a `logic: |` block; the runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF:` branches, and brace-wrapped AI blocks). See `runtime/orchestrator/TASKS/test/SKILL.yahl` for the canonical shape.
 
 ## How it feels under the hood
 
-- A YAHL script is just a markdown file with a code block of pseudo code.
+- A YAHL task file is YAML; stage `logic` holds the pseudo-code the agent or VM runs.
 - The runtime reads it, slices it into stages, runs VM-evaluable control blocks (`CONTEXT` / `IF` family) inside `isolated-vm`, then hands AI stages to the model in a clean sandbox.
 - Anything worth keeping goes into a shared bucket; everything else is forgotten between stages.
 - The AI talks back through a few structured tools — set a variable, run a shell command, ask user choices, ask for chunked extraction.
@@ -148,7 +116,8 @@ pnpm -r --filter "./infras/**" run build
 - Docker compose split:
   - root `docker-compose.yml` serves `onecli + mongo + redis + server + web`
   - `runtime/docker-compose.yml` remains available, and orchestrator keeps using compose for agent lifecycle with a shared OneCLI SDK override
-- Copy `.env.example` to `.env`, keep provider keys as placeholders, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`.
+  - the `server` container bind-mounts Omniflex source but uses its own `node_modules` volumes (host deps are not shared); run `pnpm install` on the host separately when developing outside Docker
+- Copy `.env.example` to `.env`, set `HOST_REPO_ROOT` to the absolute path of this repo, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`.
 - Runtime only: `pnpm run orchestrate`.
 - API server (from Omniflex root or this repo): `pnpm run dev:server` or `pnpm --filter @project-yahl/server run dev`.
 - Web app: `pnpm run dev:web`.

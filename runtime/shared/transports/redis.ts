@@ -117,22 +117,23 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     };
 
   pushRequest: IPublisher['pushRequest'] =
-    async (context, currentStage, temperature, { loopMeta, contextAfter } = {}) => {
+    async (context, stage, temperature, { contextAfter, executionMeta, loopMeta } = {}) => {
       const requestId = randomUUID();
 
       this.emit("pushRequest", { 
-        currentStage,
-        requestId,
-        temperature,
-        loopMeta,
         context: _serializeStorage(context)!,
+        executionMeta,
+        loopMeta,
+        requestId,
+        stage,
+        temperature,
       });
 
       await this.redis.lpush(this.requestQueue,
         JSON.stringify({
           requestId,
           temperature,
-          currentStage,
+          stage,
 
           loopMeta: loopMeta || undefined,
           context: _serializeStorage(context),

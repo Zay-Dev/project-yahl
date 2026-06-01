@@ -1,7 +1,11 @@
 import type { TRunYahl } from './-types';
 
-import { yahlToStages } from '@/orchestrator/-utils/yahl';
-import { setContext, createStorage } from '@/orchestrator/-tools/set_context';
+import { resolveStagesFromText } from '@/orchestrator/yahl-parse';
+import { createStorage } from '@/orchestrator/-tools/set_context';
+import {
+  applySetContextToolCall,
+  filterStorageForStage,
+} from '@/orchestrator/stage-field-policy';
 
 import { handleLoop } from './loop';
 
@@ -13,19 +17,26 @@ export const runYahl: TRunYahl = async (
   } = {},
 ) => {
   const storage = useStorage();
-  const stages = yahlToStages(yahl);
+  const stages = resolveStagesFromText(yahl);
 
   for (const stage of stages) {
     const temperature = options?.temperature ?? stage.temperature;
 
     if (stage.type === 'loop') {
-      await handleLoop(stage.lines, storage, runYahl, temperature);
+      await handleLoop(stage, storage, runYahl, temperature);
       continue;
     }
 
-    const { requestId, wait, getWaitForToolCall } = await publisher.pushRequest(
+    const filteredStorage = filterStorageForStage(
       storage,
       stage.lines,
+      stage,
+      options?.loopMeta?.indexName,
+    );
+
+    const { requestId, wait, getWaitForToolCall } = await publisher.pushRequest(
+      filteredStorage,
+      stage.spec,
       temperature,
       { loopMeta: options?.loopMeta },
     );
@@ -33,11 +44,11 @@ export const runYahl: TRunYahl = async (
     const toolCallHandlers = getWaitForToolCall(async (toolCall) => {
       try {
         if (toolCall.function.name === 'set_context') {
-          await setContext(storage, toolCall);
-          
+          const applied = await applySetContextToolCall(storage, toolCall, stage);
+
           return {
             hasError: false,
-            result: 'OK',
+            result: applied ? 'OK' : 'skipped',
             newStorage: storage,
           };
         } else {

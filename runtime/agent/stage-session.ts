@@ -9,6 +9,7 @@ import {
   type StageEnvelope,
   type StageSessionInput,
 } from "../shared/stage-contract";
+import { validateYahlStage } from "../shared/yahl-stage";
 
 import {
   type ChatApiMessage,
@@ -87,7 +88,14 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
   if (!parsedRaw || typeof parsedRaw !== "object" || Array.isArray(parsedRaw)) return null;
 
   const parsed = parsedRaw as Record<string, unknown>;
-  if (typeof parsed.currentStage !== "string") return null;
+  if (!parsed.stage || typeof parsed.stage !== "object" || Array.isArray(parsed.stage)) return null;
+
+  let stage;
+  try {
+    stage = validateYahlStage(parsed.stage);
+  } catch {
+    return null;
+  }
 
   if (!parsed.context) return null;
   if (typeof parsed.context !== 'object') return null;
@@ -98,10 +106,6 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
   if (!context.context) return null;
   if (typeof context.context !== 'object') return null;
   if (Array.isArray(context.context)) return null;
-
-  if (!context.stage) return null;
-  if (typeof context.stage !== 'object') return null;
-  if (Array.isArray(context.stage)) return null;
 
   const types = context.types;
   const typesRecord =
@@ -115,10 +119,10 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
 
   return {
     context: {
-      context: new Map(Object.entries(context.context)),
+      context: new Map(Object.entries(context.context as Record<string, unknown>)),
       types: new Map(Object.entries(typesRecord)),
     },
-    currentStage: parsed.currentStage,
+    stage,
     ...(temperature === undefined ? {} : { temperature }),
   };
 };
@@ -212,7 +216,7 @@ export const runStageSession = async (
     },
   }, null, 2);
 
-  const a2uiMatch = stageInput.currentStage.match(a2uiStagePattern);
+  const a2uiMatch = stageInput.stage.logic.match(a2uiStagePattern);
   const a2uiKey = a2uiMatch?.[1]?.trim();
   const a2uiRootData = a2uiKey ? stageInput.context.context[a2uiKey] : undefined;
   const a2uiSchemaSummary =
@@ -319,7 +323,8 @@ export const runStageSession = async (
           continue;
         }
 
-        return ragArgumentsToEnvelope(args);
+        throw new Error('rag not supported');
+        // return ragArgumentsToEnvelope(args);
       }
 
       if (name === "ask_user") {
@@ -333,7 +338,8 @@ export const runStageSession = async (
           });
           continue;
         }
-        return askUserArgumentsToEnvelope(args);
+        throw new Error('ask_user not supported');
+        // return askUserArgumentsToEnvelope(args);
       }
 
       if (name === "render_a2ui_plan") {

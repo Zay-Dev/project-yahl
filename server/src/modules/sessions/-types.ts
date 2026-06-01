@@ -20,6 +20,18 @@ export type TStageLoopMeta = {
   value: unknown;
 };
 
+export type TYahlStage = {
+  conditionMode?: boolean;
+  contextKeys?: string[];
+  contextMode?: boolean;
+  logic: string;
+  loopSetup?: string;
+  produceContextKeys?: string[];
+  produceTypeKeys?: string[];
+  temperature?: number;
+  updateContextKeys?: string[];
+};
+
 export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
   sessionId: string;
@@ -34,8 +46,8 @@ export interface IStage extends TWithTimestamps {
   requestId: string;
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
-  currentStage: string;
   finishedAt?: Date;
+  stage: TYahlStage;
   loopMeta?: TStageLoopMeta;
   temperature?: number;
   tokenTotals?: TTokenTotals;

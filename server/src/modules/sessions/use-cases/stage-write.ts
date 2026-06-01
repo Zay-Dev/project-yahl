@@ -4,8 +4,9 @@ import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
-import type { TStageLoopMeta, TTokenTotals } from '../-types';
+import type { TStageLoopMeta, TTokenTotals, TYahlStage } from '../-types';
 import { modelSession, modelStage } from '../models';
+import { yahlStageSchema } from '../stage-schema';
 
 export type TRequestSessionParams = {
   sessionId: string;
@@ -17,9 +18,9 @@ export type TRequestStageParams = TRequestSessionParams & {
 
 export type TRequestCreateStageBody = {
   context: Record<string, unknown>;
-  currentStage: string;
   loopMeta?: TStageLoopMeta;
   requestId: string;
+  stage: TYahlStage;
   temperature?: number;
 };
 
@@ -59,9 +60,9 @@ const tokenTotalsSchema = Joi.object<TTokenTotals>({
 
 const createStageBodySchema = Joi.object<TRequestCreateStageBody>({
   context: Joi.object().required(),
-  currentStage: Joi.string().required(),
   loopMeta: loopMetaSchema.optional(),
   requestId: Joi.string().trim().required(),
+  stage: yahlStageSchema.required(),
   temperature: Joi.number().optional(),
 });
 
@@ -105,8 +106,8 @@ export const createStage = [
         {
           $set: {
             context: body.context,
-            currentStage: body.currentStage,
             loopMeta: body.loopMeta,
+            stage: body.stage,
             session: sessionRef,
             temperature: body.temperature,
             updatedAt: now,

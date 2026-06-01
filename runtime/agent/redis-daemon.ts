@@ -1,4 +1,5 @@
 import type { TStorage } from "@/shared/transports/-types";
+import type { YahlStage } from "@/shared/yahl-stage";
 
 import config from "./config";
 
@@ -101,6 +102,16 @@ const _handleToolCalls = async (
   return { toolCallMessages };
 };
 
+const wrapVmLogic = (logic: string) => {
+  const trimmed = logic.trim();
+
+  if (trimmed.startsWith("{")) {
+    return trimmed;
+  }
+
+  return `{\n${trimmed}\n}`;
+};
+
 export const startRedisDaemon = async () => {
   if (!config.apiKey) {
     console.warn("[WARN] Running without API KEY\n");
@@ -125,7 +136,8 @@ export const startRedisDaemon = async () => {
     const envelope = await subscriber.waitForRequest();
     if (!envelope) continue;
 
-    const { context, contextAfter, currentStage, requestId, temperature } = envelope;
+    const { context, contextAfter, requestId, stage, temperature } = envelope;
+    const effectiveTemperature = temperature ?? stage.temperature;
     const { end, error, toolCall, onModelResponse } = subscriber.getReply(requestId);
 
     const _handleContextOutput = async (
@@ -142,28 +154,29 @@ export const startRedisDaemon = async () => {
     };
 
     try {
-      const _runStage = async (script: string = currentStage) => {
-        const lines = script.split('\n');
-
+      const _runStage = async (stageSpec: YahlStage = stage) => {
         if (!!contextAfter) {
           const contextOutput = await fastForward(contextAfter);
 
           await _handleContextOutput('fast-forward', contextOutput);
           return await end();
-        } else if (lines[0]?.match(/\s*CONTEXT:/)) {
-          const contextInput = context;
+        }
+
+        if (stageSpec.contextMode) {
           const contextOutput = await runScript(
-            ['{', ...lines.slice(1)].join('\n').trim(),
-            contextInput,
+            wrapVmLogic(stageSpec.logic),
+            context,
           );
 
           await _handleContextOutput('vm', contextOutput);
           return await end();
-        } else if (lines[0]?.match(/^\s*IF:/)) {
-          const winningCondition = await runConditionScript(script, context);
+        }
+
+        if (stageSpec.conditionMode) {
+          const winningCondition = await runConditionScript(stageSpec.logic, context);
 
           if (winningCondition) {
-            await _runStage(winningCondition);
+            await _runStage({ logic: winningCondition });
           }
 
           return;
@@ -172,8 +185,8 @@ export const startRedisDaemon = async () => {
         await runStageSession(
           {
             context,
-            temperature,
-            currentStage: script,
+            stage: stageSpec,
+            temperature: effectiveTemperature,
           },
           messages,
           {

@@ -1,4 +1,5 @@
 import type { TModelResponse } from '@/shared/transports/-types';
+import type { YahlStage } from '@/shared/yahl-stage';
 import type { NormalizedUsage } from '@/shared/usage';
 
 import { normalizeUsage } from '@/shared/usage';
@@ -7,7 +8,7 @@ export type TTokenTotals = NormalizedUsage;
 
 type TPushRequestEnvelope = {
   context: Record<string, unknown>;
-  currentStage: string;
+  stage: YahlStage;
   loopMeta?: {
     arraySnapshot: unknown[];
     index: number;
@@ -136,7 +137,7 @@ export const createSessionEventTracker = () => {
 
       await _post(url, {
         context: envelope.context,
-        currentStage: envelope.currentStage,
+        stage: envelope.stage,
         loopMeta: envelope.loopMeta,
         requestId: envelope.requestId,
         temperature: envelope.temperature,

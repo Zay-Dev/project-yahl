@@ -2,6 +2,9 @@ import type { OpenAI } from 'openai';
 
 import { EventEmitter } from 'events';
 
+import type { StageExecutionMeta } from '../transport';
+import type { YahlStage } from '../yahl-stage';
+
 export type TModelResponse = OpenAI.Chat.Completions.ChatCompletion & {
   thinkingMode: boolean;
   durationMs: number;
@@ -18,10 +21,10 @@ type TNormalizedStorage = {
 };
 
 export type TLoopMeta = {
-  temperature?: number;
   arraySnapshot: unknown[];
-
   index: number;
+  indexName?: string;
+  temperature?: number;
   value: unknown;
 };
 
@@ -43,7 +46,7 @@ export type TToolCallResult = {
 export type TRequestEnvelope = {
   requestId: string;
   context: TStorage;
-  currentStage: string;
+  stage: YahlStage;
   contextAfter?: TStorage;
   temperature?: number;
 };
@@ -53,7 +56,8 @@ interface IPublisherEventMap {
   modelResponse: [envelope: { requestId: string, response: TModelResponse }];
   pushRequest: [envelope: {
     context: TNormalizedStorage;
-    currentStage: string;
+    executionMeta?: StageExecutionMeta;
+    stage: YahlStage;
     requestId: string;
     loopMeta?: TLoopMeta;
     temperature?: number;
@@ -80,11 +84,12 @@ export interface IPublisher extends IBase {
 
   pushRequest: (
     context: TStorage,
-    currentStage: string,
+    stage: YahlStage,
     temperature: number | undefined,
     options?: {
-      loopMeta?: TLoopMeta | undefined,
       contextAfter?: TStorage | undefined,
+      executionMeta?: StageExecutionMeta,
+      loopMeta?: TLoopMeta | undefined,
     },
   ) => Promise<{
     requestId: string,

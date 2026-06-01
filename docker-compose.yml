@@ -69,6 +69,18 @@ services:
       - ../:/omniflex
       - ${HOST_REPO_ROOT}:${HOST_REPO_ROOT}
       - /var/run/docker.sock:/var/run/docker.sock
+      - omniflex_node_modules:/omniflex/node_modules
+      - omniflex_pnpm_store:/omniflex/.pnpm-store
+      - yahl_server_node_modules:/omniflex/project-yahl/server/node_modules
+      - yahl_server_node_modules:${HOST_REPO_ROOT}/server/node_modules
+      - yahl_runtime_node_modules:/omniflex/project-yahl/runtime/node_modules
+      - yahl_runtime_node_modules:${HOST_REPO_ROOT}/runtime/node_modules
+      - infras_core_node_modules:/omniflex/infras/core/node_modules
+      - infras_express_node_modules:/omniflex/infras/express/node_modules
+      - infras_ioredis_node_modules:/omniflex/infras/ioredis/node_modules
+      - infras_mongoose_node_modules:/omniflex/infras/databases/mongoose/node_modules
+      - infras_logger_winston_node_modules:/omniflex/infras/loggers/logger-winston/node_modules
+      - infras_aws_kms_node_modules:/omniflex/infras/modules/aws-kms-client/node_modules
 
   web:
     image: node:22
@@ -90,6 +102,16 @@ volumes:
   onecli_data:
   onecli_postgres_data:
   web_node_modules:
+  omniflex_node_modules:
+  omniflex_pnpm_store:
+  yahl_server_node_modules:
+  yahl_runtime_node_modules:
+  infras_core_node_modules:
+  infras_express_node_modules:
+  infras_ioredis_node_modules:
+  infras_mongoose_node_modules:
+  infras_logger_winston_node_modules:
+  infras_aws_kms_node_modules:
 
 networks:
   default:

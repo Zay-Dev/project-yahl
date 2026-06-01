@@ -1,4 +1,5 @@
 import { parseA2uiPlanV1, type A2uiPlanV1 } from "./a2ui-plan";
+import type { YahlStage } from "./yahl-stage";
 
 export const CONTEXT_SCOPES = ["global", "types"] as const;
 export const CONTEXT_SET_OPERATIONS = ["set", "extend"] as const;
@@ -17,7 +18,7 @@ export type StageContextPayload = {
 };
 
 export type StageSessionInput = {
-  currentStage: string;
+  stage: YahlStage;
   temperature?: number;
   context: {
     context: Map<string, unknown>;

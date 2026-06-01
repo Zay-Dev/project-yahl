@@ -41,7 +41,7 @@ sessionSchema.index({ sessionId: 1 }, { unique: true });
 const stageSchema = new Schema<TDbStage>({
   context: model.d.mixed(),
   contextAfter: model.d.mixed(),
-  currentStage: model.d.requiredString(),
+  stage: model.d.mixed(),
   finishedAt: model.d.optionalDate(),
   loopMeta: loopMetaSchema,
   requestId: model.d.requiredString(),

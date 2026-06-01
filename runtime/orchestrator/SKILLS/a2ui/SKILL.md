@@ -5,7 +5,7 @@ description: USE WHEN the YAHL stage text includes /a2ui(...) to build A2UI v0.8
 
 # A2UI (structured result surfaces)
 
-Use this skill when the current `currentStage` contains a **`/a2ui(<key>)`** call (e.g. `/a2ui(result)`).
+Use this skill when the current `stage.logic` contains a **`/a2ui(<key>)`** call (e.g. `/a2ui(result)`).
 
 The `render_a2ui_plan` tool is available only in that case. If `/a2ui(...)` is not present, do not call or simulate `render_a2ui_plan`.
 

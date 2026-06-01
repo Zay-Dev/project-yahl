@@ -1,8 +1,10 @@
 import type { TRunYahl, TStorage, TLoopMeta } from './-types';
+import type { ParsedStage } from '@/orchestrator/orchestrator-types';
 
-import { filterContextByReadUsage } from './-utils';
-
-type TMyLoopMeta = TLoopMeta & { indexName: string };
+import {
+  filterLoopBucket,
+  pickContextUpdates,
+} from '@/orchestrator/stage-field-policy';
 
 const _parseLoop = (yahl: string, storage: TStorage) => {
   const matchMeta = yahl.match(/^\s*for each (\w+) of (\[.*\])/i);
@@ -73,65 +75,82 @@ const _parseLoop = (yahl: string, storage: TStorage) => {
 };
 
 const _runLoopIteration = async (
-  yahl: string,
+  stage: ParsedStage,
   storage: TStorage,
-  loopMeta: TMyLoopMeta,
+  loopMeta: TLoopMeta & { indexName: string },
   runner: TRunYahl,
   temperature?: number,
 ) => {
-  const lines = yahl.split("\n");
-  const firstLine = lines[0];
+  const lines = stage.lines;
+  const firstLine = lines.split("\n")[0] ?? "";
   const mode = firstLine.match(/\s+[A-Z_]+:\s*{/)?.[0]?.replace("{", "") || "";
+  const body = lines.substring(lines.indexOf("{"));
+  const compiledBody = mode ? `${mode} ${body}` : body;
 
-  const normalizedYahl = `${mode} ${yahl.substring(yahl.indexOf("{"))}`;
-
-  const isExtends = (key: string) =>
-    yahl.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`));
+  const isExtends = (key: string) => lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`));
 
   const stageInput = Object
     .entries({
-      ...filterContextByReadUsage(normalizedYahl, storage.context),
-
+      ...filterLoopBucket(
+        compiledBody,
+        Object.fromEntries(storage.context),
+        stage,
+        loopMeta.indexName,
+      ),
       [loopMeta.indexName]: loopMeta.value,
     })
-    .filter(([key]) => !isExtends(key));
+    .filter(([key]) => !isExtends(key))
+    .reduce((acc, [key, value]) => {
+      acc[key] = value;
+      return acc;
+    }, {} as Record<string, unknown>);
 
   const result = await runner(
-    normalizedYahl,
+    compiledBody,
     {
-      loopMeta,
+      loopMeta: {
+        arraySnapshot: loopMeta.arraySnapshot,
+        index: loopMeta.index,
+        indexName: loopMeta.indexName,
+        temperature: loopMeta.temperature,
+        value: loopMeta.value,
+      },
       temperature,
       useStorage: () => ({
-        context: new Map(stageInput),
+        context: new Map(Object.entries(stageInput)),
         types: storage.types,
       }),
     },
   );
 
   const globalContext = storage.context;
-  const loopContext = result.storage.context;
+  const loopContext = pickContextUpdates(
+    Object.fromEntries(result.storage.context),
+    stage.updateContextKeys,
+  );
 
-  for (const key of loopContext.keys()) {
+  for (const key of Object.keys(loopContext)) {
     if (globalContext.has(key)) {
       globalContext.set(
         key,
         isExtends(key)
-          ? [globalContext.get(key), loopContext.get(key)]
-          : loopContext.get(key),
+          ? [globalContext.get(key), loopContext[key]]
+          : loopContext[key],
       );
     }
   }
 };
 
 export const handleLoop = async (
-  yahl: string,
+  stage: ParsedStage,
   storage: TStorage,
   runner: TRunYahl,
   temperature?: number,
 ) => {
-  const loopSetup = _parseLoop(yahl, storage);
+  const loopSetup = _parseLoop(stage.lines, storage);
+
   if (!loopSetup) {
-    console.error(yahl);
+    console.error(stage.lines);
     throw new Error("Invalid loop setup occurred in the above stage");
   }
 
@@ -141,16 +160,15 @@ export const handleLoop = async (
   while (step >= 0 ? i <= endAfter : i >= endAfter) {
     const currentValue = !!array ? array[i] || null : i;
 
-    const loopMeta: TMyLoopMeta = {
+    const loopMeta = {
+      arraySnapshot: array ? JSON.parse(JSON.stringify(array)) : [],
+      index: i,
       indexName,
       temperature,
-
-      index: i,
       value: currentValue,
-      arraySnapshot: array ? JSON.parse(JSON.stringify(array)) : [],
     };
 
-    await _runLoopIteration(yahl, storage, loopMeta, runner, temperature);
+    await _runLoopIteration(stage, storage, loopMeta, runner, temperature);
 
     i += step;
   }

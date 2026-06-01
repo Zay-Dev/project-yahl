@@ -115,9 +115,3 @@ export const getStages = (text: string, tabIndex = 0) => {
   }));
 };
 
-export const extractAiLogic = (text: string) =>
-  text
-    .match(/```ai\.logic\n(.*)\n```/s)?.[0]
-    ?.replace(/^```ai\.logic\n/, "")
-    ?.replace(/\n```$/, "")
-    ?.trim() || "";

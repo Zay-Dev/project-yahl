@@ -3,12 +3,14 @@ import type { StageExecutionMeta } from "@/shared/transport";
 import type { NormalizedUsage } from "@/shared/usage";
 import type { ChatToolCall } from "@/shared/stage-tools";
 
+import type { YahlStage } from "@/shared/yahl-stage";
+
 import type { ParsedStage } from "@/orchestrator/orchestrator-types";
 
 export type PushRequestEvent = {
   contextBefore: unknown;
-  currentStage: string;
   executionMeta: StageExecutionMeta;
+  stage: YahlStage;
   requestId: string;
   sessionId: string;
   temperature?: number;

@@ -1,46 +1,60 @@
----
 name: test
 description: Testing
----
 
-```ai.logic
+stages:
+  - contextMode: true
+    produceContextKeys: [a, b, c]
+    logic: |
+      const base = { a: 1, b: 2 };
 
-CONTEXT: {
-  const base = { a: 1, b: 2 };
+      (() => ({
+        ...base,
+        c: base.a + base.b,
+        d: 1234
+      }))
 
-  (() => ({
-    ...base,
-    c: base.a + base.b,
-  }))
-}
+  - contextMode: true
+    contextKeys: [c]
+    updateContextKeys: [c]
+    loopSetup: for each i of [1..5]
+    logic: |
+      (() => ({
+        c: context.context.c + context.context.i,
+      }));
 
-for each i of [1..5] CONTEXT: {
-  (() => ({
-    c: context.context.c + context.context.i,
-  }));
-}
+  - temperature: 0.2
+    loopSetup: for each i of [1..5,+2]
+    contextKeys: [c]
+    updateContextKeys: [c]
+    logic: |
+      c += i;
 
-for each i of [1..5,+2] @temperature(0.2) {
-  c += i;
-}
+  - conditionMode: true
+    contextKeys: [c]
+    updateContextKeys: [c]
+    logic: |
+      IF: context.context.c % 2 === 0;
+         c = context.context.c * 2;
+      ELSE IF: context.context.c > 30;
+         c = context.context.c - 2;
+      ELSE:
+         c = context.context.c / 2;
+      END:
 
-IF: context.context.c % 2 === 0;
-   c = context.context.c * 2;
- ELSE IF: context.context.c > 30;
-   c = context.context.c - 2;
- ELSE:
-   c = context.context.c / 2;
- END:
+  - contextKeys: [c]
+    updateContextKeys: [c]
+    logic: |
+      c += /ask-user(which number of 1,2,3,4,5);
 
-c += /ask-user(which number of 1,2,3,4,5);
+  - temperature: 2
+    contextKeys: [a, b, c]
+    updateContextKeys: [result]
+    logic: |
+      const result = {a,b,c};
 
-@temperature(2) {
-  const result = {a,b,c};
-}
+  - contextMode: true
+    updateContextKeys: [result]
+    logic: |
+      (() => ({ result: context.context.result }));
 
-CONTEXT: {
-  (() => ({ result: context.context.result }));
-}
-
-/a2ui(result)
-```
+  - logic: /a2ui(result)

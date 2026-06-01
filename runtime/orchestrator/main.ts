@@ -14,11 +14,16 @@ import { createStepTracker } from "./-utils/agent-trackers/step-tracker";
 
 import { normalizeContainerName } from "./cli-options";
 import { composeDown, composeUp, writeSharedOneCliOverride } from "./compose-onecli";
-import { buildAskUserContinuationWithContext, executeAsRoot, toAskUserAnswerValue } from "./execute";
+import {
+  buildAskUserContinuationWithContext,
+  executeAsRoot,
+  executeAsRootFromStages,
+  toAskUserAnswerValue,
+} from "./execute";
 import { workspacePath } from "./paths";
-import { getAiLogicStartLineInFile, parseStages } from "./stage-parse";
+import { getStagesBaseLineInFile } from "./stage-parse";
 import { resolveReportPromptPath } from "./task-resolve";
-import { extractAiLogic } from "./runtime";
+import { parseYahlFile } from "./yahl-parse";
 import { createSessionA2uiState, flattenSessionA2ui, mergeSessionA2uiSurface } from "./-utils/a2ui-session-merge";
 
 type AskUserResumePayloadV1 = {
@@ -75,7 +80,7 @@ export const main = async (cli: CliOptions) => {
 
   let resumePayload: AskUserResumePayloadV1 | null = null;
   let resumeHydrate: StageContextPayload | undefined;
-  let resumeSyntheticFence: string | undefined;
+  let resumeStagesOverride: ParsedStage[] | undefined;
 
   if (cli.resumeAskUserRecoveryPath) {
     const raw = await fs.readFile(path.resolve(cli.resumeAskUserRecoveryPath), "utf-8");
@@ -102,11 +107,11 @@ export const main = async (cli: CliOptions) => {
       throw new Error("resume: missing inline /ask-user(...) in saved stage text");
     }
     const resumeSourceText = await fs.readFile(parsed.sourceRef.filePath, "utf-8");
-    const resumeAiLogic = extractAiLogic(resumeSourceText);
-    const resumeStages = parseStages(resumeAiLogic).filter((stage) => stage.lines !== "}");
-    const resumeAiStartLine = getAiLogicStartLineInFile(resumeSourceText);
+    const resumeStages = parseYahlFile(resumeSourceText);
+    const resumeBaseLine = getStagesBaseLineInFile(resumeSourceText);
     const timedOutStageIndex = resumeStages.findIndex((stage) => {
-      const absoluteStartLine = resumeAiStartLine + stage.sourceStartLine - 1;
+      const absoluteStartLine = resumeBaseLine + stage.sourceStartLine - 1;
+
       return absoluteStartLine === parsed.sourceRef.line;
     });
 
@@ -114,12 +119,19 @@ export const main = async (cli: CliOptions) => {
       throw new Error("resume: cannot locate timed-out stage in source file");
     }
 
-    const resumedAiLogic = [
-      continuation.stageText,
-      ...resumeStages.slice(timedOutStageIndex + 1).map((stage) => stage.lines),
-    ].join("\n\n");
+    const timedOutStage = resumeStages[timedOutStageIndex]!;
 
-    resumeSyntheticFence = `\`\`\`ai.logic\n${resumedAiLogic}\n\`\`\``;
+    resumeStagesOverride = [
+      {
+        ...timedOutStage,
+        lines: continuation.stageText,
+        spec: {
+          ...timedOutStage.spec,
+          logic: continuation.stageText,
+        },
+      },
+      ...resumeStages.slice(timedOutStageIndex + 1),
+    ];
     resumePayload = parsed;
     resumeHydrate = {
       context: parsed.runtimeSnapshot.context ?? {},
@@ -135,11 +147,10 @@ export const main = async (cli: CliOptions) => {
     ? resumePayload.sourceRef.filePath
     : forkRunManager?.reportPath || await resolveReportPromptPath(cli);
 
-  const sourceText = resumeSyntheticFence
-    ?? forkRunManager?.aiLogic
-    ?? await fs.readFile(reportPath, "utf-8");
-
-  const aiLogicStartLine = getAiLogicStartLineInFile(sourceText);
+  const sourceText = forkRunManager
+    ? ""
+    : await fs.readFile(reportPath, "utf-8");
+  const stagesBaseLine = forkRunManager ? 1 : getStagesBaseLineInFile(sourceText);
 
   const composeProjectName = normalizeContainerName(`${cli.composeProjectPrefix}-${sessionId}`);
   const agentContainerName = normalizeContainerName(`${cli.agentContainerPrefix}-${sessionId}`);
@@ -196,14 +207,23 @@ export const main = async (cli: CliOptions) => {
     });
 
     publisher
-      .on('pushRequest', async ({ requestId, context, currentStage, meta, temperature }) => {
-        requestIdToStageId.set(requestId, meta.stageId);
+      .on('pushRequest', async ({ requestId, context, executionMeta, stage, temperature }) => {
+        if (executionMeta) {
+          requestIdToStageId.set(requestId, executionMeta.stageId);
+        }
+
         await agentTrackers.pushRequest({
           contextBefore: context,
-          currentStage,
-          executionMeta: meta,
+          executionMeta: executionMeta ?? {
+            runtimeRef: { generatedLine: 0 },
+            sourceRef: { filePath: reportPath, line: 0, text: stage.logic },
+            stageId: requestId,
+            stageIndex: parsedStages.length,
+            stageTextHash: "",
+          },
           requestId,
           sessionId,
+          stage,
           temperature,
           timestamp: new Date().toISOString(),
         });
@@ -251,15 +271,33 @@ export const main = async (cli: CliOptions) => {
 
     await publisher.waitForReady();
     
-    const { runtime, stages } = await executeAsRoot(
-      sourceText,
-      {},
-      {},
-      reportPath,
-      aiLogicStartLine,
-      undefined,
-      resumeHydrate,
-    );
+    const { runtime, stages } = resumeStagesOverride
+      ? await executeAsRootFromStages(
+        resumeStagesOverride,
+        {},
+        {},
+        reportPath,
+        stagesBaseLine,
+        resumeHydrate,
+      )
+      : forkRunManager
+        ? await executeAsRootFromStages(
+          forkRunManager.parsedStages,
+          {},
+          {},
+          reportPath,
+          stagesBaseLine,
+          resumeHydrate,
+        )
+        : await executeAsRoot(
+          sourceText,
+          {},
+          {},
+          reportPath,
+          stagesBaseLine,
+          undefined,
+          resumeHydrate,
+        );
 
     if (resumePayload) {
       const del = await fetch(

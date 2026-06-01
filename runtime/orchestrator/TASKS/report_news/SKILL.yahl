@@ -1,37 +1,34 @@
----
 name: news-monitor
 description: Monitor news from multiple sources
----
 
-```ai.logic
-type TNews = {
-  title: string;
-  date: Date;
-  url: string;
-};
-
-CONTEXT: {
-  this.news_sources = [
-    'hk01',
-    'bbc',
-  ];
-  
-  this.news = [];
-}
-
-for each source of [news_sources] {
-  EXTENDS: news = *extract_news(/web-search(source), within_24hours, allow_unknown_date, keep_datetime, keep_full_url);
-}
-
-{
-  const zh_news = *translate(news, 'zh-TW', use_ai_capability, flat_map_to: TNews);
-  const jp_news = *translate(news, 'jp', use_ai_capability, flat_map_to: TNews);
-}
-
-CONTEXT: {
-  this.result = {
-    zh: this.context.zh_news,
-    jp: this.context.jp_news,
+types: |
+  type TNews = {
+    title: string;
+    date: Date;
+    url: string;
   };
-};
-```
+
+stages:
+  - contextMode: true
+    logic: |
+      this.news_sources = [
+        'hk01',
+        'bbc',
+      ];
+
+      this.news = [];
+
+  - loopSetup: for each source of [news_sources]
+    logic: |
+      EXTENDS: news = *extract_news(/web-search(source), within_24hours, allow_unknown_date, keep_datetime, keep_full_url);
+
+  - logic: |
+      const zh_news = *translate(news, 'zh-TW', use_ai_capability, flat_map_to: TNews);
+      const jp_news = *translate(news, 'jp', use_ai_capability, flat_map_to: TNews);
+
+  - contextMode: true
+    logic: |
+      this.result = {
+        zh: this.context.zh_news,
+        jp: this.context.jp_news,
+      };

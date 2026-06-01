@@ -2,6 +2,28 @@
 
 YAHL is a new language that allow developer to write pseudo code to communicate with AI.
 
+## SKILL.yahl file format
+
+Each task lives in `TASKS/<id>/SKILL.yahl` as one YAML document:
+
+- `name`, `description` — task metadata
+- `types` (optional) — multiline type definitions (`|`), emitted as the first AI stage
+- `stages` — ordered list of stage objects
+
+Per-stage fields:
+
+| Field | Purpose |
+|-------|---------|
+| `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
+| `contextMode` | VM-only `CONTEXT: { ... }` before the next AI stage |
+| `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` |
+| `loopSetup` | e.g. `for each i of [1..5,+2]`; body compiled inside `{ }` |
+| `temperature` | Model temperature for AI stages (0–2) |
+| `contextKeys` | Allowlist of context/stage keys passed into the runner |
+| `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |
+| `produceContextKeys` | Allowlist for VM / `set_context` writes to global context |
+| `produceTypeKeys` | Allowlist for VM / `set_context` writes to the types bucket |
+
 ### Syntaxes
 
 #### System tags

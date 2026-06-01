@@ -1,9 +1,8 @@
 import { createHash } from "crypto";
 
-import { extractYahlBlocks } from "./-utils";
-
-import type { ParsedStage } from "./orchestrator-types";
 import type { RuntimeContext } from "./runtime";
+
+export { getStagesBaseLineInFile } from "./yahl-parse";
 
 const isTraceableYahlLine = (line: string) => {
   const trimmed = line.trim();
@@ -23,15 +22,6 @@ export const firstTraceableLineOffset = (text: string) => {
 
 export const getLineSinceOffset = (text: string, offset: number) =>
   text.split("\n").slice(offset).join("\n") || "";
-
-export const getAiLogicStartLineInFile = (text: string) => {
-  const lines = text.split("\n");
-  const fenceIndex = lines.findIndex((line) => line.trim() === "```ai.logic");
-
-  if (fenceIndex < 0) return 1;
-
-  return fenceIndex + 2;
-};
 
 const leadingTemperaturePattern = /^\s*@temperature\s*\(\s*([0-9]+(?:\.[0-9]+)?)\s*\)\s*/;
 
@@ -61,73 +51,6 @@ export const stripLeadingTemperature = (block: string): { temperature?: number; 
   }
 
   return { temperature, text };
-};
-
-const isLoopStage = (block: string) =>
-  !!block.match(/^\s*for each\s+(\w+)\s+of\s+(\[.*\])/i) &&
-  !!["{", "}"].find((char) => block.trim().endsWith(char));
-
-const resolveBlockSourceStartLine = (
-  aiLines: string[],
-  blockLines: string[],
-  cursor: number,
-) => {
-  for (let start = cursor; start < aiLines.length; start += 1) {
-    if (aiLines[start] !== blockLines[0]) continue;
-
-    let aiIndex = start;
-    let matched = true;
-
-    for (const blockLine of blockLines) {
-      while (aiIndex < aiLines.length && aiLines[aiIndex].trim() === "") {
-        aiIndex += 1;
-      }
-
-      if (aiLines[aiIndex] !== blockLine) {
-        matched = false;
-        break;
-      }
-
-      aiIndex += 1;
-    }
-
-    if (matched) {
-      return {
-        nextCursor: aiIndex,
-        sourceStartLine: start + 1,
-      };
-    }
-  }
-
-  return {
-    nextCursor: cursor,
-    sourceStartLine: cursor + 1,
-  };
-};
-
-export const parseStages = (aiLogic: string): ParsedStage[] => {
-  const aiLines = aiLogic.split("\n");
-  const blocks = extractYahlBlocks(aiLogic);
-  const stages: ParsedStage[] = [];
-
-  let cursor = 0;
-
-  for (const block of blocks) {
-    const blockLines = block.split("\n");
-    const { nextCursor, sourceStartLine } = resolveBlockSourceStartLine(aiLines, blockLines, cursor);
-
-    cursor = nextCursor;
-    const { temperature, text } = stripLeadingTemperature(block);
-
-    stages.push({
-      lines: text,
-      sourceStartLine,
-      type: isLoopStage(text) ? "loop" : "plain",
-      ...(temperature === undefined ? {} : { temperature }),
-    });
-  }
-
-  return stages;
 };
 
 export const toStableHash = (value: string) =>
@@ -204,12 +127,4 @@ export const parseLoop = (line: string, context: RuntimeContext) => {
   }
 
   return { indexName, ...loopSetup };
-};
-
-export const toAiLogic = (text: string) => {
-  if (text.startsWith("```ai.logic")) {
-    return text;
-  }
-
-  return `\`\`\`ai.logic\n${text}\n\`\`\``;
 };
