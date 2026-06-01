@@ -5,6 +5,7 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const projectRoot = path.resolve(moduleDir, "..");
 export const repoRoot = path.resolve(projectRoot, "..");
+export const omniflexRoot = path.resolve(repoRoot, "..");
 export const composeFile = path.resolve(projectRoot, "docker-compose.yml");
 export const onecliRuntimePath = path.resolve(projectRoot, ".onecli");
 export const onecliSharedCaFile = path.resolve(onecliRuntimePath, "proxy-ca.pem");

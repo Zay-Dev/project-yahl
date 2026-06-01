@@ -16,11 +16,11 @@ CONTEXT: {
 
 for each i of [1..5] CONTEXT: {
   (() => ({
-    c: context.stage.c + context.stage.i,
+    c: context.context.c + context.context.i,
   }));
 }
 
-for each i of [1..5,+2] {
+for each i of [1..5,+2] @temperature(0.2) {
   c += i;
 }
 
@@ -34,7 +34,9 @@ IF: context.context.c % 2 === 0;
 
 c += /ask-user(which number of 1,2,3,4,5);
 
-const result = {a,b,c};
+@temperature(2) {
+  const result = {a,b,c};
+}
 
 CONTEXT: {
   (() => ({ result: context.context.result }));

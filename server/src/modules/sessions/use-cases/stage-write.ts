@@ -1,0 +1,158 @@
+import Joi from 'joi';
+
+import { Middlewares } from '@omni-infra/express';
+import { Queries } from '@omni-infra/mongoose';
+
+import { resolveSessionBySessionId } from '../-resolve-session';
+import type { TStageLoopMeta, TTokenTotals } from '../-types';
+import { modelSession, modelStage } from '../models';
+
+export type TRequestSessionParams = {
+  sessionId: string;
+};
+
+export type TRequestStageParams = TRequestSessionParams & {
+  requestId: string;
+};
+
+export type TRequestCreateStageBody = {
+  context: Record<string, unknown>;
+  currentStage: string;
+  loopMeta?: TStageLoopMeta;
+  requestId: string;
+  temperature?: number;
+};
+
+export type TRequestPatchStageBody = {
+  contextAfter: Record<string, unknown>;
+  tokenTotals: TTokenTotals;
+};
+
+export type TResponseCreateStage = {
+  ok: true;
+  requestId: string;
+};
+
+export type TResponsePatchStage = {
+  ok: true;
+};
+
+const loopMetaSchema = Joi.object({
+  arraySnapshot: Joi.array().required(),
+  endAfter: Joi.number().optional(),
+  index: Joi.number().required(),
+  indexName: Joi.string().optional(),
+  startAt: Joi.number().optional(),
+  step: Joi.number().optional(),
+  temperature: Joi.number().optional(),
+  value: Joi.any().required(),
+}).unknown(true);
+
+const tokenTotalsSchema = Joi.object<TTokenTotals>({
+  cacheHitTokens: Joi.number().required(),
+  cacheMissTokens: Joi.number().required(),
+  completionTokens: Joi.number().required(),
+  promptTokens: Joi.number().required(),
+  reasoningTokens: Joi.number().required(),
+  totalTokens: Joi.number().required(),
+});
+
+const createStageBodySchema = Joi.object<TRequestCreateStageBody>({
+  context: Joi.object().required(),
+  currentStage: Joi.string().required(),
+  loopMeta: loopMetaSchema.optional(),
+  requestId: Joi.string().trim().required(),
+  temperature: Joi.number().optional(),
+});
+
+const patchStageBodySchema = Joi.object<TRequestPatchStageBody>({
+  contextAfter: Joi.object().required(),
+  tokenTotals: tokenTotalsSchema.required(),
+});
+
+const sessionParamsSchema = Joi.object<TRequestSessionParams>({
+  sessionId: Joi.string().trim().required(),
+});
+
+const stageParamsSchema = Joi.object<TRequestStageParams>({
+  requestId: Joi.string().trim().required(),
+  sessionId: Joi.string().trim().required(),
+});
+
+export const createStage = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      body: joi.getValidatedOrThrow(createStageBodySchema, req.body),
+      params: joi.getValidatedOrThrow(sessionParamsSchema, req.params),
+    }))
+    .next(async (express, { body, params }) => {
+      const now = new Date();
+
+      await modelSession.updateOne(
+        { sessionId: params.sessionId },
+        {
+          $set: { updatedAt: now },
+          $setOnInsert: { sessionId: params.sessionId },
+        },
+        { upsert: true },
+      );
+
+      const session = await resolveSessionBySessionId(params.sessionId);
+      const sessionRef = session._id;
+
+      await modelStage.updateOne(
+        { requestId: body.requestId, session: sessionRef },
+        {
+          $set: {
+            context: body.context,
+            currentStage: body.currentStage,
+            loopMeta: body.loopMeta,
+            session: sessionRef,
+            temperature: body.temperature,
+            updatedAt: now,
+          },
+          $setOnInsert: {
+            requestId: body.requestId,
+          },
+        },
+        { upsert: true },
+      );
+
+      express.res.status(202);
+      express.respondOne<TResponseCreateStage>({ ok: true, requestId: body.requestId });
+    })
+    .toMiddleware(),
+];
+
+export const patchStage = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      body: joi.getValidatedOrThrow(patchStageBodySchema, req.body),
+      params: joi.getValidatedOrThrow(stageParamsSchema, req.params),
+    }))
+    .next(async (express, { body, params }) => {
+      const now = new Date();
+      const session = await resolveSessionBySessionId(params.sessionId);
+      const sessionRef = session._id;
+
+      await Queries.hasExactOne(modelStage, {
+        requestId: params.requestId,
+        session: sessionRef,
+      });
+
+      await modelStage.updateOne(
+        { requestId: params.requestId, session: sessionRef },
+        {
+          $set: {
+            contextAfter: body.contextAfter,
+            finishedAt: now,
+            tokenTotals: body.tokenTotals,
+            updatedAt: now,
+          },
+        },
+      );
+
+      express.respondOne<TResponsePatchStage>({ ok: true });
+    })
+    .toMiddleware(),
+];

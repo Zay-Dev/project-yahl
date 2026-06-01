@@ -1,7 +1,7 @@
-import type { StageContextPayload } from "@/shared/stage-contract";
+import type { TStorage } from "@/shared/transports/-types";
 
 export const fastForward = async (
-  _context: StageContextPayload
+  _context: TStorage
 ) => {
   const context = JSON.parse(JSON.stringify(_context));
 

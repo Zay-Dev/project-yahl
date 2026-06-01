@@ -1,6 +1,4 @@
 import type { OpenAI } from 'openai';
-import type { StageEnvelope, SetContextToolCallEnvelope } from '@/shared/stage-contract';
-import type { ChatToolCall } from '@/shared/stage-tools';
 
 import { EventEmitter } from 'events';
 
@@ -9,50 +7,58 @@ export type TModelResponse = OpenAI.Chat.Completions.ChatCompletion & {
   durationMs: number;
 };
 
-type TRuntimeContext = {
+export type TStorage = {
+  context: Map<string, unknown>;
+  types: Map<string, unknown>;
+};
+
+type TNormalizedStorage = {
   context: Record<string, unknown>;
-  stage: Record<string, unknown>;
   types: Record<string, unknown>;
+};
+
+export type TLoopMeta = {
+  temperature?: number;
+  arraySnapshot: unknown[];
+
+  index: number;
+  value: unknown;
+};
+
+export type TChatToolCall = {
+  function: {
+    arguments: string;
+    name: string;
+  };
+  id: string;
+  type: "function";
+};
+
+export type TToolCallResult = {
+  hasError: boolean;
+  result: string;
+  newStorage?: TStorage;
 };
 
 export type TRequestEnvelope = {
   requestId: string;
-  context: TRuntimeContext;
+  context: TStorage;
   currentStage: string;
-  contextAfter?: TRuntimeContext;
+  contextAfter?: TStorage;
   temperature?: number;
 };
 
-export type TStageExecutionMeta = {
-  loopRef?: {
-    arraySnapshot: unknown[];
-    index: number;
-    value: unknown;
-  };
-  runtimeRef: {
-    generatedLine: number;
-  };
-  sourceRef: {
-    filePath: string;
-    line: number;
-    text: string;
-  };
-  stageId: string;
-  stageIndex: number;
-  stageTextHash: string;
-};
-
 interface IPublisherEventMap {
-  toolCall: [envelope: { requestId: string, toolCalls: ChatToolCall[] }];
+  toolCall: [envelope: { requestId: string, toolCalls: TChatToolCall[] }];
   modelResponse: [envelope: { requestId: string, response: TModelResponse }];
   pushRequest: [envelope: {
-    context: TRuntimeContext;
+    context: TNormalizedStorage;
     currentStage: string;
-    meta: TStageExecutionMeta;
     requestId: string;
+    loopMeta?: TLoopMeta;
     temperature?: number;
   }];
-  stageFinish: [envelope: { contextAfter: unknown; requestId: string }];
+  stageFinish: [envelope: { contextAfter: TNormalizedStorage; requestId: string }];
 }
 
 export class PublisherEmitter extends EventEmitter<IPublisherEventMap> { }
@@ -68,23 +74,38 @@ export interface IPublisher extends IBase {
   once: EventEmitter<IPublisherEventMap>['once'];
   emit: EventEmitter<IPublisherEventMap>['emit'];
 
-  emitStageFinish: (envelope: { contextAfter: unknown; requestId: string }) => void;
+  emitStageFinish: (envelope: { contextAfter: TStorage; requestId: string }) => void;
+
+  pushToolCallResult: (result: TToolCallResult) => Promise<void>;
 
   pushRequest: (
-    context: TRuntimeContext,
+    context: TStorage,
     currentStage: string,
-    meta: TStageExecutionMeta,
-    contextAfter?: Partial<TRuntimeContext | undefined>,
-    temperature?: number,
-  ) => Promise<{ requestId: string, envelope: StageEnvelope }>;
+    temperature: number | undefined,
+    options?: {
+      loopMeta?: TLoopMeta | undefined,
+      contextAfter?: TStorage | undefined,
+    },
+  ) => Promise<{
+    requestId: string,
+    wait: () => Promise<void>,
+    getWaitForToolCall: (
+      callback: (toolCall: TChatToolCall) => Promise<TToolCallResult>
+    ) => {
+      wait: () => unknown;
+      dispose: () => void;
+    },
+  }>;
 }
 
 export interface ISubscriber extends IBase {
   waitForRequest: () => Promise<TRequestEnvelope | null>;
 
   getReply: (requestId: string) => {
-    reply: (envelope: StageEnvelope) => Promise<void>;
     error: (error: Error) => Promise<void>;
+
+    end: () => Promise<any>;
+    toolCall: (toolCalls: TChatToolCall) => Promise<TToolCallResult>;
 
     onModelResponse: (response: TModelResponse) => Promise<void>;
   };

@@ -1,41 +1,33 @@
 import type Redis from "ioredis";
-import type { StageEnvelope } from '@/shared/stage-contract';
 
-import type { IPublisher, ISubscriber, TRequestEnvelope, TModelResponse } from "./-types";
+import type {
+  TStorage,
+  IPublisher,
+  ISubscriber,
+  TRequestEnvelope,
+  TChatToolCall,
+  TToolCallResult,
+} from "./-types";
 
 import { randomUUID } from 'crypto';
-
-import { parseStageEnvelope } from '@/shared/stage-contract';
 
 import { PublisherEmitter } from "./-types";
 
 const _getReplyQueue = (requestId: string) => `yahl:reply:${requestId}`;
 const _getRequestQueue = (sessionId: string) => `yahl:request:${sessionId}`;
 
-const _getToolCallChannel = (sessionId: string) => `yahl:tool-call:${sessionId}`;
+const _getToolCallChannel = (sessionId: string) => `yahl:tool:${sessionId}`;
+const _getToolCallResultChannel = (sessionId: string) => `yahl:tool-result:${sessionId}`;
 const _getModelResponseChannel = (sessionId: string) => `yahl:model-response:${sessionId}`;
 
-const _extractJsonLine = (text: string) =>
-  text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .find((line) =>
-      (line.startsWith("{") && line.endsWith("}")) ||
-      (line.startsWith("[") && line.endsWith("]"))
-    ) || "";
-
-const _parseAgentEnvelope = (value: string): StageEnvelope => {
-  const jsonLine = _extractJsonLine(value);
-  const parsed = parseStageEnvelope(jsonLine);
-
-  if (parsed) return parsed;
+const _serializeStorage = (storage?: TStorage) => {
+  if (!storage) return undefined;
 
   return {
-    output: value.trim(),
-    type: "result",
+    context: Object.fromEntries(storage.context.entries()),
+    types: Object.fromEntries(storage.types.entries()),
   };
-}
+};
 
 class RedisTransport {
   protected readonly connections: Redis[] = [];
@@ -43,12 +35,14 @@ class RedisTransport {
   protected readonly requestQueue: string;
 
   protected readonly toolCallChannel: string;
+  protected readonly toolResultChannel: string;
   protected readonly modelResponseChannel: string;
 
   constructor(protected readonly redis: Redis, protected readonly sessionId: string) {
     this.requestQueue = _getRequestQueue(this.sessionId);
 
     this.toolCallChannel = _getToolCallChannel(this.sessionId);
+    this.toolResultChannel = _getToolCallResultChannel(this.sessionId);
     this.modelResponseChannel = _getModelResponseChannel(this.sessionId);
   }
 
@@ -56,7 +50,10 @@ class RedisTransport {
     await Promise.all(
       this.connections.map(async connection => {
         connection.removeAllListeners();
-        await connection.quit();
+
+        if (!['close', 'end'].includes(connection.status)) {
+          await connection.quit();
+        }
       }),
     );
 
@@ -84,6 +81,16 @@ class RedisTransport {
 
     throw new Error("Redis not ready after ping retries");
   }
+
+  protected async _brpop(redis: Redis, queue: string, timeoutSeconds: number) {
+    const popped = await redis.brpop(queue, timeoutSeconds);
+
+    if (popped?.[1]) {
+      return popped[1];
+    }
+
+    return null;
+  }
 }
 
 export class RedisPublisher extends RedisTransport implements IPublisher {
@@ -102,60 +109,107 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
       this.connections.at(-1)!
         .on("message", (channel, message) => {
-          if (channel === this.toolCallChannel) {
-            this.emit("toolCall", JSON.parse(message));
-          } else if (channel === this.modelResponseChannel) {
+          if (channel === this.modelResponseChannel) {
             this.emit("modelResponse", JSON.parse(message));
           }
         })
-        .subscribe(this.toolCallChannel, this.modelResponseChannel);
+        .subscribe(this.modelResponseChannel);
     };
 
   pushRequest: IPublisher['pushRequest'] =
-    async (context, currentStage, meta, contextAfter, temperature) => {
+    async (context, currentStage, temperature, { loopMeta, contextAfter } = {}) => {
       const requestId = randomUUID();
-      this.emit("pushRequest", { context, currentStage, meta, requestId, temperature });
+
+      this.emit("pushRequest", { 
+        currentStage,
+        requestId,
+        temperature,
+        loopMeta,
+        context: _serializeStorage(context)!,
+      });
 
       await this.redis.lpush(this.requestQueue,
         JSON.stringify({
-          context,
           requestId,
-          currentStage,
-          contextAfter: !contextAfter ? undefined : {
-            context: contextAfter.context ?? {},
-            stage: contextAfter.stage ?? {},
-            types: contextAfter.types ?? {},
-          },
           temperature,
+          currentStage,
+
+          loopMeta: loopMeta || undefined,
+          context: _serializeStorage(context),
+          contextAfter: _serializeStorage(contextAfter),
         })
       );
 
       return {
         requestId,
-        envelope: await this._waitForReply(requestId),
+        wait: () => this._waitForReply(requestId),
+        getWaitForToolCall: (callback) => this._getWaitForToolCall(requestId, callback),
       }
+    }
+
+  pushToolCallResult: IPublisher['pushToolCallResult'] =
+    async (result) => {
+      await this.redis.lpush(
+        this.toolResultChannel,
+        JSON.stringify({
+          ...result,
+          newStorage: _serializeStorage(result.newStorage),
+        }),
+      );
     }
 
   emitStageFinish: IPublisher['emitStageFinish'] = (envelope) => {
-    this.emit("stageFinish", envelope);
+    this.emit("stageFinish", {
+      ...envelope,
+      contextAfter: _serializeStorage(envelope.contextAfter)!,
+    });
   }
 
   private async _waitForReply(requestId: string) {
-    const brpopSeconds = 30;
-    const deadline = Date.now() + 3_600_000;
+    const timeoutSeconds = 60 * 60;
+
+    const redis = this.redis.duplicate();
     const replyQueue = _getReplyQueue(requestId);
 
-    while (Date.now() < deadline) {
-      const remainingMs = deadline - Date.now();
-      const sec = Math.min(brpopSeconds, Math.max(1, Math.ceil(remainingMs / 1000)));
-      const popped = await this.redis.brpop(replyQueue, sec);
+    this.connections.push(redis);
 
-      if (popped?.[1]) {
-        return _parseAgentEnvelope(popped[1]);
+    await this._brpop(redis, replyQueue, timeoutSeconds);
+    await redis.quit();
+  }
+
+  private _getWaitForToolCall(
+    requestId: string,
+    callback: (toolCall: TChatToolCall) => Promise<TToolCallResult>
+  ): ReturnType<Awaited<ReturnType<IPublisher['pushRequest']>>['getWaitForToolCall']> {
+    const timeoutSeconds = 60 * 60;
+    const redis = this.redis.duplicate();
+
+    this.connections.push(redis);
+
+    return {
+      dispose: () => { redis.disconnect() },
+
+      wait: async () => {
+        while (true) {
+          try {
+            const popped = await this._brpop(redis, this.toolCallChannel, timeoutSeconds);
+            if (!popped) continue;
+
+            const toolCall = JSON.parse(popped) as TChatToolCall;
+
+            this.emit("toolCall", { requestId, toolCalls: [toolCall] });
+
+            const result = await callback(toolCall);
+
+            await this.redis.lpush(this.toolResultChannel, JSON.stringify(result));
+          } catch (error: unknown) {
+            const reason = error instanceof Error ? error.message : String(error);
+
+            return console.debug('waitForToolCall', { requestId, reason });
+          }
+        }
       }
-    }
-
-    throw new Error(`Stage agent reply timeout: ${requestId}`);
+    };
   }
 }
 
@@ -165,7 +219,13 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
     if (!raw) return null;
 
     try {
-      return JSON.parse(raw) as TRequestEnvelope;
+      const parsed = JSON.parse(raw) as TRequestEnvelope;
+
+      return {
+        ...parsed,
+        context: this._deserializeStorage(parsed.context)!,
+        contextAfter: this._deserializeStorage(parsed.contextAfter),
+      };
     } catch {
       return null;
     }
@@ -173,35 +233,62 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
 
   getReply: ISubscriber['getReply'] =
     (requestId: string) => {
-      type ToolCall = Exclude<
-        TModelResponse['choices'][number]['message']['tool_calls'],
-        undefined
-      >[number];
+      const timeoutSeconds = 60 * 60;
+      const redis = this.redis.duplicate();
 
       const replyQueue = _getReplyQueue(requestId);
-      const onToolsCall = async (toolCalls: ToolCall[]) => {
-        if (!toolCalls.length) return;
-        await this.redis.publish(this.toolCallChannel, JSON.stringify({ requestId, toolCalls }));
-      }
+
+      this.connections.push(redis);
+
+      const _waitForToolCallResult = async (): Promise<TToolCallResult> => {
+        const popped = await this._brpop(redis, this.toolResultChannel, timeoutSeconds);
+
+        if (!popped) {
+          return {
+            hasError: false,
+            result: 'Empty result',
+          };
+        }
+
+        const parsed = JSON.parse(popped) as TToolCallResult;
+
+        return {
+          ...parsed,
+          newStorage: this._deserializeStorage(parsed.newStorage),
+        };
+      };
 
       return {
-        reply: async (envelope: StageEnvelope) => {
-          await this.redis.lpush(replyQueue, JSON.stringify(envelope));
-        },
-
-        error: async (error: Error) => {
+        error: async (error) => {
           await this.redis.lpush(replyQueue, JSON.stringify({
             type: "result",
             output: { error, type: 'error', message: error.message },
           }));
         },
 
-        onModelResponse: async (response: TModelResponse) => {
-          await Promise.all([
-            this.redis.publish(this.modelResponseChannel, JSON.stringify({ requestId, response })),
-            onToolsCall(response.choices[0].message.tool_calls || []),
-          ]);
+        end: () => this.redis.lpush(replyQueue, 'END'),
+
+        onModelResponse: async (response) => {
+          await this.redis.publish(
+            this.modelResponseChannel,
+            JSON.stringify({ requestId, response }),
+          );
+        },
+
+        toolCall: async (toolCall) => {
+          await this.redis.lpush(this.toolCallChannel, JSON.stringify(toolCall));
+
+          return await _waitForToolCallResult();
         },
       }
     }
+
+  private _deserializeStorage(storage?: TStorage) {
+    if (!storage) return undefined;
+
+    return {
+      context: new Map<string, unknown>(Object.entries(storage.context)),
+      types: new Map<string, unknown>(Object.entries(storage.types)),
+    };
+  }
 }

@@ -26,15 +26,25 @@ const _runLoopIteration = async (
     `${mode} ${lines.substring(lines.indexOf("{"))}`,
   );
 
-  const { runtime: loopRuntime } = await execute(
-    aiBlock,
-    {
+  const isExtends = (key: string) => lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`));
+
+  const stageInput = Object
+    .entries({
       ...filterContextByReadUsage(aiBlock, runtime.get("context")!),
       ...filterContextByReadUsage(aiBlock, runtime.get("stage")!),
 
       knowledge: JSON.parse(JSON.stringify(knowledge)),
       [indexName]: currentValue,
-    },
+    })
+    .filter(([key]) => !isExtends(key))
+    .reduce((acc, [key, value]) => {
+      acc[key] = value;
+      return acc;
+    }, {} as Record<string, unknown>);
+
+  const { runtime: loopRuntime } = await execute(
+    aiBlock,
+    stageInput,
     { ...(runtime.get("types") || {}) },
     sourceFilePath,
     loopSourceLine + 1,
@@ -48,7 +58,7 @@ const _runLoopIteration = async (
 
   for (const key of Object.keys(loopContext)) {
     if (Object.keys(myContext).includes(key)) {
-      if (lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`))) {
+      if (isExtends(key)) {
         myContext[key] = [myContext[key], loopContext[key]];
       } else {
         myContext[key] = loopContext[key];

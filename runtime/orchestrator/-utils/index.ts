@@ -1,4 +1,4 @@
-export function extractYahlBlocks(rawCode: string): string[] {
+export const extractYahlBlocks = (rawCode: string): string[] => {
   const lines = rawCode.split(/\r?\n/);
   const blocks: string[] = [];
   

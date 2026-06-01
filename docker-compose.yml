@@ -49,8 +49,8 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    working_dir: /app
-    command: sh -lc "pnpm install --config.confirmModulesPurge=false && pnpm --filter server run dev"
+    working_dir: /omniflex
+    command: sh -lc "corepack enable && pnpm install --config.confirmModulesPurge=false && pnpm -r --filter \"./infras/**\" run build && pnpm --filter @project-yahl/server run dev"
     env_file:
       - .env
     environment:
@@ -66,10 +66,9 @@ services:
       - mongo
       - redis
     volumes:
-      - ./:/app
+      - ../:/omniflex
       - ${HOST_REPO_ROOT}:${HOST_REPO_ROOT}
       - /var/run/docker.sock:/var/run/docker.sock
-      - server_node_modules:/app/node_modules
 
   web:
     image: node:22
@@ -90,7 +89,6 @@ services:
 volumes:
   onecli_data:
   onecli_postgres_data:
-  server_node_modules:
   web_node_modules:
 
 networks:

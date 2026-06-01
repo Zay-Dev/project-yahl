@@ -132,16 +132,25 @@ flowchart LR
 ## Run it
 
 - You need Node + pnpm + Docker.
-- Repo shape (pnpm workspace):
-  - `runtime/` - YAHL runtime + orchestrator
-  - `server/` - Express + Mongoose session records API
+- Repo shape (Omniflex pnpm workspace member under `../pnpm-workspace.yaml`):
+  - `runtime/` (`@project-yahl/runtime`) - YAHL runtime + orchestrator
+  - `server/` (`@project-yahl/server`) - Omniflex Express + Mongoose session API
   - `web/` - Vite + shadcn app for runner, sessions list, and deep session inspection
+- Install and build framework packages from the **Omniflex repo root** (`../`):
+
+```bash
+cd ..
+pnpm install
+pnpm -r --filter "./infras/**" run build
+```
+
+- Copy `server/.env.example` to `server/.env` (or project `.env` for Docker).
 - Docker compose split:
   - root `docker-compose.yml` serves `onecli + mongo + redis + server + web`
   - `runtime/docker-compose.yml` remains available, and orchestrator keeps using compose for agent lifecycle with a shared OneCLI SDK override
 - Copy `.env.example` to `.env`, keep provider keys as placeholders, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`.
 - Runtime only: `pnpm run orchestrate`.
-- API server: `pnpm run dev:server`.
+- API server (from Omniflex root or this repo): `pnpm run dev:server` or `pnpm --filter @project-yahl/server run dev`.
 - Web app: `pnpm run dev:web`.
 - Everything together: `pnpm run dev`.
 - App stack with Docker: `pnpm run compose:up`

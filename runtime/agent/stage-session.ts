@@ -39,7 +39,7 @@ type StageRunner = {
   chatWithTools: (
     messages: ChatApiMessage[],
     options?: { temperature?: number },
-  ) => Promise<ChatAssistantMessage>;
+  ) => Promise<ChatAssistantMessage[]>;
 };
 
 type StageSessionOptions = {
@@ -115,9 +115,8 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
 
   return {
     context: {
-      context: context.context as Record<string, unknown>,
-      stage: context.stage as Record<string, unknown>,
-      types: typesRecord,
+      context: new Map(Object.entries(context.context)),
+      types: new Map(Object.entries(typesRecord)),
     },
     currentStage: parsed.currentStage,
     ...(temperature === undefined ? {} : { temperature }),
@@ -205,7 +204,14 @@ export const runStageSession = async (
 
   const toolsMd = await readFileUtf8(path.resolve(config.runtimeRoot, "Tools.md"));
 
-  const payload = JSON.stringify(stageInput, null, 2);
+  const payload = JSON.stringify({
+    ...stageInput,
+    context: {
+      context: Object.fromEntries(stageInput.context.context.entries()),
+      types: Object.fromEntries(stageInput.context.types.entries()),
+    },
+  }, null, 2);
+
   const a2uiMatch = stageInput.currentStage.match(a2uiStagePattern);
   const a2uiKey = a2uiMatch?.[1]?.trim();
   const a2uiRootData = a2uiKey ? stageInput.context.context[a2uiKey] : undefined;
@@ -250,10 +256,10 @@ export const runStageSession = async (
     const chatOpts =
       stageInput.temperature === undefined ? undefined : { temperature: stageInput.temperature };
     const assistantMessage = await runner.chatWithTools(stageMessages, chatOpts);
-    stageMessages.push(assistantMessage);
+    stageMessages.push(...assistantMessage);
 
-    const toolCalls = assistantMessage.tool_calls || [];
-
+    const toolCalls = assistantMessage.flatMap((message) => message.tool_calls || []);
+    
     for (const call of toolCalls) {
       const name = call.function.name;
       const rawArgs = call.function.arguments ?? "";
@@ -296,7 +302,12 @@ export const runStageSession = async (
         continue;
       }
 
+      if (name === "set_context") {
+        continue;
+      }
+
       if (name === "rag") {
+        continue;
         const args = parseRagToolArguments(rawArgs);
         if (!args) {
           stageMessages.push({
@@ -312,6 +323,7 @@ export const runStageSession = async (
       }
 
       if (name === "ask_user") {
+        continue;
         const args = parseAskUserToolArguments(rawArgs);
         if (!args) {
           stageMessages.push({
@@ -349,35 +361,13 @@ export const runStageSession = async (
 
           continue;
         }
+
         toolEnvelopes.push(renderA2uiPlanArgumentsToEnvelope(parsed.arguments));
         stageMessages.push({
           content: toolOkContent(),
           role: "tool",
           tool_call_id: call.id,
         });
-        continue;
-      }
-
-      if (name === "set_context") {
-        const args = parseSetContextToolArguments(rawArgs);
-
-        if (!args) {
-          stageMessages.push({
-            content: toolErrorContent("set_context: invalid arguments"),
-            role: "tool",
-            tool_call_id: call.id,
-          });
-
-          continue;
-        }
-
-        toolEnvelopes.push(setContextArgumentsToEnvelope(args));
-        stageMessages.push({
-          content: toolOkContent(),
-          role: "tool",
-          tool_call_id: call.id,
-        });
-
         continue;
       }
 
@@ -390,7 +380,7 @@ export const runStageSession = async (
 
     if (toolCalls.length > 0) continue;
 
-    return finalizeEnvelope(assistantMessage.content, toolEnvelopes);
+    return finalizeEnvelope(assistantMessage.at(-1)?.content || '', toolEnvelopes);
   }
 
   return {

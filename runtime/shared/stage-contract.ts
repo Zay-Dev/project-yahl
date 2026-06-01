@@ -1,6 +1,6 @@
 import { parseA2uiPlanV1, type A2uiPlanV1 } from "./a2ui-plan";
 
-export const CONTEXT_SCOPES = ["global", "stage", "types"] as const;
+export const CONTEXT_SCOPES = ["global", "types"] as const;
 export const CONTEXT_SET_OPERATIONS = ["set", "extend"] as const;
 export const RUNTIME_BUCKETS = ["context", "stage", "types"] as const;
 export const STAGE_ENVELOPE_TYPES = ["result", "tool_call"] as const;
@@ -17,9 +17,12 @@ export type StageContextPayload = {
 };
 
 export type StageSessionInput = {
-  context: StageContextPayload;
   currentStage: string;
   temperature?: number;
+  context: {
+    context: Map<string, unknown>;
+    types: Map<string, unknown>;
+  };
 };
 
 export type StageResultEnvelope = {
