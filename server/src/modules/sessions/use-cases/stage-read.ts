@@ -11,7 +11,10 @@ import type {
   TStageListSource,
 } from '../-api-types';
 import type { IStage, TYahlStage } from '../-types';
-import { normalizeUsageToTokenTotals } from '../-usage-normalize';
+import {
+  normalizeUsageToTokenTotals,
+  sumModelResponseUsagesByRequestId,
+} from '../-usage-normalize';
 import { modelModelResponse, modelStage, modelToolCall } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
@@ -161,6 +164,7 @@ const toListItem = (
   stage: TStageListSource & { _id: unknown },
   modelCallCount: number,
   toolCallCount: number,
+  tokenTotals: TResponseStageListItem['tokenTotals'],
 ): TResponseStageListItem => ({
   createdAt: toIso(stage.createdAt as Date) ?? '',
   finishedAt: toIso(stage.finishedAt),
@@ -170,7 +174,7 @@ const toListItem = (
   modelCallCount,
   requestId: stage.requestId,
   status: resolveStageStatus(stage),
-  tokenTotals: stage.tokenTotals ?? null,
+  tokenTotals,
   toolCallCount,
   updatedAt: toIso(stage.updatedAt as Date) ?? '',
 });
@@ -186,8 +190,9 @@ export const resolveSessionStagesList = async (sessionId: string) => {
 
   const requestIds = stages.map((stage) => stage.requestId);
 
-  const [modelCounts, toolCounts] = await Promise.all([
+  const [modelCounts, tokenTotalsByRequestId, toolCounts] = await Promise.all([
     countByRequestId(modelModelResponse, sessionRef, requestIds),
+    sumModelResponseUsagesByRequestId(sessionRef, requestIds),
     countByRequestId(modelToolCall, sessionRef, requestIds),
   ]);
 
@@ -195,6 +200,7 @@ export const resolveSessionStagesList = async (sessionId: string) => {
     stage as IStage & { _id: unknown },
     modelCounts.get(stage.requestId) ?? 0,
     toolCounts.get(stage.requestId) ?? 0,
+    tokenTotalsByRequestId.get(stage.requestId) ?? null,
   ));
 };
 
@@ -234,10 +240,16 @@ export const getSessionStage = [
           .lean(),
       ]);
 
+      const tokenTotalsByRequestId = await sumModelResponseUsagesByRequestId(
+        sessionRef,
+        [params.requestId],
+      );
+
       const listItem = toListItem(
         stage as IStage & { _id: unknown },
         modelCallCount,
         toolCallCount,
+        tokenTotalsByRequestId.get(params.requestId) ?? null,
       );
 
       const stageDoc = stage as IStage;

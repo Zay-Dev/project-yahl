@@ -9,7 +9,8 @@ import type {
   TResponseGetSession,
   TResponseSessionListItem,
 } from '../-api-types';
-import type { ISession } from '../-types';
+import type { ISession, TTokenTotals } from '../-types';
+import { sumModelResponseUsagesBySessionRef, sumModelResponseUsagesForSession } from '../-usage-normalize';
 import { modelSession } from '../models';
 
 export type {
@@ -34,26 +35,30 @@ const toIso = (value: Date | string | undefined | null) => {
   return value instanceof Date ? value.toISOString() : String(value);
 };
 
-const toResponse = (session: ISession & { _id: unknown }): TResponseGetSession => ({
+const toResponse = (
+  session: ISession & { _id: unknown },
+  tokenTotals: TTokenTotals | null,
+): TResponseGetSession => ({
   _id: String(session._id),
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
   result: session.result,
   sessionId: session.sessionId,
   taskYahlPath: session.taskYahlPath,
-  tokenTotals: session.tokenTotals ?? null,
+  tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });
 
 const toListResponse = (
   session: ISession & { _id: unknown },
+  tokenTotals: TTokenTotals | null,
 ): TResponseSessionListItem => ({
   _id: String(session._id),
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
   sessionId: session.sessionId,
   taskYahlPath: session.taskYahlPath,
-  tokenTotals: session.tokenTotals ?? null,
+  tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });
 
@@ -71,7 +76,6 @@ const resolveSessionsList = async () => {
       deletedAt: 1,
       sessionId: 1,
       taskYahlPath: 1,
-      tokenTotals: 1,
       updatedAt: 1,
     },
     {
@@ -81,7 +85,13 @@ const resolveSessionsList = async () => {
   )
     .limit(100);
 
-  return sessions.map(toListResponse);
+  const sessionRefs = sessions.map((session) => session._id);
+  const tokenTotalsBySessionRef = await sumModelResponseUsagesBySessionRef(sessionRefs);
+
+  return sessions.map((session) => toListResponse(
+    session as ISession & { _id: unknown },
+    tokenTotalsBySessionRef.get(String(session._id)) ?? null,
+  ));
 };
 
 const streamSessions = async (_: Request, res: Response) => {
@@ -132,8 +142,9 @@ export const getSession = [
     .validate(({ req }) => joi.getValidatedOrThrow(paramsSchema, req.params))
     .next(async (express, params) => {
       const session = await Queries.hasExactOne(modelSession, { sessionId: params.sessionId });
+      const tokenTotals = await sumModelResponseUsagesForSession(session._id);
 
-      express.respondOne<TResponseGetSession>(toResponse(session));
+      express.respondOne<TResponseGetSession>(toResponse(session, tokenTotals));
     })
     .toMiddleware(),
 ];

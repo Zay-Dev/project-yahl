@@ -47,7 +47,6 @@ export const createStepTracker = () => {
   const finalResult: NonNullable<TAgentTracker['finalResult']> = (event) => {
     api.patchSession(event.sessionId, {
       result: event.result,
-      tokenTotals: api.getSessionTokenTotals(),
     });
   };
 
@@ -57,7 +56,6 @@ export const createStepTracker = () => {
 
   return {
     finalResult,
-    getSessionTokenTotals: api.getSessionTokenTotals,
     modelResponse,
     pushRequest,
     registerSession,

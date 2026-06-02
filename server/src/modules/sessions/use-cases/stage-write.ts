@@ -5,7 +5,7 @@ import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { emitSessionEvent } from '../-session-events';
-import type { TStageLoopMeta, TTokenTotals, TYahlStage } from '../-types';
+import type { TStageLoopMeta, TYahlStage } from '../-types';
 import { modelSession, modelStage } from '../models';
 import { yahlStageSchema } from '../stage-schema';
 
@@ -27,7 +27,6 @@ export type TRequestCreateStageBody = {
 
 export type TRequestPatchStageBody = {
   contextAfter: Record<string, unknown>;
-  tokenTotals: TTokenTotals;
 };
 
 export type TResponseCreateStage = {
@@ -50,15 +49,6 @@ const loopMetaSchema = Joi.object({
   value: Joi.any().required(),
 }).unknown(true);
 
-const tokenTotalsSchema = Joi.object<TTokenTotals>({
-  cacheHitTokens: Joi.number().required(),
-  cacheMissTokens: Joi.number().required(),
-  completionTokens: Joi.number().required(),
-  promptTokens: Joi.number().required(),
-  reasoningTokens: Joi.number().required(),
-  totalTokens: Joi.number().required(),
-});
-
 const createStageBodySchema = Joi.object<TRequestCreateStageBody>({
   context: Joi.object().required(),
   loopMeta: loopMetaSchema.optional(),
@@ -69,7 +59,6 @@ const createStageBodySchema = Joi.object<TRequestCreateStageBody>({
 
 const patchStageBodySchema = Joi.object<TRequestPatchStageBody>({
   contextAfter: Joi.object().required(),
-  tokenTotals: tokenTotalsSchema.required(),
 });
 
 const sessionParamsSchema = Joi.object<TRequestSessionParams>({
@@ -151,7 +140,6 @@ export const patchStage = [
           $set: {
             contextAfter: body.contextAfter,
             finishedAt: now,
-            tokenTotals: body.tokenTotals,
             updatedAt: now,
           },
         },

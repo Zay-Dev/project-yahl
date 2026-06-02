@@ -1,10 +1,5 @@
 import type { TModelResponse } from '@/shared/transports/-types';
 import type { YahlStage } from '@/shared/yahl-stage';
-import type { NormalizedUsage } from '@/shared/usage';
-
-import { normalizeUsage } from '@/shared/usage';
-
-export type TTokenTotals = NormalizedUsage;
 
 type TPushRequestEnvelope = {
   context: Record<string, unknown>;
@@ -32,24 +27,6 @@ type TModelResponseEnvelope = {
 type TStageFinishEnvelope = {
   contextAfter: Record<string, unknown>;
   requestId: string;
-};
-
-const emptyUsage = (): TTokenTotals => ({
-  cacheHitTokens: 0,
-  cacheMissTokens: 0,
-  completionTokens: 0,
-  promptTokens: 0,
-  reasoningTokens: 0,
-  totalTokens: 0,
-});
-
-const addUsage = (totals: TTokenTotals, usage: NormalizedUsage) => {
-  totals.cacheHitTokens += usage.cacheHitTokens;
-  totals.cacheMissTokens += usage.cacheMissTokens;
-  totals.completionTokens += usage.completionTokens;
-  totals.promptTokens += usage.promptTokens;
-  totals.reasoningTokens += usage.reasoningTokens;
-  totals.totalTokens += usage.totalTokens;
 };
 
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
@@ -86,8 +63,6 @@ export const createSessionEventTracker = () => {
   const baseUrl = baseUrlRaw ? normalizeBaseUrl(baseUrlRaw) : 'http://localhost:4000';
 
   let queue: Promise<void> = Promise.resolve();
-  const stageTotals = new Map<string, TTokenTotals>();
-  const sessionTotals = emptyUsage();
 
   const enqueue = (fn: () => Promise<void>) => {
     queue = queue
@@ -97,25 +72,6 @@ export const createSessionEventTracker = () => {
       });
 
     return queue;
-  };
-
-  const _stageKey = (sessionId: string, requestId: string) => `${sessionId}:${requestId}`;
-
-  const _getStageTotals = (sessionId: string, requestId: string) => {
-    const key = _stageKey(sessionId, requestId);
-    const existing = stageTotals.get(key);
-
-    if (existing) return existing;
-
-    const totals = emptyUsage();
-    stageTotals.set(key, totals);
-
-    return totals;
-  };
-
-  const _recordUsage = (sessionId: string, requestId: string, usage: NormalizedUsage) => {
-    addUsage(_getStageTotals(sessionId, requestId), usage);
-    addUsage(sessionTotals, usage);
   };
 
   const registerSession = async (
@@ -158,10 +114,6 @@ export const createSessionEventTracker = () => {
   };
 
   const appendModelResponse = (sessionId: string, envelope: TModelResponseEnvelope) => {
-    const usage = normalizeUsage(envelope.response.usage as Parameters<typeof normalizeUsage>[0]);
-
-    _recordUsage(sessionId, envelope.requestId, usage);
-
     enqueue(async () => {
       if (!baseUrl) return;
 
@@ -177,11 +129,6 @@ export const createSessionEventTracker = () => {
   };
 
   const patchStage = (sessionId: string, envelope: TStageFinishEnvelope) => {
-    const key = _stageKey(sessionId, envelope.requestId);
-    const tokenTotals = { ...(_getStageTotals(sessionId, envelope.requestId)) };
-
-    stageTotals.delete(key);
-
     enqueue(async () => {
       if (!baseUrl) return;
 
@@ -190,17 +137,14 @@ export const createSessionEventTracker = () => {
 
       await _patch(url, {
         contextAfter: envelope.contextAfter,
-        tokenTotals,
       });
     });
   };
 
   const patchSession = (
     sessionId: string,
-    body: { result?: unknown; tokenTotals?: TTokenTotals },
+    body: { result?: unknown },
   ) => {
-    const tokenTotals = body.tokenTotals ?? { ...sessionTotals };
-
     enqueue(async () => {
       if (!baseUrl) return;
 
@@ -208,18 +152,14 @@ export const createSessionEventTracker = () => {
 
       await _patch(url, {
         ...(body.result !== undefined ? { result: body.result } : {}),
-        tokenTotals,
       });
     });
   };
-
-  const getSessionTokenTotals = () => ({ ...sessionTotals });
 
   return {
     appendModelResponse,
     appendToolCall,
     createStage,
-    getSessionTokenTotals,
     patchSession,
     patchStage,
     registerSession,

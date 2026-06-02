@@ -4,7 +4,6 @@ import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
 import { emitSessionEvent } from '../-session-events';
-import type { TTokenTotals } from '../-types';
 import { modelSession } from '../models';
 
 export type TRequestRegisterSessionParams = {
@@ -21,25 +20,14 @@ export type TResponseRegisterSession = {
 
 export type TRequestPatchSessionBody = {
   result?: unknown;
-  tokenTotals: TTokenTotals;
 };
 
 export type TResponsePatchSession = {
   ok: true;
 };
 
-const tokenTotalsSchema = Joi.object<TTokenTotals>({
-  cacheHitTokens: Joi.number().required(),
-  cacheMissTokens: Joi.number().required(),
-  completionTokens: Joi.number().required(),
-  promptTokens: Joi.number().required(),
-  reasoningTokens: Joi.number().required(),
-  totalTokens: Joi.number().required(),
-});
-
 const patchBodySchema = Joi.object<TRequestPatchSessionBody>({
   result: Joi.any().optional(),
-  tokenTotals: tokenTotalsSchema.required(),
 });
 
 const bodySchema = Joi.object<TRequestRegisterSessionBody>({
@@ -97,7 +85,6 @@ export const patchSession = [
         {
           $set: {
             ...(body.result !== undefined ? { result: body.result } : {}),
-            tokenTotals: body.tokenTotals,
             updatedAt: now,
           },
         },

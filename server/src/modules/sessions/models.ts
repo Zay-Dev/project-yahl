@@ -9,15 +9,6 @@ export type TDbStage = IStage & Document;
 export type TDbModelResponse = IModelResponse & Document;
 export type TDbToolCall = IToolCall & Document;
 
-const tokenTotalsSchema = new Schema({
-  cacheHitTokens: model.d.requiredNumber(),
-  cacheMissTokens: model.d.requiredNumber(),
-  completionTokens: model.d.requiredNumber(),
-  promptTokens: model.d.requiredNumber(),
-  reasoningTokens: model.d.requiredNumber(),
-  totalTokens: model.d.requiredNumber(),
-}, { _id: false });
-
 const loopMetaSchema = new Schema({
   arraySnapshot: { type: [Schema.Types.Mixed], required: true },
   endAfter: model.d.optionalNumber(),
@@ -34,7 +25,6 @@ const sessionSchema = new Schema<TDbSession>({
   result: model.d.mixed(),
   sessionId: model.d.requiredString(),
   taskYahlPath: model.d.optionalString(),
-  tokenTotals: tokenTotalsSchema,
 }, {
   collection: modelsName.Sessions,
   timestamps: true,
@@ -51,7 +41,6 @@ const stageSchema = new Schema<TDbStage>({
   requestId: model.d.requiredString(),
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   temperature: model.d.optionalNumber(),
-  tokenTotals: tokenTotalsSchema,
 }, {
   collection: modelsName.Stages,
   timestamps: true,

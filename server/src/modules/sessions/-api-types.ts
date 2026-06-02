@@ -84,6 +84,5 @@ export type TStageListSource = {
   loopMeta?: TStageLoopMeta;
   requestId: string;
   stage: TYahlStage;
-  tokenTotals?: TTokenTotals;
   updatedAt: Date | string;
 };

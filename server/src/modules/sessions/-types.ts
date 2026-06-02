@@ -37,7 +37,6 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   sessionId: string;
   result?: unknown;
   taskYahlPath?: string;
-  tokenTotals?: TTokenTotals;
 }
 
 export interface IStage extends TWithTimestamps {
@@ -50,7 +49,6 @@ export interface IStage extends TWithTimestamps {
   stage: TYahlStage;
   loopMeta?: TStageLoopMeta;
   temperature?: number;
-  tokenTotals?: TTokenTotals;
 }
 
 export interface IModelResponse extends TWithTimestamps {
