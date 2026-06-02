@@ -3,12 +3,13 @@ import { exposedRoute } from '@/servers';
 import './-inject';
 
 import { createModelResponse } from './use-cases/model-response-write';
-import { getSession } from './use-cases/read';
+import { getSession, getSessions } from './use-cases/read';
 import { createStage, patchStage } from './use-cases/stage-write';
 import { createToolCall } from './use-cases/tool-call-write';
 import { patchSession, registerSession } from './use-cases/write';
 
 exposedRoute('/api/sessions')
+  .get('/', getSessions)
   .post('/:sessionId/register', registerSession)
   .patch('/:sessionId', patchSession)
   .get('/:sessionId', getSession)
