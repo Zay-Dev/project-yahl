@@ -70,6 +70,13 @@ export type TResponseStageDetail = TResponseStageListItem & {
   toolCalls: TResponseStageToolCallItem[];
 };
 
+export type TSessionLiveEvent =
+  | { type: 'session.updated' }
+  | { type: 'stage.created'; requestId: string }
+  | { type: 'stage.finished'; requestId: string }
+  | { type: 'stage.model-response'; requestId: string }
+  | { type: 'stage.tool-call'; requestId: string };
+
 export type TStageListSource = {
   contextAfter?: Record<string, unknown>;
   createdAt: Date | string;

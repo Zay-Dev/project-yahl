@@ -175,30 +175,34 @@ const toListItem = (
   updatedAt: toIso(stage.updatedAt as Date) ?? '',
 });
 
+export const resolveSessionStagesList = async (sessionId: string) => {
+  const session = await resolveSessionBySessionId(sessionId);
+  const sessionRef = session._id;
+
+  const stages = await modelStage
+    .find({ session: sessionRef })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  const requestIds = stages.map((stage) => stage.requestId);
+
+  const [modelCounts, toolCounts] = await Promise.all([
+    countByRequestId(modelModelResponse, sessionRef, requestIds),
+    countByRequestId(modelToolCall, sessionRef, requestIds),
+  ]);
+
+  return stages.map((stage) => toListItem(
+    stage as IStage & { _id: unknown },
+    modelCounts.get(stage.requestId) ?? 0,
+    toolCounts.get(stage.requestId) ?? 0,
+  ));
+};
+
 export const getSessionStages = [
   Middlewares.Chainable
     .validate(({ req }) => joi.getValidatedOrThrow(sessionParamsSchema, req.params))
     .next(async (express, params) => {
-      const session = await resolveSessionBySessionId(params.sessionId);
-      const sessionRef = session._id;
-
-      const stages = await modelStage
-        .find({ session: sessionRef })
-        .sort({ createdAt: 1 })
-        .lean();
-
-      const requestIds = stages.map((stage) => stage.requestId);
-
-      const [modelCounts, toolCounts] = await Promise.all([
-        countByRequestId(modelModelResponse, sessionRef, requestIds),
-        countByRequestId(modelToolCall, sessionRef, requestIds),
-      ]);
-
-      const items = stages.map((stage) => toListItem(
-        stage as IStage & { _id: unknown },
-        modelCounts.get(stage.requestId) ?? 0,
-        toolCounts.get(stage.requestId) ?? 0,
-      ));
+      const items = await resolveSessionStagesList(params.sessionId);
 
       await express.respondMany<TResponseStageListItem>(items, items.length, { skipHydrate: true });
     })

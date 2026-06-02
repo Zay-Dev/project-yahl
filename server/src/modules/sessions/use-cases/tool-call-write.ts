@@ -4,6 +4,7 @@ import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
+import { emitSessionEvent } from '../-session-events';
 import { modelStage, modelToolCall } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
@@ -44,6 +45,11 @@ export const createToolCall = [
         requestId: params.requestId,
         session: sessionRef,
         toolCalls: body.toolCalls,
+      });
+
+      emitSessionEvent(params.sessionId, {
+        requestId: params.requestId,
+        type: 'stage.tool-call',
       });
 
       express.res.status(202);

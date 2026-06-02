@@ -3,6 +3,7 @@ import Joi from 'joi';
 import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
+import { emitSessionEvent } from '../-session-events';
 import type { TTokenTotals } from '../-types';
 import { modelSession } from '../models';
 
@@ -72,6 +73,8 @@ export const registerSession = [
         { upsert: true },
       );
 
+      emitSessionEvent(params.sessionId, { type: 'session.updated' });
+
       express.res.status(202);
       express.respondOne<TResponseRegisterSession>({ ok: true });
     })
@@ -99,6 +102,8 @@ export const patchSession = [
           },
         },
       );
+
+      emitSessionEvent(params.sessionId, { type: 'session.updated' });
 
       express.respondOne<TResponsePatchSession>({ ok: true });
     })

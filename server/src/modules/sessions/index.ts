@@ -3,6 +3,7 @@ import { exposedRoute } from '@/servers';
 import './-inject';
 
 import { createModelResponse } from './use-cases/model-response-write';
+import { getSessionEventsStream } from './use-cases/session-events-stream';
 import { getSession, getSessions } from './use-cases/read';
 import { getSessionStage, getSessionStages } from './use-cases/stage-read';
 import { createStage, patchStage } from './use-cases/stage-write';
@@ -14,6 +15,7 @@ exposedRoute('/api/sessions')
   .post('/:sessionId/register', registerSession)
   .patch('/:sessionId', patchSession)
   .get('/:sessionId', getSession)
+  .get('/:sessionId/events/stream', getSessionEventsStream)
   .get('/:sessionId/stages', getSessionStages)
   .post('/:sessionId/stages', createStage)
   .get('/:sessionId/stages/:requestId', getSessionStage)

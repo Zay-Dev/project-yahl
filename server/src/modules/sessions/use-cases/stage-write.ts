@@ -4,6 +4,7 @@ import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
+import { emitSessionEvent } from '../-session-events';
 import type { TStageLoopMeta, TTokenTotals, TYahlStage } from '../-types';
 import { modelSession, modelStage } from '../models';
 import { yahlStageSchema } from '../stage-schema';
@@ -119,6 +120,9 @@ export const createStage = [
         { upsert: true },
       );
 
+      emitSessionEvent(params.sessionId, { type: 'session.updated' });
+      emitSessionEvent(params.sessionId, { requestId: body.requestId, type: 'stage.created' });
+
       express.res.status(202);
       express.respondOne<TResponseCreateStage>({ ok: true, requestId: body.requestId });
     })
@@ -152,6 +156,8 @@ export const patchStage = [
           },
         },
       );
+
+      emitSessionEvent(params.sessionId, { requestId: params.requestId, type: 'stage.finished' });
 
       express.respondOne<TResponsePatchStage>({ ok: true });
     })

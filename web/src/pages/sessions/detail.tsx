@@ -7,6 +7,7 @@ import { SessionJsonFallback } from "@/pages/sessions/components/session-json-fa
 import { SessionOverview } from "@/pages/sessions/components/session-overview";
 import { SessionResult } from "@/pages/sessions/components/session-result";
 import { SessionTimeline } from "@/pages/sessions/components/session-timeline";
+import { useSessionEventsStream } from "@/pages/sessions/hooks/use-session-events-stream";
 import { RESOURCES } from "@/providers/constants";
 
 export function SessionDetailPage() {
@@ -18,6 +19,18 @@ export function SessionDetailPage() {
       enabled: !!id,
     },
     resource: RESOURCES.sessions,
+  });
+
+  const {
+    error: stagesError,
+    isLoading: stagesLoading,
+    lastEvent,
+    stages,
+  } = useSessionEventsStream({
+    onSessionUpdated: () => {
+      void query.refetch();
+    },
+    sessionId: id ?? "",
   });
 
   const session = result;
@@ -46,7 +59,13 @@ export function SessionDetailPage() {
         <>
           <SessionOverview session={session} />
           <SessionResult result={session.result} />
-          <SessionTimeline sessionId={session.sessionId} />
+          <SessionTimeline
+            error={stagesError}
+            isLoading={stagesLoading}
+            lastEvent={lastEvent}
+            sessionId={session.sessionId}
+            stages={stages}
+          />
           <SessionJsonFallback label="Developer" value={session} />
         </>
       ) : null}

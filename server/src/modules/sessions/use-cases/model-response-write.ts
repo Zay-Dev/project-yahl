@@ -4,6 +4,7 @@ import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
+import { emitSessionEvent } from '../-session-events';
 import { modelModelResponse, modelStage } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
@@ -50,6 +51,11 @@ export const createModelResponse = [
         response: body.response,
         session: sessionRef,
         thinkingMode: body.thinkingMode,
+      });
+
+      emitSessionEvent(params.sessionId, {
+        requestId: params.requestId,
+        type: 'stage.model-response',
       });
 
       express.res.status(202);

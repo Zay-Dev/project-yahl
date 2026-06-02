@@ -1,6 +1,6 @@
-import type { TResponseStageDetail, TResponseStageListItem } from "@project-yahl/server/modules/sessions/-api-types";
+import type { TResponseStageDetail, TResponseStageListItem, TSessionLiveEvent } from "@project-yahl/server/modules/sessions/-api-types";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,15 +11,16 @@ import {
 import { StageDetailPanel } from "@/pages/sessions/components/stage-detail-panel";
 import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
 import { fetchWithConcurrency } from "@/pages/sessions/lib/fetch-with-concurrency";
-import {
-  fetchSessionStageDetail,
-  fetchSessionStages,
-} from "@/pages/sessions/lib/sessions-api";
+import { fetchSessionStageDetail } from "@/pages/sessions/lib/sessions-api";
 import { buildStageLabels } from "@/pages/sessions/lib/stage-label";
 import { summarizeValue } from "@/pages/sessions/lib/tool-call-parse";
 
 type TSessionTimelineProps = {
+  error: string | null;
+  isLoading: boolean;
+  lastEvent: TSessionLiveEvent | null;
   sessionId: string;
+  stages: TResponseStageListItem[];
 };
 
 const DETAIL_FETCH_CONCURRENCY = 5;
@@ -28,6 +29,12 @@ const statusClass = (status: TResponseStageListItem["status"]) => {
   return status === "finished"
     ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
     : "bg-amber-500/15 text-amber-800 dark:text-amber-200";
+};
+
+const needsDetailRefresh = (event: TSessionLiveEvent) => {
+  return event.type === 'stage.finished'
+    || event.type === 'stage.model-response'
+    || event.type === 'stage.tool-call';
 };
 
 type TStageRowProps = {
@@ -98,50 +105,25 @@ const StageRow = ({
   </Collapsible>
 );
 
-export function SessionTimeline({ sessionId }: TSessionTimelineProps) {
-  const [stages, setStages] = useState<TResponseStageListItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function SessionTimeline({
+  error,
+  isLoading,
+  lastEvent,
+  sessionId,
+  stages,
+}: TSessionTimelineProps) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [details, setDetails] = useState<Map<string, TResponseStageDetail>>(() => new Map());
   const [detailErrors, setDetailErrors] = useState<Map<string, string>>(() => new Map());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(() => new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const openIdsRef = useRef(openIds);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const items = await fetchSessionStages(sessionId);
-
-        if (!cancelled) {
-          setStages(items);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Failed to load stages");
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId]);
+  openIdsRef.current = openIds;
 
   const loadDetail = useCallback(
-    async (requestId: string) => {
-      if (details.has(requestId) || loadingIds.has(requestId)) {
+    async (requestId: string, options?: { force?: boolean }) => {
+      if (!options?.force && (details.has(requestId) || loadingIds.has(requestId))) {
         return;
       }
 
@@ -183,6 +165,20 @@ export function SessionTimeline({ sessionId }: TSessionTimelineProps) {
       }
     });
   }, [details, loadDetail, loadingIds, openIds]);
+
+  useEffect(() => {
+    if (!lastEvent || !needsDetailRefresh(lastEvent)) {
+      return;
+    }
+
+    const requestId = lastEvent.requestId;
+
+    if (!openIdsRef.current.has(requestId)) {
+      return;
+    }
+
+    void loadDetail(requestId, { force: true });
+  }, [lastEvent, loadDetail]);
 
   const allOpen = stages.length > 0 && openIds.size === stages.length;
 
