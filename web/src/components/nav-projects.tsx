@@ -1,6 +1,6 @@
 "use client"
 
-import type { TSessionSummary } from "@/lib/types"
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types"
 
 import {
   SidebarGroup,
@@ -15,7 +15,7 @@ import { NavLink, useLocation } from "react-router"
 export function NavProjects({
   sessions,
 }: {
-  sessions: TSessionSummary[]
+  sessions: TResponseSessionListItem[]
 }) {
   const location = useLocation()
 

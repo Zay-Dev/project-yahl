@@ -1,7 +1,7 @@
 import { useList } from "@refinedev/core";
 import { Outlet, useLocation } from "react-router";
 
-import type { TSessionSummary } from "@/lib/types";
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import {
@@ -37,7 +37,7 @@ export function AppLayout() {
   const location = useLocation();
   const streamStatus = useStreamStatus();
 
-  const { result } = useList<TSessionSummary>({
+  const { result } = useList<TResponseSessionListItem>({
     pagination: { currentPage: 1, mode: "client", pageSize: 100 },
     queryOptions: {
       placeholderData: { data: [], total: 0 },

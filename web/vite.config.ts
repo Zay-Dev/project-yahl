@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@project-yahl/server": path.resolve(__dirname, "../server/src"),
     },
   },
 })

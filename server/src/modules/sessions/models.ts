@@ -20,7 +20,11 @@ const tokenTotalsSchema = new Schema({
 
 const loopMetaSchema = new Schema({
   arraySnapshot: { type: [Schema.Types.Mixed], required: true },
+  endAfter: model.d.optionalNumber(),
   index: model.d.requiredNumber(),
+  indexName: model.d.optionalString(),
+  startAt: model.d.optionalNumber(),
+  step: model.d.optionalNumber(),
   temperature: model.d.optionalNumber(),
   value: model.d.mixed(),
 }, { _id: false });

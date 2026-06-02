@@ -23,13 +23,16 @@
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-markdown": "^10.1.0",
     "react-router": "^7.16.0",
+    "remark-gfm": "^4.0.1",
     "shadcn": "^4.10.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
+    "@project-yahl/server": "workspace:*",
     "@eslint/js": "^10",
     "@types/node": "^24",
     "@types/react": "^19",

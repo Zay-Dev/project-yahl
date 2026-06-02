@@ -1,4 +1,4 @@
-import type { TSoftDeletable, TWithTimestamps } from '@/core';
+import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
 export type TTokenTotals = {
   cacheHitTokens: number;

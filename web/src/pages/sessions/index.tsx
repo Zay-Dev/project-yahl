@@ -1,12 +1,12 @@
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types";
+
 import { useList } from "@refinedev/core";
 import { Link } from "react-router";
-
-import type { TSessionSummary } from "@/lib/types";
 
 import { RESOURCES } from "@/providers/constants";
 
 export function SessionsPage() {
-  const { result } = useList<TSessionSummary>({
+  const { result } = useList<TResponseSessionListItem>({
     pagination: { currentPage: 1, mode: "client", pageSize: 100 },
     queryOptions: {
       placeholderData: { data: [], total: 0 },

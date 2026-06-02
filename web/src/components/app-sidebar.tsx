@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import type { TSessionSummary } from "@/lib/types"
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
@@ -52,7 +52,7 @@ const data = {
 }
 
 type TAppSidebarProps = React.ComponentProps<typeof Sidebar> & {
-  sessions: TSessionSummary[]
+  sessions: TResponseSessionListItem[]
 }
 
 export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {

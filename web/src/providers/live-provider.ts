@@ -1,6 +1,6 @@
 import type { LiveEvent, LiveProvider } from "@refinedev/core";
 
-import type { TSessionSummary } from "@/lib/types";
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { connectSessionsStream } from "@/lib/sse";
 import { RESOURCES } from "@/providers/constants";
@@ -24,7 +24,7 @@ const isSessionsSubscription = (channel: string, resource?: string) => {
   return channel === sessionsChannel || resource === RESOURCES.sessions;
 };
 
-const publishSessionsUpdate = (sessions: TSessionSummary[]) => {
+const publishSessionsUpdate = (sessions: TResponseSessionListItem[]) => {
   const event: LiveEvent = {
     channel: sessionsChannel,
     date: new Date(),

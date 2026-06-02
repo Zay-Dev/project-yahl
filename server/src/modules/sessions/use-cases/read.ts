@@ -5,65 +5,56 @@ import Joi from 'joi';
 import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
-import type { ISession, TTokenTotals } from '../-types';
+import type {
+  TResponseGetSession,
+  TResponseSessionListItem,
+} from '../-api-types';
+import type { ISession } from '../-types';
 import { modelSession } from '../models';
+
+export type {
+  TResponseGetSession,
+  TResponseSessionListItem,
+  TResponseTokenTotals,
+} from '../-api-types';
 
 export type TRequestGetSessionParams = {
   sessionId: string;
-};
-
-export type TResponseTokenTotals = TTokenTotals;
-
-export type TResponseGetSession = Pick<
-  ISession,
-  | 'sessionId'
-  | 'taskYahlPath'
-  | 'createdAt'
-  | 'updatedAt'
-  | 'deletedAt'
-> & {
-  _id: string;
-  result?: unknown;
-  tokenTotals: TResponseTokenTotals | null;
-};
-
-export type TResponseSessionListItem = Pick<
-  ISession,
-  | 'sessionId'
-  | 'taskYahlPath'
-  | 'createdAt'
-  | 'updatedAt'
-  | 'deletedAt'
-> & {
-  _id: string;
-  tokenTotals: TResponseTokenTotals | null;
 };
 
 const paramsSchema = Joi.object<TRequestGetSessionParams>({
   sessionId: Joi.string().trim().required(),
 });
 
+const toIso = (value: Date | string | undefined | null) => {
+  if (!value) {
+    return undefined;
+  }
+
+  return value instanceof Date ? value.toISOString() : String(value);
+};
+
 const toResponse = (session: ISession & { _id: unknown }): TResponseGetSession => ({
   _id: String(session._id),
-  createdAt: session.createdAt,
-  deletedAt: session.deletedAt,
+  createdAt: toIso(session.createdAt) ?? '',
+  deletedAt: toIso(session.deletedAt),
   result: session.result,
   sessionId: session.sessionId,
   taskYahlPath: session.taskYahlPath,
   tokenTotals: session.tokenTotals ?? null,
-  updatedAt: session.updatedAt,
+  updatedAt: toIso(session.updatedAt) ?? '',
 });
 
 const toListResponse = (
   session: ISession & { _id: unknown },
 ): TResponseSessionListItem => ({
   _id: String(session._id),
-  createdAt: session.createdAt,
-  deletedAt: session.deletedAt,
+  createdAt: toIso(session.createdAt) ?? '',
+  deletedAt: toIso(session.deletedAt),
   sessionId: session.sessionId,
   taskYahlPath: session.taskYahlPath,
   tokenTotals: session.tokenTotals ?? null,
-  updatedAt: session.updatedAt,
+  updatedAt: toIso(session.updatedAt) ?? '',
 });
 
 const writeSse = (res: Response, event: string, payload: unknown) => {

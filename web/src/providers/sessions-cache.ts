@@ -1,14 +1,14 @@
-import type { TSessionSummary } from "@/lib/types";
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types";
 
 export type TStreamStatus = "connecting" | "connected" | "disconnected";
 
-let sessionsSnapshot: TSessionSummary[] = [];
+let sessionsSnapshot: TResponseSessionListItem[] = [];
 let streamStatus: TStreamStatus = "connecting";
 const streamStatusListeners = new Set<() => void>();
 
 export const getSessionsSnapshot = () => sessionsSnapshot;
 
-export const setSessionsSnapshot = (sessions: TSessionSummary[]) => {
+export const setSessionsSnapshot = (sessions: TResponseSessionListItem[]) => {
   sessionsSnapshot = sessions;
 };
 

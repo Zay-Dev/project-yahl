@@ -3,7 +3,7 @@ import { useCustom } from "@refinedev/core"
 import type { TPingResponse } from "@/lib/types"
 
 export function HealthPage() {
-  const { data, query } = useCustom<TPingResponse>({
+  const { query, result } = useCustom<TPingResponse>({
     method: "get",
     queryOptions: {
       queryKey: ["health", "ping"],
@@ -11,7 +11,7 @@ export function HealthPage() {
     url: "/__/ping",
   })
 
-  const ping = data?.data
+  const ping = result?.data
   const error = query.error
   const isLoading = query.isLoading
 

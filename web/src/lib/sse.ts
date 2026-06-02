@@ -1,10 +1,10 @@
-import type { TSessionSummary } from "@/lib/types";
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { API_BASE_URL } from "@/providers/constants";
 
 type TUseSessionsStreamParams = {
   onError?: (error: Error) => void;
-  onSessions: (sessions: TSessionSummary[]) => void;
+  onSessions: (sessions: TResponseSessionListItem[]) => void;
   onStatus?: (status: "connecting" | "connected" | "disconnected") => void;
 };
 
@@ -18,7 +18,7 @@ export const connectSessionsStream = ({
 
   const handleSessions = (event: MessageEvent) => {
     try {
-      const parsed = JSON.parse(event.data) as TSessionSummary[];
+      const parsed = JSON.parse(event.data) as TResponseSessionListItem[];
       onSessions(parsed);
       onStatus?.("connected");
     } catch (error) {

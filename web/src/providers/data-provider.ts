@@ -19,7 +19,7 @@ export const dataProvider: DataProvider = {
     if (params.resource === RESOURCES.sessions) {
       const data = getSessionsSnapshot();
 
-      return { data, total: data.length };
+      return { data, total: data.length } as never;
     }
 
     return base.getList(params);

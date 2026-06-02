@@ -21,6 +21,22 @@
         "./dist/src/modules/*/index.js",
         "./dist/src/modules/*.js"
       ]
+    },
+    "./modules/*/use-cases/*": {
+      "development": [
+        "./src/modules/*/use-cases/*.ts"
+      ],
+      "import": [
+        "./dist/src/modules/*/use-cases/*.js"
+      ]
+    },
+    "./modules/sessions/-api-types": {
+      "development": [
+        "./src/modules/sessions/-api-types.ts"
+      ],
+      "import": [
+        "./dist/src/modules/sessions/-api-types.js"
+      ]
     }
   },
   "scripts": {

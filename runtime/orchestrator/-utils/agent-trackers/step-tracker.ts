@@ -44,11 +44,19 @@ export const createStepTracker = () => {
     });
   };
 
+  const finalResult: NonNullable<TAgentTracker['finalResult']> = (event) => {
+    api.patchSession(event.sessionId, {
+      result: event.result,
+      tokenTotals: api.getSessionTokenTotals(),
+    });
+  };
+
   const registerSession = async (sessionId: string, opts: RegisterSessionOpts) => {
     await api.registerSession(sessionId, { taskYahlPath: opts.taskYahlPath });
   };
 
   return {
+    finalResult,
     getSessionTokenTotals: api.getSessionTokenTotals,
     modelResponse,
     pushRequest,

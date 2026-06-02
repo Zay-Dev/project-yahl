@@ -2,7 +2,7 @@ import { useList } from "@refinedev/core";
 import { useMemo } from "react";
 import { Link } from "react-router";
 
-import type { TSessionSummary } from "@/lib/types";
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { useStreamStatus } from "@/hooks/use-stream-status";
 import { RESOURCES } from "@/providers/constants";
@@ -10,7 +10,7 @@ import { RESOURCES } from "@/providers/constants";
 export function DashboardPage() {
   const streamStatus = useStreamStatus();
 
-  const { result } = useList<TSessionSummary>({
+  const { result } = useList<TResponseSessionListItem>({
     pagination: { currentPage: 1, mode: "client", pageSize: 100 },
     queryOptions: {
       placeholderData: { data: [], total: 0 },
