@@ -7,6 +7,7 @@ import { resolveSessionBySessionId } from '../-resolve-session';
 import type {
   TResponseStageDetail,
   TResponseStageListItem,
+  TResponseStageReplayItem,
   TResponseStageStatus,
   TStageListSource,
 } from '../-api-types';
@@ -84,7 +85,7 @@ const parseToolArguments = (raw: unknown) => {
   }
 };
 
-const resolveStageStatus = (
+export const resolveStageStatus = (
   stage: Pick<TStageListSource, 'contextAfter' | 'finishedAt'>,
 ): TResponseStageStatus => {
   if (stage.finishedAt || stage.contextAfter) {
@@ -160,6 +161,13 @@ const countByRequestId = async (
   return counts;
 };
 
+const listStagesBySessionRef = async (sessionRef: unknown) =>
+  Queries.queryBy(
+    modelStage,
+    { session: sessionRef },
+    { sort: { createdAt: 1 } },
+  ).lean();
+
 const toListItem = (
   stage: TStageListSource & { _id: unknown },
   modelCallCount: number,
@@ -169,10 +177,12 @@ const toListItem = (
   createdAt: toIso(stage.createdAt as Date) ?? '',
   finishedAt: toIso(stage.finishedAt),
   logicPreview: logicPreviewFrom(stage.stage?.logic),
+  loopSetup: stage.stage?.loopSetup,
   loopIndex: stage.loopMeta?.index,
   loopValue: stage.loopMeta?.value,
   modelCallCount,
   requestId: stage.requestId,
+  stageId: String(stage._id),
   status: resolveStageStatus(stage),
   tokenTotals,
   toolCallCount,
@@ -183,10 +193,7 @@ export const resolveSessionStagesList = async (sessionId: string) => {
   const session = await resolveSessionBySessionId(sessionId);
   const sessionRef = session._id;
 
-  const stages = await modelStage
-    .find({ session: sessionRef })
-    .sort({ createdAt: 1 })
-    .lean();
+  const stages = await listStagesBySessionRef(sessionRef);
 
   const requestIds = stages.map((stage) => stage.requestId);
 
@@ -204,6 +211,23 @@ export const resolveSessionStagesList = async (sessionId: string) => {
   ));
 };
 
+export const resolveSessionStagesReplay = async (sessionId: string) => {
+  const session = await resolveSessionBySessionId(sessionId);
+  const sessionRef = session._id;
+
+  const stages = await listStagesBySessionRef(sessionRef);
+
+  return stages.map((stage): TResponseStageReplayItem => ({
+    context: (stage.context ?? {}) as Record<string, unknown>,
+    contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
+    loopMeta: stage.loopMeta,
+    requestId: stage.requestId,
+    stage: stage.stage as TYahlStage,
+    stageId: String(stage._id),
+    temperature: stage.temperature,
+  }));
+};
+
 export const getSessionStages = [
   Middlewares.Chainable
     .validate(({ req }) => joi.getValidatedOrThrow(sessionParamsSchema, req.params))
@@ -211,6 +235,17 @@ export const getSessionStages = [
       const items = await resolveSessionStagesList(params.sessionId);
 
       await express.respondMany<TResponseStageListItem>(items, items.length, { skipHydrate: true });
+    })
+    .toMiddleware(),
+];
+
+export const getSessionStagesReplay = [
+  Middlewares.Chainable
+    .validate(({ req }) => joi.getValidatedOrThrow(sessionParamsSchema, req.params))
+    .next(async (express, params) => {
+      const items = await resolveSessionStagesReplay(params.sessionId);
+
+      await express.respondMany<TResponseStageReplayItem>(items, items.length, { skipHydrate: true });
     })
     .toMiddleware(),
 ];

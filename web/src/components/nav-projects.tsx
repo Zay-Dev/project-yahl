@@ -9,6 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { SessionTitle } from "@/pages/sessions/components/session-title"
 import { Clock3Icon } from "lucide-react"
 import { NavLink, useLocation } from "react-router"
 
@@ -31,7 +32,7 @@ export function NavProjects({
             >
               <Clock3Icon
               />
-              <span>{session.sessionId}</span>
+              <SessionTitle sessionId={session.sessionId} taskId={session.taskId} />
             </SidebarMenuButton>
           </SidebarMenuItem>
         ))}

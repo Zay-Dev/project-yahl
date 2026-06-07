@@ -10,8 +10,9 @@ import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 
 import { runStageSession } from "./stage-session";
 
-import { fastForward } from "./-utils/ff-client";
+import { fastForward, type TContextBuckets } from './-utils/ff-client';
 import { chatWithTools } from "./-utils/llm-client";
+import { isVmConditionBranch, wrapVmLogic } from "./condition-branch";
 import { runScript, runConditionScript } from "./-utils/vm-client";
 
 type TGetReplyReturnType = ReturnType<typeof subscriber['getReply']>;
@@ -39,32 +40,42 @@ const runCommand = async (command: string) => {
   }
 };
 
-const _toSetContextToolCalls = async (
+const _contextBucketsFromVm = (
+  output: Record<string, unknown>,
+): TContextBuckets => ({
+  context: output,
+  types: {},
+});
+
+const _toSetContextToolCalls = (
   model: TFastModel,
   requestId: string,
-  context: Record<string, unknown>,
+  buckets: TContextBuckets,
 ) => {
-  return Object.entries(context)
-    .map(([key, value], index) => ({
-      arguments: {
-        key,
-        value,
-        scope: "global" as const,
-        operation: 'set' as const,
-      },
-      id: `${model}-${requestId}-${index}`,
-      tool: "set_context",
-      type: "tool_call" as const,
-    }))
-    .map((call) => ({
-      id: call.id,
-      type: 'function' as const,
-      function: {
-        name: call.tool,
-        arguments: JSON.stringify(call.arguments),
-      },
-    }));
-}
+  const specs = [
+    ...Object.entries(buckets.context).map(([key, value]) => ({
+      key,
+      operation: 'set' as const,
+      scope: 'global' as const,
+      value,
+    })),
+    ...Object.entries(buckets.types).map(([key, value]) => ({
+      key,
+      operation: 'set' as const,
+      scope: 'types' as const,
+      value,
+    })),
+  ];
+
+  return specs.map((arguments_, index) => ({
+    id: `${model}-${requestId}-${index}`,
+    type: 'function' as const,
+    function: {
+      name: 'set_context',
+      arguments: JSON.stringify(arguments_),
+    },
+  }));
+};
 
 const _handleToolCalls = async (
   storage: TStorage,
@@ -102,16 +113,6 @@ const _handleToolCalls = async (
   return { toolCallMessages };
 };
 
-const wrapVmLogic = (logic: string) => {
-  const trimmed = logic.trim();
-
-  if (trimmed.startsWith("{")) {
-    return trimmed;
-  }
-
-  return `{\n${trimmed}\n}`;
-};
-
 export const startRedisDaemon = async () => {
   if (!config.apiKey) {
     console.warn("[WARN] Running without API KEY\n");
@@ -142,23 +143,18 @@ export const startRedisDaemon = async () => {
 
     const _handleContextOutput = async (
       model: TFastModel,
-      contextOutput: Record<string, unknown>,
+      buckets: TContextBuckets,
     ) => {
-      const calls = await _toSetContextToolCalls(
-        model,
-        requestId,
-        contextOutput,
-      );
+      const calls = _toSetContextToolCalls(model, requestId, buckets);
 
       await _handleToolCalls(context, error, toolCall, calls);
     };
 
     try {
       const _runStage = async (stageSpec: YahlStage = stage) => {
-        if (!!contextAfter) {
-          const contextOutput = await fastForward(contextAfter);
+        if (contextAfter != null) {
+          await _handleContextOutput('fast-forward', await fastForward(contextAfter));
 
-          await _handleContextOutput('fast-forward', contextOutput);
           return await end();
         }
 
@@ -168,16 +164,32 @@ export const startRedisDaemon = async () => {
             context,
           );
 
-          await _handleContextOutput('vm', contextOutput);
+          await _handleContextOutput('vm', _contextBucketsFromVm(contextOutput));
           return await end();
         }
 
         if (stageSpec.conditionMode) {
           const winningCondition = await runConditionScript(stageSpec.logic, context);
 
-          if (winningCondition) {
-            await _runStage({ logic: winningCondition });
+          if (!winningCondition) {
+            return await end();
           }
+
+          if (isVmConditionBranch(winningCondition)) {
+            const contextOutput = await runScript(
+              wrapVmLogic(winningCondition),
+              context,
+            );
+
+            await _handleContextOutput('vm', _contextBucketsFromVm(contextOutput));
+            return await end();
+          }
+
+          await _runStage({
+            ...stageSpec,
+            conditionMode: undefined,
+            logic: winningCondition,
+          });
 
           return;
         }

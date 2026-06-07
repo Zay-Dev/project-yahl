@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { compileStage } from "./yahl-parse";
-import { stripLeadingTemperature } from "./stage-parse";
+import { resolveEffectiveStageTemperature, stripLeadingTemperature } from "./stage-parse";
 
 describe("stripLeadingTemperature", () => {
   it("strips prefix and returns temperature", () => {
@@ -25,6 +25,37 @@ describe("stripLeadingTemperature", () => {
     const { text } = stripLeadingTemperature("@temperature(0.1) for each i of [1..2] CONTEXT: {\n}");
     assert.match(text, /CONTEXT:/);
     assert.doesNotMatch(text, /@temperature/);
+  });
+});
+
+describe("resolveEffectiveStageTemperature", () => {
+  it("prefers explicit override then spec field", () => {
+    const stage = compileStage({ logic: "x = 1;", temperature: 0.4 }, 1);
+
+    assert.equal(
+      resolveEffectiveStageTemperature(stage, { temperature: 0.9 }),
+      0.9,
+    );
+    assert.equal(resolveEffectiveStageTemperature(stage), 0.4);
+  });
+
+  it("reads @temperature decorator when spec field is absent", () => {
+    const stage = compileStage({ logic: "x = 1;" }, 1);
+    const lines = `@temperature(1.5) ${stage.lines}`;
+
+    assert.equal(
+      resolveEffectiveStageTemperature({ ...stage, lines }, undefined, lines),
+      1.5,
+    );
+  });
+
+  it("uses loopMeta temperature as last fallback", () => {
+    const stage = compileStage({ logic: "x = 1;" }, 1);
+
+    assert.equal(
+      resolveEffectiveStageTemperature(stage, { loopMeta: { temperature: 0.15 } }),
+      0.15,
+    );
   });
 });
 

@@ -76,13 +76,13 @@ export const createSessionEventTracker = () => {
 
   const registerSession = async (
     sessionId: string,
-    opts: { taskYahlPath: string },
+    opts: { taskId: string; taskYahlPath: string },
   ) => {
     if (!baseUrl) return;
 
     const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/register`;
 
-    await _post(url, { taskYahlPath: opts.taskYahlPath });
+    await _post(url, { taskId: opts.taskId, taskYahlPath: opts.taskYahlPath });
   };
 
   const createStage = (sessionId: string, envelope: TPushRequestEnvelope) => {
@@ -91,12 +91,14 @@ export const createSessionEventTracker = () => {
 
       const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/stages`;
 
+      const temperature = envelope.temperature ?? envelope.stage.temperature;
+
       await _post(url, {
         context: envelope.context,
         stage: envelope.stage,
         loopMeta: envelope.loopMeta,
         requestId: envelope.requestId,
-        temperature: envelope.temperature,
+        ...(temperature === undefined ? {} : { temperature }),
       });
     });
   };

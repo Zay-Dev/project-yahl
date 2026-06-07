@@ -1,3 +1,5 @@
+import './fork-legacy-globals';
+
 import path from "path";
 
 import Redis from "ioredis";
@@ -27,6 +29,7 @@ import { handleRag } from "./rag-handling";
 import {
   firstTraceableLineOffset,
   getLineSinceOffset,
+  resolveEffectiveStageTemperature,
   stripLeadingTemperature,
   toStableHash,
 } from "./stage-parse";
@@ -480,9 +483,12 @@ const _execute = async (
           const effectiveLines = compileStageLines(effectiveSpec);
           const next = filterLines?.(effectiveLines);
           const rawStage = next?.stageText || effectiveLines;
-          const { temperature: restripTemp, text: stageText } = stripLeadingTemperature(rawStage);
-          const effectiveTemperature =
-            effectiveSpec.temperature ?? restripTemp ?? stageTemperature ?? loopMeta?.temperature;
+          const { text: stageText } = stripLeadingTemperature(rawStage);
+          const effectiveTemperature = resolveEffectiveStageTemperature(
+            { ...stage, lines: stageText, spec: effectiveSpec },
+            { loopMeta },
+            stageText,
+          );
           const meaningfulOffset = firstTraceableLineOffset(stageText);
           const sourceLineText = getLineSinceOffset(stageText, meaningfulOffset);
           const generatedLine = (next?.generatedLine || position.generatedLine) + meaningfulOffset;

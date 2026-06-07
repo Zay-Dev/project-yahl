@@ -90,6 +90,7 @@ export const createStage = [
 
       const session = await resolveSessionBySessionId(params.sessionId);
       const sessionRef = session._id;
+      const temperature = body.temperature ?? body.stage.temperature;
 
       await modelStage.updateOne(
         { requestId: body.requestId, session: sessionRef },
@@ -99,7 +100,7 @@ export const createStage = [
             loopMeta: body.loopMeta,
             stage: body.stage,
             session: sessionRef,
-            temperature: body.temperature,
+            ...(temperature === undefined ? {} : { temperature }),
             updatedAt: now,
           },
           $setOnInsert: {

@@ -50,16 +50,21 @@ services:
       context: .
       dockerfile: server/Dockerfile
     working_dir: /omniflex
-    command: sh -lc "corepack enable && pnpm install --config.confirmModulesPurge=false && pnpm -r --filter \"./infras/**\" run build && pnpm --filter @project-yahl/server run dev"
+    command: sh -lc "corepack enable && pnpm install --config.confirmModulesPurge=false && pnpm --filter @project-yahl/runtime install --config.confirmModulesPurge=false && pnpm -r --filter \"./infras/**\" run build && pnpm --filter @project-yahl/server run dev"
     env_file:
       - .env
     environment:
       CI: "true"
       MONGODB_URI: mongodb://mongo:27017/yahl
       REDIS_URL: redis://redis:6379
-      RUNTIME_REPO_ROOT: ${HOST_REPO_ROOT}
+      HOST_REPO_ROOT: ${HOST_REPO_ROOT}
+      OMNIFLEX_BUILD_CONTEXT: /omniflex
+      RUNTIME_REPO_ROOT: /omniflex/project-yahl
+      SESSION_API_BASE_URL: http://127.0.0.1:4000
       RUNTIME_SHARED_NETWORK: yahl_shared
       YAHL_ENABLE_ASK_USER: ${YAHL_ENABLE_ASK_USER:-false}
+      DOCKER_BUILDKIT: "1"
+      COMPOSE_DOCKER_CLI_BUILD: "1"
     ports:
       - "4000:4000"
     depends_on:

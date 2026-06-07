@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
+    "test": "tsx --test \"src/pages/sessions/lib/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
@@ -44,6 +45,7 @@
     "globals": "^17",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
+    "tsx": "^4.21.0",
     "typescript": "~6",
     "typescript-eslint": "^8",
     "vite": "^8"

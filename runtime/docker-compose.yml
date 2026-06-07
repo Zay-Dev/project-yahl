@@ -2,10 +2,10 @@ services:
   agent:
     image: ${AGENT_IMAGE:-project-yahl-agent:latest}
     build:
-      context: ../..
+      context: ${OMNIFLEX_BUILD_CONTEXT:-../..}
       dockerfile: project-yahl/runtime/Dockerfile.agent
     env_file:
-      - ../.env
+      - ${HOST_REPO_ROOT:-..}/.env
     environment:
       AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
       AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}
@@ -13,10 +13,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ../workspace:/root
-      - ./agent/Agent.md:/opt/agent/Agent.md:ro
-      - ./orchestrator/YAHL:/opt/yahl:ro
-      - ./orchestrator/SKILLS:/opt/skills:ro
+      - ${HOST_REPO_ROOT:-..}/workspace:/root
+      - ${HOST_REPO_ROOT:-..}/runtime/agent/Agent.md:/opt/agent/Agent.md:ro
+      - ${HOST_REPO_ROOT:-..}/runtime/orchestrator/YAHL:/opt/yahl:ro
+      - ${HOST_REPO_ROOT:-..}/runtime/orchestrator/SKILLS:/opt/skills:ro
     command: ["pnpm", "--silent", "--filter", "@project-yahl/runtime", "run", "agent", "--", "--daemon"]
     container_name: ${AGENT_CONTAINER_NAME:-agent}
     networks:

@@ -2,6 +2,9 @@ import type { TResponseGetSession } from "@project-yahl/server/modules/sessions/
 
 import { Link } from "react-router";
 
+import { SessionDeleteDialog } from "@/pages/sessions/components/session-delete-dialog";
+import { SessionTitle } from "@/pages/sessions/components/session-title";
+
 type TSessionOverviewProps = {
   session: TResponseGetSession;
 };
@@ -29,18 +32,29 @@ export function SessionOverview({ session }: TSessionOverviewProps) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">Session overview</p>
-          <p className="mt-1 font-mono text-sm">{session.sessionId}</p>
+          <SessionTitle
+            className="mt-1"
+            sessionId={session.sessionId}
+            taskId={session.taskId}
+          />
         </div>
-        <Link
-          className="text-sm text-primary underline-offset-2 hover:underline"
-          to="/sessions"
-        >
-          Back to sessions
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <SessionDeleteDialog
+            deletedAt={session.deletedAt}
+            navigateAfterDelete
+            sessionId={session.sessionId}
+          />
+          <Link
+            className="text-sm text-primary underline-offset-2 hover:underline"
+            to="/sessions"
+          >
+            Back to sessions
+          </Link>
+        </div>
       </div>
       <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-muted-foreground">Task</dt>
+          <dt className="text-muted-foreground">Task path</dt>
           <dd className="mt-0.5 break-all font-medium">{session.taskYahlPath || "—"}</dd>
         </div>
         <div>

@@ -106,16 +106,53 @@ export const filterStorageForStage = (
   ),
 });
 
-export const applySetContextToolCall = async (
+const _isFastForwardToolCall = (toolCall: TChatToolCall) =>
+  toolCall.id.startsWith('fast-forward-');
+
+const _SET_CONTEXT_META_KEYS = new Set(['scope', 'operation']);
+
+const _isSetContextScope = (
+  value: unknown,
+): value is SetContextToolCallEnvelope['arguments']['scope'] =>
+  value === 'global' || value === 'stage' || value === 'types';
+
+const _isSetContextOperation = (
+  value: unknown,
+): value is SetContextToolCallEnvelope['arguments']['operation'] =>
+  value === 'set' || value === 'extend';
+
+const _canonicalSetContextArgs = (
+  parsed: Record<string, unknown>,
+): SetContextToolCallEnvelope['arguments'][] => {
+  if (typeof parsed.key === 'string' && parsed.key.trim()) {
+    return [{
+      key: parsed.key.trim(),
+      operation: _isSetContextOperation(parsed.operation) ? parsed.operation : 'set',
+      scope: _isSetContextScope(parsed.scope) ? parsed.scope : 'global',
+      value: parsed.value,
+    }];
+  }
+
+  const scope = _isSetContextScope(parsed.scope) ? parsed.scope : 'global';
+  const operation = _isSetContextOperation(parsed.operation) ? parsed.operation : 'set';
+
+  return Object.keys(parsed)
+    .filter((key) => !_SET_CONTEXT_META_KEYS.has(key))
+    .map((key) => ({
+      key,
+      operation,
+      scope,
+      value: parsed[key],
+    }));
+};
+
+const _applyOneSetContextArg = async (
   storage: TStorage,
   toolCall: TChatToolCall,
   stage: ParsedStage,
+  args: SetContextToolCallEnvelope['arguments'],
 ) => {
-  const args = JSON.parse(
-    toolCall.function.arguments,
-  ) as SetContextToolCallEnvelope["arguments"];
-
-  if (!shouldApplySetContext(args.key, stage)) {
+  if (!_isFastForwardToolCall(toolCall) && !shouldApplySetContext(args.key, stage)) {
     return false;
   }
 
@@ -130,6 +167,29 @@ export const applySetContextToolCall = async (
   });
 
   return true;
+};
+
+export const applySetContextToolCall = async (
+  storage: TStorage,
+  toolCall: TChatToolCall,
+  stage: ParsedStage,
+) => {
+  const parsed = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+  const argList = _canonicalSetContextArgs(parsed);
+
+  if (argList.length === 0) {
+    return false;
+  }
+
+  let applied = false;
+
+  for (const args of argList) {
+    if (await _applyOneSetContextArg(storage, toolCall, stage, args)) {
+      applied = true;
+    }
+  }
+
+  return applied;
 };
 
 export const filterStageContextPayload = (

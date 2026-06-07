@@ -20,6 +20,11 @@ const _getToolCallChannel = (sessionId: string) => `yahl:tool:${sessionId}`;
 const _getToolCallResultChannel = (sessionId: string) => `yahl:tool-result:${sessionId}`;
 const _getModelResponseChannel = (sessionId: string) => `yahl:model-response:${sessionId}`;
 
+const _isStorage = (value: unknown): value is TStorage =>
+  typeof value === 'object'
+  && value !== null
+  && (value as TStorage).context instanceof Map;
+
 const _serializeStorage = (storage?: TStorage) => {
   if (!storage) return undefined;
 
@@ -27,6 +32,14 @@ const _serializeStorage = (storage?: TStorage) => {
     context: Object.fromEntries(storage.context.entries()),
     types: Object.fromEntries(storage.types.entries()),
   };
+};
+
+const _normalizeContextAfter = (contextAfter: TStorage | Record<string, unknown>) => {
+  if (_isStorage(contextAfter)) {
+    return _serializeStorage(contextAfter)!;
+  }
+
+  return contextAfter as { context: Record<string, unknown>; types: Record<string, unknown> };
 };
 
 class RedisTransport {
@@ -160,7 +173,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
   emitStageFinish: IPublisher['emitStageFinish'] = (envelope) => {
     this.emit("stageFinish", {
       ...envelope,
-      contextAfter: _serializeStorage(envelope.contextAfter)!,
+      contextAfter: _normalizeContextAfter(envelope.contextAfter),
     });
   }
 

@@ -78,7 +78,10 @@ export interface IPublisher extends IBase {
   once: EventEmitter<IPublisherEventMap>['once'];
   emit: EventEmitter<IPublisherEventMap>['emit'];
 
-  emitStageFinish: (envelope: { contextAfter: TStorage; requestId: string }) => void;
+  emitStageFinish: (envelope: {
+    contextAfter: TStorage | Record<string, unknown>;
+    requestId: string;
+  }) => void;
 
   pushToolCallResult: (result: TToolCallResult) => Promise<void>;
 

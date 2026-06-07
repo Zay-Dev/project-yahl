@@ -5,6 +5,7 @@ import type { TResponseSessionListItem } from "@project-yahl/server/modules/sess
 import { connectSessionsStream } from "@/lib/sse";
 import { RESOURCES } from "@/providers/constants";
 import {
+  getSessionsSnapshot,
   setSessionsSnapshot,
   setStreamStatus,
 } from "@/providers/sessions-cache";
@@ -22,6 +23,10 @@ const sessionsChannel = `resources/${RESOURCES.sessions}`;
 
 const isSessionsSubscription = (channel: string, resource?: string) => {
   return channel === sessionsChannel || resource === RESOURCES.sessions;
+};
+
+export const publishSessionsSnapshot = () => {
+  publishSessionsUpdate(getSessionsSnapshot());
 };
 
 const publishSessionsUpdate = (sessions: TResponseSessionListItem[]) => {

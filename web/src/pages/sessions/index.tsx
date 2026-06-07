@@ -3,6 +3,8 @@ import type { TResponseSessionListItem } from "@project-yahl/server/modules/sess
 import { useList } from "@refinedev/core";
 import { Link } from "react-router";
 
+import { SessionDeleteDialog } from "@/pages/sessions/components/session-delete-dialog";
+import { SessionTitle } from "@/pages/sessions/components/session-title";
 import { RESOURCES } from "@/providers/constants";
 
 export function SessionsPage() {
@@ -23,9 +25,10 @@ export function SessionsPage() {
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
-              <th className="p-3 text-left font-medium">Session ID</th>
+              <th className="p-3 text-left font-medium">Task</th>
               <th className="p-3 text-left font-medium">Updated At</th>
               <th className="p-3 text-left font-medium">Tokens</th>
+              <th className="p-3 text-left font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -33,19 +36,25 @@ export function SessionsPage() {
               <tr key={session.sessionId} className="border-t">
                 <td className="p-3">
                   <Link
-                    to={`/sessions/${encodeURIComponent(session.sessionId)}`}
                     className="text-primary underline-offset-2 hover:underline"
+                    to={`/sessions/${encodeURIComponent(session.sessionId)}`}
                   >
-                    {session.sessionId}
+                    <SessionTitle
+                      sessionId={session.sessionId}
+                      taskId={session.taskId}
+                    />
                   </Link>
                 </td>
                 <td className="p-3">{new Date(session.updatedAt).toLocaleString()}</td>
                 <td className="p-3">{session.tokenTotals?.totalTokens || 0}</td>
+                <td className="p-3">
+                  <SessionDeleteDialog sessionId={session.sessionId} />
+                </td>
               </tr>
             ))}
             {sessions.length === 0 ? (
               <tr>
-                <td className="p-3 text-muted-foreground" colSpan={3}>
+                <td className="p-3 text-muted-foreground" colSpan={4}>
                   Waiting for sessions stream...
                 </td>
               </tr>

@@ -5,20 +5,21 @@ import config from "./config";
 import Redis from "ioredis";
 import { RedisPublisher } from '@/shared/transports/redis';
 
-import { initForkRunManager } from './forkrun-manager';
-
 import { program, resolveSessionId, runCommand } from './-commander';
 import { composeDown, composeUp, writeSharedOneCliOverride } from "./compose-onecli";
 
 import { buildAgent } from './-docker';
-import { runTaskPath } from './-runners/path';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
+
+import { initForkSessionManager } from './fork-session-manager';
+
+import { runTaskPath } from './-runners/path';
+import { runForkSession } from './-runners/fork';
 
 declare global {
   var sessionId: string;
 
   var publisher: IPublisher;
-  var forkRunManager: undefined | Awaited<ReturnType<typeof initForkRunManager>>;
 }
 
 const redis = new Redis(config.redisUrl, {
@@ -55,8 +56,6 @@ const _composeUp = async (agentName: string) => {
   });
 };
 
-buildAgent();
-
 runCommand.action(async options => {
   const sessionId = resolveSessionId(options.sessionId);
 
@@ -68,22 +67,45 @@ runCommand.action(async options => {
   globalThis.sessionId = sessionId;
   globalThis.publisher = new RedisPublisher(redis, sessionId);
 
-  await tracker.registerSession(sessionId, {
-    taskYahlPath: options.taskPath ?? '',
-  });
+  const forkManager = options.forkrunId
+    ? await initForkSessionManager(options.forkrunId)
+    : undefined;
 
-  await composeDown(agentName);
-  await _composeUp(agentName);
-  await _setupPublisher(tracker, sessionId);
+  if (forkManager) {
+    globalThis.forkSessionManager = forkManager;
 
-  if (options.taskPath) {
-    await runTaskPath(options.taskPath);
-  } else if (options.resumeId) {
-    console.log('resumeId', options.resumeId);
-  } else if (options.forkrunId) {
-    console.log('forkrunId', options.forkrunId);
-  } else {
-    throw new Error('No task path, resume id, or forkrun id provided');
+    if (sessionId !== forkManager.targetSessionId) {
+      throw new Error(
+        `Session id mismatch: CLI ${sessionId} vs fork target ${forkManager.targetSessionId}`,
+      );
+    }
+  }
+
+  try {
+    buildAgent();
+
+    await tracker.registerSession(sessionId, {
+      taskId: options.taskId,
+      taskYahlPath: options.taskPath ?? forkManager?.taskYahlPath ?? '',
+    });
+
+    await composeDown(agentName);
+    await _composeUp(agentName);
+    await _setupPublisher(tracker, sessionId);
+
+    if (options.taskPath) {
+      await runTaskPath(options.taskPath);
+    } else if (options.resumeId) {
+      console.log('resumeId', options.resumeId);
+    } else if (options.forkrunId) {
+      await runForkSession(options.forkrunId, forkManager);
+    } else {
+      throw new Error('No task path, resume id, or forkrun id provided');
+    }
+  } catch (error) {
+    console.error('[orchestrator] run failed:', error);
+    process.exitCode = 1;
+    throw error;
   }
 
   await composeDown(agentName);

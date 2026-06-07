@@ -12,6 +12,10 @@ export const setSessionsSnapshot = (sessions: TResponseSessionListItem[]) => {
   sessionsSnapshot = sessions;
 };
 
+export const removeSessionFromSnapshot = (sessionId: string) => {
+  sessionsSnapshot = sessionsSnapshot.filter((session) => session.sessionId !== sessionId);
+};
+
 export const getStreamStatus = () => streamStatus;
 
 export const setStreamStatus = (status: TStreamStatus) => {

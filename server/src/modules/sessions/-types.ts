@@ -32,10 +32,34 @@ export type TYahlStage = {
   updateContextKeys?: string[];
 };
 
+export type TSessionForkedFrom = {
+  anchorStageId: string;
+  forkSessionId: string;
+  sourceSessionId: string;
+};
+
+export type TForkSessionStageSetup = {
+  context: Record<string, unknown>;
+  loopMeta?: TStageLoopMeta;
+  stage: TYahlStage;
+  stageId: string;
+};
+
+export interface IForkSession extends TWithTimestamps {
+  _id: string;
+  anchorStageId: string;
+  forkSessionId: string;
+  setups: TForkSessionStageSetup[];
+  sourceSessionId: string;
+  targetSessionId: string;
+}
+
 export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
+  forkedFrom?: TSessionForkedFrom;
   sessionId: string;
   result?: unknown;
+  taskId?: string;
   taskYahlPath?: string;
 }
 

@@ -73,7 +73,7 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
         />
       ),
       items: sessions.slice(0, 6).map((session) => ({
-        title: session.sessionId,
+        title: session.taskId?.trim() || "Unknown task",
         url: `/sessions/${encodeURIComponent(session.sessionId)}`,
       })),
     },

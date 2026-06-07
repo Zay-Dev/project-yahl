@@ -42,8 +42,10 @@ const toResponse = (
   _id: String(session._id),
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
+  forkedFrom: session.forkedFrom,
   result: session.result,
   sessionId: session.sessionId,
+  taskId: session.taskId,
   taskYahlPath: session.taskYahlPath,
   tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
@@ -57,6 +59,7 @@ const toListResponse = (
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
   sessionId: session.sessionId,
+  taskId: session.taskId,
   taskYahlPath: session.taskYahlPath,
   tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
@@ -69,12 +72,13 @@ const writeSse = (res: Response, event: string, payload: unknown) => {
 
 const resolveSessionsList = async () => {
   const sessions = await modelSession.find(
-    {},
+    { deletedAt: null },
     {
       _id: 1,
       createdAt: 1,
       deletedAt: 1,
       sessionId: 1,
+      taskId: 1,
       taskYahlPath: 1,
       updatedAt: 1,
     },

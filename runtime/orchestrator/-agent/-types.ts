@@ -6,10 +6,12 @@ export { TStorage, TLoopMeta };
 export type TRunYahl = (
   yahl: string,
   options?: {
+    contextAfter?: TStorage;
+    contextAfterRecord?: Record<string, unknown>;
     loopMeta?: TLoopMeta;
     stages?: ParsedStage[];
     temperature?: number;
-    useStorage?: () => TStorage
+    useStorage?: () => TStorage;
   },
 ) => Promise<{
   storage: TStorage;

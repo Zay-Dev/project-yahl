@@ -8,6 +8,7 @@ type RegisterSessionOpts = {
     sourceSessionId: string;
     stageIndex: number;
   };
+  taskId: string;
   taskYahlPath: string;
 };
 
@@ -51,7 +52,10 @@ export const createStepTracker = () => {
   };
 
   const registerSession = async (sessionId: string, opts: RegisterSessionOpts) => {
-    await api.registerSession(sessionId, { taskYahlPath: opts.taskYahlPath });
+    await api.registerSession(sessionId, {
+      taskId: opts.taskId,
+      taskYahlPath: opts.taskYahlPath,
+    });
   };
 
   return {

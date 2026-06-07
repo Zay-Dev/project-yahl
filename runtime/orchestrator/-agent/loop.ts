@@ -3,9 +3,18 @@ import type { ParsedStage } from '@/orchestrator/orchestrator-types';
 
 import {
   filterLoopBucket,
+  loopIndexNameFromLines,
   pickContextUpdates,
 } from '@/orchestrator/stage-field-policy';
 import { toLoopIterationStage } from '@/orchestrator/yahl-parse';
+
+export const resolveLoopIndexName = (
+  stage: ParsedStage,
+  loopMeta: TLoopMeta,
+) =>
+  loopMeta.indexName
+  ?? loopIndexNameFromLines(stage.spec.loopSetup ?? '')
+  ?? loopIndexNameFromLines(stage.lines);
 
 const _parseLoop = (yahl: string, storage: TStorage) => {
   const matchMeta = yahl.match(/^\s*for each (\w+) of (\[.*\])/i);
@@ -75,13 +84,20 @@ const _parseLoop = (yahl: string, storage: TStorage) => {
   return { indexName, ...loopSetup };
 };
 
-const _runLoopIteration = async (
+export const runLoopIteration = async (
   stage: ParsedStage,
   storage: TStorage,
-  loopMeta: TLoopMeta & { indexName: string },
+  loopMeta: TLoopMeta,
   runner: TRunYahl,
   temperature?: number,
 ) => {
+  const indexName = resolveLoopIndexName(stage, loopMeta);
+
+  if (!indexName) {
+    throw new Error(`Missing loop index name for stage at line ${stage.sourceStartLine}`);
+  }
+
+  const resolvedLoopMeta = { ...loopMeta, indexName };
   const lines = stage.lines;
   const firstLine = lines.split("\n")[0] ?? "";
   const mode = firstLine.match(/\s+[A-Z_]+:\s*{/)?.[0]?.replace("{", "") || "";
@@ -96,9 +112,9 @@ const _runLoopIteration = async (
         compiledBody,
         Object.fromEntries(storage.context),
         stage,
-        loopMeta.indexName,
+        resolvedLoopMeta.indexName,
       ),
-      [loopMeta.indexName]: loopMeta.value,
+      [resolvedLoopMeta.indexName]: resolvedLoopMeta.value,
     })
     .filter(([key]) => !isExtends(key))
     .reduce((acc, [key, value]) => {
@@ -110,11 +126,11 @@ const _runLoopIteration = async (
     "",
     {
       loopMeta: {
-        arraySnapshot: loopMeta.arraySnapshot,
-        index: loopMeta.index,
-        indexName: loopMeta.indexName,
-        temperature: loopMeta.temperature,
-        value: loopMeta.value,
+        arraySnapshot: resolvedLoopMeta.arraySnapshot,
+        index: resolvedLoopMeta.index,
+        indexName: resolvedLoopMeta.indexName,
+        temperature: resolvedLoopMeta.temperature,
+        value: resolvedLoopMeta.value,
       },
       stages: [toLoopIterationStage(stage, compiledBody)],
       temperature,
@@ -170,7 +186,7 @@ export const handleLoop = async (
       value: currentValue,
     };
 
-    await _runLoopIteration(stage, storage, loopMeta, runner, temperature);
+    await runLoopIteration(stage, storage, loopMeta, runner, temperature);
 
     i += step;
   }

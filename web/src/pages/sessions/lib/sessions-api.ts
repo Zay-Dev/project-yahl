@@ -1,4 +1,10 @@
-import type { TResponseStageDetail, TResponseStageListItem } from "@project-yahl/server/modules/sessions/-api-types";
+import type {
+  TRequestCreateForkSessionBody,
+  TResponseCreateForkSession,
+  TResponseDeleteSession,
+  TResponseStageDetail,
+  TResponseStageListItem,
+} from "@project-yahl/server/modules/sessions/-api-types";
 
 import { API_BASE_URL } from "@/providers/constants";
 
@@ -26,4 +32,28 @@ export const fetchSessionStageDetail = async (sessionId: string, requestId: stri
   const response = await fetch(url);
 
   return parseJson<TResponseStageDetail>(response);
+};
+
+export const createForkSession = async (
+  sessionId: string,
+  body: TRequestCreateForkSessionBody,
+) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}/fork-sessions`;
+  const response = await fetch(url, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  return parseJson<TResponseCreateForkSession>(response);
+};
+
+export const deleteSession = async (
+  sessionId: string,
+  mode: 'hard' | 'soft',
+) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}?mode=${mode}`;
+  const response = await fetch(url, { method: 'DELETE' });
+
+  return parseJson<TResponseDeleteSession>(response);
 };

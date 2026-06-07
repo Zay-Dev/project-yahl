@@ -1,9 +1,18 @@
-import type { TStorage } from "@/shared/transports/-types";
+import type { TStorage } from '@/shared/transports/-types';
 
-export const fastForward = async (
-  _context: TStorage
-) => {
-  const context = JSON.parse(JSON.stringify(_context));
+export type TContextBuckets = {
+  context: Record<string, unknown>;
+  types: Record<string, unknown>;
+};
 
-  return context.context as Record<string, unknown>;
+export const fastForward = async (snapshot: TStorage): Promise<TContextBuckets> => {
+  const cloned = JSON.parse(JSON.stringify({
+    context: Object.fromEntries(snapshot.context),
+    types: Object.fromEntries(snapshot.types),
+  })) as TContextBuckets;
+
+  return {
+    context: cloned.context ?? {},
+    types: cloned.types ?? {},
+  };
 };

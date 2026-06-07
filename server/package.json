@@ -41,8 +41,11 @@
   },
   "scripts": {
     "build": "tsc && tsc-alias",
+    "debug:fork-plan": "tsx scripts/debug-fork-plan.ts",
+    "debug:fork-replay": "tsx scripts/debug-fork-replay.ts",
     "dev": "nodemon",
     "start": "node dist/src/index.js",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "nodemonConfig": {

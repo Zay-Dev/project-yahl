@@ -45,7 +45,9 @@ type TStageRowProps = {
   item: TResponseStageListItem;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  sessionId: string;
   stageLabel: string;
+  stages: TResponseStageListItem[];
 };
 
 const StageRow = ({
@@ -56,7 +58,9 @@ const StageRow = ({
   item,
   onOpenChange,
   open,
+  sessionId,
   stageLabel,
+  stages,
 }: TStageRowProps) => (
   <Collapsible
     className="rounded-lg border bg-background"
@@ -100,7 +104,14 @@ const StageRow = ({
       {detailError ? (
         <p className="border-t px-4 py-3 text-sm text-destructive">{detailError}</p>
       ) : null}
-      {detail ? <StageDetailPanel baselineAfter={baselineAfter} detail={detail} /> : null}
+      {detail ? (
+        <StageDetailPanel
+          baselineAfter={baselineAfter}
+          detail={detail}
+          sessionId={sessionId}
+          stages={stages}
+        />
+      ) : null}
     </CollapsibleContent>
   </Collapsible>
 );
@@ -268,7 +279,9 @@ export function SessionTimeline({
             detailLoading={loadingIds.has(item.requestId)}
             item={item}
             key={item.requestId}
+            sessionId={sessionId}
             stageLabel={stageLabels[index] ?? `#${index + 1}`}
+            stages={stages}
             onOpenChange={(next) => {
               setOpenIds((current) => {
                 const updated = new Set(current);

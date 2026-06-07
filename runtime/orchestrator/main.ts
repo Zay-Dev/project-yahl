@@ -1,3 +1,5 @@
+import './fork-legacy-globals';
+
 import path from "path";
 
 import type { CliOptions, CliResume, ParsedStage } from './orchestrator-types';
@@ -45,6 +47,7 @@ type AskUserResumePayloadV1 = {
 
 const _createStepTracker = async (
   sessionId: string,
+  taskId: string,
   taskYahlPath: string,
   resume?: CliResume,
 ) => {
@@ -60,6 +63,7 @@ const _createStepTracker = async (
         },
       }
       : {}),
+    taskId,
     taskYahlPath,
   });
 
@@ -156,7 +160,7 @@ export const main = async (cli: CliOptions) => {
   const agentContainerName = normalizeContainerName(`${cli.agentContainerPrefix}-${sessionId}`);
 
   const sessionTracker = createSessionTracker();
-  const stepTracker = await _createStepTracker(sessionId, reportPath, cli.resume);
+  const stepTracker = await _createStepTracker(sessionId, cli.taskId, reportPath, cli.resume);
   let finalResult: unknown;
   const parsedStages: ParsedStage[] = [];
   const sessionA2uiState = createSessionA2uiState();

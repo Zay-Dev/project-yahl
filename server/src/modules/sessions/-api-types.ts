@@ -1,4 +1,10 @@
-import type { TStageLoopMeta, TTokenTotals, TYahlStage } from './-types';
+import type {
+  TForkSessionStageSetup,
+  TSessionForkedFrom,
+  TStageLoopMeta,
+  TTokenTotals,
+  TYahlStage,
+} from './-types';
 
 export type TResponseTokenTotals = TTokenTotals;
 
@@ -6,8 +12,10 @@ export type TResponseGetSession = {
   _id: string;
   createdAt: string;
   deletedAt?: string;
+  forkedFrom?: TSessionForkedFrom;
   result?: unknown;
   sessionId: string;
+  taskId?: string;
   taskYahlPath?: string;
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
@@ -18,6 +26,7 @@ export type TResponseSessionListItem = {
   createdAt: string;
   deletedAt?: string;
   sessionId: string;
+  taskId?: string;
   taskYahlPath?: string;
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
@@ -29,14 +38,26 @@ export type TResponseStageListItem = {
   createdAt: string;
   finishedAt?: string;
   logicPreview: string;
+  loopSetup?: string;
   loopIndex?: number;
   loopValue?: unknown;
   modelCallCount: number;
   requestId: string;
+  stageId: string;
   status: TResponseStageStatus;
   tokenTotals: TTokenTotals | null;
   toolCallCount: number;
   updatedAt: string;
+};
+
+export type TResponseStageReplayItem = {
+  context: Record<string, unknown>;
+  contextAfter?: Record<string, unknown>;
+  loopMeta?: TStageLoopMeta;
+  requestId: string;
+  stage: TYahlStage;
+  stageId: string;
+  temperature?: number;
 };
 
 export type TResponseStageModelResponseItem = {
@@ -79,10 +100,35 @@ export type TSessionLiveEvent =
 
 export type TStageListSource = {
   contextAfter?: Record<string, unknown>;
+  context?: Record<string, unknown>;
   createdAt: Date | string;
   finishedAt?: Date | string;
   loopMeta?: TStageLoopMeta;
   requestId: string;
   stage: TYahlStage;
+  temperature?: number;
   updatedAt: Date | string;
+};
+
+export type TResponseGetForkSession = {
+  anchorStageId: string;
+  forkSessionId: string;
+  setups: TForkSessionStageSetup[];
+  sourceSessionId: string;
+  targetSessionId: string;
+  taskYahlPath?: string;
+};
+
+export type TRequestCreateForkSessionBody = {
+  anchorStageId: string;
+  setups: TForkSessionStageSetup[];
+};
+
+export type TResponseCreateForkSession = {
+  forkSessionId: string;
+  targetSessionId: string;
+};
+
+export type TResponseDeleteSession = {
+  ok: true;
 };

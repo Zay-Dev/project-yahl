@@ -1,6 +1,10 @@
-import type { TResponseStageDetail } from "@project-yahl/server/modules/sessions/-api-types";
+import type {
+  TResponseStageDetail,
+  TResponseStageListItem,
+} from "@project-yahl/server/modules/sessions/-api-types";
 
 import { StageContextCompare } from "@/pages/sessions/components/stage-context-compare";
+import { StageRerunDialog } from "@/pages/sessions/components/stage-rerun-dialog";
 import { StageLoopMeta } from "@/pages/sessions/components/stage-loop-meta";
 import { StageModelResponseCard } from "@/pages/sessions/components/stage-model-response-card";
 import { StageSetupJsonSheet } from "@/pages/sessions/components/stage-setup-json-sheet";
@@ -9,11 +13,21 @@ import { ToolCallList } from "@/pages/sessions/components/tool-calls/tool-call-l
 type TStageDetailPanelProps = {
   baselineAfter?: Record<string, unknown>;
   detail: TResponseStageDetail;
+  sessionId: string;
+  stages: TResponseStageListItem[];
 };
 
-export function StageDetailPanel({ baselineAfter, detail }: TStageDetailPanelProps) {
+export function StageDetailPanel({
+  baselineAfter,
+  detail,
+  sessionId,
+  stages,
+}: TStageDetailPanelProps) {
   return (
     <div className="space-y-4 border-t bg-background/60 px-4 py-4 text-sm">
+      <div className="flex justify-end">
+        <StageRerunDialog detail={detail} sessionId={sessionId} stages={stages} />
+      </div>
       {detail.loopMeta ? <StageLoopMeta loopMeta={detail.loopMeta} /> : null}
       <StageContextCompare
         after={detail.contextAfter}

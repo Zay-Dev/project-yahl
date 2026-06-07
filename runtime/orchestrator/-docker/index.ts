@@ -12,6 +12,6 @@ export const buildAgent = () => {
     console.log("Docker compose build completed for agent.");
   } catch (err) {
     console.error("Failed to build agent using docker compose:", err);
-    process.exit(1);
+    throw err;
   }
 };

@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { useStreamStatus } from "@/hooks/use-stream-status";
+import { SessionTitle } from "@/pages/sessions/components/session-title";
 import { RESOURCES } from "@/providers/constants";
 
 export function DashboardPage() {
@@ -48,7 +49,10 @@ export function DashboardPage() {
         <p className="text-sm text-muted-foreground">Most recently updated session</p>
         {latestSession ? (
           <div className="mt-2 flex items-center justify-between gap-4">
-            <p className="font-medium">{latestSession.sessionId}</p>
+            <SessionTitle
+              sessionId={latestSession.sessionId}
+              taskId={latestSession.taskId}
+            />
             <Link
               className="text-sm text-primary underline-offset-2 hover:underline"
               to={`/sessions/${encodeURIComponent(latestSession.sessionId)}`}

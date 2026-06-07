@@ -2,10 +2,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
 
-import type { StageExecutionMeta } from "../shared/transport";
-import type { StageSessionInput } from "../shared/stage-contract";
-
-import type { CliForkedFrom, CliOptions } from "./orchestrator-types";
+import type { CliOptions } from "./orchestrator-types";
 import { repoRoot, tasksRoot } from "./paths";
 
 export const normalizeContainerName = (value: string) =>

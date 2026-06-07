@@ -12,14 +12,6 @@ export type RerunPrefixSnapshot = {
   stageIndex: number;
 };
 
-export interface CliForkedFrom {
-  prefixDump?: unknown[];
-  prefixSnapshots?: RerunPrefixSnapshot[];
-  requestId: string;
-  sourceSessionId: string;
-  stepIndex: number;
-}
-
 export interface CliResume {
   forkrunFormId?: string;
   sourceRequestId: string;

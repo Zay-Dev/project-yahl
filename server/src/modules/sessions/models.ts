@@ -1,4 +1,4 @@
-import type { IModelResponse, ISession, IStage, IToolCall } from './-types';
+import type { IForkSession, IModelResponse, ISession, IStage, IToolCall } from './-types';
 
 import type { Document } from 'mongoose';
 
@@ -20,10 +20,25 @@ const loopMetaSchema = new Schema({
   value: model.d.mixed(),
 }, { _id: false });
 
+const forkedFromSchema = new Schema({
+  anchorStageId: model.d.requiredString(),
+  forkSessionId: model.d.requiredString(),
+  sourceSessionId: model.d.requiredString(),
+}, { _id: false });
+
+const forkSessionSetupSchema = new Schema({
+  context: model.d.mixed(),
+  loopMeta: loopMetaSchema,
+  stage: model.d.mixed(),
+  stageId: model.d.requiredString(),
+}, { _id: false });
+
 const sessionSchema = new Schema<TDbSession>({
   deletedAt: model.d.deletedAt(),
+  forkedFrom: forkedFromSchema,
   result: model.d.mixed(),
   sessionId: model.d.requiredString(),
+  taskId: model.d.optionalString(),
   taskYahlPath: model.d.optionalString(),
 }, {
   collection: modelsName.Sessions,
@@ -72,6 +87,25 @@ const toolCallSchema = new Schema<TDbToolCall>({
 
 toolCallSchema.index({ requestId: 1, session: 1 });
 
+const forkSessionSchema = new Schema<IForkSession & Document>({
+  anchorStageId: model.d.requiredString(),
+  forkSessionId: model.d.requiredString(),
+  setups: [forkSessionSetupSchema],
+  sourceSessionId: model.d.requiredString(),
+  targetSessionId: model.d.requiredString(),
+}, {
+  collection: modelsName.ForkSessions,
+  timestamps: true,
+});
+
+forkSessionSchema.index({ forkSessionId: 1 }, { unique: true });
+
+export type TDbForkSession = IForkSession & Document;
+
+export const modelForkSession = createModel<TDbForkSession>(
+  modelsName.ForkSessions,
+  forkSessionSchema,
+);
 export const modelSession = createModel<TDbSession>(modelsName.Sessions, sessionSchema);
 export const modelStage = createModel<TDbStage>(modelsName.Stages, stageSchema);
 export const modelModelResponse = createModel<TDbModelResponse>(

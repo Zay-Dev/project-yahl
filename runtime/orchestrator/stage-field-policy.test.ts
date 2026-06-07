@@ -117,6 +117,46 @@ describe("applySetContextToolCall", () => {
     assert.equal(storage.context.has("d"), false);
   });
 
+  it("applies all keys for fast-forward synthetic tool calls", async () => {
+    const storage = createStorage();
+    const stage = plainStage({ produceContextKeys: ["result"] });
+
+    const applied = await applySetContextToolCall(storage, {
+      function: {
+        arguments: JSON.stringify({
+          key: "a",
+          operation: "set",
+          scope: "global",
+          value: 1,
+        }),
+        name: "set_context",
+      },
+      id: "fast-forward-req-0",
+      type: "function",
+    }, stage);
+
+    assert.equal(applied, true);
+    assert.equal(storage.context.get("a"), 1);
+  });
+
+  it("applies flat-object shorthand arguments", async () => {
+    const storage = createStorage();
+    storage.context.set("c", 28);
+    const stage = plainStage({ updateContextKeys: ["c"] });
+
+    const applied = await applySetContextToolCall(storage, {
+      function: {
+        arguments: JSON.stringify({ c: 56 }),
+        name: "set_context",
+      },
+      id: "1",
+      type: "function",
+    }, stage);
+
+    assert.equal(applied, true);
+    assert.equal(storage.context.get("c"), 56);
+  });
+
   it("writes allowed keys to types when produceTypeKeys matches", async () => {
     const storage = createStorage();
     const stage = plainStage({ produceTypeKeys: ["T"] });

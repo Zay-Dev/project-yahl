@@ -11,6 +11,7 @@ export type TRequestRegisterSessionParams = {
 };
 
 export type TRequestRegisterSessionBody = {
+  taskId: string;
   taskYahlPath: string;
 };
 
@@ -31,6 +32,7 @@ const patchBodySchema = Joi.object<TRequestPatchSessionBody>({
 });
 
 const bodySchema = Joi.object<TRequestRegisterSessionBody>({
+  taskId: Joi.string().trim().required(),
   taskYahlPath: Joi.string().trim().required(),
 });
 
@@ -51,6 +53,7 @@ export const registerSession = [
         { sessionId: params.sessionId },
         {
           $set: {
+            taskId: body.taskId,
             taskYahlPath: body.taskYahlPath,
             updatedAt: now,
           },

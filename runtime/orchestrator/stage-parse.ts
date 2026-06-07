@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 
+import type { ParsedStage, StageLoopMeta } from "./orchestrator-types";
 import type { RuntimeContext } from "./runtime";
 
 export { getStagesBaseLineInFile } from "./yahl-parse";
@@ -51,6 +52,25 @@ export const stripLeadingTemperature = (block: string): { temperature?: number; 
   }
 
   return { temperature, text };
+};
+
+type TTemperatureOverrides = {
+  loopMeta?: Pick<StageLoopMeta, 'temperature'>;
+  temperature?: number;
+};
+
+export const resolveEffectiveStageTemperature = (
+  stage: ParsedStage,
+  overrides?: TTemperatureOverrides,
+  lines = stage.lines,
+) => {
+  const { temperature: decoratorTemp } = stripLeadingTemperature(lines);
+
+  return overrides?.temperature
+    ?? stage.spec.temperature
+    ?? decoratorTemp
+    ?? stage.temperature
+    ?? overrides?.loopMeta?.temperature;
 };
 
 export const toStableHash = (value: string) =>

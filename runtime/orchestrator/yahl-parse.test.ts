@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import { toAgentStage } from "../shared/yahl-stage";
 
 import {
+  compileForkRunStage,
   compileStage,
   compileStageLines,
   parseYahlDocument,
@@ -142,6 +143,29 @@ describe("toLoopIterationStage", () => {
     assert.equal(iteration.spec.contextMode, true);
     assert.equal(iteration.spec.loopSetup, "for each i of [1..5]");
     assert.deepEqual(iteration.spec.contextKeys, ["c"]);
+  });
+});
+
+describe("compileForkRunStage", () => {
+  it("keeps loop type when loopMeta is absent", () => {
+    const stage = compileForkRunStage({
+      logic: "(() => ({ c: 1 }))",
+      loopSetup: "for each i of [1..3]",
+    }, undefined, 1);
+
+    assert.equal(stage.type, "loop");
+  });
+
+  it("yields plain iteration stage when loopMeta is set", () => {
+    const stage = compileForkRunStage({
+      contextMode: true,
+      logic: "(() => ({ c: context.context.c + context.context.i }))",
+      loopSetup: "for each i of [1..5]",
+    }, { index: 2, arraySnapshot: [1, 2, 3, 4, 5], value: 3 }, 1);
+
+    assert.equal(stage.type, "plain");
+    assert.match(stage.lines, /CONTEXT:/);
+    assert.equal(stage.spec.loopSetup, "for each i of [1..5]");
   });
 });
 

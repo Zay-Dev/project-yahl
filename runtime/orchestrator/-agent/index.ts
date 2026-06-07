@@ -7,7 +7,7 @@ import {
   applySetContextToolCall,
   filterStorageForStage,
 } from '@/orchestrator/stage-field-policy';
-
+import { resolveEffectiveStageTemperature } from '@/orchestrator/stage-parse';
 import { handleLoop } from './loop';
 
 export const runYahl: TRunYahl = async (
@@ -21,9 +21,12 @@ export const runYahl: TRunYahl = async (
   const stages = options?.stages ?? resolveStagesFromText(yahl);
 
   for (const stage of stages) {
-    const temperature = options?.temperature ?? stage.temperature;
+    const temperature = resolveEffectiveStageTemperature(stage, {
+      loopMeta: options?.loopMeta,
+      temperature: options?.temperature,
+    });
 
-    if (stage.type === 'loop') {
+    if (stage.type === 'loop' && !options?.contextAfter) {
       await handleLoop(stage, storage, runYahl, temperature);
       continue;
     }
@@ -39,7 +42,11 @@ export const runYahl: TRunYahl = async (
       filteredStorage,
       toAgentStage(stage.spec),
       temperature,
-      { loopMeta: options?.loopMeta, persistedStage: stage.spec },
+      {
+        contextAfter: options?.contextAfter,
+        loopMeta: options?.loopMeta,
+        persistedStage: stage.spec,
+      },
     );
 
     const toolCallHandlers = getWaitForToolCall(async (toolCall) => {
@@ -72,7 +79,10 @@ export const runYahl: TRunYahl = async (
 
     await wait();
     toolCallHandlers.dispose();
-    publisher.emitStageFinish({ requestId, contextAfter: storage });
+
+    const finishContextAfter = options?.contextAfterRecord ?? storage;
+
+    publisher.emitStageFinish({ requestId, contextAfter: finishContextAfter });
   }
 
   return {

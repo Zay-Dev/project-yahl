@@ -2,7 +2,7 @@ import YAML from "yaml";
 
 import type { YahlStage } from "../shared/yahl-stage";
 
-import type { ParsedStage } from "./orchestrator-types";
+import type { ParsedStage, StageLoopMeta } from "./orchestrator-types";
 import type { YahlDocument } from "./yahl-schema";
 import { validateYahlDocument } from "./yahl-schema";
 
@@ -55,6 +55,34 @@ export const toLoopIterationStage = (
   spec: parent.spec,
   type: "plain",
 });
+
+export const loopBodyLinesFromCompiledStage = (lines: string) => {
+  const firstLine = lines.split('\n')[0] ?? '';
+  const mode = firstLine.match(/\s+[A-Z_]+:\s*{/)?.[0]?.replace('{', '') || '';
+  const braceIndex = lines.indexOf('{');
+
+  if (braceIndex < 0) {
+    return lines;
+  }
+
+  const body = lines.substring(braceIndex);
+
+  return mode ? `${mode} ${body}` : body;
+};
+
+export const compileForkRunStage = (
+  stage: YahlStage,
+  loopMeta?: StageLoopMeta,
+  sourceStartLine = 1,
+): ParsedStage => {
+  const parsed = compileStage(stage, sourceStartLine);
+
+  if (!loopMeta) {
+    return parsed;
+  }
+
+  return toLoopIterationStage(parsed, loopBodyLinesFromCompiledStage(parsed.lines));
+};
 
 export const compileStage = (
   stage: YahlStage,

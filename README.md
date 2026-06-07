@@ -132,7 +132,7 @@ pnpm -r --filter "./infras/**" run build
 - Resume/fork flow inputs:
   - `--resume-source-session-id <sessionId>`
   - `--resume-source-request-id <requestId>`
-  - `--forkrun-form-id <forkrunFormId>`
+  - `--forkrun-id <forkSessionId>`
 
 ### OneCLI setup checklist
 
@@ -163,7 +163,9 @@ Quick sanity map (so future-you can debug at 2am with less suffering):
 - `POST /api/runs` starts an orchestrator run for a task.
 - SSE streams expose live run logs (`meta` / `log` / `status`) and session events for the web UI.
 - `GET /api/sessions?includeArchived=true` includes archived sessions; default list hides archived rows.
-- `GET /api/forkrun-forms/:forkrunFormId` fetches saved rerun draft payloads.
+- `POST /api/sessions/:sessionId/fork-sessions` creates a fork session and spawns `pnpm --filter runtime run orchestrate -- --session-id <target> --forkrun-id <id>`.
+- `GET /api/fork-sessions/:forkSessionId` loads fork setup for the orchestrator.
+- `GET /api/sessions/:sessionId/stages/replay` returns full stage rows for prefix fast-forward.
 - Session endpoints support inspect, soft-delete, hard-delete, and rerun-from-request flow with safety guardrails (rerun rejects non-finalized, truncated, or missing-prefix-context snapshots).
 - Session persistence uses normalized Mongo collections (`sessions`, `session_stages`, `session_tool_calls`, `session_stage_chat_messages`, `session_model_spends`, `session_fork_lineages`). After upgrading, wipe the database or drop those collections so old single-document `sessions` rows do not conflict with the new layout.
 
