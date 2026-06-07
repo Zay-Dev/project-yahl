@@ -9,6 +9,7 @@ import type {
   TResponseCreateForkSession,
 } from '../-api-types';
 import type { TForkSessionStageSetup } from '../-types';
+import { deriveTaskIdFromYahlPath } from '../-derive-task-id';
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { modelForkSession, modelSession } from '../models';
 import { yahlStageSchema } from '../stage-schema';
@@ -133,7 +134,8 @@ export const createForkSession = [
               forkSessionId,
               sourceSessionId: params.sessionId,
             },
-            taskId: sourceSession.taskId ?? '',
+            taskId: sourceSession.taskId?.trim()
+              || deriveTaskIdFromYahlPath(sourceSession.taskYahlPath ?? ''),
             taskYahlPath: sourceSession.taskYahlPath ?? '',
             updatedAt: now,
           },

@@ -1,6 +1,7 @@
 import type { TYahlStage } from "@project-yahl/server/modules/sessions/-types";
 
 import { Button } from "@/components/ui/button";
+import { SESSION_SHEET_WIDTH } from "@/pages/sessions/lib/session-sheet";
 import {
   Sheet,
   SheetContent,
@@ -23,7 +24,7 @@ export function StageSetupJsonSheet({ stage }: TStageSetupJsonSheetProps) {
           </Button>
         }
       />
-      <SheetContent className="w-full sm:max-w-xl" side="right">
+      <SheetContent className={SESSION_SHEET_WIDTH} side="right">
         <SheetHeader>
           <SheetTitle>Stage setup</SheetTitle>
         </SheetHeader>

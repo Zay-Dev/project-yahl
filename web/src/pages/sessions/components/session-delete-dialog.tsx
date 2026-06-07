@@ -9,6 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { SESSION_SHEET_WIDTH } from "@/pages/sessions/lib/session-sheet";
 import { deleteSession } from "@/pages/sessions/lib/sessions-api";
 import { publishSessionsSnapshot } from "@/providers/live-provider";
 import { removeSessionFromSnapshot } from "@/providers/sessions-cache";
@@ -58,41 +59,43 @@ export function SessionDeleteDialog({
           </Button>
         }
       />
-      <SheetContent className="flex flex-col gap-4" side="right">
+      <SheetContent className={SESSION_SHEET_WIDTH} side="right">
         <SheetHeader>
           <SheetTitle>Delete session</SheetTitle>
         </SheetHeader>
-        <p className="font-mono text-xs text-muted-foreground">{sessionId}</p>
-        {deletedAt ? (
-          <p className="text-sm text-muted-foreground">
-            This session is already soft-deleted. You can permanently remove it with hard delete.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Soft delete hides the session from the list but keeps data. Hard delete permanently
-            removes the session and related records.
-          </p>
-        )}
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        <div className="flex flex-col gap-2">
-          {!deletedAt ? (
+        <div className="flex flex-col gap-4 px-6 pb-6">
+          <p className="font-mono text-xs text-muted-foreground">{sessionId}</p>
+          {deletedAt ? (
+            <p className="text-sm text-muted-foreground">
+              This session is already soft-deleted. You can permanently remove it with hard delete.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Soft delete hides the session from the list but keeps data. Hard delete permanently
+              removes the session and related records.
+            </p>
+          )}
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <div className="flex flex-col gap-2">
+            {!deletedAt ? (
+              <Button
+                disabled={submitting}
+                onClick={() => void handleDelete('soft')}
+                type="button"
+                variant="outline"
+              >
+                {submitting ? 'Deleting…' : 'Soft delete'}
+              </Button>
+            ) : null}
             <Button
               disabled={submitting}
-              onClick={() => void handleDelete('soft')}
+              onClick={() => void handleDelete('hard')}
               type="button"
-              variant="outline"
+              variant="destructive"
             >
-              {submitting ? 'Deleting…' : 'Soft delete'}
+              {submitting ? 'Deleting…' : 'Hard delete'}
             </Button>
-          ) : null}
-          <Button
-            disabled={submitting}
-            onClick={() => void handleDelete('hard')}
-            type="button"
-            variant="destructive"
-          >
-            {submitting ? 'Deleting…' : 'Hard delete'}
-          </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

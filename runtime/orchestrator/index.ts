@@ -15,6 +15,7 @@ import { initForkSessionManager } from './fork-session-manager';
 
 import { runTaskPath } from './-runners/path';
 import { runForkSession } from './-runners/fork';
+import { deriveTaskIdFromYahlPath } from './derive-task-id';
 
 declare global {
   var sessionId: string;
@@ -84,9 +85,12 @@ runCommand.action(async options => {
   try {
     buildAgent();
 
+    const taskYahlPath = options.taskPath ?? forkManager?.taskYahlPath ?? '';
+    const taskId = options.taskId ?? deriveTaskIdFromYahlPath(taskYahlPath);
+
     await tracker.registerSession(sessionId, {
-      taskId: options.taskId,
-      taskYahlPath: options.taskPath ?? forkManager?.taskYahlPath ?? '',
+      taskId,
+      taskYahlPath,
     });
 
     await composeDown(agentName);
