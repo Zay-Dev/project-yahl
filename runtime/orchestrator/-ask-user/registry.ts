@@ -1,41 +1,19 @@
 import type { AskUserToolCallEnvelope } from '@/shared/stage-contract';
 import type { YahlAskUserEntry, YahlStage } from '@/shared/yahl-stage';
 
-export const questionRefFromId = (id: number | string) => `question_${id}`;
-
-export const normalizeQuestionRef = (
-  questionRef: string,
-  entries: YahlAskUserEntry[],
-) => {
-  const trimmed = questionRef.trim();
-
-  if (entries.some((entry) => questionRefFromId(entry.id) === trimmed)) {
-    return trimmed;
-  }
-
-  const byRawId = entries.find((entry) => String(entry.id) === trimmed);
-
-  if (byRawId) {
-    return questionRefFromId(byRawId.id);
-  }
-
-  return trimmed;
-};
-
 export const resolveAskUserEntry = (
   stage: YahlStage,
   questionRef: string,
 ): YahlAskUserEntry | null => {
-  const entries = stage.askUser ?? [];
-  const normalized = normalizeQuestionRef(questionRef, entries);
+  const trimmed = questionRef.trim();
 
-  return entries.find((entry) => questionRefFromId(entry.id) === normalized) ?? null;
+  return stage.askUser?.find((entry) => entry.id === trimmed) ?? null;
 };
 
 export const listAskUserRefs = (stage: YahlStage) =>
   (stage.askUser ?? []).map((entry) => ({
     question: entry.question,
-    questionRef: questionRefFromId(entry.id),
+    questionRef: entry.id,
   }));
 
 export const validateAskUserToolCall = (

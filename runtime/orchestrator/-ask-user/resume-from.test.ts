@@ -7,17 +7,17 @@ import type { TAskUserCheckpoint, TStageDetailForResume } from './session-api';
 const checkpoint = (overrides: Partial<TAskUserCheckpoint> = {}): TAskUserCheckpoint => ({
   answerIds: ['3'],
   answerLabels: ['three'],
-  askUserId: 1,
+  askUserId: '1',
   contextSnapshot: {},
   question: {
     kind: 'multipleChoice',
     options: [{ id: '3', label: 'three' }],
-    questionRef: 'question_1',
+    questionRef: '1',
     title: 'pick',
     version: 'askUser.v1',
   },
   questionId: 'q-1',
-  questionRef: 'question_1',
+  questionRef: '1',
   requestId: 'req-1',
   stage: {},
   stageIndex: 4,
@@ -52,7 +52,7 @@ const stageDetail = (overrides: Partial<TStageDetailForResume> = {}): TStageDeta
   stage: {},
   toolCalls: [{
     tools: [{
-      arguments: { questionRef: 'question_1' },
+      arguments: { questionRef: '1' },
       id: 'tool-ask-1',
       name: 'ask_user',
     }],

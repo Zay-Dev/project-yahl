@@ -11,14 +11,14 @@ describe('resetAskUserStageForRerun', () => {
     const reset = resetAskUserStageForRerun({
       askUser: [{
         answer: 3,
-        id: 1,
+        id: '1',
         options: [{ id: '1', label: 'one' }, { id: '2', label: 'two' }],
         question: 'pick one',
       }],
-      logic: 'c += /ask-user(question_1);',
+      logic: 'c += /ask-user(1);',
     });
 
-    assert.equal(reset.askUser?.[0]?.id, 1);
+    assert.equal(reset.askUser?.[0]?.id, '1');
     assert.equal(reset.askUser?.[0]?.question, 'pick one');
     assert.equal(reset.askUser?.[0]?.options?.length, 2);
     assert.equal(reset.askUser?.[0]?.answer, undefined);

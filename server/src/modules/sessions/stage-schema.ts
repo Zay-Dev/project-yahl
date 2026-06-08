@@ -14,7 +14,7 @@ const askUserOptionSchema = Joi.object({
 
 const askUserEntrySchema = Joi.object({
   answer: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
-  id: Joi.alternatives().try(Joi.number(), Joi.string().trim()).required(),
+  id: Joi.string().trim().required(),
   options: Joi.array().items(askUserOptionSchema).min(2).optional(),
   question: Joi.string().trim().required(),
 });

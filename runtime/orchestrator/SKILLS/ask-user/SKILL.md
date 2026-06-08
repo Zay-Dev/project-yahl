@@ -17,11 +17,11 @@ askUser:
   - id: 1
     question: Choose pricing scope
 logic: |
-  scope = /ask-user(question_1);
+  scope = /ask-user(1);
 ```
 
 - `question` is the required tool `title` and UI heading
-- `/ask-user(question_<id>)` must match a registry entry
+- `/ask-user(<id>)` must match a registry entry
 - server fills `answer` after the user responds
 
 ## Required tool
@@ -32,7 +32,7 @@ Call `ask_user` with this exact argument shape:
 {
   "version": "askUser.v1",
   "kind": "multipleChoice",
-  "questionRef": "question_1",
+  "questionRef": "1",
   "title": "Choose pricing scope",
   "description": "Pick one scope before continuing.",
   "options": [
@@ -65,7 +65,7 @@ Call `ask_user` with this exact argument shape:
 - orchestrator persists a checkpoint and stops the agent container
 - web UI shows agent options plus a free-text counter-option
 - after the user answers, a new orchestrator resumes the same stage
-- inline `/ask-user(question_<id>)` is replaced with the selected answer value
+- inline `/ask-user(<id>)` is replaced with the selected answer value
 - answer is also stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
 
 ## When to use

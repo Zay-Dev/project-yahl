@@ -92,7 +92,7 @@ export const STAGE_TOOLS = [
             type: "array",
           },
           questionRef: {
-            description: 'Registry ref matching /ask-user(question_<id>) in stage logic, e.g. "question_1".',
+            description: 'Registry ref matching /ask-user(<id>) in stage logic, e.g. "1".',
             type: "string",
           },
           title: { type: "string" },

@@ -24,10 +24,10 @@ describe('buildAskUserContinuation', () => {
     const next = buildAskUserContinuation(
       [
         'const a = 1;',
-        'c += /ask-user(question_1);',
+        'c += /ask-user(1);',
         'const result = c;',
       ].join('\n'),
-      'question_1',
+      '1',
       3,
     );
 
@@ -47,10 +47,10 @@ describe('buildAskUserContinuation', () => {
     const next = buildAskUserContinuation(
       [
         '{',
-        'c += /ask-user(question_1);',
+        'c += /ask-user(1);',
         '}',
       ].join('\n'),
-      'question_1',
+      '1',
       3,
     );
 
@@ -59,14 +59,14 @@ describe('buildAskUserContinuation', () => {
   });
 
   it('returns null when stage has no matching ask-user ref', () => {
-    const next = buildAskUserContinuation('const c = 1;\nconst r = c;', 'question_1', '');
+    const next = buildAskUserContinuation('const c = 1;\nconst r = c;', '1', '');
     assert.equal(next, null);
   });
 });
 
 describe('extractAskUserRefsFromLogic', () => {
   it('collects question refs from logic', () => {
-    const refs = extractAskUserRefsFromLogic('a += /ask-user(question_1);\nb += /ask-user(question_2);');
-    assert.deepEqual(refs, ['question_1', 'question_2']);
+    const refs = extractAskUserRefsFromLogic('a += /ask-user(1);\nb += /ask-user(2);');
+    assert.deepEqual(refs, ['1', '2']);
   });
 });

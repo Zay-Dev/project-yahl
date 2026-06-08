@@ -10,8 +10,8 @@
 - **`set_context`**：参数 `{ "scope": "global"|"stage"|"types", "key": "<非空字符串>", "value": <任意 JSON>, "operation"?: "set"|"extend" }`。`global` 跨 stage 共享；`stage` 每 stage 重置；`types` 用于类型定义共享。`operation` 省略时默认 `set`；`extend` 会把目标 key 更新为 `[oldValue, newValue]`。
   - 不要在同一 sandbox 运行中尝试“验证写回结果”。`set_context` 的持久化由 sandbox 外的 orchestrator 边界应用，同步读回并不权威。
 - **`rag`**：参数 `{ "lookingFor": "<提取目标描述>", "chunkSize": <正数>, "tmp_file_path": "<临时文件路径>", "byteLength": <正数>, "context_key": "<写入 stage 的 key>" }`。用于触发 orchestrator 执行分块读取与抽取，再把结果回填到当前 stage。
-- **`ask_user`**：参数 `{ "version":"askUser.v1", "kind":"multipleChoice", "questionRef":"question_<id>", "title":"<非空>", "options":[{"id":"<非空>","label":"<非空>"}...], "description"?: "<可选>", "allowMultiple"?: <boolean>, "minChoices"?: <number>, "maxChoices"?: <number> }`。
-  - `questionRef` 必须匹配 stage YAML `askUser[]` 注册项与 logic 中的 `/ask-user(question_<id>)`。
+- **`ask_user`**：参数 `{ "version":"askUser.v1", "kind":"multipleChoice", "questionRef":"<id>", "title":"<非空>", "options":[{"id":"<非空>","label":"<非空>"}...], "description"?: "<可选>", "allowMultiple"?: <boolean>, "minChoices"?: <number>, "maxChoices"?: <number> }`。
+  - `questionRef` 必须匹配 stage YAML `askUser[]` 注册项与 logic 中的 `/ask-user(<id>)`。
   - `title` 必须与注册项 `question` 完全一致。
   - `options` 至少 2 个。
   - `id` 与 `label` 不能为空。

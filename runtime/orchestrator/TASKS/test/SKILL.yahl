@@ -47,7 +47,7 @@ stages:
       - id: 1
         question: which number of 1,2,3,4,5
     logic: |
-      c += /ask-user(question_1);
+      c += /ask-user(1);
 
   - temperature: 2
     contextKeys: [a, b, c]

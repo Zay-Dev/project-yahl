@@ -115,7 +115,7 @@ Constraints:
 - only `multipleChoice` is supported
 
 Execution semantics:
-- stages may register `askUser[]` entries; logic uses `/ask-user(question_<id>)`
+- stages may register `askUser[]` entries; logic uses `/ask-user(<id>)`
 - when an ask_user call resolves, runtime resumes the same stage and replaces the inline ref with the selected answer value
 - runtime writes the answer onto `askUser[].answer` and into context as `ask_user_<id>_answer`
 - `ask_user_last_answer` is scalar only: numeric option ids become numbers, otherwise string

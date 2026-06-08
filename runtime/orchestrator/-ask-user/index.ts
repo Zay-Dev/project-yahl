@@ -6,11 +6,7 @@ import { composeDown } from '@/orchestrator/compose-onecli';
 import { parseAskUserToolArguments } from '@/shared/stage-tools';
 
 import { AskUserPausedError } from './errors';
-import {
-  normalizeQuestionRef,
-  questionRefFromId,
-  validateAskUserToolCall,
-} from './registry';
+import { resolveAskUserEntry, validateAskUserToolCall } from './registry';
 import { postAskUserQuestion } from './session-api';
 import { toParsedStageSnapshot } from './parsed-stage-snapshot';
 
@@ -55,18 +51,12 @@ export const handleAskUserToolCall = async (params: {
     return { hasError: true, result: validationError };
   }
 
-  const entry = params.stage.spec.askUser?.find((item) => (
-    questionRefFromId(item.id) === normalizeQuestionRef(args.questionRef, params.stage.spec.askUser ?? [])
-  ));
+  const questionRef = args.questionRef.trim();
+  const entry = resolveAskUserEntry(params.stage.spec, questionRef);
 
   if (entry?.answer !== undefined) {
     return { hasError: true, result: 'ask_user: question already answered' };
   }
-
-  const questionRef = normalizeQuestionRef(
-    args.questionRef,
-    params.stage.spec.askUser ?? [],
-  );
 
   if (!entry) {
     return { hasError: true, result: `ask_user: unknown questionRef "${questionRef}"` };
@@ -102,7 +92,8 @@ export const applyAskUserAnswerToStage = (
   questionRef: string,
   answerValue: number | string,
 ) => {
-  const entry = stage.askUser?.find((item) => questionRefFromId(item.id) === questionRef);
+  const trimmed = questionRef.trim();
+  const entry = stage.askUser?.find((item) => item.id === trimmed);
 
   if (!entry) {
     return stage;
@@ -111,7 +102,7 @@ export const applyAskUserAnswerToStage = (
   return {
     ...stage,
     askUser: stage.askUser?.map((item) => (
-      questionRefFromId(item.id) === questionRef
+      item.id === trimmed
         ? { ...item, answer: answerValue }
         : item
     )),
@@ -134,8 +125,6 @@ export { parsedStageFromSnapshot, toParsedStageSnapshot } from './parsed-stage-s
 export type { TParsedStageSnapshot } from './parsed-stage-snapshot';
 export {
   listAskUserRefs,
-  normalizeQuestionRef,
-  questionRefFromId,
   resolveAskUserEntry,
   validateAskUserToolCall,
 } from './registry';

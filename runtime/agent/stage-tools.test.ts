@@ -119,7 +119,7 @@ describe("parseAskUserToolArguments", () => {
       JSON.stringify({
         kind: "multipleChoice",
         options: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
-        questionRef: "question_1",
+        questionRef: "1",
         title: "Pick one",
         version: "askUser.v1",
       }),
@@ -127,7 +127,7 @@ describe("parseAskUserToolArguments", () => {
 
     assert.ok(parsed);
     assert.equal(parsed!.kind, "multipleChoice");
-    assert.equal(parsed!.questionRef, "question_1");
+    assert.equal(parsed!.questionRef, "1");
     assert.equal(parsed!.options.length, 2);
   });
 

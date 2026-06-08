@@ -1,4 +1,4 @@
-const inlineAskUserRefPattern = /\/ask-user\(question_([^)]+)\)/;
+const inlineAskUserRefPattern = /\/ask-user\(([^)]+)\)/;
 
 export const toAskUserAnswerValue = (optionId: string | undefined) => {
   if (!optionId) return "";
@@ -48,7 +48,7 @@ export const extractAskUserRefsFromLogic = (logic: string) => {
     const match = line.match(inlineAskUserRefPattern);
 
     if (match?.[1]) {
-      refs.add(`question_${match[1]}`);
+      refs.add(match[1].trim());
     }
   }
 

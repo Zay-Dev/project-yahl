@@ -33,7 +33,7 @@ const buildResumedFromCheckpoint = (
   const patchedStage = {
     ...stageBase,
     askUser: stageBase.askUser?.map((entry) => (
-      `question_${entry.id}` === questionRef
+      entry.id === questionRef
         ? { ...entry, answer: answerValue }
         : entry
     )),
@@ -56,20 +56,20 @@ const buildResumedFromCheckpoint = (
 describe('resume checkpoint anchoring', () => {
   it('fork edited ask-user resume uses snapshot not parsedStages', () => {
     const editedStage = {
-      askUser: [{ id: 1, question: 'pick' }],
-      logic: 'c += /ask-user(question_1);\nc += 99;',
+      askUser: [{ id: '1', question: 'pick' }],
+      logic: 'c += /ask-user(1);\nc += 99;',
     };
 
     const resumed = buildResumedFromCheckpoint(
       {
         parsedStageSnapshot: {
-          lines: '{\nc += /ask-user(question_1);\nc += 99;\n}',
+          lines: '{\nc += /ask-user(1);\nc += 99;\n}',
           sourceStartLine: 1,
           type: 'plain',
         },
         stage: editedStage,
       },
-      'question_1',
+      '1',
       3,
     );
 
@@ -81,12 +81,12 @@ describe('resume checkpoint anchoring', () => {
     const resumed = buildResumedFromCheckpoint(
       {
         stage: {
-          askUser: [{ id: 1, question: 'pick' }],
-          logic: 'c += /ask-user(question_1);',
+          askUser: [{ id: '1', question: 'pick' }],
+          logic: 'c += /ask-user(1);',
         },
         stageIndex: 0,
       },
-      'question_1',
+      '1',
       2,
     );
 

@@ -6,7 +6,7 @@
 - Use ask_user to pause for user choice with strict schema:
   - `version: "askUser.v1"`
   - `kind: "multipleChoice"`
-  - `questionRef: "question_<id>"` matching stage `askUser[]` and `/ask-user(question_<id>)` in logic
+  - `questionRef: "<id>"` matching stage `askUser[]` and `/ask-user(<id>)` in logic
   - `title: "<non-empty>"` must exactly match the registered `question`
   - `options: [{ "id":"<non-empty>", "label":"<non-empty>" }, ...]` with at least 2 options
   - optional `description`, `allowMultiple`, `minChoices`, `maxChoices`

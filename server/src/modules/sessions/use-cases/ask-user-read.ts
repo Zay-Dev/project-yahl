@@ -9,7 +9,7 @@ import { modelAskUserQuestion } from '../models';
 export type TResponseAskUserQuestion = {
   answerIds?: string[];
   answerLabels?: string[];
-  askUserId: number | string;
+  askUserId: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
   freeText?: string;
@@ -51,7 +51,7 @@ const questionParamsSchema = Joi.object({
 const _toCheckpoint = (question: {
   answerIds?: string[];
   answerLabels?: string[];
-  askUserId: number | string;
+  askUserId: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
   freeText?: string;

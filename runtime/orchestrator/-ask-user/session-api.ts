@@ -8,7 +8,7 @@ const sessionApiBaseUrl = (process.env.SESSION_API_BASE_URL || 'http://localhost
 export type TAskUserCheckpoint = {
   answerIds?: string[];
   answerLabels?: string[];
-  askUserId: number | string;
+  askUserId: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
   freeText?: string;
@@ -42,7 +42,7 @@ export type TStageDetailForResume = {
 export const postAskUserQuestion = async (
   sessionId: string,
   body: {
-    askUserId: number | string;
+    askUserId: string;
     contextSnapshot: Record<string, unknown>;
     forkSetupIndex?: number;
     loopMeta?: Record<string, unknown>;

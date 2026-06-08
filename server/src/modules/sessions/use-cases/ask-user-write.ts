@@ -14,7 +14,7 @@ import { yahlStageSchema } from '../stage-schema';
 import { spawnOrchestrate } from './spawn-orchestrate';
 
 export type TRequestCreateAskUserQuestionBody = {
-  askUserId: number | string;
+  askUserId: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
   loopMeta?: Record<string, unknown>;
@@ -58,7 +58,7 @@ const parsedStageSnapshotSchema = Joi.object<TParsedStageSnapshot>({
 });
 
 const createBodySchema = Joi.object<TRequestCreateAskUserQuestionBody>({
-  askUserId: Joi.alternatives().try(Joi.number(), Joi.string().trim()).required(),
+  askUserId: Joi.string().trim().required(),
   contextSnapshot: Joi.object().required(),
   forkSetupIndex: Joi.number().optional(),
   loopMeta: Joi.object().optional(),
@@ -124,7 +124,7 @@ const _assertStageRunning = async (sessionRef: string, requestId: string) => {
 const _patchStageAskUserAnswer = async (
   sessionRef: string,
   requestId: string,
-  askUserId: number | string,
+  askUserId: string,
   answer: number | string,
 ) => {
   const stage = await Queries.hasExactOne(modelStage, {
@@ -133,7 +133,7 @@ const _patchStageAskUserAnswer = async (
   });
 
   const askUser = stage.stage.askUser?.map((entry) => (
-    String(entry.id) === String(askUserId)
+    entry.id === askUserId
       ? { ...entry, answer }
       : entry
   ));

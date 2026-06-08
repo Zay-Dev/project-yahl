@@ -215,7 +215,7 @@ export const runStageSession = async (
     ? [
       'Answered askUser (do not call ask_user again; apply stage logic with set_context):',
       ...answeredAskUser.map((entry) => (
-        `- questionRef: "question_${entry.id}", answer: ${JSON.stringify(entry.answer)}`
+        `- questionRef: "${entry.id}", answer: ${JSON.stringify(entry.answer)}`
       )),
     ].join('\n')
     : '';
@@ -223,7 +223,7 @@ export const runStageSession = async (
     ? [
       'Registered askUser questions (use exact questionRef and title):',
       ...pendingAskUser.map((entry) => (
-        `- questionRef: "question_${entry.id}", title: ${JSON.stringify(entry.question)}`
+        `- questionRef: "${entry.id}", title: ${JSON.stringify(entry.question)}`
       )),
     ].join('\n')
     : '';

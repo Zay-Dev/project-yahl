@@ -6,11 +6,11 @@ import type { ParsedStage } from '@/orchestrator/orchestrator-types';
 import { parsedStageFromSnapshot, toParsedStageSnapshot } from './parsed-stage-snapshot';
 
 const sampleStage = (): ParsedStage => ({
-  lines: '{\nc += /ask-user(question_1);\n}',
+  lines: '{\nc += /ask-user(1);\n}',
   sourceStartLine: 12,
   spec: {
-    askUser: [{ id: 1, question: 'pick' }],
-    logic: 'c += /ask-user(question_1);',
+    askUser: [{ id: '1', question: 'pick' }],
+    logic: 'c += /ask-user(1);',
   },
   type: 'plain',
 });
@@ -32,7 +32,7 @@ describe('parsed-stage-snapshot', () => {
       ...sampleStage(),
       lines: '{\nresult = totally_rewritten();\n}',
       spec: {
-        askUser: [{ id: 1, question: 'edited question' }],
+        askUser: [{ id: '1', question: 'edited question' }],
         logic: 'result = totally_rewritten();',
       },
     };

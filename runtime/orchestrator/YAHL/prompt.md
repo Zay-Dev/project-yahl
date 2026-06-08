@@ -40,11 +40,11 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 Use the **`ask_user`** tool when user choice is required before proceeding.
 
 - Stage YAML may register questions under `askUser[]` with `id` and `question`.
-- Stage logic references them as `/ask-user(question_<id>)`.
+- Stage logic references them as `/ask-user(<id>)`.
 - Required arguments:
   - `version: "askUser.v1"`
   - `kind: "multipleChoice"`
-  - `questionRef: "question_<id>"` matching the registry entry
+  - `questionRef: "<id>"` matching the registry entry
   - `title: "<non-empty>"` must exactly match the registered `question`
   - `options: [{ "id":"<non-empty>", "label":"<non-empty>" }, ...]` with at least 2 options
 - Optional arguments:
@@ -56,7 +56,7 @@ Use the **`ask_user`** tool when user choice is required before proceeding.
 - Runtime behavior:
   - orchestrator checkpoints context, stops the agent container, and waits for a user answer in the web UI
   - after answer, a new orchestrator resumes the same stage with prior model responses replayed
-  - continuation replaces `/ask-user(question_<id>)` with the selected answer value
+  - continuation replaces `/ask-user(<id>)` with the selected answer value
   - answer is stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
 
 ## `/a2ui(...)` skill and `render_a2ui_plan` (API tool)

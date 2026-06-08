@@ -6,7 +6,7 @@ export type YahlAskUserOption = {
 
 export type YahlAskUserEntry = {
   answer?: number | string;
-  id: number | string;
+  id: string;
   options?: YahlAskUserOption[];
   question: string;
 };
@@ -80,7 +80,7 @@ const validateAskUserEntry = (
   }
 
   return {
-    id: typeof entry.id === "number" ? entry.id : entry.id.trim(),
+    id: String(entry.id).trim(),
     question: entry.question.trim(),
     ...(entry.answer !== undefined ? { answer: entry.answer } : {}),
     ...(Array.isArray(entry.options)
@@ -154,13 +154,12 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
 
     askUser = stage.askUser.map((entry, index) => {
       const validated = validateAskUserEntry(entry, `${label}.askUser[${index}]`);
-      const idKey = String(validated.id);
 
-      if (seenIds.has(idKey)) {
-        throw new Error(`${label}.askUser: duplicate id "${idKey}"`);
+      if (seenIds.has(validated.id)) {
+        throw new Error(`${label}.askUser: duplicate id "${validated.id}"`);
       }
 
-      seenIds.add(idKey);
+      seenIds.add(validated.id);
 
       return validated;
     });

@@ -28,7 +28,7 @@ export type TYahlAskUserOption = {
 
 export type TYahlAskUserEntry = {
   answer?: number | string;
-  id: number | string;
+  id: string;
   options?: TYahlAskUserOption[];
   question: string;
 };
@@ -131,7 +131,7 @@ export interface IAskUserQuestion extends TWithTimestamps {
   answerIds?: string[];
   answerLabels?: string[];
   answeredAt?: Date;
-  askUserId: number | string;
+  askUserId: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
   freeText?: string;
