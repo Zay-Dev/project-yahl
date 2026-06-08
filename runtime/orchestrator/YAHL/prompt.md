@@ -39,22 +39,25 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`ask_user`** tool when user choice is required before proceeding.
 
+- Stage YAML may register questions under `askUser[]` with `id` and `question`.
+- Stage logic references them as `/ask-user(question_<id>)`.
 - Required arguments:
   - `version: "askUser.v1"`
   - `kind: "multipleChoice"`
-  - `title: "<non-empty>"`
+  - `questionRef: "question_<id>"` matching the registry entry
+  - `title: "<non-empty>"` must exactly match the registered `question`
   - `options: [{ "id":"<non-empty>", "label":"<non-empty>" }, ...]` with at least 2 options
 - Optional arguments:
   - `description`, `allowMultiple`, `minChoices`, `maxChoices`
 - Validation constraints:
-  - do not omit `version` or `kind`
+  - do not omit `version`, `kind`, or `questionRef`
   - do not send fewer than 2 options
   - do not send empty option ids or labels
 - Runtime behavior:
-  - orchestrator will pause and wait for user answer after this tool call
-  - continuation resumes the same stage by replacing the inline `/ask-user(...)` expression with the selected answer value
-  - selected answer value is persisted as `ask_user_last_answer` in global context
-  - `ask_user_last_answer` is a scalar only (number when option id is numeric, otherwise string)
+  - orchestrator checkpoints context, stops the agent container, and waits for a user answer in the web UI
+  - after answer, a new orchestrator resumes the same stage with prior model responses replayed
+  - continuation replaces `/ask-user(question_<id>)` with the selected answer value
+  - answer is stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
 
 ## `/a2ui(...)` skill and `render_a2ui_plan` (API tool)
 

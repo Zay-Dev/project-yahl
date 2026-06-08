@@ -1,4 +1,11 @@
-import type { IForkSession, IModelResponse, ISession, IStage, IToolCall } from './-types';
+import type {
+  IAskUserQuestion,
+  IForkSession,
+  IModelResponse,
+  ISession,
+  IStage,
+  IToolCall,
+} from './-types';
 
 import type { Document } from 'mongoose';
 
@@ -8,6 +15,7 @@ export type TDbSession = ISession & Document;
 export type TDbStage = IStage & Document;
 export type TDbModelResponse = IModelResponse & Document;
 export type TDbToolCall = IToolCall & Document;
+export type TDbAskUserQuestion = IAskUserQuestion & Document;
 
 const loopMetaSchema = new Schema({
   arraySnapshot: { type: [Schema.Types.Mixed], required: true },
@@ -36,6 +44,7 @@ const forkSessionSetupSchema = new Schema({
 const sessionSchema = new Schema<TDbSession>({
   deletedAt: model.d.deletedAt(),
   forkedFrom: forkedFromSchema,
+  parsedStages: [model.d.mixed()],
   result: model.d.mixed(),
   sessionId: model.d.requiredString(),
   taskId: model.d.optionalString(),
@@ -100,6 +109,35 @@ const forkSessionSchema = new Schema<IForkSession & Document>({
 
 forkSessionSchema.index({ forkSessionId: 1 }, { unique: true });
 
+const askUserQuestionSchema = new Schema<TDbAskUserQuestion>({
+  answerIds: [model.d.optionalString()],
+  answerLabels: [model.d.optionalString()],
+  answeredAt: model.d.optionalDate(),
+  askUserId: model.d.mixed(),
+  contextSnapshot: model.d.mixed(),
+  forkSetupIndex: model.d.optionalNumber(),
+  freeText: model.d.optionalString(),
+  loopMeta: loopMetaSchema,
+  question: model.d.mixed(),
+  questionId: model.d.requiredString(),
+  parsedStageSnapshot: model.d.mixed(),
+  questionRef: model.d.requiredString(),
+  requestId: model.d.requiredString(),
+  session: model.d.toRequiredObjectId(modelsName.Sessions),
+  stage: model.d.mixed(),
+  stageIndex: model.d.optionalNumber(),
+  status: model.d.requiredString(),
+  storageSnapshot: model.d.mixed(),
+  toolCallId: model.d.requiredString(),
+}, {
+  collection: modelsName.SessionAskUserQuestions,
+  timestamps: true,
+});
+
+askUserQuestionSchema.index({ questionId: 1 }, { unique: true });
+askUserQuestionSchema.index({ requestId: 1, session: 1 });
+askUserQuestionSchema.index({ session: 1, status: 1 });
+
 export type TDbForkSession = IForkSession & Document;
 
 export const modelForkSession = createModel<TDbForkSession>(
@@ -113,3 +151,7 @@ export const modelModelResponse = createModel<TDbModelResponse>(
   modelResponseSchema,
 );
 export const modelToolCall = createModel<TDbToolCall>(modelsName.SessionToolCalls, toolCallSchema);
+export const modelAskUserQuestion = createModel<TDbAskUserQuestion>(
+  modelsName.SessionAskUserQuestions,
+  askUserQuestionSchema,
+);

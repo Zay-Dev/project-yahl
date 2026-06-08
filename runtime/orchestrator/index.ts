@@ -2,25 +2,33 @@ import type { IPublisher } from '@/shared/transports/-types';
 
 import config from "./config";
 
+import fs from 'fs/promises';
 import Redis from "ioredis";
+
 import { RedisPublisher } from '@/shared/transports/redis';
 
+import { buildAgent } from './-docker';
 import { program, resolveSessionId, runCommand } from './-commander';
 import { composeDown, composeUp, writeSharedOneCliOverride } from "./compose-onecli";
 
-import { buildAgent } from './-docker';
+import { resolveStagesFromText } from './yahl-parse';
+import { deriveTaskNameFromYahl } from './derive-task-id';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 
+import { runYahl } from './-agent';
+import { AskUserPausedError } from './-ask-user';
 import { initForkSessionManager } from './fork-session-manager';
 
-import { runTaskPath } from './-runners/path';
 import { runForkSession } from './-runners/fork';
-import { deriveTaskIdFromYahlPath } from './derive-task-id';
+import { runAskUserResume } from './-runners/resume';
+import { resolveTaskPath } from './-runners/path';
 
 declare global {
   var sessionId: string;
 
   var publisher: IPublisher;
+
+  var sessionTracker: ReturnType<typeof createSessionEventTracker>;
 }
 
 const redis = new Redis(config.redisUrl, {
@@ -59,54 +67,60 @@ const _composeUp = async (agentName: string) => {
 
 runCommand.action(async options => {
   const sessionId = resolveSessionId(options.sessionId);
-
-  console.log(`sessionId=${sessionId}`);
-
+  
   const agentName = `agent-${sessionId}`;
   const tracker = createSessionEventTracker();
 
+  console.log(`sessionId=${sessionId}`);
+  console.log(`agentName=${agentName}`);
+
   globalThis.sessionId = sessionId;
   globalThis.publisher = new RedisPublisher(redis, sessionId);
-
-  const forkManager = options.forkrunId
-    ? await initForkSessionManager(options.forkrunId)
-    : undefined;
-
-  if (forkManager) {
-    globalThis.forkSessionManager = forkManager;
-
-    if (sessionId !== forkManager.targetSessionId) {
-      throw new Error(
-        `Session id mismatch: CLI ${sessionId} vs fork target ${forkManager.targetSessionId}`,
-      );
-    }
-  }
+  globalThis.sessionTracker = tracker;
 
   try {
     buildAgent();
-
-    const taskYahlPath = options.taskPath ?? forkManager?.taskYahlPath ?? '';
-    const taskId = options.taskId ?? deriveTaskIdFromYahlPath(taskYahlPath);
-
-    await tracker.registerSession(sessionId, {
-      taskId,
-      taskYahlPath,
-    });
 
     await composeDown(agentName);
     await _composeUp(agentName);
     await _setupPublisher(tracker, sessionId);
 
     if (options.taskPath) {
-      await runTaskPath(options.taskPath);
-    } else if (options.resumeId) {
-      console.log('resumeId', options.resumeId);
+      const taskYahlPath = await resolveTaskPath(options.taskPath);
+      const yahl = await fs.readFile(taskYahlPath, 'utf-8');
+      const parsedStages = resolveStagesFromText(yahl);
+      const taskId = options.taskId ?? deriveTaskNameFromYahl(yahl, taskYahlPath);
+
+      await tracker.registerSession(sessionId, {
+        parsedStages,
+        taskId,
+        taskYahlPath,
+      });
+
+      await runYahl(yahl, { stages: parsedStages });
     } else if (options.forkrunId) {
+      const forkManager = await initForkSessionManager(options.forkrunId);
+      globalThis.forkSessionManager = forkManager;
+  
+      if (sessionId !== forkManager.targetSessionId) {
+        throw new Error(
+          `Session id mismatch: CLI ${sessionId} vs fork target ${forkManager.targetSessionId}`,
+        );
+      }
+
       await runForkSession(options.forkrunId, forkManager);
+    } else if (options.resumeId) {
+      await runAskUserResume(sessionId, options.resumeId);
     } else {
       throw new Error('No task path, resume id, or forkrun id provided');
     }
   } catch (error) {
+    if (error instanceof AskUserPausedError) {
+      await tracker.flush();
+      process.exit(0);
+      return;
+    }
+
     console.error('[orchestrator] run failed:', error);
     process.exitCode = 1;
     throw error;

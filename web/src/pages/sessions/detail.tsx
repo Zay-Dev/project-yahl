@@ -3,10 +3,13 @@ import type { TResponseGetSession } from "@project-yahl/server/modules/sessions/
 import { useOne } from "@refinedev/core";
 import { useParams } from "react-router";
 
+import { AskUserPendingBanner } from "@/pages/sessions/components/ask-user-pending-banner";
+import { AskUserQuestionDialog } from "@/pages/sessions/components/ask-user-question-dialog";
 import { SessionJsonFallback } from "@/pages/sessions/components/session-json-fallback";
 import { SessionOverview } from "@/pages/sessions/components/session-overview";
 import { SessionResult } from "@/pages/sessions/components/session-result";
 import { SessionTimeline } from "@/pages/sessions/components/session-timeline";
+import { useAskUserQuestions } from "@/pages/sessions/hooks/use-ask-user-questions";
 import { useSessionEventsStream } from "@/pages/sessions/hooks/use-session-events-stream";
 import { RESOURCES } from "@/providers/constants";
 
@@ -31,6 +34,18 @@ export function SessionDetailPage() {
       void query.refetch();
     },
     sessionId: id ?? "",
+  });
+
+  const {
+    activeQuestion,
+    dialogOpen,
+    handleAnswered,
+    openQuestion,
+    pendingQuestions,
+    setDialogOpen,
+  } = useAskUserQuestions({
+    lastEvent,
+    sessionId: id ?? '',
   });
 
   const session = result;
@@ -58,6 +73,17 @@ export function SessionDetailPage() {
       {session ? (
         <>
           <SessionOverview session={session} />
+          <AskUserPendingBanner
+            onOpenQuestion={openQuestion}
+            questions={pendingQuestions}
+          />
+          <AskUserQuestionDialog
+            onAnswered={handleAnswered}
+            onOpenChange={setDialogOpen}
+            open={dialogOpen}
+            question={activeQuestion}
+            sessionId={session.sessionId}
+          />
           <SessionResult result={session.result} />
           <SessionTimeline
             error={stagesError}

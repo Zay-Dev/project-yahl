@@ -1,5 +1,6 @@
 import type {
   TRequestCreateForkSessionBody,
+  TResponseAskUserQuestionListItem,
   TResponseCreateForkSession,
   TResponseDeleteSession,
   TResponseStageDetail,
@@ -46,6 +47,30 @@ export const createForkSession = async (
   });
 
   return parseJson<TResponseCreateForkSession>(response);
+};
+
+export const fetchPendingAskUserQuestions = async (sessionId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    '/ask-user/questions?status=pending';
+  const response = await fetch(url);
+
+  return parseJson<TResponseAskUserQuestionListItem[]>(response);
+};
+
+export const submitAskUserAnswer = async (
+  sessionId: string,
+  questionId: string,
+  body: { freeText?: string; optionIds?: string[] },
+) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    `/ask-user/questions/${encodeURIComponent(questionId)}/answer`;
+  const response = await fetch(url, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  return parseJson<{ ok: true; questionId: string }>(response);
 };
 
 export const deleteSession = async (

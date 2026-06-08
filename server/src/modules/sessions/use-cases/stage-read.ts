@@ -4,6 +4,7 @@ import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
+import { isStageFinished } from '../-stage-status';
 import type {
   TResponseStageDetail,
   TResponseStageListItem,
@@ -86,14 +87,8 @@ const parseToolArguments = (raw: unknown) => {
 };
 
 export const resolveStageStatus = (
-  stage: Pick<TStageListSource, 'contextAfter' | 'finishedAt'>,
-): TResponseStageStatus => {
-  if (stage.finishedAt || stage.contextAfter) {
-    return 'finished';
-  }
-
-  return 'running';
-};
+  stage: Pick<TStageListSource, 'finishedAt'>,
+): TResponseStageStatus => (isStageFinished(stage) ? 'finished' : 'running');
 
 const extractContentPreview = (response: Record<string, unknown>) => {
   const choices = response.choices;
@@ -220,6 +215,7 @@ export const resolveSessionStagesReplay = async (sessionId: string) => {
   return stages.map((stage): TResponseStageReplayItem => ({
     context: (stage.context ?? {}) as Record<string, unknown>,
     contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
+    finishedAt: toIso(stage.finishedAt),
     loopMeta: stage.loopMeta,
     requestId: stage.requestId,
     stage: stage.stage as TYahlStage,
@@ -303,6 +299,7 @@ export const getSessionStage = [
             createdAt: toIso(doc.createdAt as Date) ?? '',
             durationMs: doc.durationMs,
             model: typeof response.model === 'string' ? response.model : undefined,
+            response,
             thinkingMode: doc.thinkingMode,
             usage: normalizeUsageToTokenTotals(response.usage),
           };

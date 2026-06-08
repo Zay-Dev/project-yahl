@@ -2,8 +2,8 @@ import path from 'path';
 import fs from 'fs/promises';
 
 import config from '@/orchestrator/config';
-import { runYahl } from '@/orchestrator/-agent';
-const _getFilePath = async (taskPathRaw: string) => {
+
+export const resolveTaskPath = async (taskPathRaw: string) => {
   const taskPath = path.resolve(
     config.__dirname,
     'orchestrator',
@@ -32,13 +32,4 @@ const _getFilePath = async (taskPathRaw: string) => {
   }
 
   throw new Error(`No task file found in ${taskPath}`);
-};
-
-export const runTaskPath = async (
-  taskPathRaw: string,
-) => {
-  const taskPath = await _getFilePath(taskPathRaw);
-  const task = await fs.readFile(taskPath, 'utf-8');
-
-  await runYahl(task);
 };

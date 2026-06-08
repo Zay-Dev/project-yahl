@@ -24,10 +24,12 @@ export const getForkSession = [
       });
 
       const sourceSession = await resolveSessionBySessionId(forkSession.sourceSessionId);
+      const targetSession = await resolveSessionBySessionId(forkSession.targetSessionId);
 
       const response: TResponseGetForkSession = {
         anchorStageId: forkSession.anchorStageId,
         forkSessionId: forkSession.forkSessionId,
+        parsedStages: targetSession.parsedStages,
         setups: forkSession.setups,
         sourceSessionId: forkSession.sourceSessionId,
         targetSessionId: forkSession.targetSessionId,

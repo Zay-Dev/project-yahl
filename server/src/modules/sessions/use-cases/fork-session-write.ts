@@ -13,11 +13,9 @@ import { deriveTaskIdFromYahlPath } from '../-derive-task-id';
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { modelForkSession, modelSession } from '../models';
 import { yahlStageSchema } from '../stage-schema';
+import { isStageFinished } from '../-stage-status';
 import { mergeForkSessionSetups } from './merge-fork-setups';
-import {
-  resolveSessionStagesReplay,
-  resolveStageStatus,
-} from './stage-read';
+import { resolveSessionStagesReplay } from './stage-read';
 import { spawnOrchestrate } from './spawn-orchestrate';
 
 export type TRequestCreateForkSessionParams = {
@@ -81,7 +79,7 @@ export const createForkSession = [
         throw errors.notFound('Anchor stage not found on source session');
       }
 
-      if (resolveStageStatus(anchorRow) !== 'finished') {
+      if (!isStageFinished(anchorRow)) {
         throw errors.badRequest('Anchor stage must be finished before rerun');
       }
 
@@ -113,6 +111,10 @@ export const createForkSession = [
 
       const setups = mergeForkSessionSetups(replayRows, anchorIndex, body.setups);
 
+      if (!sourceSession.parsedStages?.length) {
+        throw errors.badRequest('Source session is missing parsedStages; cannot fork');
+      }
+
       const forkSessionId = randomUUID();
       const targetSessionId = _normalizeContainerName(randomUUID());
       const now = new Date();
@@ -134,6 +136,7 @@ export const createForkSession = [
               forkSessionId,
               sourceSessionId: params.sessionId,
             },
+            parsedStages: sourceSession.parsedStages,
             taskId: sourceSession.taskId?.trim()
               || deriveTaskIdFromYahlPath(sourceSession.taskYahlPath ?? ''),
             taskYahlPath: sourceSession.taskYahlPath ?? '',

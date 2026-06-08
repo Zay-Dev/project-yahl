@@ -4,13 +4,16 @@ import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
 import { emitSessionEvent } from '../-session-events';
+import type { TParsedStage } from '../-types';
 import { modelSession } from '../models';
+import { parsedStageSchema } from '../stage-schema';
 
 export type TRequestRegisterSessionParams = {
   sessionId: string;
 };
 
 export type TRequestRegisterSessionBody = {
+  parsedStages: TParsedStage[];
   taskId: string;
   taskYahlPath: string;
 };
@@ -32,6 +35,7 @@ const patchBodySchema = Joi.object<TRequestPatchSessionBody>({
 });
 
 const bodySchema = Joi.object<TRequestRegisterSessionBody>({
+  parsedStages: Joi.array().items(parsedStageSchema).min(1).required(),
   taskId: Joi.string().trim().required(),
   taskYahlPath: Joi.string().trim().required(),
 });
@@ -53,6 +57,7 @@ export const registerSession = [
         { sessionId: params.sessionId },
         {
           $set: {
+            parsedStages: body.parsedStages,
             taskId: body.taskId,
             taskYahlPath: body.taskYahlPath,
             updatedAt: now,

@@ -16,8 +16,10 @@ import { PublisherEmitter } from "./-types";
 const _getReplyQueue = (requestId: string) => `yahl:reply:${requestId}`;
 const _getRequestQueue = (sessionId: string) => `yahl:request:${sessionId}`;
 
-const _getToolCallChannel = (sessionId: string) => `yahl:tool:${sessionId}`;
-const _getToolCallResultChannel = (sessionId: string) => `yahl:tool-result:${sessionId}`;
+const _getToolCallChannel = (sessionId: string, requestId: string) =>
+  `yahl:tool:${sessionId}:${requestId}`;
+const _getToolCallResultChannel = (sessionId: string, requestId: string) =>
+  `yahl:tool-result:${sessionId}:${requestId}`;
 const _getModelResponseChannel = (sessionId: string) => `yahl:model-response:${sessionId}`;
 
 const _isStorage = (value: unknown): value is TStorage =>
@@ -47,16 +49,19 @@ class RedisTransport {
 
   protected readonly requestQueue: string;
 
-  protected readonly toolCallChannel: string;
-  protected readonly toolResultChannel: string;
   protected readonly modelResponseChannel: string;
 
   constructor(protected readonly redis: Redis, protected readonly sessionId: string) {
     this.requestQueue = _getRequestQueue(this.sessionId);
-
-    this.toolCallChannel = _getToolCallChannel(this.sessionId);
-    this.toolResultChannel = _getToolCallResultChannel(this.sessionId);
     this.modelResponseChannel = _getModelResponseChannel(this.sessionId);
+  }
+
+  protected _toolCallChannel(requestId: string) {
+    return _getToolCallChannel(this.sessionId, requestId);
+  }
+
+  protected _toolResultChannel(requestId: string) {
+    return _getToolCallResultChannel(this.sessionId, requestId);
   }
 
   async close() {
@@ -130,17 +135,27 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     };
 
   pushRequest: IPublisher['pushRequest'] =
-    async (context, stage, temperature, { contextAfter, executionMeta, loopMeta, persistedStage } = {}) => {
-      const requestId = randomUUID();
+    async (context, stage, temperature, {
+      contextAfter,
+      executionMeta,
+      loopMeta,
+      persistedStage,
+      requestId: requestIdOverride,
+      resumeFrom,
+      skipStageCreate,
+    } = {}) => {
+      const requestId = requestIdOverride ?? randomUUID();
 
-      this.emit("pushRequest", { 
-        context: _serializeStorage(context)!,
-        executionMeta,
-        loopMeta,
-        requestId,
-        stage: persistedStage ?? stage,
-        temperature,
-      });
+      if (!skipStageCreate) {
+        this.emit("pushRequest", {
+          context: _serializeStorage(context)!,
+          executionMeta,
+          loopMeta,
+          requestId,
+          stage: persistedStage ?? stage,
+          temperature,
+        });
+      }
 
       await this.redis.lpush(this.requestQueue,
         JSON.stringify({
@@ -149,6 +164,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
           stage,
           context: _serializeStorage(context),
           contextAfter: _serializeStorage(contextAfter),
+          resumeFrom,
         })
       );
 
@@ -160,9 +176,9 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     }
 
   pushToolCallResult: IPublisher['pushToolCallResult'] =
-    async (result) => {
+    async (requestId, result) => {
       await this.redis.lpush(
-        this.toolResultChannel,
+        this._toolResultChannel(requestId),
         JSON.stringify({
           ...result,
           newStorage: _serializeStorage(result.newStorage),
@@ -204,7 +220,8 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
       wait: async () => {
         while (true) {
           try {
-            const popped = await this._brpop(redis, this.toolCallChannel, timeoutSeconds);
+            const toolCallChannel = this._toolCallChannel(requestId);
+            const popped = await this._brpop(redis, toolCallChannel, timeoutSeconds);
             if (!popped) continue;
 
             const toolCall = JSON.parse(popped) as TChatToolCall;
@@ -213,8 +230,15 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
             const result = await callback(toolCall);
 
-            await this.redis.lpush(this.toolResultChannel, JSON.stringify(result));
+            await this.redis.lpush(
+              this._toolResultChannel(requestId),
+              JSON.stringify(result),
+            );
           } catch (error: unknown) {
+            if (error instanceof Error && error.name === 'AskUserPausedError') {
+              throw error;
+            }
+
             const reason = error instanceof Error ? error.message : String(error);
 
             return console.debug('waitForToolCall', { requestId, reason });
@@ -253,7 +277,7 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
       this.connections.push(redis);
 
       const _waitForToolCallResult = async (): Promise<TToolCallResult> => {
-        const popped = await this._brpop(redis, this.toolResultChannel, timeoutSeconds);
+        const popped = await this._brpop(redis, this._toolResultChannel(requestId), timeoutSeconds);
 
         if (!popped) {
           return {
@@ -288,7 +312,7 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
         },
 
         toolCall: async (toolCall) => {
-          await this.redis.lpush(this.toolCallChannel, JSON.stringify(toolCall));
+          await this.redis.lpush(this._toolCallChannel(requestId), JSON.stringify(toolCall));
 
           return await _waitForToolCallResult();
         },

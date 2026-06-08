@@ -1,4 +1,5 @@
 import type { TStorage } from '@/shared/transports/-types';
+import type { ParsedStage } from '@/orchestrator/orchestrator-types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 type TStageLoopMeta = {
@@ -12,10 +13,7 @@ type TStageLoopMeta = {
   value: unknown;
 };
 
-import {
-  storageFromContextPayload,
-  storageFromSnapshot,
-} from './storage-context';
+import { storageFromSnapshot } from './storage-context';
 
 export type TReplayStageRow = {
   context: Record<string, unknown>;
@@ -37,6 +35,7 @@ export type TForkSessionSetup = {
 export type TForkSessionResponse = {
   anchorStageId: string;
   forkSessionId: string;
+  parsedStages?: ParsedStage[];
   setups: TForkSessionSetup[];
   sourceSessionId: string;
   targetSessionId: string;
@@ -94,16 +93,10 @@ const fetchSourceReplay = async (sourceSessionId: string) => {
 };
 
 export class ForkSessionManager {
-  private readonly _rowByStageId: Map<string, TReplayStageRow>;
-  private readonly _setupByStageId: Map<string, TForkSessionSetup>;
-
   constructor(
     readonly forkSession: TForkSessionResponse,
     readonly sourceRows: TReplayStageRow[],
-  ) {
-    this._rowByStageId = new Map(sourceRows.map((row) => [row.stageId, row]));
-    this._setupByStageId = new Map(forkSession.setups.map((setup) => [setup.stageId, setup]));
-  }
+  ) {}
 
   get targetSessionId() {
     return this.forkSession.targetSessionId;
@@ -115,6 +108,10 @@ export class ForkSessionManager {
 
   get taskYahlPath() {
     return this.forkSession.taskYahlPath ?? '';
+  }
+
+  get parsedStages() {
+    return this.forkSession.parsedStages ?? [];
   }
 
   getAnchorIndex() {
@@ -137,10 +134,6 @@ export class ForkSessionManager {
     return this.forkSession.setups;
   }
 
-  rowByStageId(stageId: string) {
-    return this._rowByStageId.get(stageId);
-  }
-
   buildExecutionPlan(): TForkExecutionStep[] {
     const anchorIndex = this.getAnchorIndex();
     const plan: TForkExecutionStep[] = [];
@@ -160,18 +153,6 @@ export class ForkSessionManager {
 
   contextAfterForPrefixRow(row: TReplayStageRow): TStorage | undefined {
     return storageFromSnapshot(row.contextAfter);
-  }
-
-  storageFromSetup(setup: TForkSessionSetup) {
-    return storageFromContextPayload(setup.context);
-  }
-
-  loopMetaForSetup(setup: TForkSessionSetup) {
-    return setup.loopMeta;
-  }
-
-  hasSetup(stageId: string) {
-    return this._setupByStageId.has(stageId);
   }
 }
 

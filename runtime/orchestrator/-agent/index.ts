@@ -1,13 +1,18 @@
 import type { TRunYahl } from './-types';
 
-import { resolveStagesFromText } from '@/orchestrator/yahl-parse';
 import { toAgentStage } from '@/shared/yahl-stage';
+
+import { resolveStagesFromText } from '@/orchestrator/yahl-parse';
 import { createStorage } from '@/orchestrator/-tools/set_context';
+
+import { resolveEffectiveStageTemperature } from '@/orchestrator/stage-parse';
+import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
+
 import {
   applySetContextToolCall,
   filterStorageForStage,
 } from '@/orchestrator/stage-field-policy';
-import { resolveEffectiveStageTemperature } from '@/orchestrator/stage-parse';
+
 import { handleLoop } from './loop';
 
 export const runYahl: TRunYahl = async (
@@ -18,51 +23,111 @@ export const runYahl: TRunYahl = async (
   } = {},
 ) => {
   const storage = useStorage();
+  const startIndex = options?.startFromStageIndex ?? 0;
   const stages = options?.stages ?? resolveStagesFromText(yahl);
 
-  for (const stage of stages) {
+  const sessionId = globalThis.sessionId;
+  const agentName = `agent-${sessionId}`;
+
+  for (let stageIndex = startIndex; stageIndex < stages.length; stageIndex += 1) {
+    const stage = stages[stageIndex]!;
+
     const temperature = resolveEffectiveStageTemperature(stage, {
       loopMeta: options?.loopMeta,
       temperature: options?.temperature,
     });
 
-    if (stage.type === 'loop' && !options?.contextAfter) {
-      await handleLoop(stage, storage, runYahl, temperature);
+    if (stage.type === 'loop' && !options?.contextAfter && !options?.resumeStage) {
+      await handleLoop(
+        stage,
+        storage,
+        runYahl,
+        temperature,
+        options?.pipelineStageIndex ?? stageIndex,
+      );
       continue;
     }
 
+    const resumeStage = options?.resumeStage && stageIndex === startIndex
+      ? options.resumeStage
+      : undefined;
+
+    const activeStage = resumeStage?.stage ?? stage;
+    const stageSpec = activeStage.spec;
+
     const filteredStorage = filterStorageForStage(
       storage,
-      stage.lines,
-      stage,
+      activeStage.lines,
+      activeStage,
       options?.loopMeta?.indexName,
     );
 
+    let paused = false;
+    let pauseError: AskUserPausedError | null = null;
+
+    const onPause = () => {
+      paused = true;
+    };
+
     const { requestId, wait, getWaitForToolCall } = await publisher.pushRequest(
       filteredStorage,
-      toAgentStage(stage.spec),
+      toAgentStage(stageSpec),
       temperature,
       {
         contextAfter: options?.contextAfter,
-        loopMeta: options?.loopMeta,
-        persistedStage: stage.spec,
+        loopMeta: resumeStage?.loopMeta ?? options?.loopMeta,
+        persistedStage: stageSpec,
+        requestId: resumeStage?.requestId,
+        resumeFrom: resumeStage?.resumeFrom,
+        skipStageCreate: !!resumeStage,
       },
     );
+
+    await globalThis.sessionTracker?.flush?.();
 
     const toolCallHandlers = getWaitForToolCall(async (toolCall) => {
       try {
         if (toolCall.function.name === 'set_context') {
-          const applied = await applySetContextToolCall(storage, toolCall, stage);
+          const applied = await applySetContextToolCall(
+            storage,
+            toolCall,
+            activeStage,
+          );
 
           return {
             hasError: false,
             result: applied ? 'OK' : 'skipped',
             newStorage: storage,
           };
-        } else {
-          console.log('--toolCall--', toolCall.function.name);
+        }
+
+        if (toolCall.function.name === 'ask_user') {
+          return await handleAskUserToolCall({
+            onPause,
+            agentName,
+
+            requestId,
+            sessionId,
+
+            storage,
+            toolCall,
+
+            stage: activeStage,
+
+            forkSetupIndex: options?.forkSetupIndex,
+            loopMeta: resumeStage?.loopMeta ?? options?.loopMeta,
+
+            ...(options?.forkSetupIndex != null
+              ? {}
+              : { stageIndex: options?.pipelineStageIndex ?? stageIndex }),
+          });
         }
       } catch (error) {
+        if (error instanceof AskUserPausedError) {
+          pauseError = error;
+          throw error;
+        }
+
         return {
           hasError: true,
           result: `Error: ${error}`,
@@ -75,10 +140,34 @@ export const runYahl: TRunYahl = async (
       };
     });
 
+    const pausePromise = new Promise<never>((_, reject) => {
+      const interval = setInterval(() => {
+        if (paused || pauseError) {
+          clearInterval(interval);
+          reject(pauseError ?? new AskUserPausedError());
+        }
+      }, 50);
+    });
+
     toolCallHandlers.wait();
 
-    await wait();
+    try {
+      await Promise.race([wait(), pausePromise]);
+    } catch (error) {
+      toolCallHandlers.dispose();
+
+      if (error instanceof AskUserPausedError) {
+        throw error;
+      }
+
+      throw error;
+    }
+
     toolCallHandlers.dispose();
+
+    if (options?.resumeStage) {
+      options.resumeStage = undefined;
+    }
 
     const finishContextAfter = options?.contextAfterRecord ?? storage;
 

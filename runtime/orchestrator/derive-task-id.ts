@@ -1,3 +1,5 @@
+import { isYahlDocument, parseYahlDocument } from './yahl-parse';
+
 export const deriveTaskIdFromYahlPath = (taskYahlPath: string) => {
   const normalized = taskYahlPath.replace(/\\/g, '/').trim();
   const parts = normalized.split('/').filter(Boolean);
@@ -7,4 +9,20 @@ export const deriveTaskIdFromYahlPath = (taskYahlPath: string) => {
   }
 
   return parts[0] ?? 'test';
+};
+
+export const deriveTaskNameFromYahl = (yahlText: string, taskYahlPath: string) => {
+  try {
+    if (isYahlDocument(yahlText)) {
+      const doc = parseYahlDocument(yahlText);
+
+      if (doc.name.trim()) {
+        return doc.name.trim();
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+
+  return deriveTaskIdFromYahlPath(taskYahlPath);
 };

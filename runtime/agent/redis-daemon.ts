@@ -8,6 +8,7 @@ import { promisify } from "util";
 
 import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 
+import { buildResumeStageMessages } from './-utils/resume-messages';
 import { runStageSession } from "./stage-session";
 
 import { fastForward, type TContextBuckets } from './-utils/ff-client';
@@ -137,7 +138,7 @@ export const startRedisDaemon = async () => {
     const envelope = await subscriber.waitForRequest();
     if (!envelope) continue;
 
-    const { context, contextAfter, requestId, stage, temperature } = envelope;
+    const { context, contextAfter, requestId, resumeFrom, stage, temperature } = envelope;
     const effectiveTemperature = temperature ?? stage.temperature;
     const { end, error, toolCall, onModelResponse } = subscriber.getReply(requestId);
 
@@ -228,6 +229,9 @@ export const startRedisDaemon = async () => {
                 ...toolCallMessages,
               ] as any[];
             },
+          },
+          {
+            resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,
           },
         );
 

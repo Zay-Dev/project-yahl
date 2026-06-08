@@ -46,6 +46,7 @@ type StageRunner = {
 type StageSessionOptions = {
   maxBashCalls?: number;
   maxTurns?: number;
+  resumeMessages?: ChatApiMessage[];
 };
 
 const a2uiStagePattern = /\/a2ui\(\s*([a-zA-Z0-9_.-]+)\s*\)/;
@@ -208,6 +209,25 @@ export const runStageSession = async (
 
   const toolsMd = await readFileUtf8(path.resolve(config.runtimeRoot, "Tools.md"));
 
+  const pendingAskUser = stageInput.stage.askUser?.filter((entry) => entry.answer === undefined) ?? [];
+  const answeredAskUser = stageInput.stage.askUser?.filter((entry) => entry.answer !== undefined) ?? [];
+  const answeredAskUserHint = answeredAskUser.length
+    ? [
+      'Answered askUser (do not call ask_user again; apply stage logic with set_context):',
+      ...answeredAskUser.map((entry) => (
+        `- questionRef: "question_${entry.id}", answer: ${JSON.stringify(entry.answer)}`
+      )),
+    ].join('\n')
+    : '';
+  const askUserHint = pendingAskUser.length
+    ? [
+      'Registered askUser questions (use exact questionRef and title):',
+      ...pendingAskUser.map((entry) => (
+        `- questionRef: "question_${entry.id}", title: ${JSON.stringify(entry.question)}`
+      )),
+    ].join('\n')
+    : '';
+
   const payload = JSON.stringify({
     ...stageInput,
     context: {
@@ -244,8 +264,13 @@ export const runStageSession = async (
     {
       role: "user",
       // content: `${toolsMd}\n\nInput:\n${payload}`,
-      content: `\n\nInput:\n${payload}`
+      content: [
+        answeredAskUserHint,
+        askUserHint,
+        `\n\nInput:\n${payload}`,
+      ].filter(Boolean).join('\n'),
     },
+    ...(options.resumeMessages ?? []),
   ];
 
   let bashCalls = 0;

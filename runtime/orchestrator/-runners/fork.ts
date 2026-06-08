@@ -1,8 +1,6 @@
 import type { ForkSessionManager } from '@/orchestrator/fork-session-manager';
 import type { TReplayStageRow } from '@/orchestrator/fork-session-manager';
-import type { TForkSessionSetup } from '@/orchestrator/fork-session-manager';
 
-import { runLoopIteration } from '@/orchestrator/-agent/loop';
 import { runYahl } from '@/orchestrator/-agent';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import { mergeContextPayloadToStorage } from '@/orchestrator/storage-context';
@@ -10,12 +8,13 @@ import { resolveEffectiveStageTemperature } from '@/orchestrator/stage-parse';
 import { compileStage } from '@/orchestrator/yahl-parse';
 import { initForkSessionManager } from '@/orchestrator/fork-session-manager';
 
+import { runForkSetups } from './fork-setups';
+
 declare global {
   var forkSessionManager: undefined | ForkSessionManager;
 }
 
-const _parsedStage = (stage: TForkSessionSetup['stage'] | TReplayStageRow['stage']) =>
-  compileStage(stage, 1);
+const _parsedStage = (stage: TReplayStageRow['stage']) => compileStage(stage, 1);
 
 const _runForkPlan = async (manager: ForkSessionManager) => {
   const plan = manager.buildExecutionPlan();
@@ -53,27 +52,10 @@ const _runForkPlan = async (manager: ForkSessionManager) => {
       continue;
     }
 
-    if (step.setup.stageId === manager.forkSession.anchorStageId) {
-      mergeContextPayloadToStorage(storage, step.setup.context);
-    }
-
-    const parsed = _parsedStage(step.setup.stage);
-    const temperature = resolveEffectiveStageTemperature(parsed, {
-      loopMeta: step.setup.loopMeta,
-    });
-
-    if (step.setup.loopMeta) {
-      await runLoopIteration(parsed, storage, step.setup.loopMeta, runYahl, temperature);
-
-      continue;
-    }
-
-    await runYahl('', {
-      stages: [parsed],
-      temperature,
-      useStorage: () => storage,
-    });
+    break;
   }
+
+  await runForkSetups(manager, storage);
 
   return { storage };
 };

@@ -66,6 +66,7 @@ export type AskUserToolCallEnvelope = {
       id: string;
       label: string;
     }[];
+    questionRef: string;
     title: string;
     version: "askUser.v1";
   };
@@ -123,6 +124,7 @@ const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
     parsedArgs.version === "askUser.v1" &&
     parsedArgs.kind === "multipleChoice" &&
     typeof parsedArgs.title === "string" &&
+    typeof parsedArgs.questionRef === "string" &&
     Array.isArray(parsedArgs.options)
   ) {
     return {
@@ -143,6 +145,7 @@ const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
             label: String(option.label || ""),
           }))
           .filter((option) => option.id && option.label),
+        questionRef: parsedArgs.questionRef.trim(),
         title: parsedArgs.title,
         version: "askUser.v1",
       },

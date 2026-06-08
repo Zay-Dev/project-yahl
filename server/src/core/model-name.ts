@@ -1,5 +1,6 @@
 const _modelsName = {
   ForkSessions: 'ForkSessions',
+  SessionAskUserQuestions: 'SessionAskUserQuestions',
   SessionModelResponses: 'SessionModelResponses',
   Sessions: 'Sessions',
   SessionToolCalls: 'SessionToolCalls',

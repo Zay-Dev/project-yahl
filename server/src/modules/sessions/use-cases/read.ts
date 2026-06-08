@@ -43,6 +43,7 @@ const toResponse = (
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
   forkedFrom: session.forkedFrom,
+  parsedStages: session.parsedStages,
   result: session.result,
   sessionId: session.sessionId,
   taskId: session.taskId,

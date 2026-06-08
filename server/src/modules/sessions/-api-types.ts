@@ -1,5 +1,6 @@
 import type {
   TForkSessionStageSetup,
+  TParsedStage,
   TSessionForkedFrom,
   TStageLoopMeta,
   TTokenTotals,
@@ -13,6 +14,7 @@ export type TResponseGetSession = {
   createdAt: string;
   deletedAt?: string;
   forkedFrom?: TSessionForkedFrom;
+  parsedStages?: TParsedStage[];
   result?: unknown;
   sessionId: string;
   taskId?: string;
@@ -53,6 +55,7 @@ export type TResponseStageListItem = {
 export type TResponseStageReplayItem = {
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
+  finishedAt?: string;
   loopMeta?: TStageLoopMeta;
   requestId: string;
   stage: TYahlStage;
@@ -66,6 +69,7 @@ export type TResponseStageModelResponseItem = {
   createdAt: string;
   durationMs?: number;
   model?: string;
+  response?: Record<string, unknown>;
   thinkingMode?: boolean;
   usage: TTokenTotals | null;
 };
@@ -91,7 +95,17 @@ export type TResponseStageDetail = TResponseStageListItem & {
   toolCalls: TResponseStageToolCallItem[];
 };
 
+export type TResponseAskUserQuestionListItem = {
+  question: Record<string, unknown>;
+  questionId: string;
+  questionRef: string;
+  requestId: string;
+  status: 'answered' | 'pending';
+};
+
 export type TSessionLiveEvent =
+  | { type: 'ask-user.answered'; questionId: string; requestId: string }
+  | { type: 'ask-user.created'; questionId: string; requestId: string }
   | { type: 'session.updated' }
   | { type: 'stage.created'; requestId: string }
   | { type: 'stage.finished'; requestId: string }
@@ -113,6 +127,7 @@ export type TStageListSource = {
 export type TResponseGetForkSession = {
   anchorStageId: string;
   forkSessionId: string;
+  parsedStages?: TParsedStage[];
   setups: TForkSessionStageSetup[];
   sourceSessionId: string;
   targetSessionId: string;

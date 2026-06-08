@@ -106,6 +106,10 @@ export const createStage = [
           $setOnInsert: {
             requestId: body.requestId,
           },
+          $unset: {
+            contextAfter: '',
+            finishedAt: '',
+          },
         },
         { upsert: true },
       );

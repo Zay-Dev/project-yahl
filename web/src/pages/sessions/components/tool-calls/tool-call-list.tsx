@@ -1,5 +1,6 @@
 import type { TResponseStageToolCallItem } from "@project-yahl/server/modules/sessions/-api-types";
 
+import { AskUserToolCall } from "./ask-user-tool-call";
 import { GenericToolCall } from "./generic-tool-call";
 import { SetContextToolCall } from "./set-context-tool-call";
 
@@ -14,6 +15,10 @@ const ToolEntry = ({
 }) => {
   if (tool.name === "set_context") {
     return <SetContextToolCall tool={tool} />;
+  }
+
+  if (tool.name === "ask_user") {
+    return <AskUserToolCall tool={tool} />;
   }
 
   return <GenericToolCall tool={tool} />;

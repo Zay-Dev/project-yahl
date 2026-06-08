@@ -1,12 +1,26 @@
 import Joi from 'joi';
 
-import type { TYahlStage } from './-types';
+import type { TParsedStage, TYahlStage } from './-types';
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
 
 const stringArraySchema = Joi.array().items(Joi.string());
 
+const askUserOptionSchema = Joi.object({
+  description: Joi.string().optional(),
+  id: Joi.string().trim().required(),
+  label: Joi.string().trim().required(),
+});
+
+const askUserEntrySchema = Joi.object({
+  answer: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
+  id: Joi.alternatives().try(Joi.number(), Joi.string().trim()).required(),
+  options: Joi.array().items(askUserOptionSchema).min(2).optional(),
+  question: Joi.string().trim().required(),
+});
+
 export const yahlStageSchema = Joi.object<TYahlStage>({
+  askUser: Joi.array().items(askUserEntrySchema).min(1).optional(),
   conditionMode: Joi.boolean().optional(),
   contextKeys: stringArraySchema.optional(),
   contextMode: Joi.boolean().optional(),
@@ -32,3 +46,15 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
 
     return value;
   });
+
+export const parsedStageSchema = Joi.object<TParsedStage>({
+  contextKeys: stringArraySchema.optional(),
+  lines: Joi.string().required(),
+  produceContextKeys: stringArraySchema.optional(),
+  produceTypeKeys: stringArraySchema.optional(),
+  sourceStartLine: Joi.number().integer().min(1).required(),
+  spec: yahlStageSchema.required(),
+  temperature: Joi.number().min(0).max(2).optional(),
+  type: Joi.string().valid('loop', 'plain').required(),
+  updateContextKeys: stringArraySchema.optional(),
+});

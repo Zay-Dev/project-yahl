@@ -20,7 +20,21 @@ export type TStageLoopMeta = {
   value: unknown;
 };
 
+export type TYahlAskUserOption = {
+  description?: string;
+  id: string;
+  label: string;
+};
+
+export type TYahlAskUserEntry = {
+  answer?: number | string;
+  id: number | string;
+  options?: TYahlAskUserOption[];
+  question: string;
+};
+
 export type TYahlStage = {
+  askUser?: TYahlAskUserEntry[];
   conditionMode?: boolean;
   contextKeys?: string[];
   contextMode?: boolean;
@@ -29,6 +43,18 @@ export type TYahlStage = {
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   temperature?: number;
+  updateContextKeys?: string[];
+};
+
+export type TParsedStage = {
+  contextKeys?: string[];
+  lines: string;
+  produceContextKeys?: string[];
+  produceTypeKeys?: string[];
+  sourceStartLine: number;
+  spec: TYahlStage;
+  temperature?: number;
+  type: 'loop' | 'plain';
   updateContextKeys?: string[];
 };
 
@@ -57,6 +83,7 @@ export interface IForkSession extends TWithTimestamps {
 export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
   forkedFrom?: TSessionForkedFrom;
+  parsedStages?: TParsedStage[];
   sessionId: string;
   result?: unknown;
   taskId?: string;
@@ -89,4 +116,35 @@ export interface IToolCall extends TWithTimestamps {
   session: string;
   requestId: string;
   toolCalls: Record<string, unknown>[];
+}
+
+export type TAskUserQuestionStatus = 'answered' | 'pending';
+
+export type TParsedStageSnapshot = {
+  lines: string;
+  sourceStartLine: number;
+  type: 'loop' | 'plain';
+};
+
+export interface IAskUserQuestion extends TWithTimestamps {
+  _id: string;
+  answerIds?: string[];
+  answerLabels?: string[];
+  answeredAt?: Date;
+  askUserId: number | string;
+  contextSnapshot: Record<string, unknown>;
+  forkSetupIndex?: number;
+  freeText?: string;
+  loopMeta?: TStageLoopMeta;
+  question: Record<string, unknown>;
+  questionId: string;
+  parsedStageSnapshot?: TParsedStageSnapshot;
+  questionRef: string;
+  requestId: string;
+  session: string;
+  stage: TYahlStage;
+  stageIndex?: number;
+  status: TAskUserQuestionStatus;
+  storageSnapshot: Record<string, unknown>;
+  toolCallId: string;
 }

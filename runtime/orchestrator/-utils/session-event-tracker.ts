@@ -1,4 +1,5 @@
 import type { TModelResponse } from '@/shared/transports/-types';
+import type { ParsedStage } from '@/orchestrator/orchestrator-types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 type TPushRequestEnvelope = {
@@ -76,13 +77,17 @@ export const createSessionEventTracker = () => {
 
   const registerSession = async (
     sessionId: string,
-    opts: { taskId: string; taskYahlPath: string },
+    opts: { parsedStages?: ParsedStage[]; taskId: string; taskYahlPath: string },
   ) => {
     if (!baseUrl) return;
 
     const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/register`;
 
-    await _post(url, { taskId: opts.taskId, taskYahlPath: opts.taskYahlPath });
+    await _post(url, {
+      parsedStages: opts.parsedStages ?? [],
+      taskId: opts.taskId,
+      taskYahlPath: opts.taskYahlPath,
+    });
   };
 
   const createStage = (sessionId: string, envelope: TPushRequestEnvelope) => {
@@ -158,10 +163,13 @@ export const createSessionEventTracker = () => {
     });
   };
 
+  const flush = () => queue;
+
   return {
     appendModelResponse,
     appendToolCall,
     createStage,
+    flush,
     patchSession,
     patchStage,
     registerSession,

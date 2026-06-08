@@ -1,4 +1,4 @@
-name: test
+name: test the syntax
 description: Testing
 
 stages:
@@ -43,8 +43,11 @@ stages:
 
   - contextKeys: [c]
     updateContextKeys: [c]
+    askUser:
+      - id: 1
+        question: which number of 1,2,3,4,5
     logic: |
-      c += /ask-user(which number of 1,2,3,4,5);
+      c += /ask-user(question_1);
 
   - temperature: 2
     contextKeys: [a, b, c]

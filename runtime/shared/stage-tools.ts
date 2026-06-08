@@ -91,10 +91,14 @@ export const STAGE_TOOLS = [
             },
             type: "array",
           },
+          questionRef: {
+            description: 'Registry ref matching /ask-user(question_<id>) in stage logic, e.g. "question_1".',
+            type: "string",
+          },
           title: { type: "string" },
           version: { enum: ["askUser.v1"], type: "string" },
         },
-        required: ["version", "kind", "title", "options"],
+        required: ["version", "kind", "title", "options", "questionRef"],
         type: "object",
       },
     },
@@ -304,6 +308,7 @@ export const parseAskUserToolArguments = (
   if (!isRecord(parsed)) return null;
   if (parsed.version !== "askUser.v1" || parsed.kind !== "multipleChoice") return null;
   if (typeof parsed.title !== "string" || !parsed.title.trim()) return null;
+  if (typeof parsed.questionRef !== "string" || !parsed.questionRef.trim()) return null;
   if (!Array.isArray(parsed.options) || parsed.options.length < 2) return null;
   const options = parsed.options
     .filter((option) => isRecord(option))
@@ -321,6 +326,7 @@ export const parseAskUserToolArguments = (
     maxChoices: typeof parsed.maxChoices === "number" ? parsed.maxChoices : undefined,
     minChoices: typeof parsed.minChoices === "number" ? parsed.minChoices : undefined,
     options,
+    questionRef: parsed.questionRef.trim(),
     title: parsed.title.trim(),
     version: "askUser.v1",
   };

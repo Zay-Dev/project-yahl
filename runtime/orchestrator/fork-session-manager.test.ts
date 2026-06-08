@@ -157,4 +157,28 @@ describe('ForkSessionManager', () => {
 
     assert.deepEqual(runIds, ['s2', 's3', 's4']);
   });
+
+  it('exposes parsedStages from fork session response', () => {
+    const forkSession = {
+      anchorStageId: 'b',
+      forkSessionId: 'fork-1',
+      parsedStages: [
+        {
+          lines: 'a',
+          sourceStartLine: 1,
+          spec: { logic: 'a' },
+          type: 'plain' as const,
+        },
+      ],
+      setups: [{ stageId: 'b', context: {}, stage: { logic: 'b2' } }],
+      sourceSessionId: 'src',
+      targetSessionId: 'tgt',
+    };
+
+    const manager = new ForkSessionManager(forkSession, [row('a', 'a')]);
+
+    assert.equal(manager.parsedStages.length, 1);
+    assert.equal(manager.parsedStages[0]?.spec.logic, 'a');
+  });
+
 });

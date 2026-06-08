@@ -43,11 +43,23 @@ export type TToolCallResult = {
   newStorage?: TStorage;
 };
 
+export type TAskUserResumeFrom = {
+  answer: {
+    freeText?: string;
+    selectedLabels: string[];
+    selectedOptionIds: string[];
+  };
+  modelResponses: TModelResponse[];
+  pendingToolCallId: string;
+  toolCalls: TChatToolCall[];
+};
+
 export type TRequestEnvelope = {
   requestId: string;
   context: TStorage;
   stage: YahlStage;
   contextAfter?: TStorage;
+  resumeFrom?: TAskUserResumeFrom;
   temperature?: number;
 };
 
@@ -83,7 +95,7 @@ export interface IPublisher extends IBase {
     requestId: string;
   }) => void;
 
-  pushToolCallResult: (result: TToolCallResult) => Promise<void>;
+  pushToolCallResult: (requestId: string, result: TToolCallResult) => Promise<void>;
 
   pushRequest: (
     context: TStorage,
@@ -94,6 +106,9 @@ export interface IPublisher extends IBase {
       executionMeta?: StageExecutionMeta,
       loopMeta?: TLoopMeta | undefined,
       persistedStage?: YahlStage,
+      requestId?: string,
+      resumeFrom?: TAskUserResumeFrom,
+      skipStageCreate?: boolean,
     },
   ) => Promise<{
     requestId: string,
