@@ -6,15 +6,12 @@ import Redis from "ioredis";
 
 import type {
   AskUserToolCallEnvelope,
-  RenderA2uiPlanToolCallEnvelope,
   SetContextToolCallEnvelope,
   StageContextPayload,
 } from "../shared/stage-contract";
 import type { TStorage } from "../shared/transports/-types";
 import type { StageExecutionMeta } from "../shared/transport";
 import { toAgentStage, validateYahlStage } from "../shared/yahl-stage";
-
-import { toA2uiFromPlan } from "../shared/a2ui-from-plan";
 
 import { parseAskUserToolArguments } from "../shared/stage-tools";
 
@@ -289,20 +286,6 @@ export const buildAskUserContinuationWithContext = (rawLines: string) => {
   };
 };
 
-export const validateSurfaceUiKindConflict = (
-  knownSurfaceUiKinds: Map<string, string>,
-  surfaceId: string,
-  uiKind: string,
-) => {
-  const existingUiKind = knownSurfaceUiKinds.get(surfaceId);
-  if (!existingUiKind || existingUiKind === uiKind) return null;
-
-  return (
-    `surfaceId "${surfaceId}" already initialized as ${existingUiKind}; ` +
-    `cannot re-create with ${uiKind}. Use a new surfaceId.`
-  );
-};
-
 type StageFilterFn = (lines: string) => {
   generatedLine: number;
   sourceLine: number;
@@ -379,7 +362,6 @@ const _execute = async (
 
   try {
     const runtime = createRuntimeContext();
-    const surfaceUiKinds = new Map<string, string>();
     if (resumeHydrate) {
       Object.assign(runtime.get("context")!, resumeHydrate.context ?? {});
       Object.assign(runtime.get("types")!, resumeHydrate.types ?? {});
@@ -421,49 +403,6 @@ const _execute = async (
         filterLines?: StageFilterFn,
       ) => {
         let stageRequestId = "";
-        const applyRenderA2uiEnvelope = async (renderEnvelope: RenderA2uiPlanToolCallEnvelope) => {
-          const { dataRef, mode, plan } = renderEnvelope.arguments;
-          const bucket = getBucketForScope(dataRef.scope);
-          const rootData = runtime.get(bucket)?.[dataRef.key];
-          const surfaceOverride = renderEnvelope.arguments.surfaceId?.trim();
-          const mergedPlan = {
-            ...plan,
-            surfaceId: surfaceOverride || plan.surfaceId,
-          };
-          const logMeta =
-            `mode=${mode} ui_kind=${mergedPlan.ui_kind} surfaceId=${mergedPlan.surfaceId} ` +
-            `dataRefScope=${dataRef.scope} dataRefKey=${dataRef.key}`;
-          const conflictMessage = validateSurfaceUiKindConflict(
-            surfaceUiKinds,
-            mergedPlan.surfaceId,
-            mergedPlan.ui_kind,
-          );
-          if (conflictMessage) {
-            process.stderr.write(`[render_a2ui_plan] conflict ${logMeta}: ${conflictMessage}\n`);
-            throw new Error(conflictMessage);
-          }
-
-          const resultA2ui = toA2uiFromPlan(rootData, mergedPlan);
-          if (!resultA2ui.length) {
-            process.stderr.write(
-              `[render_a2ui_plan] empty output ${logMeta}\n`,
-            );
-            return;
-          }
-
-          surfaceUiKinds.set(mergedPlan.surfaceId, mergedPlan.ui_kind);
-
-          const sessionId = process.env.AGENT_SESSION_ID?.trim();
-          if (sessionId) {
-            await agentTrackers.sessionA2ui({
-              envelopes: resultA2ui,
-              mode,
-              sessionId,
-              surfaceId: mergedPlan.surfaceId,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        };
 
         try {
           const override = forkRunManager?.getOverride(_stageIndex, loopMeta?.index);

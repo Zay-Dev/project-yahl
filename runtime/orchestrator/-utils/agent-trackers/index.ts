@@ -45,17 +45,8 @@ export type StageFinishEvent = {
   timestamp: string;
 };
 
-export type SessionA2uiEvent = {
-  envelopes: unknown;
-  mode: "append" | "replace";
-  sessionId: string;
-  surfaceId: string;
-  timestamp: string;
-};
-
 export type FinalResultEvent = {
   result: unknown;
-  resultA2ui?: unknown;
   sessionId: string;
   stages: ParsedStage[];
 };
@@ -64,7 +55,6 @@ export type TAgentTracker = {
   pushRequest?: (event: PushRequestEvent) => void | Promise<void>;
   toolCall?: (event: ToolCallEvent) => void | Promise<void>;
   modelResponse?: (event: ModelResponseEvent) => void | Promise<void>;
-  sessionA2ui?: (event: SessionA2uiEvent) => void | Promise<void>;
   stageFinish?: (event: StageFinishEvent) => void | Promise<void>;
   finalResult?: (event: FinalResultEvent) => void | Promise<void>;
   reset?: () => void;
@@ -95,6 +85,5 @@ const _fanOut = async <T,>(
 export const pushRequest = (event: PushRequestEvent) => _fanOut("pushRequest", event);
 export const toolCall = (event: ToolCallEvent) => _fanOut("toolCall", event);
 export const modelResponse = (event: ModelResponseEvent) => _fanOut("modelResponse", event);
-export const sessionA2ui = (event: SessionA2uiEvent) => _fanOut("sessionA2ui", event);
 export const stageFinish = (event: StageFinishEvent) => _fanOut("stageFinish", event);
 export const finalResult = (event: FinalResultEvent) => _fanOut("finalResult", event);

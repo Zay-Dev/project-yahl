@@ -26,8 +26,8 @@ describe("parseYahlDocument", () => {
     const text = readFileSync(testSkillPath, "utf-8");
     const doc = parseYahlDocument(text);
 
-    assert.equal(doc.name, "test");
-    assert.equal(doc.stages.length, 8);
+    assert.equal(doc.name, "test the syntax");
+    assert.equal(doc.stages.length, 7);
   });
 
   it("rejects contextMode and conditionMode together", () => {
@@ -90,7 +90,7 @@ describe("parseYahlFile", () => {
   it("compiles test stages with temperature and loop type", () => {
     const stages = parseYahlFile(readFileSync(testSkillPath, "utf-8"));
 
-    assert.equal(stages.length, 8);
+    assert.equal(stages.length, 7);
     assert.equal(stages[2]?.type, "loop");
     assert.equal(stages[2]?.temperature, 0.2);
     assert.equal(stages[0]?.produceContextKeys?.join(","), "a,b,c");

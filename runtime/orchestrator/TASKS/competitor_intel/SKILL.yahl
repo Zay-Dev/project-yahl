@@ -1,5 +1,5 @@
 name: competitor-intel
-description: Competitor intelligence brief with A2UI surfaces
+description: Competitor intelligence brief
 
 types: |
   type TIntelItem = {
@@ -135,11 +135,3 @@ stages:
           title: context.context.title,
         }
       }));
-
-  - logic: |
-      *aware_echo('I will call render_a2ui_plan multiple times with dataRef key result; no set_context');
-      *aware_echo('Surface ci-overview: ui_kind summary_card; bindings title /title, body /executive_summary_md, subtitle /generated_at');
-      *aware_echo('Surface ci-takeaways: ui_kind list_cards; bindings items /takeaways, item_title /text_zh');
-      *aware_echo('For each sections[i]: surface ci-section-<i>, ui_kind detail_card; bindings title /sections/<i>/heading, body /sections/<i>/body_md');
-      *aware_echo('Surface ci-intel-table: ui_kind table; bindings rows /raw_intel; column_bindings competitor, date, category, sentiment, summary_zh, and link Source with path /title, kind link, urlPath /source_url, labelPath /title');
-      /a2ui(result);

@@ -1,13 +1,11 @@
 import type OpenAI from "openai";
 
-import { parseA2uiPlanV1Detailed, type A2uiPlanParseIssueCode } from "./a2ui-plan";
 import {
   CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
   AskUserToolCallEnvelope,
   RagToolCallEnvelope,
   type ContextScope,
-  type RenderA2uiPlanToolCallEnvelope,
   type SetContextToolCallEnvelope,
 } from "./stage-contract";
 
@@ -44,27 +42,7 @@ export type ChatApiMessage =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 
-const isScope = (value: unknown): value is ContextScope =>
-  typeof value === "string" && CONTEXT_SCOPES.includes(value as ContextScope);
-
-const isSetOperation = (value: unknown): value is SetContextToolArguments["operation"] =>
-  typeof value === "string" &&
-  CONTEXT_SET_OPERATIONS.includes(value as SetContextToolArguments["operation"]);
-
 export type SetContextToolArguments = SetContextToolCallEnvelope["arguments"];
-export type RenderA2uiPlanToolArgumentsParseIssue = {
-  code: A2uiPlanParseIssueCode | "INVALID_JSON" | "INVALID_ROOT" | "INVALID_VERSION" | "INVALID_DATA_REF";
-  message: string;
-};
-
-export type RenderA2uiPlanToolArgumentsParseResult =
-  | { issue: RenderA2uiPlanToolArgumentsParseIssue; ok: false }
-  | { arguments: RenderA2uiPlanToolCallEnvelope["arguments"]; ok: true };
-
-const RENDER_A2UI_PLAN_MODES = ["append", "replace"] as const;
-type RenderA2uiPlanMode = (typeof RENDER_A2UI_PLAN_MODES)[number];
-const isRenderA2uiPlanMode = (value: unknown): value is RenderA2uiPlanMode =>
-  typeof value === "string" && RENDER_A2UI_PLAN_MODES.includes(value as RenderA2uiPlanMode);
 
 export const STAGE_TOOLS = [
   {
@@ -107,7 +85,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Run a single shell command inside the agent container. Use for listing files, reading paths under /opt/skills, etc. Do not use for persisting context. Do not use echo/printf to fake other API tools (e.g. render_a2ui_plan); call those tools by name instead.",
+        "Run a single shell command inside the agent container. Use for listing files, reading paths under /opt/skills, etc. Do not use for persisting context. Do not use echo/printf to fake other API tools; call those tools by name instead.",
       name: "run_bash",
       parameters: {
         properties: {
@@ -187,68 +165,7 @@ export const STAGE_TOOLS = [
     },
     type: "function" as const,
   },
-  {
-    function: {
-      description:
-        "Emit A2UI v0.8 surfaces from structured context data using a compact plan (bindings are JSON pointers). Invoke this function tool directly after canonical JSON exists at dataRef (e.g. via set_context or CONTEXT). Do not emit via run_bash or echo. Multiple successful calls are merged per surface and stored on the session at finalize. Does not duplicate large payloads.",
-      name: "render_a2ui_plan",
-      parameters: {
-        properties: {
-          dataRef: {
-            description: "Where the canonical JSON value lives (global=context bucket, stage=per-stage, types=types bucket).",
-            properties: {
-              key: { type: "string" },
-              scope: { enum: [...CONTEXT_SCOPES], type: "string" },
-            },
-            required: ["scope", "key"],
-            type: "object",
-          },
-          mode: {
-            description: "Optional merge mode. replace overwrites target surface; append keeps prior envelopes and adds new ones.",
-            enum: [...RENDER_A2UI_PLAN_MODES],
-            type: "string",
-          },
-          plan: {
-            description:
-              "a2uiPlan.v1: surfaceId, ui_kind (summary_card|metric_cards|list_cards|detail_card|table), bindings map of slot->JSON pointer, optional column_bindings for table, optional limits.maxItems.",
-            type: "object",
-          },
-          surfaceId: {
-            description: "Optional A2UI surface id; defaults to YAHL stage id when omitted.",
-            type: "string",
-          },
-          version: { enum: ["renderA2uiPlan.v1"], type: "string" },
-        },
-        required: ["version", "dataRef", "plan"],
-        type: "object",
-      },
-    },
-    type: "function" as const,
-  },
 ];
-
-export const parseSetContextToolArguments = (raw: string): SetContextToolArguments | null => {
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch {
-    return null;
-  }
-
-  if (!isRecord(parsed)) return null;
-  if (!isScope(parsed.scope)) return null;
-  if (parsed.operation !== undefined && !isSetOperation(parsed.operation)) return null;
-  if (typeof parsed.key !== "string") return null;
-  if (!parsed.key.trim()) return null;
-
-  return {
-    key: parsed.key,
-    operation: parsed.operation === undefined ? "set" : parsed.operation,
-    scope: parsed.scope,
-    value: parsed.value,
-  };
-};
 
 export const parseRagToolArguments = (raw: string): RagToolCallEnvelope["arguments"] | null => {
   let parsed: unknown;
@@ -331,109 +248,3 @@ export const parseAskUserToolArguments = (
     version: "askUser.v1",
   };
 };
-
-export const setContextArgumentsToEnvelope = (
-  arguments_: SetContextToolArguments,
-): SetContextToolCallEnvelope => ({
-  arguments: arguments_,
-  tool: "set_context",
-  type: "tool_call",
-});
-
-export const ragArgumentsToEnvelope = (
-  arguments_: RagToolCallEnvelope["arguments"],
-): RagToolCallEnvelope => ({
-  arguments: arguments_,
-  tool: "rag",
-  type: "tool_call",
-});
-
-export const askUserArgumentsToEnvelope = (
-  arguments_: AskUserToolCallEnvelope["arguments"],
-): AskUserToolCallEnvelope => ({
-  arguments: arguments_,
-  tool: "ask_user",
-  type: "tool_call",
-});
-
-export const parseRenderA2uiPlanToolArguments = (
-  raw: string,
-): RenderA2uiPlanToolCallEnvelope["arguments"] | null => {
-  const parsed = parseRenderA2uiPlanToolArgumentsDetailed(raw);
-  return parsed.ok ? parsed.arguments : null;
-};
-
-export const parseRenderA2uiPlanToolArgumentsDetailed = (
-  raw: string,
-): RenderA2uiPlanToolArgumentsParseResult => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch {
-    return {
-      issue: { code: "INVALID_JSON", message: "arguments must be valid JSON" },
-      ok: false,
-    };
-  }
-  if (!isRecord(parsed)) {
-    return {
-      issue: { code: "INVALID_ROOT", message: "arguments must be an object" },
-      ok: false,
-    };
-  }
-  if (parsed.version !== "renderA2uiPlan.v1") {
-    return {
-      issue: { code: "INVALID_VERSION", message: "version must be renderA2uiPlan.v1" },
-      ok: false,
-    };
-  }
-  const planParsed = parseA2uiPlanV1Detailed(parsed.plan);
-  if (!planParsed.ok) {
-    return {
-      issue: { code: planParsed.issueCode, message: planParsed.message },
-      ok: false,
-    };
-  }
-  const dr = parsed.dataRef;
-  if (!isRecord(dr) || !isScope(dr.scope) || typeof dr.key !== "string" || !dr.key.trim()) {
-    return {
-      issue: {
-        code: "INVALID_DATA_REF",
-        message: "dataRef requires valid scope and non-empty key",
-      },
-      ok: false,
-    };
-  }
-  const modeRaw = parsed.mode;
-  const modeCandidate = modeRaw === undefined || modeRaw === null ? "replace" : modeRaw;
-  if (!isRenderA2uiPlanMode(modeCandidate)) {
-    return {
-      issue: {
-        code: "INVALID_ROOT",
-        message: "mode must be append or replace",
-      },
-      ok: false,
-    };
-  }
-
-  const mode = modeCandidate;
-
-  return {
-    arguments: {
-      dataRef: { key: dr.key.trim(), scope: dr.scope },
-      mode,
-      plan: planParsed.plan,
-      surfaceId: typeof parsed.surfaceId === "string" ? parsed.surfaceId.trim() : undefined,
-      version: "renderA2uiPlan.v1",
-    },
-    ok: true,
-  };
-};
-
-export const renderA2uiPlanArgumentsToEnvelope = (
-  arguments_: RenderA2uiPlanToolCallEnvelope["arguments"],
-): RenderA2uiPlanToolCallEnvelope => ({
-  arguments: arguments_,
-  tool: "render_a2ui_plan",
-  type: "tool_call",
-});

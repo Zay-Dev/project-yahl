@@ -1,4 +1,3 @@
-import { parseA2uiPlanV1, type A2uiPlanV1 } from "./a2ui-plan";
 import type { YahlStage } from "./yahl-stage";
 
 export const CONTEXT_SCOPES = ["global", "types"] as const;
@@ -74,25 +73,9 @@ export type AskUserToolCallEnvelope = {
   type: "tool_call";
 };
 
-export type RenderA2uiPlanToolCallEnvelope = {
-  arguments: {
-    dataRef: {
-      key: string;
-      scope: ContextScope;
-    };
-    mode: "append" | "replace";
-    plan: A2uiPlanV1;
-    surfaceId?: string;
-    version: "renderA2uiPlan.v1";
-  };
-  tool: "render_a2ui_plan";
-  type: "tool_call";
-};
-
 export type StageToolCallEnvelope = SetContextToolCallEnvelope |
   RagToolCallEnvelope |
-  AskUserToolCallEnvelope |
-  RenderA2uiPlanToolCallEnvelope;
+  AskUserToolCallEnvelope;
 
 export type StageEnvelope = StageResultEnvelope |
   StageToolCallEnvelope[] |
@@ -107,9 +90,6 @@ const isScope = (value: unknown): value is ContextScope =>
 const isSetOperation = (value: unknown): value is ContextSetOperation =>
   typeof value === "string" &&
   CONTEXT_SET_OPERATIONS.includes(value as ContextSetOperation);
-
-const isRenderMode = (value: unknown): value is RenderA2uiPlanToolCallEnvelope["arguments"]["mode"] =>
-  value === "append" || value === "replace";
 
 const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
   if (!isRecord(item)) return null;
@@ -152,34 +132,6 @@ const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
       tool: "ask_user",
       type: "tool_call",
     };
-  }
-
-  if (item.tool === "render_a2ui_plan" && parsedArgs.version === "renderA2uiPlan.v1") {
-    const dr = parsedArgs.dataRef;
-    const planParsed = parseA2uiPlanV1(parsedArgs.plan);
-    const mode = parsedArgs.mode;
-    const parsedMode = mode === undefined ? "replace" : mode;
-    if (
-      isRecord(dr) &&
-      isScope(dr.scope) &&
-      typeof dr.key === "string" &&
-      dr.key.trim() &&
-      planParsed &&
-      isRenderMode(parsedMode)
-    ) {
-      return {
-        arguments: {
-          dataRef: { key: dr.key.trim(), scope: dr.scope },
-          mode: parsedMode,
-          plan: planParsed,
-          surfaceId: typeof parsedArgs.surfaceId === "string" ? parsedArgs.surfaceId.trim() : undefined,
-          version: "renderA2uiPlan.v1",
-        },
-        tool: "render_a2ui_plan",
-        type: "tool_call",
-      };
-    }
-    return null;
   }
 
   if (

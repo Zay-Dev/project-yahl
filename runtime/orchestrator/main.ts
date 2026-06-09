@@ -26,8 +26,6 @@ import { workspacePath } from "./paths";
 import { getStagesBaseLineInFile } from "./stage-parse";
 import { resolveReportPromptPath } from "./task-resolve";
 import { parseYahlFile } from "./yahl-parse";
-import { createSessionA2uiState, flattenSessionA2ui, mergeSessionA2uiSurface } from "./-utils/a2ui-session-merge";
-
 type AskUserResumePayloadV1 = {
   currentStageText: string;
   questionId: string;
@@ -69,9 +67,6 @@ const _createStepTracker = async (
 
   return tracker;
 };
-
-const MAX_A2UI_ENVELOPES_PER_SURFACE = 2000;
-const MAX_A2UI_ENVELOPES_TOTAL = 8000;
 
 export const main = async (cli: CliOptions) => {
   const startTime = process.hrtime.bigint();
@@ -163,33 +158,10 @@ export const main = async (cli: CliOptions) => {
   const stepTracker = await _createStepTracker(sessionId, cli.taskId, reportPath, cli.resume);
   let finalResult: unknown;
   const parsedStages: ParsedStage[] = [];
-  const sessionA2uiState = createSessionA2uiState();
 
   agentTrackers.add(sessionTracker);
   agentTrackers.add(createConsoleTracker());
   agentTrackers.add(stepTracker);
-  agentTrackers.add({
-    sessionA2ui: (event) => {
-      const envelopes = Array.isArray(event.envelopes) ? event.envelopes : [];
-      if (!envelopes.length) return;
-      const result = mergeSessionA2uiSurface(sessionA2uiState, {
-        envelopes,
-        maxPerSurface: MAX_A2UI_ENVELOPES_PER_SURFACE,
-        mode: event.mode,
-        surfaceId: event.surfaceId,
-      });
-      if (result.truncated) {
-        process.stderr.write(
-          `[render_a2ui_plan] capped envelopes for surfaceId=${event.surfaceId} ` +
-            `at ${MAX_A2UI_ENVELOPES_PER_SURFACE}\n`,
-        );
-      }
-      process.stdout.write(
-        `[render_a2ui_plan] mode=${event.mode} surfaceId=${event.surfaceId} ` +
-          `prev=${result.prevCount} next=${result.nextCount}\n`,
-      );
-    },
-  });
 
   await fs.mkdir(workspacePath, {
     recursive: true,
@@ -320,15 +292,8 @@ export const main = async (cli: CliOptions) => {
   } catch (ex) {
     console.error(ex);
   } finally {
-    const flattenedSessionA2ui = flattenSessionA2ui(sessionA2uiState, MAX_A2UI_ENVELOPES_TOTAL);
-    if (flattenedSessionA2ui.truncated) {
-      process.stderr.write(
-        `[render_a2ui_plan] capped total session envelopes at ${MAX_A2UI_ENVELOPES_TOTAL}\n`,
-      );
-    }
     await agentTrackers.finalResult({
       result: finalResult,
-      resultA2ui: flattenedSessionA2ui.envelopes.length ? flattenedSessionA2ui.envelopes : undefined,
       sessionId,
       stages: parsedStages,
     });

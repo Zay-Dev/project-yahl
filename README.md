@@ -48,7 +48,6 @@ Stuff to build:
 - More granular per-line or per-step error visibility.
 - Full input/output logs per stage (so debugging is less detective work, more replay button).
 - OneCLI integration for safer secret handling (ongoing polish, fewer paper cuts).
-- Extend A2UI beyond current `ask-user` multiple-choice flow (richer approvals, clarifications, and multi-step interactions).
 - Friendlier UI polish around authoring and inspecting YAHL scripts.
 
 ## Some catchy syntax
