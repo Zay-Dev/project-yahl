@@ -84,7 +84,10 @@ export function SessionDetailPage() {
             question={activeQuestion}
             sessionId={session.sessionId}
           />
-          <SessionResult result={session.result} />
+          <SessionResult
+            result={session.result}
+            resultContextKey={session.resultContextKey}
+          />
           <SessionTimeline
             error={stagesError}
             isLoading={stagesLoading}

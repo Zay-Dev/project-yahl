@@ -16,6 +16,7 @@ export type TResponseGetSession = {
   forkedFrom?: TSessionForkedFrom;
   parsedStages?: TParsedStage[];
   result?: unknown;
+  resultContextKey?: string;
   sessionId: string;
   taskId?: string;
   taskYahlPath?: string;
@@ -128,6 +129,7 @@ export type TResponseGetForkSession = {
   anchorStageId: string;
   forkSessionId: string;
   parsedStages?: TParsedStage[];
+  resultContextKey?: string;
   setups: TForkSessionStageSetup[];
   sourceSessionId: string;
   targetSessionId: string;

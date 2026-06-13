@@ -11,9 +11,10 @@ import { buildAgent } from './-docker';
 import { program, resolveSessionId, runCommand } from './-commander';
 import { composeDown, composeUp, writeSharedOneCliOverride } from "./compose-onecli";
 
-import { resolveStagesFromText } from './yahl-parse';
 import { deriveTaskNameFromYahl } from './derive-task-id';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
+import { publishSessionResult } from './session-result';
+import { parseYahlTask } from './yahl-parse';
 
 import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
@@ -88,16 +89,19 @@ runCommand.action(async options => {
     if (options.taskPath) {
       const taskYahlPath = await resolveTaskPath(options.taskPath);
       const yahl = await fs.readFile(taskYahlPath, 'utf-8');
-      const parsedStages = resolveStagesFromText(yahl);
+      const { stages, resultContextKey } = parseYahlTask(yahl);
       const taskId = options.taskId ?? deriveTaskNameFromYahl(yahl, taskYahlPath);
 
       await tracker.registerSession(sessionId, {
-        parsedStages,
+        parsedStages: stages,
+        resultContextKey,
         taskId,
         taskYahlPath,
       });
 
-      await runYahl(yahl, { stages: parsedStages });
+      const { storage } = await runYahl(yahl, { stages });
+
+      await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.forkrunId) {
       const forkManager = await initForkSessionManager(options.forkrunId);
       globalThis.forkSessionManager = forkManager;
@@ -108,9 +112,13 @@ runCommand.action(async options => {
         );
       }
 
-      await runForkSession(options.forkrunId, forkManager);
+      const { storage } = await runForkSession(options.forkrunId, forkManager);
+
+      await publishSessionResult(sessionId, forkManager.resultContextKey, storage);
     } else if (options.resumeId) {
-      await runAskUserResume(sessionId, options.resumeId);
+      const { resultContextKey, storage } = await runAskUserResume(sessionId, options.resumeId);
+
+      await publishSessionResult(sessionId, resultContextKey, storage);
     } else {
       throw new Error('No task path, resume id, or forkrun id provided');
     }

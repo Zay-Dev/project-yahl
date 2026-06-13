@@ -45,6 +45,7 @@ const toResponse = (
   forkedFrom: session.forkedFrom,
   parsedStages: session.parsedStages,
   result: session.result,
+  resultContextKey: session.resultContextKey,
   sessionId: session.sessionId,
   taskId: session.taskId,
   taskYahlPath: session.taskYahlPath,

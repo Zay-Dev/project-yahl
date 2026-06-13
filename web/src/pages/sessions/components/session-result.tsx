@@ -10,6 +10,7 @@ import {
 
 type TSessionResultProps = {
   result: unknown;
+  resultContextKey?: string;
 };
 
 const MarkdownBlock = ({ content }: { content: string }) => (
@@ -148,7 +149,19 @@ const StructuredResult = ({ record }: { record: Record<string, unknown> }) => {
   );
 };
 
-export function SessionResult({ result }: TSessionResultProps) {
+export function SessionResult({ result, resultContextKey }: TSessionResultProps) {
+  if (!resultContextKey) {
+    return (
+      <div className="rounded-xl bg-muted/50 p-4">
+        <p className="text-sm text-muted-foreground">Task result</p>
+        <p className="mt-2 text-sm">
+          This task has no <code className="text-xs">resultContextKey</code>; no session result is
+          configured.
+        </p>
+      </div>
+    );
+  }
+
   if (result === null || result === undefined) {
     return (
       <div className="rounded-xl bg-muted/50 p-4">

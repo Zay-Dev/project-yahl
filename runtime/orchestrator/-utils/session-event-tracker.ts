@@ -77,7 +77,12 @@ export const createSessionEventTracker = () => {
 
   const registerSession = async (
     sessionId: string,
-    opts: { parsedStages?: ParsedStage[]; taskId: string; taskYahlPath: string },
+    opts: {
+      parsedStages?: ParsedStage[];
+      resultContextKey?: string;
+      taskId: string;
+      taskYahlPath: string;
+    },
   ) => {
     if (!baseUrl) return;
 
@@ -87,6 +92,7 @@ export const createSessionEventTracker = () => {
       parsedStages: opts.parsedStages ?? [],
       taskId: opts.taskId,
       taskYahlPath: opts.taskYahlPath,
+      ...(opts.resultContextKey ? { resultContextKey: opts.resultContextKey } : {}),
     });
   };
 
@@ -158,7 +164,7 @@ export const createSessionEventTracker = () => {
       const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}`;
 
       await _patch(url, {
-        ...(body.result !== undefined ? { result: body.result } : {}),
+        ...('result' in body ? { result: body.result } : {}),
       });
     });
   };

@@ -84,6 +84,7 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
   forkedFrom?: TSessionForkedFrom;
   parsedStages?: TParsedStage[];
+  resultContextKey?: string;
   sessionId: string;
   result?: unknown;
   taskId?: string;

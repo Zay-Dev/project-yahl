@@ -2,7 +2,7 @@ import type { TRunYahl } from './-types';
 
 import { toAgentStage } from '@/shared/yahl-stage';
 
-import { resolveStagesFromText } from '@/orchestrator/yahl-parse';
+import { parseYahlFile } from '@/orchestrator/yahl-parse';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/stage-parse';
@@ -24,7 +24,7 @@ export const runYahl: TRunYahl = async (
 ) => {
   const storage = useStorage();
   const startIndex = options?.startFromStageIndex ?? 0;
-  const stages = options?.stages ?? resolveStagesFromText(yahl);
+  const stages = options?.stages ?? parseYahlFile(yahl);
 
   const sessionId = globalThis.sessionId;
   const agentName = `agent-${sessionId}`;
@@ -32,23 +32,31 @@ export const runYahl: TRunYahl = async (
   for (let stageIndex = startIndex; stageIndex < stages.length; stageIndex += 1) {
     const stage = stages[stageIndex]!;
 
+    const pipelineStageIndex = options?.pipelineStageIndex != null
+      ? options.pipelineStageIndex + (stageIndex - startIndex)
+      : stageIndex;
+
+    const isResumingThisStage = Boolean(
+      options?.resumeStage && stageIndex === startIndex,
+    );
+
     const temperature = resolveEffectiveStageTemperature(stage, {
       loopMeta: options?.loopMeta,
       temperature: options?.temperature,
     });
 
-    if (stage.type === 'loop' && !options?.contextAfter && !options?.resumeStage) {
+    if (stage.type === 'loop' && !options?.contextAfter && !isResumingThisStage) {
       await handleLoop(
         stage,
         storage,
         runYahl,
         temperature,
-        options?.pipelineStageIndex ?? stageIndex,
+        pipelineStageIndex,
       );
       continue;
     }
 
-    const resumeStage = options?.resumeStage && stageIndex === startIndex
+    const resumeStage = isResumingThisStage
       ? options.resumeStage
       : undefined;
 
@@ -119,7 +127,7 @@ export const runYahl: TRunYahl = async (
 
             ...(options?.forkSetupIndex != null
               ? {}
-              : { stageIndex: options?.pipelineStageIndex ?? stageIndex }),
+              : { stageIndex: pipelineStageIndex }),
           });
         }
       } catch (error) {

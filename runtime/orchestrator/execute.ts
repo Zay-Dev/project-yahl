@@ -30,7 +30,7 @@ import {
   stripLeadingTemperature,
   toStableHash,
 } from "./stage-parse";
-import { compileStageLines, resolveStagesFromText } from "./yahl-parse";
+import { compileStageLines, parseYahlFile } from "./yahl-parse";
 
 import {
   createRuntimeContext,
@@ -349,7 +349,7 @@ const _execute = async (
   resumeHydrate?: StageContextPayload | null,
   stagesOverride?: ParsedStage[],
 ) => {
-  const stages = (stagesOverride ?? resolveStagesFromText(text))
+  const stages = (stagesOverride ?? parseYahlFile(text))
     .filter((stage) => stage.lines !== "}");
 
   if (stages.length <= 0) {

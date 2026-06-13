@@ -31,6 +31,7 @@ export const getForkSession = [
         forkSessionId: forkSession.forkSessionId,
         parsedStages: targetSession.parsedStages,
         setups: forkSession.setups,
+        resultContextKey: targetSession.resultContextKey ?? sourceSession.resultContextKey,
         sourceSessionId: forkSession.sourceSessionId,
         targetSessionId: forkSession.targetSessionId,
         taskYahlPath: sourceSession.taskYahlPath,

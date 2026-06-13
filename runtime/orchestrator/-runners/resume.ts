@@ -25,6 +25,39 @@ export const resolveForkSuffixFromSetupIndex = (forkSetupIndex?: number) => (
   (forkSetupIndex ?? 0) + 1
 );
 
+export const resolveResumeStartIndex = (
+  checkpoint: Pick<
+    Awaited<ReturnType<typeof fetchAskUserCheckpoint>>,
+    'parsedStageSnapshot' | 'stageIndex'
+  >,
+  yahlStages: ParsedStage[],
+) => {
+  if (checkpoint.stageIndex != null) {
+    return checkpoint.stageIndex;
+  }
+
+  if (checkpoint.parsedStageSnapshot) {
+    const match = yahlStages.findIndex((stage) =>
+      stage.sourceStartLine === checkpoint.parsedStageSnapshot?.sourceStartLine
+      && stage.lines === checkpoint.parsedStageSnapshot?.lines);
+
+    if (match >= 0) {
+      return match;
+    }
+  }
+
+  throw new Error('resume: missing stageIndex for non-fork resume');
+};
+
+export const buildResumePipelineStages = (
+  startIndex: number,
+  yahlStages: ParsedStage[],
+  resumedStage: ParsedStage,
+) => [
+  resumedStage,
+  ...yahlStages.slice(startIndex + 1),
+];
+
 const _deserializeStorage = (snapshot: Record<string, unknown>): TStorage => {
   const context = snapshot.context;
   const types = snapshot.types;
@@ -187,29 +220,31 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
     await runForkSetups(manager, storage, {
       fromSetupIndex: resolveForkSuffixFromSetupIndex(checkpoint.forkSetupIndex),
     });
+  } else {
+    const startIndex = resolveResumeStartIndex(checkpoint, yahlStages);
 
-    return;
+    if (startIndex < 0 || startIndex >= yahlStages.length) {
+      throw new Error(`resume: invalid stageIndex ${startIndex}`);
+    }
+
+    const pipelineStages = buildResumePipelineStages(startIndex, yahlStages, resumedStage);
+
+    await runYahl('', {
+      pipelineStageIndex: startIndex,
+      resumeStage: {
+        loopMeta: checkpoint.loopMeta as TLoopMeta | undefined,
+        requestId: checkpoint.requestId,
+        resumeFrom,
+        stage: resumedStage,
+      },
+      stages: pipelineStages,
+      startFromStageIndex: 0,
+      useStorage: () => storage,
+    });
   }
 
-  const startIndex = checkpoint.stageIndex;
-
-  if (startIndex == null) {
-    throw new Error('resume: missing stageIndex for non-fork resume');
-  }
-
-  if (startIndex < 0 || startIndex >= yahlStages.length) {
-    throw new Error(`resume: invalid stageIndex ${startIndex}`);
-  }
-
-  await runYahl('', {
-    resumeStage: {
-      loopMeta: checkpoint.loopMeta as TLoopMeta | undefined,
-      requestId: checkpoint.requestId,
-      resumeFrom,
-      stage: resumedStage,
-    },
-    stages: yahlStages,
-    startFromStageIndex: startIndex,
-    useStorage: () => storage,
-  });
+  return {
+    resultContextKey: session.resultContextKey,
+    storage,
+  };
 };

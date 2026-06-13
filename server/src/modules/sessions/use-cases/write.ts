@@ -14,6 +14,7 @@ export type TRequestRegisterSessionParams = {
 
 export type TRequestRegisterSessionBody = {
   parsedStages: TParsedStage[];
+  resultContextKey?: string;
   taskId: string;
   taskYahlPath: string;
 };
@@ -36,6 +37,7 @@ const patchBodySchema = Joi.object<TRequestPatchSessionBody>({
 
 const bodySchema = Joi.object<TRequestRegisterSessionBody>({
   parsedStages: Joi.array().items(parsedStageSchema).min(1).required(),
+  resultContextKey: Joi.string().trim().optional(),
   taskId: Joi.string().trim().required(),
   taskYahlPath: Joi.string().trim().required(),
 });
@@ -61,6 +63,7 @@ export const registerSession = [
             taskId: body.taskId,
             taskYahlPath: body.taskYahlPath,
             updatedAt: now,
+            ...(body.resultContextKey ? { resultContextKey: body.resultContextKey } : {}),
           },
           $setOnInsert: {
             sessionId: params.sessionId,
@@ -92,7 +95,7 @@ export const patchSession = [
         { sessionId: params.sessionId },
         {
           $set: {
-            ...(body.result !== undefined ? { result: body.result } : {}),
+            ...('result' in body ? { result: body.result } : {}),
             updatedAt: now,
           },
         },

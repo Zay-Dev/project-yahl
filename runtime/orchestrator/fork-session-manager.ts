@@ -36,6 +36,7 @@ export type TForkSessionResponse = {
   anchorStageId: string;
   forkSessionId: string;
   parsedStages?: ParsedStage[];
+  resultContextKey?: string;
   setups: TForkSessionSetup[];
   sourceSessionId: string;
   targetSessionId: string;
@@ -104,6 +105,10 @@ export class ForkSessionManager {
 
   get sourceSessionId() {
     return this.forkSession.sourceSessionId;
+  }
+
+  get resultContextKey() {
+    return this.forkSession.resultContextKey;
   }
 
   get taskYahlPath() {

@@ -1,5 +1,6 @@
 name: test the syntax
 description: Testing
+resultContextKey: result
 
 stages:
   - contextMode: true

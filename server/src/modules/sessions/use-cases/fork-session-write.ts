@@ -141,6 +141,9 @@ export const createForkSession = [
               || deriveTaskIdFromYahlPath(sourceSession.taskYahlPath ?? ''),
             taskYahlPath: sourceSession.taskYahlPath ?? '',
             updatedAt: now,
+            ...(sourceSession.resultContextKey
+              ? { resultContextKey: sourceSession.resultContextKey }
+              : {}),
           },
           $setOnInsert: {
             sessionId: targetSessionId,

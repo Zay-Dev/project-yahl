@@ -11,6 +11,7 @@ import {
   compileStageLines,
   parseYahlDocument,
   parseYahlFile,
+  parseYahlTask,
   toLoopIterationStage,
 } from "./yahl-parse";
 
@@ -27,6 +28,7 @@ describe("parseYahlDocument", () => {
     const doc = parseYahlDocument(text);
 
     assert.equal(doc.name, "test the syntax");
+    assert.equal(doc.resultContextKey, "result");
     assert.equal(doc.stages.length, 7);
   });
 
@@ -43,6 +45,41 @@ stages:
       END:
 `);
     }, /mutually exclusive/);
+  });
+
+  it("parses optional resultContextKey", () => {
+    const doc = parseYahlDocument(`
+name: x
+description: y
+resultContextKey: result
+stages:
+  - logic: "x = 1;"
+`);
+
+    assert.equal(doc.resultContextKey, "result");
+  });
+
+  it("omits resultContextKey when absent", () => {
+    const doc = parseYahlDocument(`
+name: x
+description: y
+stages:
+  - logic: "x = 1;"
+`);
+
+    assert.equal(doc.resultContextKey, undefined);
+  });
+
+  it("rejects empty resultContextKey", () => {
+    assert.throws(() => {
+      parseYahlDocument(`
+name: x
+description: y
+resultContextKey: "   "
+stages:
+  - logic: "x = 1;"
+`);
+    }, /resultContextKey/);
   });
 
   it("rejects conditionMode and loopSetup together", () => {
@@ -83,6 +120,17 @@ describe("compileStageLines", () => {
     });
 
     assert.match(lines, /^for each i of \[1..5\] CONTEXT:/);
+  });
+});
+
+describe("parseYahlTask", () => {
+  it("returns stages and resultContextKey from test SKILL.yahl", () => {
+    const text = readFileSync(testSkillPath, "utf-8");
+    const { resultContextKey, stages } = parseYahlTask(text);
+
+    assert.equal(resultContextKey, "result");
+    assert.equal(stages.length, 7);
+    assert.equal(stages[2]?.type, "loop");
   });
 });
 

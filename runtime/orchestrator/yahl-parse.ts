@@ -136,8 +136,7 @@ export const parseYahlDocument = (text: string): YahlDocument => {
   return validateYahlDocument(parsed);
 };
 
-export const parseYahlFile = (text: string): ParsedStage[] => {
-  const document = parseYahlDocument(text);
+const buildStagesFromDocument = (document: YahlDocument, text: string): ParsedStage[] => {
   const stages: ParsedStage[] = [];
 
   if (document.types) {
@@ -156,6 +155,18 @@ export const parseYahlFile = (text: string): ParsedStage[] => {
   });
 
   return stages;
+};
+
+export const parseYahlFile = (text: string): ParsedStage[] =>
+  buildStagesFromDocument(parseYahlDocument(text), text);
+
+export const parseYahlTask = (text: string) => {
+  const document = parseYahlDocument(text);
+
+  return {
+    resultContextKey: document.resultContextKey,
+    stages: buildStagesFromDocument(document, text),
+  };
 };
 
 const findTypesSourceLine = (fileText: string) => {
@@ -192,36 +203,3 @@ export const isYahlDocument = (text: string) => {
   }
 };
 
-export const resolveStagesFromText = (text: string): ParsedStage[] => {
-  if (isYahlDocument(text)) {
-    return parseYahlFile(text);
-  }
-
-  const stripped = text
-    .replace(/^```ai\.logic\n/, "")
-    .replace(/\n```\s*$/, "")
-    .trim();
-
-  if (!stripped) {
-    return [];
-  }
-
-  const loopHeaderMatch = stripped.match(/^(\s*for each\s+\w+\s+of\s+\[.*?\])\s*/i);
-  const isLoop =
-    !!loopHeaderMatch &&
-    !!["{", "}"].find((char) => stripped.trim().endsWith(char));
-
-  const spec: YahlStage = isLoop && loopHeaderMatch
-    ? {
-      logic: stripped.slice(loopHeaderMatch[0].length).trim(),
-      loopSetup: loopHeaderMatch[1].trim(),
-    }
-    : { logic: stripped };
-
-  return [{
-    lines: stripped,
-    sourceStartLine: 1,
-    spec,
-    type: isLoop ? "loop" : "plain",
-  }];
-};
