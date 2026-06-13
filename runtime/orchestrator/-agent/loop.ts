@@ -100,18 +100,14 @@ export const runLoopIteration = async (
   }
 
   const resolvedLoopMeta = { ...loopMeta, indexName };
-  const lines = stage.lines;
-  const firstLine = lines.split("\n")[0] ?? "";
-  const mode = firstLine.match(/\s+[A-Z_]+:\s*{/)?.[0]?.replace("{", "") || "";
-  const body = lines.substring(lines.indexOf("{"));
-  const compiledBody = mode ? `${mode} ${body}` : body;
 
-  const isExtends = (key: string) => lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`));
+  const isExtends = (key: string) =>
+    stage.lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`));
 
   const stageInput = Object
     .entries({
       ...filterLoopBucket(
-        compiledBody,
+        stage.spec.logic,
         Object.fromEntries(storage.context),
         stage,
         resolvedLoopMeta.indexName,
@@ -135,7 +131,7 @@ export const runLoopIteration = async (
         temperature: resolvedLoopMeta.temperature,
         value: resolvedLoopMeta.value,
       },
-      stages: [toLoopIterationStage(stage, compiledBody)],
+      stages: [toLoopIterationStage(stage, stage.spec.logic)],
       temperature,
       ...(pipelineStageIndex === undefined ? {} : { pipelineStageIndex }),
       useStorage: () => ({
