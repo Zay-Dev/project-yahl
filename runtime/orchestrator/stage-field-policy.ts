@@ -8,7 +8,7 @@ import {
 } from "./context-filter";
 import { setContext } from "./-tools/set_context";
 
-import type { ParsedStage, StageLoopMeta } from "./orchestrator-types";
+import type { ParsedStage } from "./orchestrator-types";
 
 export { pickContextUpdates };
 
@@ -190,22 +190,4 @@ export const applySetContextToolCall = async (
   }
 
   return applied;
-};
-
-export const filterStageContextPayload = (
-  stageText: string,
-  context: Record<string, unknown>,
-  stage: Record<string, unknown>,
-  types: Record<string, unknown>,
-  parsedStage: ParsedStage,
-  loopMeta?: StageLoopMeta,
-) => {
-  const loopIndex = loopMeta?.indexName
-    ?? (loopMeta ? loopIndexNameFromLines(parsedStage.lines) : undefined);
-
-  return {
-    context: filterStageBucket(stageText, context, parsedStage, loopIndex),
-    stage: filterStageBucket(stageText, stage, parsedStage, loopIndex),
-    types: filterStageBucket(stageText, types, parsedStage, loopIndex),
-  };
 };
