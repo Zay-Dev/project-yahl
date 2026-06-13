@@ -7,18 +7,16 @@ import Redis from "ioredis";
 
 import { RedisPublisher } from '@/shared/transports/redis';
 
-import { buildAgent } from './-docker';
-import { program, resolveSessionId, runCommand } from './-commander';
-import { composeDown, composeUp, writeSharedOneCliOverride } from "./compose-onecli";
+import { buildAgent, composeDown, composeUp, writeSharedOneCliOverride } from './-docker';
+import { program, resolveSessionId, runCommand } from './-cli';
 
-import { deriveTaskNameFromYahl } from './derive-task-id';
+import { deriveTaskNameFromYahl, parseYahlTask } from './-utils/yahl';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
-import { publishSessionResult } from './session-result';
-import { parseYahlTask } from './yahl-parse';
+import { publishSessionResult } from './-utils/session-result';
 
 import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
-import { initForkSessionManager } from './fork-session-manager';
+import { initForkSessionManager } from './-runners/fork-session-manager';
 
 import { runForkSession } from './-runners/fork';
 import { runAskUserResume } from './-runners/resume';

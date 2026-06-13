@@ -1,7 +1,7 @@
-import type { YahlStage } from "../shared/yahl-stage";
-import { validateYahlStage } from "../shared/yahl-stage";
+import type { YahlStage } from "@/shared/yahl-stage";
+import { validateYahlStage } from "@/shared/yahl-stage";
 
-export type { YahlStage } from "../shared/yahl-stage";
+export type { YahlStage } from "@/shared/yahl-stage";
 
 export interface YahlDocument {
   description: string;

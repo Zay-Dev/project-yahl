@@ -1,4 +1,4 @@
-import type { ForkSessionManager } from '@/orchestrator/fork-session-manager';
+import type { ForkSessionManager } from '@/orchestrator/-runners/fork-session-manager';
 import type { TStorage } from '@/shared/transports/-types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
@@ -8,9 +8,9 @@ import {
   resetAskUserStageForRerun,
   stripAskUserAnswersFromContext,
 } from '@/orchestrator/-ask-user';
-import { mergeContextPayloadToStorage } from '@/orchestrator/storage-context';
-import { resolveEffectiveStageTemperature } from '@/orchestrator/stage-parse';
-import { compileStage } from '@/orchestrator/yahl-parse';
+import { mergeContextPayloadToStorage } from '@/orchestrator/-context';
+import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
+import { compileStage } from '@/orchestrator/-utils/yahl';
 
 const _parsedStage = (stage: YahlStage) => compileStage(stage, 1);
 

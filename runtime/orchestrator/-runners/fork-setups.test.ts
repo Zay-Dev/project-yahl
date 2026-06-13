@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { resetAskUserStageForRerun } from '@/orchestrator/-ask-user';
-import { compileStage } from '@/orchestrator/yahl-parse';
+import { compileStage } from '@/orchestrator/-utils/yahl';
 
 describe('fork-setups edited stage path', () => {
   it('compiles heavily edited fork stage without parsedStages fingerprint', () => {

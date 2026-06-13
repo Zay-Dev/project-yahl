@@ -1,4 +1,4 @@
-import { isYahlDocument, parseYahlDocument } from './yahl-parse';
+import { isYahlDocument, parseYahlDocument } from './parse';
 
 export const deriveTaskIdFromYahlPath = (taskYahlPath: string) => {
   const normalized = taskYahlPath.replace(/\\/g, '/').trim();

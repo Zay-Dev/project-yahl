@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 import { buildAskUserContinuation } from '@/orchestrator/-ask-user';
 import { parsedStageFromSnapshot } from '@/orchestrator/-ask-user/parsed-stage-snapshot';
-import { compileStage } from '@/orchestrator/yahl-parse';
+import { compileStage } from '@/orchestrator/-utils/yahl';
 
 const yahlStages: ParsedStage[] = [
   { lines: '{\na = 1;\n}', sourceStartLine: 1, spec: { logic: 'a = 1;' }, type: 'plain' },

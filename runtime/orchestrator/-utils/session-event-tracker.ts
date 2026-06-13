@@ -1,5 +1,5 @@
 import type { TModelResponse } from '@/shared/transports/-types';
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 type TPushRequestEnvelope = {

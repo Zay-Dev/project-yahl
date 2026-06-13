@@ -1,4 +1,4 @@
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 export type TParsedStageSnapshot = {
   lines: string;

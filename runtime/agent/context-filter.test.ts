@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { filterContextByReadUsage } from "../orchestrator/context-filter";
+import { filterContextByReadUsage } from "../orchestrator/-context/context-filter";
 
 describe("filterContextByReadUsage", () => {
   it("includes keys that are read", () => {

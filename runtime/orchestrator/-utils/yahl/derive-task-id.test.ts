@@ -8,7 +8,7 @@ import { deriveTaskIdFromYahlPath, deriveTaskNameFromYahl } from './derive-task-
 
 const testSkillPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  'TASKS/test/SKILL.yahl',
+  '../../TASKS/test/SKILL.yahl',
 );
 
 describe('deriveTaskNameFromYahl', () => {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { normalizeUsage } from "../shared/usage";
+import { normalizeUsage } from "./usage";
 
 describe("normalizeUsage", () => {
   it("keeps reasoningTokens at 0 when reasoning metadata is missing", () => {

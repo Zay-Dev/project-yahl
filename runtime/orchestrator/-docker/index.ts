@@ -1,6 +1,8 @@
 import { execSync } from "child_process";
 
-import { composeFile, repoRoot } from "../paths";
+import { composeFile, repoRoot } from "./paths";
+
+export { composeDown, composeUp, writeSharedOneCliOverride } from './compose-onecli';
 
 export const buildAgent = () => {
   try {

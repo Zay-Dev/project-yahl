@@ -1,5 +1,5 @@
 import type { TStorage } from '@/shared/transports/-types';
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 type TStageLoopMeta = {
@@ -13,7 +13,7 @@ type TStageLoopMeta = {
   value: unknown;
 };
 
-import { storageFromSnapshot } from './storage-context';
+import { storageFromSnapshot } from '@/orchestrator/-context/storage-context';
 
 export type TReplayStageRow = {
   context: Record<string, unknown>;

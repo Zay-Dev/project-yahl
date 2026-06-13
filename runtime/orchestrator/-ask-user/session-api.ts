@@ -1,7 +1,7 @@
 import type { AskUserToolCallEnvelope } from '@/shared/stage-contract';
 
 import type { TParsedStageSnapshot } from './parsed-stage-snapshot';
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 const sessionApiBaseUrl = (process.env.SESSION_API_BASE_URL || 'http://localhost:4000').replace(/\/+$/, '');
 

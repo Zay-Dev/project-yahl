@@ -1,4 +1,4 @@
-import type { ParsedStage, StageLoopMeta } from "./orchestrator-types";
+import type { ParsedStage, StageLoopMeta } from "./types";
 
 const leadingTemperaturePattern = /^\s*@temperature\s*\(\s*([0-9]+(?:\.[0-9]+)?)\s*\)\s*/;
 

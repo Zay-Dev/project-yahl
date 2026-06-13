@@ -1,8 +1,8 @@
 import type { TChatToolCall, TLoopMeta, TStorage } from '@/shared/transports/-types';
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
-import { composeDown } from '@/orchestrator/compose-onecli';
+import { composeDown } from '@/orchestrator/-docker';
 import { parseAskUserToolArguments } from '@/shared/stage-tools';
 
 import { AskUserPausedError } from './errors';

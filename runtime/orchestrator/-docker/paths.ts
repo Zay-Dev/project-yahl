@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
-export const projectRoot = path.resolve(moduleDir, "..");
+export const projectRoot = path.resolve(moduleDir, "../..");
 
 const moduleRepoRoot = path.resolve(projectRoot, "..");
 

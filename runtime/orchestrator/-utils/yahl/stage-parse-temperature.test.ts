@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { compileStage } from "./yahl-parse";
+import { compileStage } from "./parse";
 import { resolveEffectiveStageTemperature, stripLeadingTemperature } from "./stage-parse";
 
 describe("stripLeadingTemperature", () => {

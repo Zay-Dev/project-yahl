@@ -1,5 +1,5 @@
 import type { TAskUserResumeFrom, TLoopMeta, TStorage } from '@/shared/transports/-types';
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 import { runYahl } from '@/orchestrator/-agent';
@@ -15,8 +15,8 @@ import {
 } from '@/orchestrator/-ask-user';
 import type { TStageDetailForResume } from '@/orchestrator/-ask-user/session-api';
 import { buildResumeFrom } from '@/orchestrator/-ask-user/resume-from';
-import { initForkSessionManager } from '@/orchestrator/fork-session-manager';
-import { compileStage } from '@/orchestrator/yahl-parse';
+import { initForkSessionManager } from '@/orchestrator/-runners/fork-session-manager';
+import { compileStage } from '@/orchestrator/-utils/yahl';
 import { isStageFinished } from '@/shared/stage-status';
 
 import { runForkSetups } from './fork-setups';

@@ -1,5 +1,5 @@
 import type { TAskUserResumeFrom, TStorage, TLoopMeta } from '@/shared/transports/-types';
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 export { TStorage, TLoopMeta };
 

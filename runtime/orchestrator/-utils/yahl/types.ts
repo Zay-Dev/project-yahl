@@ -1,4 +1,4 @@
-import type { YahlStage } from "../shared/yahl-stage";
+import type { YahlStage } from "@/shared/yahl-stage";
 
 export interface StageLoopMeta {
   arraySnapshot: unknown[];

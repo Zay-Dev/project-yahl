@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 
 import { createOneCliDashboardClient } from "./clients/api";
 
-import type { ComposeUpOptions } from "./orchestrator-types";
+import type { ComposeUpOptions } from '@/orchestrator/-utils/yahl/types';
 import {
   composeFile,
   onecliRuntimePath,

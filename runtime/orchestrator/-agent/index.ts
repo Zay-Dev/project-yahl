@@ -2,16 +2,16 @@ import type { TRunYahl } from './-types';
 
 import { toAgentStage } from '@/shared/yahl-stage';
 
-import { parseYahlFile } from '@/orchestrator/yahl-parse';
+import { parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 
-import { resolveEffectiveStageTemperature } from '@/orchestrator/stage-parse';
+import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
 
 import {
   applySetContextToolCall,
   filterStorageForStage,
-} from '@/orchestrator/stage-field-policy';
+} from '@/orchestrator/-context';
 
 import { handleLoop } from './loop';
 

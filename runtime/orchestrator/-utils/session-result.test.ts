@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 
 import { createStorage } from '@/orchestrator/-tools/set_context';
 
-import type { createSessionEventTracker } from './-utils/session-event-tracker';
+import type { createSessionEventTracker } from './session-event-tracker';
 
 import { publishSessionResult } from './session-result';
 

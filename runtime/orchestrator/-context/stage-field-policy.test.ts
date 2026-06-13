@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createStorage } from "./-tools/set_context";
+import { createStorage } from "@/orchestrator/-tools/set_context";
 import {
   applySetContextToolCall,
   filterStageBucket,
@@ -11,7 +11,7 @@ import {
   shouldApplySetContext,
 } from "./stage-field-policy";
 
-import type { ParsedStage } from "./orchestrator-types";
+import type { ParsedStage } from "@/orchestrator/-utils/yahl/types";
 
 const plainStage = (overrides: Partial<ParsedStage> = {}): ParsedStage => ({
   lines: "{\n  x = a + b;\n}",

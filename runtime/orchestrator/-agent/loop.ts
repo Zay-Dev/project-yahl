@@ -1,12 +1,12 @@
 import type { TRunYahl, TStorage, TLoopMeta } from './-types';
-import type { ParsedStage } from '@/orchestrator/orchestrator-types';
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import {
   filterLoopBucket,
   loopIndexNameFromLines,
   pickContextUpdates,
-} from '@/orchestrator/stage-field-policy';
-import { toLoopIterationStage } from '@/orchestrator/yahl-parse';
+} from '@/orchestrator/-context';
+import { toLoopIterationStage } from '@/orchestrator/-utils/yahl';
 
 export const resolveLoopIndexName = (
   stage: ParsedStage,

@@ -1,10 +1,10 @@
 import YAML from "yaml";
 
-import type { YahlStage } from "../shared/yahl-stage";
+import type { YahlStage } from "@/shared/yahl-stage";
 
-import type { ParsedStage, StageLoopMeta } from "./orchestrator-types";
-import type { YahlDocument } from "./yahl-schema";
-import { validateYahlDocument } from "./yahl-schema";
+import type { ParsedStage, StageLoopMeta } from "./types";
+import type { YahlDocument } from "./schema";
+import { validateYahlDocument } from "./schema";
 
 const logicNeedsBraceWrap = (logic: string) => {
   const trimmed = logic.trim();

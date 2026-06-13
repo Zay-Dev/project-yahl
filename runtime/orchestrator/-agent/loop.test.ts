@@ -5,7 +5,7 @@ import type { TRunYahl, TStorage } from '@/orchestrator/-agent/-types';
 
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import { resolveLoopIndexName, runLoopIteration } from '@/orchestrator/-agent/loop';
-import { compileStage } from '@/orchestrator/yahl-parse';
+import { compileStage } from '@/orchestrator/-utils/yahl';
 
 const testLoopStage = compileStage({
   contextKeys: ['c'],

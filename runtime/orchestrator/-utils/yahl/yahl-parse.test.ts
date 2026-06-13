@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 
-import { toAgentStage } from "../shared/yahl-stage";
+import { toAgentStage } from "@/shared/yahl-stage";
 
 import {
   compileForkRunStage,
@@ -13,13 +13,13 @@ import {
   parseYahlFile,
   parseYahlTask,
   toLoopIterationStage,
-} from "./yahl-parse";
+} from "./parse";
 
 import { fileURLToPath } from "node:url";
 
 const testSkillPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "TASKS/test/SKILL.yahl",
+  "../../TASKS/test/SKILL.yahl",
 );
 
 describe("parseYahlDocument", () => {
