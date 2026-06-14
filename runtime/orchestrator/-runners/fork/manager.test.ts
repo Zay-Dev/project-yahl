@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { ForkSessionManager } from './fork-session-manager';
+import { ForkSessionManager } from './manager';
 
 const row = (
   stageId: string,

@@ -5,7 +5,7 @@ import config from '@/config';
 
 import { Queries } from '@omni-infra/mongoose';
 
-import { ForkSessionManager } from '../../runtime/orchestrator/-runners/fork-session-manager';
+import { ForkSessionManager } from '../../runtime/orchestrator/-runners/fork/manager';
 import { modelForkSession } from '@/modules/sessions/models';
 import { resolveSessionStagesReplay } from '@/modules/sessions/use-cases/stage-read';
 

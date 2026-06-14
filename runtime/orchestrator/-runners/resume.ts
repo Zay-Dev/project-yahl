@@ -15,11 +15,11 @@ import {
 } from '@/orchestrator/-ask-user';
 import type { TStageDetailForResume } from '@/orchestrator/-ask-user/session-api';
 import { buildResumeFrom } from '@/orchestrator/-ask-user/resume-from';
-import { initForkSessionManager } from '@/orchestrator/-runners/fork-session-manager';
+import { initForkSessionManager } from '@/orchestrator/-runners/fork/manager';
 import { compileStage } from '@/orchestrator/-utils/yahl';
 import { isStageFinished } from '@/shared/stage-status';
 
-import { runForkSetups } from './fork-setups';
+import { runForkSetups } from './fork/setups';
 
 export const resolveForkSuffixFromSetupIndex = (forkSetupIndex?: number) => (
   (forkSetupIndex ?? 0) + 1

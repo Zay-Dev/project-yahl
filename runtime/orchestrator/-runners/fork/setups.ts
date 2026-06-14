@@ -1,4 +1,4 @@
-import type { ForkSessionManager } from '@/orchestrator/-runners/fork-session-manager';
+import type { ForkSessionManager } from './manager';
 import type { TStorage } from '@/shared/transports/-types';
 import type { YahlStage } from '@/shared/yahl-stage';
 

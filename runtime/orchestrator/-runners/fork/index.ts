@@ -1,14 +1,13 @@
-import type { ForkSessionManager } from '@/orchestrator/-runners/fork-session-manager';
-import type { TReplayStageRow } from '@/orchestrator/-runners/fork-session-manager';
+import type { ForkSessionManager, TReplayStageRow } from './manager';
 
 import { runYahl } from '@/orchestrator/-agent';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import { mergeContextPayloadToStorage } from '@/orchestrator/-context';
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { compileStage } from '@/orchestrator/-utils/yahl';
-import { initForkSessionManager } from '@/orchestrator/-runners/fork-session-manager';
+import { initForkSessionManager } from './manager';
 
-import { runForkSetups } from './fork-setups';
+import { runForkSetups } from './setups';
 
 declare global {
   var forkSessionManager: undefined | ForkSessionManager;

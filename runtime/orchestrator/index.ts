@@ -16,7 +16,7 @@ import { publishSessionResult } from './-utils/session-result';
 
 import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
-import { initForkSessionManager } from './-runners/fork-session-manager';
+import { initForkSessionManager } from './-runners/fork/manager';
 
 import { runForkSession } from './-runners/fork';
 import { runAskUserResume } from './-runners/resume';
