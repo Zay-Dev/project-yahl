@@ -10,7 +10,7 @@
     "dev": "tsx orchestrator/index.ts run --task-path test/SKILL.yahl",
     "orchestrate": "tsx orchestrator/index.ts run",
     "orchestrate:prod": "node dist/orchestrator/index.js run",
-    "test": "AGENT_SESSION_ID=test-session tsx --test \"agent/**/*.test.ts\" \"orchestrator/**/*.test.ts\"",
+    "test": "AGENT_SESSION_ID=test-session tsx --test \"agent/**/*.test.ts\" \"orchestrator/**/*.test.ts\" \"shared/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

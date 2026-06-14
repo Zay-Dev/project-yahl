@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import {
   parseAskUserToolArguments,
   parseRunBashToolArguments,
-} from "../shared/stage-tools";
+} from "./stage-tools";
 
 describe("parseRunBashToolArguments", () => {
   it("parses valid command", () => {

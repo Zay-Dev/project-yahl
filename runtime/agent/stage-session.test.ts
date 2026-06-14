@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { parseStageSessionInput, runStageSession } from "./stage-session";
-import type { ChatAssistantMessage } from "../shared/stage-tools";
+import type { ChatAssistantMessage } from "@/shared/stage-tools";
 
 const assistant = (content: string | null, toolCalls?: ChatAssistantMessage["tool_calls"]): ChatAssistantMessage => ({
   content,

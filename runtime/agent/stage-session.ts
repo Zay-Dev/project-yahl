@@ -1,27 +1,21 @@
 import config from "./config";
 
-import path from "path";
-
 import type { TAskUserResumeFrom } from '@/shared/transports/-types';
 
 import {
   parseStageEnvelope,
-  type SetContextToolCallEnvelope,
   type StageEnvelope,
   type StageSessionInput,
-} from "../shared/stage-contract";
-import { validateYahlStage } from "../shared/yahl-stage";
+} from "@/shared/stage-contract";
+import { validateYahlStage } from "@/shared/yahl-stage";
 
 import {
   type ChatApiMessage,
   type ChatAssistantMessage,
   type ChatToolCall,
-  parseAskUserToolArguments,
-  parseRagToolArguments,
   parseRunBashToolArguments,
-} from "../shared/stage-tools";
+} from "@/shared/stage-tools";
 
-import { readFileUtf8 } from "./-utils/prompts";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
 
 type BootstrapMessage = {
@@ -135,15 +129,8 @@ export const normalizeToolCalls = (raw: unknown): ChatToolCall[] | undefined => 
   return out.length > 0 ? out : undefined;
 };
 
-const finalizeEnvelope = (
-  content: string | null,
-  toolEnvelopes: SetContextToolCallEnvelope[],
-): StageEnvelope => {
+const finalizeEnvelope = (content: string | null): StageEnvelope => {
   const trimmed = (content ?? "").trim();
-
-  if (toolEnvelopes.length > 0) {
-    return toolEnvelopes;
-  }
 
   if (trimmed) {
     const envelope = parseStageEnvelope(trimmed);
@@ -175,8 +162,6 @@ export const runStageSession = async (
   const maxBashCalls = options.maxBashCalls ?? 24;
   const maxTurns = options.maxTurns ?? 60;
 
-  const toolsMd = await readFileUtf8(path.resolve(config.runtimeRoot, "Tools.md"));
-
   const askUserResumePrompt = options.resumeFrom
     ? buildAskUserResumePrompt(options.resumeFrom)
     : '';
@@ -203,7 +188,6 @@ export const runStageSession = async (
     ...toApiMessages(messages),
     {
       role: "user",
-      // content: `${toolsMd}\n\nInput:\n${payload}`,
       content: [
         askUserResumePrompt,
         askUserHint,
@@ -215,7 +199,6 @@ export const runStageSession = async (
 
   let bashCalls = 0;
   let turns = 0;
-  const toolEnvelopes: SetContextToolCallEnvelope[] = [];
 
   while (turns < maxTurns) {
     turns += 1;
@@ -269,40 +252,8 @@ export const runStageSession = async (
         continue;
       }
 
-      if (name === "set_context") {
+      if (name === "set_context" || name === "rag" || name === "ask_user") {
         continue;
-      }
-
-      if (name === "rag") {
-        continue;
-        const args = parseRagToolArguments(rawArgs);
-        if (!args) {
-          stageMessages.push({
-            content: toolErrorContent("rag: invalid arguments"),
-            role: "tool",
-            tool_call_id: call.id,
-          });
-
-          continue;
-        }
-
-        throw new Error('rag not supported');
-        // return ragArgumentsToEnvelope(args);
-      }
-
-      if (name === "ask_user") {
-        continue;
-        const args = parseAskUserToolArguments(rawArgs);
-        if (!args) {
-          stageMessages.push({
-            content: toolErrorContent("ask_user: invalid arguments"),
-            role: "tool",
-            tool_call_id: call.id,
-          });
-          continue;
-        }
-        throw new Error('ask_user not supported');
-        // return askUserArgumentsToEnvelope(args);
       }
 
       stageMessages.push({
@@ -314,7 +265,7 @@ export const runStageSession = async (
 
     if (toolCalls.length > 0) continue;
 
-    return finalizeEnvelope(assistantMessage.at(-1)?.content || '', toolEnvelopes);
+    return finalizeEnvelope(assistantMessage.at(-1)?.content || '');
   }
 
   return {

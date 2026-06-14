@@ -3,14 +3,30 @@ import "dotenv/config";
 import url from "url";
 import path from "path";
 
+const _moduleDir = path.dirname(url.fileURLToPath(import.meta.url));
+
 const __dirname = (() => {
-  const value = process.cwd() ||
-    path.dirname(url.fileURLToPath(import.meta.url));
+  const value = process.cwd() || _moduleDir;
 
-    if (value.endsWith("/runtime")) return value;
-    if (value.endsWith('/agent')) return value.slice(0, -6);
+  if (value.endsWith('/runtime')) {
+    return value;
+  }
 
-    throw new Error(`Failed to determine module directory from ${value}`);
+  if (value.endsWith('/agent')) {
+    return value.slice(0, -6);
+  }
+
+  if (value.endsWith('/orchestrator')) {
+    return value.slice(0, -11);
+  }
+
+  const nestedRuntime = path.join(value, 'runtime');
+
+  if (nestedRuntime === path.dirname(_moduleDir) || value.endsWith('project-yahl')) {
+    return path.dirname(_moduleDir);
+  }
+
+  return path.dirname(_moduleDir);
 })();
 
 const normalizeBaseUrl = (value: string) =>

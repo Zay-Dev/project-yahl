@@ -403,4 +403,5 @@ next-env.d.ts
 /data/
 /workspace/
 
+.onecli/
 tsconfig.tsbuildinfo
