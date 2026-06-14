@@ -3,6 +3,7 @@ import type { OpenAI } from 'openai';
 import { EventEmitter } from 'events';
 
 import type { StageExecutionMeta } from '../transport';
+import type { AskUserToolCallEnvelope } from '../stage-contract';
 import type { YahlStage } from '../yahl-stage';
 
 export type TModelResponse = OpenAI.Chat.Completions.ChatCompletion & {
@@ -51,6 +52,8 @@ export type TAskUserResumeFrom = {
   };
   modelResponses: TModelResponse[];
   pendingToolCallId: string;
+  question: AskUserToolCallEnvelope['arguments'];
+  questionRef: string;
   toolCalls: TChatToolCall[];
 };
 

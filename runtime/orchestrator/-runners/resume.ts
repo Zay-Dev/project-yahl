@@ -110,7 +110,7 @@ const _resolveBaseParsed = (
   return yahlStages[startIndex]!;
 };
 
-const _buildResumedStage = (
+export const buildResumedStage = (
   parsedStage: ParsedStage,
   patchedStage: YahlStage,
   questionRef: string,
@@ -137,10 +137,9 @@ const _buildResumedStage = (
     return compileStage(spec, parsedStage.sourceStartLine);
   }
 
-  return {
-    ...parsedStage,
-    spec: patchedStage,
-  };
+  throw new Error(
+    `resume: could not replace /ask-user(${questionRef}) in stage logic`,
+  );
 };
 
 const _resumeAnchorStage = async (params: {
@@ -200,7 +199,7 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
 
   const resumeFrom = buildResumeFrom(checkpoint, stageDetail as TStageDetailForResume);
   const baseParsed = _resolveBaseParsed(checkpoint, yahlStages);
-  const resumedStage = _buildResumedStage(
+  const resumedStage = buildResumedStage(
     baseParsed,
     patchedStage,
     checkpoint.questionRef,

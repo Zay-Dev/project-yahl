@@ -231,6 +231,7 @@ export const startRedisDaemon = async () => {
             },
           },
           {
+            resumeFrom,
             resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,
           },
         );

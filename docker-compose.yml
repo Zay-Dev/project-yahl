@@ -4,7 +4,7 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - ./mongo_data:/data/db
+      - ./data/mongo:/data/db
 
   redis:
     image: redis:7-alpine
@@ -27,7 +27,7 @@ services:
       - "10254:10254"
       - "10255:10255"
     volumes:
-      - onecli_data:/app/data
+      - ./data/onecli:/app/data
 
   onecli_postgres:
     image: postgres:16-alpine
@@ -43,81 +43,49 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - onecli_postgres_data:/var/lib/postgresql/data
+      - ./data/onecli_postgres:/var/lib/postgresql/data
 
   server:
     build:
-      context: .
-      dockerfile: server/Dockerfile
-    working_dir: /omniflex
-    command: sh -lc "corepack enable && pnpm install --config.confirmModulesPurge=false && pnpm --filter @project-yahl/runtime install --config.confirmModulesPurge=false && pnpm -r --filter \"./infras/**\" run build && pnpm --filter @project-yahl/server run dev"
+      context: ..
+      dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/server/Dockerfile
+      args:
+        OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
     env_file:
       - .env
     environment:
-      CI: "true"
-      MONGODB_URI: mongodb://mongo:27017/yahl
-      REDIS_URL: redis://redis:6379
       HOST_REPO_ROOT: ${HOST_REPO_ROOT}
+      MONGODB_URI: mongodb://mongo:27017/yahl
+      OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
       OMNIFLEX_BUILD_CONTEXT: /omniflex
-      RUNTIME_REPO_ROOT: /omniflex/project-yahl
+      ONECLI_DASHBOARD_URL: http://onecli:10254
+      REDIS_URL: redis://redis:6379
+      RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
+      RUNTIME_SHARED_NETWORK: ${SHARED_DOCKER_NETWORK:-yahl_shared}
       SESSION_API_BASE_URL: http://127.0.0.1:4000
-      RUNTIME_SHARED_NETWORK: yahl_shared
-      YAHL_ENABLE_ASK_USER: ${YAHL_ENABLE_ASK_USER:-false}
-      DOCKER_BUILDKIT: "1"
-      COMPOSE_DOCKER_CLI_BUILD: "1"
     ports:
       - "4000:4000"
     depends_on:
       - mongo
       - redis
     volumes:
-      - ../:/omniflex
-      - ${HOST_REPO_ROOT}:${HOST_REPO_ROOT}
+      - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
+      - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
+      - ./workspace:${HOST_REPO_ROOT}/workspace
       - /var/run/docker.sock:/var/run/docker.sock
-      - omniflex_node_modules:/omniflex/node_modules
-      - omniflex_pnpm_store:/omniflex/.pnpm-store
-      - yahl_server_node_modules:/omniflex/project-yahl/server/node_modules
-      - yahl_server_node_modules:${HOST_REPO_ROOT}/server/node_modules
-      - yahl_runtime_node_modules:/omniflex/project-yahl/runtime/node_modules
-      - yahl_runtime_node_modules:${HOST_REPO_ROOT}/runtime/node_modules
-      - infras_core_node_modules:/omniflex/infras/core/node_modules
-      - infras_express_node_modules:/omniflex/infras/express/node_modules
-      - infras_ioredis_node_modules:/omniflex/infras/ioredis/node_modules
-      - infras_mongoose_node_modules:/omniflex/infras/databases/mongoose/node_modules
-      - infras_logger_winston_node_modules:/omniflex/infras/loggers/logger-winston/node_modules
-      - infras_aws_kms_node_modules:/omniflex/infras/modules/aws-kms-client/node_modules
 
   web:
-    image: node:22
-    working_dir: /app
-    command: sh -lc "corepack enable && pnpm install --config.confirmModulesPurge=false && pnpm --filter web dev --host 0.0.0.0 --port 5173"
-    env_file:
-      - .env
-    environment:
-      CI: "true"
+    build:
+      context: ..
+      dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/web/Dockerfile
+      args:
+        OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
+        VITE_API_BASE_URL: http://localhost:4000
+    ports:
+      - "5173:80"
     depends_on:
       - server
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./:/app
-      - web_node_modules:/app/node_modules
-
-volumes:
-  onecli_data:
-  onecli_postgres_data:
-  web_node_modules:
-  omniflex_node_modules:
-  omniflex_pnpm_store:
-  yahl_server_node_modules:
-  yahl_runtime_node_modules:
-  infras_core_node_modules:
-  infras_express_node_modules:
-  infras_ioredis_node_modules:
-  infras_mongoose_node_modules:
-  infras_logger_winston_node_modules:
-  infras_aws_kms_node_modules:
 
 networks:
   default:
-    name: yahl_shared
+    name: ${SHARED_DOCKER_NETWORK:-yahl_shared}

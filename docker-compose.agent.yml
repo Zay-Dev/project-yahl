@@ -1,0 +1,30 @@
+services:
+  agent:
+    image: ${AGENT_IMAGE:-${COMPOSE_PROJECT_NAME:-project-yahl}-agent:latest}
+    build:
+      context: ${OMNIFLEX_BUILD_CONTEXT:-..}
+      dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/runtime/Dockerfile.agent
+      args:
+        OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
+    env_file:
+      - ${COMPOSE_ENV_FILE:-.env}
+    environment:
+      AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
+      AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${HOST_REPO_ROOT:-.}/workspace:/root
+      - ${HOST_REPO_ROOT:-.}/runtime/agent/Agent.md:/opt/agent/Agent.md:ro
+      - ${HOST_REPO_ROOT:-.}/runtime/orchestrator/YAHL:/opt/yahl:ro
+      - ${HOST_REPO_ROOT:-.}/runtime/orchestrator/SKILLS:/opt/skills:ro
+    command: ["pnpm", "--silent", "--filter", "@project-yahl/runtime", "run", "agent", "--", "--daemon"]
+    container_name: ${AGENT_CONTAINER_NAME:-agent}
+    networks:
+      - shared
+
+networks:
+  shared:
+    external: true
+    name: ${SHARED_DOCKER_NETWORK:-yahl_shared}

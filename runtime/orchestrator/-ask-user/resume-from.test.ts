@@ -67,6 +67,8 @@ describe('buildResumeFrom', () => {
     assert.equal(result.pendingToolCallId, 'tool-ask-1');
     assert.deepEqual(result.answer.selectedOptionIds, ['3']);
     assert.deepEqual(result.answer.selectedLabels, ['three']);
+    assert.equal(result.questionRef, '1');
+    assert.equal(result.question.title, 'pick');
     assert.equal(result.modelResponses.length, 1);
     assert.equal(result.toolCalls.length, 1);
     assert.equal(result.toolCalls[0]?.id, 'tool-ask-1');

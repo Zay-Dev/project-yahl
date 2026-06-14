@@ -16,7 +16,7 @@
   - `options` 至少 2 个。
   - `id` 与 `label` 不能为空。
   - 需要用户决策时优先使用该工具，而不是猜测或直接继续。
-  - 调用后 orchestrator 会 checkpoint、停止 agent 容器，并在用户回答后由新 orchestrator 恢复同一 stage。
+  - 调用后 orchestrator 会 checkpoint、停止 agent 容器，并在用户回答后由新 orchestrator 恢复同一 stage；恢复时 user prompt 会包含 ask-user 的问题与答案（预设选项或自定义 free-text）。
 
 ## During the steps per stage
 

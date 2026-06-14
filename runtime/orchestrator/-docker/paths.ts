@@ -4,36 +4,73 @@ import { fileURLToPath } from "url";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
-export const projectRoot = path.resolve(moduleDir, "../..");
+const stackComposeAt = (root: string) => path.join(root, "docker-compose.yml");
+const agentComposeAt = (root: string) => path.join(root, "docker-compose.agent.yml");
 
-const moduleRepoRoot = path.resolve(projectRoot, "..");
+const hasRepoCompose = (root: string) =>
+  fs.existsSync(agentComposeAt(root)) || fs.existsSync(stackComposeAt(root));
 
-const runtimeComposeAt = (root: string) => path.join(root, "runtime", "docker-compose.yml");
+const findRepoRootFromModule = () => {
+  let current = moduleDir;
+
+  for (let depth = 0; depth < 10; depth += 1) {
+    if (hasRepoCompose(current)) {
+      return current;
+    }
+
+    const parent = path.dirname(current);
+
+    if (parent === current) {
+      break;
+    }
+
+    current = parent;
+  }
+
+  return path.resolve(moduleDir, "../../..");
+};
 
 export const repoRoot = (() => {
+  const runtimeRepoRoot = process.env.RUNTIME_REPO_ROOT?.trim();
+
+  if (runtimeRepoRoot) {
+    const candidate = path.dirname(path.resolve(runtimeRepoRoot));
+
+    if (hasRepoCompose(candidate)) {
+      return candidate;
+    }
+  }
+
   const hostRepoRoot = process.env.HOST_REPO_ROOT?.trim();
 
   if (hostRepoRoot) {
     const resolved = path.resolve(hostRepoRoot);
 
-    if (fs.existsSync(runtimeComposeAt(resolved))) {
+    if (hasRepoCompose(resolved)) {
       return resolved;
     }
   }
 
-  return moduleRepoRoot;
+  return findRepoRootFromModule();
 })();
-
-if (process.env.HOST_REPO_ROOT?.trim() !== repoRoot) {
-  process.env.HOST_REPO_ROOT = repoRoot;
-}
 
 export const runtimeRoot = path.join(repoRoot, "runtime");
 
 export const omniflexRoot = path.resolve(repoRoot, "..");
 
-export const composeFile = path.join(runtimeRoot, "docker-compose.yml");
-export const onecliRuntimePath = path.join(runtimeRoot, ".onecli");
+export const composeFile = agentComposeAt(repoRoot);
+
+const resolveOnecliRuntimePath = () => {
+  const hostRepoRoot = process.env.HOST_REPO_ROOT?.trim();
+
+  if (hostRepoRoot) {
+    return path.join(path.resolve(hostRepoRoot), "runtime", ".onecli");
+  }
+
+  return path.join(runtimeRoot, ".onecli");
+};
+
+export const onecliRuntimePath = resolveOnecliRuntimePath();
 export const onecliSharedCaFile = path.join(onecliRuntimePath, "proxy-ca.pem");
 export const onecliSharedCombinedCaFile = path.join(onecliRuntimePath, "combined-ca.pem");
 

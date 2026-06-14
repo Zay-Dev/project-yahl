@@ -2,6 +2,8 @@ import config from "./config";
 
 import path from "path";
 
+import type { TAskUserResumeFrom } from '@/shared/transports/-types';
+
 import {
   parseStageEnvelope,
   type SetContextToolCallEnvelope,
@@ -20,6 +22,7 @@ import {
 } from "../shared/stage-tools";
 
 import { readFileUtf8 } from "./-utils/prompts";
+import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
 
 type BootstrapMessage = {
   content: string;
@@ -38,6 +41,7 @@ type StageRunner = {
 type StageSessionOptions = {
   maxBashCalls?: number;
   maxTurns?: number;
+  resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
 };
 
@@ -173,16 +177,11 @@ export const runStageSession = async (
 
   const toolsMd = await readFileUtf8(path.resolve(config.runtimeRoot, "Tools.md"));
 
-  const pendingAskUser = stageInput.stage.askUser?.filter((entry) => entry.answer === undefined) ?? [];
-  const answeredAskUser = stageInput.stage.askUser?.filter((entry) => entry.answer !== undefined) ?? [];
-  const answeredAskUserHint = answeredAskUser.length
-    ? [
-      'Answered askUser (do not call ask_user again; apply stage logic with set_context):',
-      ...answeredAskUser.map((entry) => (
-        `- questionRef: "${entry.id}", answer: ${JSON.stringify(entry.answer)}`
-      )),
-    ].join('\n')
+  const askUserResumePrompt = options.resumeFrom
+    ? buildAskUserResumePrompt(options.resumeFrom)
     : '';
+
+  const pendingAskUser = stageInput.stage.askUser?.filter((entry) => entry.answer === undefined) ?? [];
   const askUserHint = pendingAskUser.length
     ? [
       'Registered askUser questions (use exact questionRef and title):',
@@ -206,7 +205,7 @@ export const runStageSession = async (
       role: "user",
       // content: `${toolsMd}\n\nInput:\n${payload}`,
       content: [
-        answeredAskUserHint,
+        askUserResumePrompt,
         askUserHint,
         `\n\nInput:\n${payload}`,
       ].filter(Boolean).join('\n'),

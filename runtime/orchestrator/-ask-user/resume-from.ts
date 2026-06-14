@@ -49,6 +49,8 @@ export const buildResumeFrom = (
     answer,
     modelResponses,
     pendingToolCallId: checkpoint.toolCallId,
+    question: checkpoint.question,
+    questionRef: checkpoint.questionRef,
     toolCalls,
   };
 };

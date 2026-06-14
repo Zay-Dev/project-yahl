@@ -67,6 +67,8 @@ Call `ask_user` with this exact argument shape:
 - after the user answers, a new orchestrator resumes the same stage
 - inline `/ask-user(<id>)` is replaced with the selected answer value
 - answer is also stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
+- on resume, the agent user prompt includes the ask-user question and answer (preset option or custom free-text)
+- on resume, before you made the desicion, repeat the question and the answer, to understand the context of the user's answer
 
 ## When to use
 

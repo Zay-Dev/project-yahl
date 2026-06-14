@@ -5,9 +5,8 @@
   "description": "",
   "scripts": {
     "compose:down": "docker compose down",
-    "compose:up": "docker compose up -d --build",
-    "compose:runtime:down": "docker compose -f runtime/docker-compose.yml down",
-    "compose:runtime:up": "docker compose -f runtime/docker-compose.yml up -d --build",
+    "compose:up": "docker compose up -d mongo redis onecli onecli_postgres",
+    "compose:up:all": "docker compose up -d --build mongo redis onecli onecli_postgres server web",
     "dev": "pnpm -r --parallel --filter @project-yahl/runtime --filter @project-yahl/server run dev",
     "dev:runtime": "pnpm --filter @project-yahl/runtime run dev",
     "dev:server": "pnpm --filter @project-yahl/server run dev",

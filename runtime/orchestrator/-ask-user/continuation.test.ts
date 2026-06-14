@@ -43,6 +43,13 @@ describe('buildAskUserContinuation', () => {
     );
   });
 
+  it('serializes string option ids such as yes/no', () => {
+    const next = buildAskUserContinuation('c += /ask-user(1);', '1', 'yes');
+
+    assert.ok(next);
+    assert.equal(next?.stageText, 'c += "yes";');
+  });
+
   it('preserves wrapped compiled lines when replacing ask-user ref', () => {
     const next = buildAskUserContinuation(
       [

@@ -1,20 +1,22 @@
 FROM node:22
 
+ARG OMNIFLEX_APP_DIR=project-yahl
+
 WORKDIR /omniflex
 
 RUN corepack enable
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY project-yahl/package.json ./project-yahl/
-COPY project-yahl/runtime/package.json ./project-yahl/runtime/
+COPY ${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/
+COPY ${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
 
 RUN pnpm install --frozen-lockfile --filter @project-yahl/runtime...
 
-COPY project-yahl/runtime/agent ./project-yahl/runtime/agent
-COPY project-yahl/runtime/orchestrator ./project-yahl/runtime/orchestrator
-COPY project-yahl/runtime/shared ./project-yahl/runtime/shared
-COPY project-yahl/runtime/tsconfig.json ./project-yahl/runtime/tsconfig.json
+COPY ${OMNIFLEX_APP_DIR}/runtime/agent ./${OMNIFLEX_APP_DIR}/runtime/agent
+COPY ${OMNIFLEX_APP_DIR}/runtime/orchestrator ./${OMNIFLEX_APP_DIR}/runtime/orchestrator
+COPY ${OMNIFLEX_APP_DIR}/runtime/shared ./${OMNIFLEX_APP_DIR}/runtime/shared
+COPY ${OMNIFLEX_APP_DIR}/runtime/tsconfig.json ./${OMNIFLEX_APP_DIR}/runtime/tsconfig.json
 
-WORKDIR /omniflex/project-yahl/runtime
+WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/runtime
 
 CMD ["pnpm", "--silent", "--filter", "@project-yahl/runtime", "run", "agent", "--", "--daemon"]

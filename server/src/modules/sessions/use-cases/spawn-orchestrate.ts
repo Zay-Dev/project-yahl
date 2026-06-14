@@ -3,11 +3,18 @@ import fs from 'fs';
 import path from 'path';
 
 const CONTAINER_WORKSPACE = '/omniflex';
-const CONTAINER_RUNTIME = '/omniflex/project-yahl/runtime';
+const CONTAINER_RUNTIME = `/omniflex/${process.env.OMNIFLEX_APP_DIR?.trim() || 'project-yahl'}/runtime`;
 const RUNTIME_FILTER = '@project-yahl/runtime';
 
 const _orchestrateCliArgs = (sessionId: string, args: string[]) => [
   'orchestrator/index.ts',
+  'run',
+  '--session-id',
+  sessionId,
+  ...args,
+];
+
+const _orchestrateBuiltCliArgs = (sessionId: string, args: string[]) => [
   'run',
   '--session-id',
   sessionId,
@@ -57,15 +64,15 @@ const _findPnpmWorkspaceRoot = (startDir: string) => {
 };
 
 const _resolveRuntimeDir = () => {
-  if (fs.existsSync(path.join(CONTAINER_RUNTIME, 'package.json'))) {
-    return CONTAINER_RUNTIME;
-  }
-
   const runtimeRoot = process.env.RUNTIME_REPO_ROOT?.trim()
     || process.env.YAHL_REPO_ROOT?.trim();
 
-  if (runtimeRoot) {
-    return path.join(_findProjectYahlRoot(path.resolve(runtimeRoot)), 'runtime');
+  if (runtimeRoot && fs.existsSync(path.join(path.resolve(runtimeRoot), 'package.json'))) {
+    return path.resolve(runtimeRoot);
+  }
+
+  if (fs.existsSync(path.join(CONTAINER_RUNTIME, 'package.json'))) {
+    return CONTAINER_RUNTIME;
   }
 
   return path.join(_findProjectYahlRoot(process.cwd()), 'runtime');
@@ -84,6 +91,25 @@ type TSpawnSpec = {
   cmd: string;
   cwd: string;
   label: string;
+};
+
+const _resolveBuiltOrchestratorSpawn = (
+  runtimeDir: string,
+  sessionId: string,
+  args: string[],
+): TSpawnSpec | null => {
+  const entry = path.join(runtimeDir, 'dist/orchestrator/index.js');
+
+  if (!fs.existsSync(entry)) {
+    return null;
+  }
+
+  return {
+    args: [entry, ..._orchestrateBuiltCliArgs(sessionId, args)],
+    cmd: process.execPath,
+    cwd: runtimeDir,
+    label: `node+built@${runtimeDir}`,
+  };
 };
 
 const _resolveNodeTsxSpawn = (
@@ -147,6 +173,7 @@ const _logSpawnDiagnostics = (
 ) => {
   const tsxBin = path.join(runtimeDir, 'node_modules/.bin/tsx');
   const tsxCli = path.join(runtimeDir, 'node_modules/tsx/dist/cli.mjs');
+  const builtEntry = path.join(runtimeDir, 'dist/orchestrator/index.js');
   const line = [
     '[spawn-orchestrate]',
     `sessionId=${sessionId}`,
@@ -154,6 +181,7 @@ const _logSpawnDiagnostics = (
     `cmd=${spawnSpec.cmd}`,
     `cwd=${spawnSpec.cwd}`,
     `log=${logPath}`,
+    `builtEntry=${fs.existsSync(builtEntry)}`,
     `tsxBin=${fs.existsSync(tsxBin)}`,
     `tsxCli=${fs.existsSync(tsxCli)}`,
     `runtimePkg=${fs.existsSync(path.join(runtimeDir, 'package.json'))}`,
@@ -170,7 +198,8 @@ export const spawnOrchestrate = (
   const runtimeDir = _resolveRuntimeDir();
   const workspaceRoot = _resolveWorkspaceRoot();
   const sessionApiBaseUrl = resolveSessionApiBaseUrl();
-  const spawnSpec = _resolveNodeTsxSpawn(runtimeDir, sessionId, args)
+  const spawnSpec = _resolveBuiltOrchestratorSpawn(runtimeDir, sessionId, args)
+    ?? _resolveNodeTsxSpawn(runtimeDir, sessionId, args)
     ?? _resolvePnpmExecSpawn(workspaceRoot, sessionId, args);
 
   const logPath = path.join('/tmp', `yahl-orchestrator-${sessionId}.log`);

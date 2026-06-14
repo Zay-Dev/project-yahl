@@ -111,18 +111,24 @@ pnpm install
 pnpm -r --filter "./infras/**" run build
 ```
 
-- Copy `server/.env.example` to `server/.env` (or project `.env` for Docker).
-- Docker compose split:
-  - root `docker-compose.yml` serves `onecli + mongo + redis + server + web`
-  - `runtime/docker-compose.yml` remains available, and orchestrator keeps using compose for agent lifecycle with a shared OneCLI SDK override
-  - the `server` container bind-mounts Omniflex source but uses its own `node_modules` volumes (host deps are not shared); run `pnpm install` on the host separately when developing outside Docker
-- Copy `.env.example` to `.env`, set `HOST_REPO_ROOT` to the absolute path of this repo, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`.
+- **Docker compose:**
+  - [`docker-compose.yml`](docker-compose.yml) — stack: infra (mongo, redis, onecli) + built server + web (`pnpm run compose:up` / `compose:up:all`); image build context is the **Omniflex monorepo root** (`..` from project-yahl); app paths use `OMNIFLEX_APP_DIR` (default `project-yahl`); `COMPOSE_PROJECT_NAME` is independent (Docker naming only, e.g. agent image tag)
+  - [`docker-compose.agent.yml`](docker-compose.agent.yml) — agent only; used by orchestrator (`pnpm run orchestrate`), never by `compose:up`
+- **Local volume data** (gitignored): [`data/`](data/) (infra persistence), [`workspace/`](workspace/) (agent files), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides)
+- Copy `server/.env.example` to `server/.env` (or project `.env` for local dev).
+- **Local dev** (hot reload on the host):
+  1. Start infra: `pnpm run compose:up` (mongo, redis, onecli, postgres)
+  2. Run apps: `pnpm run dev` (server + runtime) and `pnpm run dev:web` in another terminal
+  3. Run sessions: `pnpm run orchestrate`
+- **Full Docker stack** (optional, CI/demo): `pnpm run compose:up:all` (infra + built server + web)
+- Dockerfiles: [`server/Dockerfile`](server/Dockerfile) (API + built orchestrator), [`web/Dockerfile`](web/Dockerfile) (static nginx), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (agent; built on the host when orchestrator runs)
+- Copy [`.env.example`](.env.example) to `.env`, set `HOST_REPO_ROOT` to the **absolute path** of this repo, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`
 - Runtime only: `pnpm run orchestrate`.
 - API server (from Omniflex root or this repo): `pnpm run dev:server` or `pnpm --filter @project-yahl/server run dev`.
 - Web app: `pnpm run dev:web`.
-- Everything together: `pnpm run dev`.
-- App stack with Docker: `pnpm run compose:up`
-- Runtime stack with Docker: `pnpm run compose:runtime:up`
+- Everything together: `pnpm run dev` (after `pnpm run compose:up` for infra)
+- Infra only: `pnpm run compose:up`
+- Full stack: `pnpm run compose:up:all`
 
 ### Advanced orchestrate flags
 

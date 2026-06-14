@@ -39,9 +39,9 @@ const diffClass = (kind: TContextDiffEntry["kind"]) => {
   return "";
 };
 
-const formatDiffValue = (value: unknown) => {
+const formatDiffValue = (value: unknown): string => {
   if (value === undefined) {
-    return null;
+    return "—";
   }
 
   try {
