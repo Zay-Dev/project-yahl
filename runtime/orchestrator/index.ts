@@ -52,11 +52,21 @@ const _setupPublisher = async (tracker: ReturnType<typeof createSessionEventTrac
   await publisher.waitForReady();
 };
 
+const isStagehandLiveview = () => {
+  const value = process.env.STAGEHAND_LIVEVIEW?.trim().toLowerCase();
+
+  return value === "1" || value === "true";
+};
+
 const _composeUp = async (agentName: string) => {
   const onecliOverrideFilePath = await writeSharedOneCliOverride();
 
   process.env.AGENT_CONTAINER_NAME = agentName;
   process.env.AGENT_SESSION_ID = sessionId;
+
+  if (isStagehandLiveview()) {
+    console.log("[stagehand] live view enabled — connect VNC to localhost:5900");
+  }
 
   await composeUp({
     composeProjectName: agentName,

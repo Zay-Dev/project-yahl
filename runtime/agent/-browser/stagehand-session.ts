@@ -5,6 +5,10 @@ import { z } from "zod";
 
 import type { BrowserToolArguments } from "@/shared/stage-tools";
 
+import { effectiveApiKey } from "../-utils/llm-transport";
+
+import { resolveChromiumExecutablePath } from "./chromium-executable";
+
 const DEFAULT_AGENT_MAX_STEPS = 15;
 
 const AGENT_TIMEOUT_MS = 300_000;
@@ -17,7 +21,19 @@ type TBrowserResult =
 let stagehand: Stagehand | null = null;
 let initPromise: Promise<Stagehand> | null = null;
 
-const stagehandModel = () => config.stagehandModel;
+const chromiumArgs = () => {
+  const args = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+  ];
+
+  if (config.stagehandLiveview) {
+    args.push("--ozone-platform=x11", "--disable-gpu");
+  }
+
+  return args;
+};
 
 const resolveStagehand = async (): Promise<Stagehand> => {
   if (stagehand) return stagehand;
@@ -30,18 +46,27 @@ const resolveStagehand = async (): Promise<Stagehand> => {
   }
 
   initPromise = (async () => {
+    const chromePath = resolveChromiumExecutablePath();
+    process.env.CHROME_PATH = chromePath;
+
+    if (config.debug) {
+      console.log(`[stagehand] CHROME_PATH=${chromePath}\n`);
+    }
+
     const instance = new Stagehand({
       disablePino: true,
       env: "LOCAL",
       localBrowserLaunchOptions: {
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        args: chromiumArgs(),
         chromiumSandbox: false,
-        headless: true,
+        connectTimeoutMs: 60_000,
+        executablePath: resolveChromiumExecutablePath(),
+        headless: !config.stagehandLiveview,
       },
       model: {
-        apiKey: config.apiKey,
+        apiKey: effectiveApiKey(config.apiKey),
         baseURL: config.apiBaseUrl,
-        modelName: stagehandModel(),
+        modelName: config.stagehandModel,
       },
       sessionId,
       verbose: 0,

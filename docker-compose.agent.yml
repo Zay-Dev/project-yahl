@@ -1,6 +1,6 @@
 services:
   agent:
-    image: ${AGENT_IMAGE:-${COMPOSE_PROJECT_NAME:-project-yahl}-agent:latest}
+    image: ${AGENT_IMAGE:-project-yahl-agent:latest}
     build:
       context: ${OMNIFLEX_BUILD_CONTEXT:-..}
       dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/runtime/Dockerfile.agent
@@ -11,7 +11,15 @@ services:
     environment:
       AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
       AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}
+      DISPLAY: ${STAGEHAND_LIVEVIEW_DISPLAY:-:99}
+      NO_PROXY: localhost,127.0.0.1,::1
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      STAGEHAND_CHROME_PATH: ${STAGEHAND_CHROME_PATH:-}
+      STAGEHAND_LIVEVIEW: ${STAGEHAND_LIVEVIEW:-0}
+      no_proxy: localhost,127.0.0.1,::1
+    ports:
+      - "5900:5900"
+    shm_size: 2gb
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

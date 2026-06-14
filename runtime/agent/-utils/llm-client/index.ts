@@ -8,6 +8,8 @@ import config from "@/agent/config";
 
 import { STAGE_TOOLS } from "@/shared/stage-tools";
 
+import { effectiveApiKey, openAiFetch } from "../llm-transport";
+
 import * as Utils from "./-utils";
 
 export const chatWithTools = async (
@@ -64,20 +66,7 @@ const _chat = async (
 };
 
 const _client = new OpenAI({
-  apiKey: config.apiKey || "sk-no-auth-required",
+  apiKey: effectiveApiKey(config.apiKey),
   baseURL: config.apiBaseUrl,
-
-  fetch: (() => {
-    if (config.apiKey) return fetch;
-
-    return async (input: RequestInfo | URL, init?: RequestInit) => {
-      const headers = new Headers(init?.headers || {});
-      headers.delete("authorization");
-
-      return fetch(input, {
-        ...init,
-        headers,
-      });
-    };
-  })(),
+  fetch: openAiFetch(config.apiKey),
 });
