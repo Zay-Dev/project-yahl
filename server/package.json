@@ -1,34 +1,88 @@
 {
-  "name": "server",
-  "version": "1.0.0",
+  "name": "@project-yahl/server",
   "private": true,
   "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
   "exports": {
-    "./wire": {
-      "types": "./dist/wire.d.ts",
-      "default": "./dist/wire.js"
+    "./core/*": {
+      "development": [
+        "./src/core/*.ts"
+      ],
+      "import": [
+        "./dist/src/core/*.js"
+      ]
+    },
+    "./modules/*": {
+      "development": [
+        "./src/modules/*/index.ts",
+        "./src/modules/*.ts"
+      ],
+      "import": [
+        "./dist/src/modules/*/index.js",
+        "./dist/src/modules/*.js"
+      ]
+    },
+    "./modules/*/use-cases/*": {
+      "development": [
+        "./src/modules/*/use-cases/*.ts"
+      ],
+      "import": [
+        "./dist/src/modules/*/use-cases/*.js"
+      ]
+    },
+    "./modules/sessions/-api-types": {
+      "development": [
+        "./src/modules/sessions/-api-types.ts"
+      ],
+      "import": [
+        "./dist/src/modules/sessions/-api-types.js"
+      ]
     }
   },
-  "types": "./dist/wire.d.ts",
   "scripts": {
-    "build:types": "tsc -b",
+    "build": "tsc && tsc-alias",
+    "debug:fork-plan": "tsx scripts/debug-fork-plan.ts",
+    "debug:fork-replay": "tsx scripts/debug-fork-replay.ts",
+    "dev": "nodemon",
+    "start": "node dist/src/index.js",
     "test": "tsx --test \"src/**/*.test.ts\"",
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit"
   },
+  "nodemonConfig": {
+    "delay": 100,
+    "verbose": true,
+    "watch": [
+      ".env",
+      "./",
+      "../../infras"
+    ],
+    "ext": "js,ts,json",
+    "exec": "tsc --noEmit && tsx -C development src/index.ts",
+    "ignore": [
+      "**/dist/**",
+      "**/node_modules/**"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "cors": "^2.8.5",
+    "@omni-infra/core": "workspace:*",
+    "@omni-infra/express": "workspace:*",
+    "@omni-infra/logger-winston": "workspace:*",
+    "@omni-infra/mongoose": "workspace:*",
+    "awilix": "^13.0.3",
     "dotenv": "^17.4.2",
-    "ioredis": "^5.8.2",
-    "express": "^5.1.0",
+    "express": "^5.2.1",
     "joi": "^18.1.2",
-    "mongoose": "^8.19.2"
+    "mongoose": "^9.4.1",
+    "nodemon": "^3.1.14"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.3",
+    "@omni-infra/types": "workspace:*",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.9.1",
+    "tsc-alias": "^1.8.11",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

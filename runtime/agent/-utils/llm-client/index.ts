@@ -1,7 +1,4 @@
-import type { NormalizedUsage } from '@/shared/usage';
-
 import type {
-  ChatToolCall,
   ChatApiMessage,
   ChatAssistantMessage,
 } from '@/shared/stage-tools';
@@ -9,33 +6,9 @@ import type {
 import OpenAI from "openai";
 import config from "@/agent/config";
 
-import { normalizeUsage } from "@/shared/usage";
 import { STAGE_TOOLS } from "@/shared/stage-tools";
 
 import * as Utils from "./-utils";
-
-type TMeta = {
-  requestId: string;
-  sessionId: string;
-};
-
-type UsageEmitPayload = {
-  chatMessages?: { content?: unknown; role: string; toolCallIndex?: number; usageDelta?: unknown }[];
-  model: string;
-  durationMs: number;
-  requestId: string;
-  sessionId: string;
-  thinkingMode: boolean;
-  usage: NormalizedUsage;
-};
-
-let usageEmitter: ((payload: UsageEmitPayload) => void) | null = null;
-
-export const getEmitter = () => usageEmitter;
-
-export const setUsageEmitter = (fn: ((payload: UsageEmitPayload) => void) | null) => {
-  usageEmitter = fn;
-};
 
 export const chatWithTools = async (
   messages: ChatApiMessage[],

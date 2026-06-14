@@ -1,32 +1,22 @@
 import config from "./config";
 
-import path from "path";
+import type { TAskUserResumeFrom } from '@/shared/transports/-types';
 
 import {
   parseStageEnvelope,
-  type RenderA2uiPlanToolCallEnvelope,
-  type SetContextToolCallEnvelope,
   type StageEnvelope,
   type StageSessionInput,
-} from "../shared/stage-contract";
+} from "@/shared/stage-contract";
+import { validateYahlStage } from "@/shared/yahl-stage";
 
 import {
   type ChatApiMessage,
   type ChatAssistantMessage,
   type ChatToolCall,
-  parseAskUserToolArguments,
-  parseRagToolArguments,
-  parseRenderA2uiPlanToolArgumentsDetailed,
   parseRunBashToolArguments,
-  parseSetContextToolArguments,
-  askUserArgumentsToEnvelope,
-  ragArgumentsToEnvelope,
-  renderA2uiPlanArgumentsToEnvelope,
-  setContextArgumentsToEnvelope,
-} from "../shared/stage-tools";
-import { buildA2uiTranslatorSystemMessage, buildA2uiTranslatorUserMessage } from "../orchestrator/-utils/a2ui-plan-translator";
+} from "@/shared/stage-tools";
 
-import { readFileUtf8 } from "./-utils/prompts";
+import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
 
 type BootstrapMessage = {
   content: string;
@@ -39,35 +29,14 @@ type StageRunner = {
   chatWithTools: (
     messages: ChatApiMessage[],
     options?: { temperature?: number },
-  ) => Promise<ChatAssistantMessage>;
+  ) => Promise<ChatAssistantMessage[]>;
 };
 
 type StageSessionOptions = {
   maxBashCalls?: number;
   maxTurns?: number;
-};
-
-const a2uiStagePattern = /\/a2ui\(\s*([a-zA-Z0-9_.-]+)\s*\)/;
-
-const summarizeNodeShape = (value: unknown): unknown => {
-  if (value === null) return "null";
-  if (value === undefined) return "undefined";
-  if (Array.isArray(value)) {
-    if (!value.length) return [];
-    return [{ item: summarizeNodeShape(value[0]) }];
-  }
-  if (typeof value === "object") {
-    const input = value as Record<string, unknown>;
-    const out: Record<string, unknown> = {};
-    Object.keys(input)
-      .sort()
-      .slice(0, 30)
-      .forEach((key) => {
-        out[key] = summarizeNodeShape(input[key]);
-      });
-    return out;
-  }
-  return typeof value;
+  resumeFrom?: TAskUserResumeFrom;
+  resumeMessages?: ChatApiMessage[];
 };
 
 const toApiMessages = (messages: BootstrapMessage[]): ChatApiMessage[] =>
@@ -87,7 +56,14 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
   if (!parsedRaw || typeof parsedRaw !== "object" || Array.isArray(parsedRaw)) return null;
 
   const parsed = parsedRaw as Record<string, unknown>;
-  if (typeof parsed.currentStage !== "string") return null;
+  if (!parsed.stage || typeof parsed.stage !== "object" || Array.isArray(parsed.stage)) return null;
+
+  let stage;
+  try {
+    stage = validateYahlStage(parsed.stage);
+  } catch {
+    return null;
+  }
 
   if (!parsed.context) return null;
   if (typeof parsed.context !== 'object') return null;
@@ -98,10 +74,6 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
   if (!context.context) return null;
   if (typeof context.context !== 'object') return null;
   if (Array.isArray(context.context)) return null;
-
-  if (!context.stage) return null;
-  if (typeof context.stage !== 'object') return null;
-  if (Array.isArray(context.stage)) return null;
 
   const types = context.types;
   const typesRecord =
@@ -115,11 +87,10 @@ export const parseStageSessionInput = (text: string): StageSessionInput | null =
 
   return {
     context: {
-      context: context.context as Record<string, unknown>,
-      stage: context.stage as Record<string, unknown>,
-      types: typesRecord,
+      context: new Map(Object.entries(context.context as Record<string, unknown>)),
+      types: new Map(Object.entries(typesRecord)),
     },
-    currentStage: parsed.currentStage,
+    stage,
     ...(temperature === undefined ? {} : { temperature }),
   };
 };
@@ -158,15 +129,8 @@ export const normalizeToolCalls = (raw: unknown): ChatToolCall[] | undefined => 
   return out.length > 0 ? out : undefined;
 };
 
-const finalizeEnvelope = (
-  content: string | null,
-  toolEnvelopes: Array<RenderA2uiPlanToolCallEnvelope | SetContextToolCallEnvelope>,
-): StageEnvelope => {
+const finalizeEnvelope = (content: string | null): StageEnvelope => {
   const trimmed = (content ?? "").trim();
-
-  if (toolEnvelopes.length > 0) {
-    return toolEnvelopes;
-  }
 
   if (trimmed) {
     const envelope = parseStageEnvelope(trimmed);
@@ -189,11 +153,6 @@ const toolErrorContent = (message: string) =>
     ok: false,
   });
 
-const toolOkContent = () =>
-  JSON.stringify({
-    ok: true,
-  });
-
 export const runStageSession = async (
   stageInput: StageSessionInput,
   messages: BootstrapMessage[],
@@ -203,46 +162,43 @@ export const runStageSession = async (
   const maxBashCalls = options.maxBashCalls ?? 24;
   const maxTurns = options.maxTurns ?? 60;
 
-  const toolsMd = await readFileUtf8(path.resolve(config.runtimeRoot, "Tools.md"));
+  const askUserResumePrompt = options.resumeFrom
+    ? buildAskUserResumePrompt(options.resumeFrom)
+    : '';
 
-  const payload = JSON.stringify(stageInput, null, 2);
-  const a2uiMatch = stageInput.currentStage.match(a2uiStagePattern);
-  const a2uiKey = a2uiMatch?.[1]?.trim();
-  const a2uiRootData = a2uiKey ? stageInput.context.context[a2uiKey] : undefined;
-  const a2uiSchemaSummary =
-    a2uiRootData === undefined ? undefined : JSON.stringify(summarizeNodeShape(a2uiRootData));
-  const a2uiTranslatorMessages: ChatApiMessage[] =
-    a2uiKey
-      ? [
-        {
-          content: buildA2uiTranslatorSystemMessage(),
-          role: "system",
-        },
-        {
-          content: buildA2uiTranslatorUserMessage({
-            dataRef: { key: a2uiKey, scope: "global" },
-            schemaSummary: a2uiSchemaSummary,
-          }),
-          role: "system",
-        },
-      ]
-      : [];
+  const pendingAskUser = stageInput.stage.askUser?.filter((entry) => entry.answer === undefined) ?? [];
+  const askUserHint = pendingAskUser.length
+    ? [
+      'Registered askUser questions (use exact questionRef and title):',
+      ...pendingAskUser.map((entry) => (
+        `- questionRef: "${entry.id}", title: ${JSON.stringify(entry.question)}`
+      )),
+    ].join('\n')
+    : '';
+
+  const payload = JSON.stringify({
+    ...stageInput,
+    context: {
+      context: Object.fromEntries(stageInput.context.context.entries()),
+      types: Object.fromEntries(stageInput.context.types.entries()),
+    },
+  }, null, 2);
 
   const stageMessages: ChatApiMessage[] = [
     ...toApiMessages(messages),
-    ...a2uiTranslatorMessages,
     {
       role: "user",
-      // content: `${toolsMd}\n\nInput:\n${payload}`,
-      content: `\n\nInput:\n${payload}`
+      content: [
+        askUserResumePrompt,
+        askUserHint,
+        `\n\nInput:\n${payload}`,
+      ].filter(Boolean).join('\n'),
     },
+    ...(options.resumeMessages ?? []),
   ];
 
   let bashCalls = 0;
   let turns = 0;
-  const toolEnvelopes: Array<RenderA2uiPlanToolCallEnvelope | SetContextToolCallEnvelope> = [];
-  const invalidRenderArgsAttempts = new Map<string, number>();
-  const maxSameInvalidRenderAttempts = 3;
 
   while (turns < maxTurns) {
     turns += 1;
@@ -250,10 +206,10 @@ export const runStageSession = async (
     const chatOpts =
       stageInput.temperature === undefined ? undefined : { temperature: stageInput.temperature };
     const assistantMessage = await runner.chatWithTools(stageMessages, chatOpts);
-    stageMessages.push(assistantMessage);
+    stageMessages.push(...assistantMessage);
 
-    const toolCalls = assistantMessage.tool_calls || [];
-
+    const toolCalls = assistantMessage.flatMap((message) => message.tool_calls || []);
+    
     for (const call of toolCalls) {
       const name = call.function.name;
       const rawArgs = call.function.arguments ?? "";
@@ -296,88 +252,7 @@ export const runStageSession = async (
         continue;
       }
 
-      if (name === "rag") {
-        const args = parseRagToolArguments(rawArgs);
-        if (!args) {
-          stageMessages.push({
-            content: toolErrorContent("rag: invalid arguments"),
-            role: "tool",
-            tool_call_id: call.id,
-          });
-
-          continue;
-        }
-
-        return ragArgumentsToEnvelope(args);
-      }
-
-      if (name === "ask_user") {
-        const args = parseAskUserToolArguments(rawArgs);
-        if (!args) {
-          stageMessages.push({
-            content: toolErrorContent("ask_user: invalid arguments"),
-            role: "tool",
-            tool_call_id: call.id,
-          });
-          continue;
-        }
-        return askUserArgumentsToEnvelope(args);
-      }
-
-      if (name === "render_a2ui_plan") {
-        const parsed = parseRenderA2uiPlanToolArgumentsDetailed(rawArgs);
-        if (!parsed.ok) {
-          const signature = `${parsed.issue.code}:${rawArgs}`;
-          const attempts = (invalidRenderArgsAttempts.get(signature) ?? 0) + 1;
-          invalidRenderArgsAttempts.set(signature, attempts);
-          stageMessages.push({
-            content: toolErrorContent(
-              `render_a2ui_plan: ${parsed.issue.code}: ${parsed.issue.message}`,
-            ),
-            role: "tool",
-            tool_call_id: call.id,
-          });
-
-          if (attempts >= maxSameInvalidRenderAttempts) {
-            return {
-              output:
-                `执行失败 render_a2ui_plan repeated invalid arguments (${parsed.issue.code}) ` +
-                `${attempts} times: ${parsed.issue.message}`,
-              type: "result",
-            };
-          }
-
-          continue;
-        }
-        toolEnvelopes.push(renderA2uiPlanArgumentsToEnvelope(parsed.arguments));
-        stageMessages.push({
-          content: toolOkContent(),
-          role: "tool",
-          tool_call_id: call.id,
-        });
-        continue;
-      }
-
-      if (name === "set_context") {
-        const args = parseSetContextToolArguments(rawArgs);
-
-        if (!args) {
-          stageMessages.push({
-            content: toolErrorContent("set_context: invalid arguments"),
-            role: "tool",
-            tool_call_id: call.id,
-          });
-
-          continue;
-        }
-
-        toolEnvelopes.push(setContextArgumentsToEnvelope(args));
-        stageMessages.push({
-          content: toolOkContent(),
-          role: "tool",
-          tool_call_id: call.id,
-        });
-
+      if (name === "set_context" || name === "rag" || name === "ask_user") {
         continue;
       }
 
@@ -390,7 +265,7 @@ export const runStageSession = async (
 
     if (toolCalls.length > 0) continue;
 
-    return finalizeEnvelope(assistantMessage.content, toolEnvelopes);
+    return finalizeEnvelope(assistantMessage.at(-1)?.content || '');
   }
 
   return {

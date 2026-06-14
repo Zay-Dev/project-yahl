@@ -37,7 +37,8 @@ Stuff that already works (aka things that surprisingly do not explode):
 - Session/event tracking with replayable step history and usage/cost visibility.
 - Web UI now has proper Runner + Sessions + Session Detail flow with live logs/status and jump-to-session links.
 - Session detail view includes live stream panel, model aggregate table, step details dialog, and final result dialog (aka less guessing, more actual receipts).
-- Fork-run flow supports editing structured request snapshots (`currentStage`, `context.context`, `context.stage`, `context.types`) before rerun, which makes debugging way less painful.
+- Fork-run flow supports editing structured request snapshots (`stage` YAHL object, `context.context`, `context.stage`, `context.types`) before rerun, which makes debugging way less painful.
+- Session `Stages` documents store `stage` as structured JSON (`logic`, `contextMode`, `loopSetup`, key allowlists, etc.), not compiled pseudo-code strings. Existing Mongo rows with `currentStage` strings are incompatible; reset stage collections in dev or run a one-off migration.
 - Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
 - VM client now runs on `isolated-vm` for stronger sandbox boundaries and fewer "hope-this-is-fine" moments.
 - You can attach the orchestrator to a debugger, hit breakpoints, and even poke variables manually while tracing execution. (sounds pretty like coding right?)
@@ -47,7 +48,6 @@ Stuff to build:
 - More granular per-line or per-step error visibility.
 - Full input/output logs per stage (so debugging is less detective work, more replay button).
 - OneCLI integration for safer secret handling (ongoing polish, fewer paper cuts).
-- Extend A2UI beyond current `ask-user` multiple-choice flow (richer approvals, clarifications, and multi-step interactions).
 - Friendlier UI polish around authoring and inspecting YAHL scripts.
 
 ## Some catchy syntax
@@ -79,44 +79,11 @@ A quick tour of the shapes:
 - `/skill_name(...)` — call into a skill from the skills folder; think of it as a named, well-documented capability.
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 
-A trimmed look at current task shapes (`test` + `competitor_intel` energy):
-
-```
-CONTEXT: {
-  const base = { a: 1, b: 2 };
-
-  (() => ({
-    ...base,
-    c: base.a + base.b,
-  }))
-}
-
-for each i of [1..5,+2] {
-  c += i;
-}
-
-IF: context.context.c % 2 === 0;
-   c = context.context.c * 2;
-ELSE IF: context.context.c > 30;
-   c = context.context.c - 2;
-ELSE:
-   c = context.context.c / 2;
-END:
-
-c += /ask-user(which number of 1,2,3,4,5);
-
-for each competitor of [competitors] {
-  for each source of [competitor.news_sources] {
-    raw_articles = /web-search(query: `${competitor.name} news last 7 days`, source: source);
-
-    EXTENDS: intel = *extract_intel(raw_articles, flat_map_to: TIntelItem, set_competitor: competitor.name);
-  }
-}
-```
+`SKILL.yahl` is a single YAML document (`name`, `description`, optional `types`, and a `stages` list). Each stage has a `logic: |` block; the runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF:` branches, and brace-wrapped AI blocks). See `runtime/orchestrator/TASKS/test/SKILL.yahl` for the canonical shape.
 
 ## How it feels under the hood
 
-- A YAHL script is just a markdown file with a code block of pseudo code.
+- A YAHL task file is YAML; stage `logic` holds the pseudo-code the agent or VM runs.
 - The runtime reads it, slices it into stages, runs VM-evaluable control blocks (`CONTEXT` / `IF` family) inside `isolated-vm`, then hands AI stages to the model in a clean sandbox.
 - Anything worth keeping goes into a shared bucket; everything else is forgotten between stages.
 - The AI talks back through a few structured tools — set a variable, run a shell command, ask user choices, ask for chunked extraction.
@@ -132,20 +99,36 @@ flowchart LR
 ## Run it
 
 - You need Node + pnpm + Docker.
-- Repo shape (pnpm workspace):
-  - `runtime/` - YAHL runtime + orchestrator
-  - `server/` - Express + Mongoose session records API
+- Repo shape (Omniflex pnpm workspace member under `../pnpm-workspace.yaml`):
+  - `runtime/` (`@project-yahl/runtime`) - YAHL runtime + orchestrator
+  - `server/` (`@project-yahl/server`) - Omniflex Express + Mongoose session API
   - `web/` - Vite + shadcn app for runner, sessions list, and deep session inspection
-- Docker compose split:
-  - root `docker-compose.yml` serves `onecli + mongo + redis + server + web`
-  - `runtime/docker-compose.yml` remains available, and orchestrator keeps using compose for agent lifecycle with a shared OneCLI SDK override
-- Copy `.env.example` to `.env`, keep provider keys as placeholders, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`.
+- Install and build framework packages from the **Omniflex repo root** (`../`):
+
+```bash
+cd ..
+pnpm install
+pnpm -r --filter "./infras/**" run build
+```
+
+- **Docker compose:**
+  - [`docker-compose.yml`](docker-compose.yml) — stack: infra (mongo, redis, onecli) + built server + web (`pnpm run compose:up` / `compose:up:all`); image build context is the **Omniflex monorepo root** (`..` from project-yahl); app paths use `OMNIFLEX_APP_DIR` (default `project-yahl`); `COMPOSE_PROJECT_NAME` is independent (Docker naming only, e.g. agent image tag)
+  - [`docker-compose.agent.yml`](docker-compose.agent.yml) — agent only; used by orchestrator (`pnpm run orchestrate`), never by `compose:up`
+- **Local volume data** (gitignored): [`data/`](data/) (infra persistence), [`workspace/`](workspace/) (agent files), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides)
+- Copy `server/.env.example` to `server/.env` (or project `.env` for local dev).
+- **Local dev** (hot reload on the host):
+  1. Start infra: `pnpm run compose:up` (mongo, redis, onecli, postgres)
+  2. Run apps: `pnpm run dev` (server + runtime) and `pnpm run dev:web` in another terminal
+  3. Run sessions: `pnpm run orchestrate`
+- **Full Docker stack** (optional, CI/demo): `pnpm run compose:up:all` (infra + built server + web)
+- Dockerfiles: [`server/Dockerfile`](server/Dockerfile) (API + built orchestrator), [`web/Dockerfile`](web/Dockerfile) (static nginx), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (agent; built on the host when orchestrator runs)
+- Copy [`.env.example`](.env.example) to `.env`, set `HOST_REPO_ROOT` to the **absolute path** of this repo, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`
 - Runtime only: `pnpm run orchestrate`.
-- API server: `pnpm run dev:server`.
+- API server (from Omniflex root or this repo): `pnpm run dev:server` or `pnpm --filter @project-yahl/server run dev`.
 - Web app: `pnpm run dev:web`.
-- Everything together: `pnpm run dev`.
-- App stack with Docker: `pnpm run compose:up`
-- Runtime stack with Docker: `pnpm run compose:runtime:up`
+- Everything together: `pnpm run dev` (after `pnpm run compose:up` for infra)
+- Infra only: `pnpm run compose:up`
+- Full stack: `pnpm run compose:up:all`
 
 ### Advanced orchestrate flags
 
@@ -154,7 +137,7 @@ flowchart LR
 - Resume/fork flow inputs:
   - `--resume-source-session-id <sessionId>`
   - `--resume-source-request-id <requestId>`
-  - `--forkrun-form-id <forkrunFormId>`
+  - `--forkrun-id <forkSessionId>`
 
 ### OneCLI setup checklist
 
@@ -185,7 +168,9 @@ Quick sanity map (so future-you can debug at 2am with less suffering):
 - `POST /api/runs` starts an orchestrator run for a task.
 - SSE streams expose live run logs (`meta` / `log` / `status`) and session events for the web UI.
 - `GET /api/sessions?includeArchived=true` includes archived sessions; default list hides archived rows.
-- `GET /api/forkrun-forms/:forkrunFormId` fetches saved rerun draft payloads.
+- `POST /api/sessions/:sessionId/fork-sessions` creates a fork session and spawns `pnpm --filter runtime run orchestrate -- --session-id <target> --forkrun-id <id>`.
+- `GET /api/fork-sessions/:forkSessionId` loads fork setup for the orchestrator.
+- `GET /api/sessions/:sessionId/stages/replay` returns full stage rows for prefix fast-forward.
 - Session endpoints support inspect, soft-delete, hard-delete, and rerun-from-request flow with safety guardrails (rerun rejects non-finalized, truncated, or missing-prefix-context snapshots).
 - Session persistence uses normalized Mongo collections (`sessions`, `session_stages`, `session_tool_calls`, `session_stage_chat_messages`, `session_model_spends`, `session_fork_lineages`). After upgrading, wipe the database or drop those collections so old single-document `sessions` rows do not conflict with the new layout.
 

@@ -27,11 +27,3 @@ export const readFolderUtf8 = async (dirPath: string) => {
     return "";
   }
 };
-
-export const decodeBase64 = (text: string) => {
-  try {
-    return Buffer.from(text, "base64").toString("utf-8").trim();
-  } catch {
-    return "";
-  }
-};

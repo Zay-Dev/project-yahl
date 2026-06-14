@@ -1,3 +1,6 @@
+import type { TStorage } from "@/shared/transports/-types";
+import type { YahlStage } from "@/shared/yahl-stage";
+
 import config from "./config";
 
 import { exec } from "child_process";
@@ -5,13 +8,17 @@ import { promisify } from "util";
 
 import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 
+import { buildResumeStageMessages } from './-utils/resume-messages';
 import { runStageSession } from "./stage-session";
 
-import { fastForward } from "./-utils/ff-client";
+import { fastForward, type TContextBuckets } from './-utils/ff-client';
 import { chatWithTools } from "./-utils/llm-client";
+import { isVmConditionBranch, wrapVmLogic } from "./condition-branch";
 import { runScript, runConditionScript } from "./-utils/vm-client";
 
-type TReply = ReturnType<typeof subscriber.getReply>;
+type TGetReplyReturnType = ReturnType<typeof subscriber['getReply']>;
+
+type TFastModel = 'vm' | 'fast-forward';
 
 const execAsync = promisify(exec);
 
@@ -34,57 +41,78 @@ const runCommand = async (command: string) => {
   }
 };
 
-const _toToolsCall = async (
-  model: 'vm' | 'fast-forward',
+const _contextBucketsFromVm = (
+  output: Record<string, unknown>,
+): TContextBuckets => ({
+  context: output,
+  types: {},
+});
+
+const _toSetContextToolCalls = (
+  model: TFastModel,
   requestId: string,
-  context: Record<string, unknown>,
-  reply: TReply['reply'],
-  onModelResponse: TReply['onModelResponse'],
+  buckets: TContextBuckets,
 ) => {
-  const toolsCall = Object.entries(context)
-    .map(([key, value], index) => ({
-      arguments: {
-        key,
-        value,
-        scope: "global" as const,
-        operation: 'set' as const,
-      },
-      id: `${model}-${requestId}-${index}`,
-      tool: "set_context" as const,
-      type: "tool_call" as const,
-    }));
+  const specs = [
+    ...Object.entries(buckets.context).map(([key, value]) => ({
+      key,
+      operation: 'set' as const,
+      scope: 'global' as const,
+      value,
+    })),
+    ...Object.entries(buckets.types).map(([key, value]) => ({
+      key,
+      operation: 'set' as const,
+      scope: 'types' as const,
+      value,
+    })),
+  ];
 
-  await reply(toolsCall);
+  return specs.map((arguments_, index) => ({
+    id: `${model}-${requestId}-${index}`,
+    type: 'function' as const,
+    function: {
+      name: 'set_context',
+      arguments: JSON.stringify(arguments_),
+    },
+  }));
+};
 
-  await onModelResponse({
-    durationMs: 0,
-    thinkingMode: false,
+const _handleToolCalls = async (
+  storage: TStorage,
+  error: TGetReplyReturnType['error'],
+  toolCall: TGetReplyReturnType['toolCall'],
+  toolCalls: Awaited<ReturnType<typeof _toSetContextToolCalls>>,
+) => {
+  const toolCallMessages = new Array<{ role: 'tool'; content: string; tool_call_id: string; }>();
 
-    model,
-    id: model,
-    object: "chat.completion",
-    created: Date.now(),
+  for (const call of toolCalls) {
+    const result = await toolCall(call);
+    const baseMessage = { role: 'tool' as const, tool_call_id: call.id };
 
-    choices: [{
-      index: 0,
-      finish_reason: "stop",
-      logprobs: null,
-      message: {
-        content: "",
-        role: "assistant",
-        refusal: null,
-        tool_calls: toolsCall.map((call) => ({
-          id: call.id,
-          type: 'function',
-          function: {
-            name: call.tool,
-            arguments: JSON.stringify(call.arguments),
-          },
-        })),
-      },
-    }]
-  });
-}
+    if (result.hasError) {
+      await error(new Error(result.result));
+
+      toolCallMessages.push({ ...baseMessage, content: `tool call error: ${result.result}` });      
+    } else if (result.newStorage) {
+      const replace = (key: keyof TStorage) => {
+        storage[key].clear();
+
+        Object.entries(result.newStorage![key])
+          .forEach(([key, value]) => {
+            storage[key].set(key, value);
+          });
+      };
+
+      replace('context');
+      replace('types');
+
+      toolCallMessages.push({ ...baseMessage, content: `tool call result: OK` });
+    }
+  }
+
+  return { toolCallMessages };
+};
 
 export const startRedisDaemon = async () => {
   if (!config.apiKey) {
@@ -110,40 +138,68 @@ export const startRedisDaemon = async () => {
     const envelope = await subscriber.waitForRequest();
     if (!envelope) continue;
 
-    const { context, contextAfter, currentStage, requestId, temperature } = envelope;
-    const { reply, error, onModelResponse } = subscriber.getReply(requestId);
-    try {
-      const _runStage = async (script: string = currentStage) => {
-        const lines = script.split('\n');
+    const { context, contextAfter, requestId, resumeFrom, stage, temperature } = envelope;
+    const effectiveTemperature = temperature ?? stage.temperature;
+    const { end, error, toolCall, onModelResponse } = subscriber.getReply(requestId);
 
-        if (!!contextAfter) {
-          const contextOutput = await fastForward(contextAfter);
-          await _toToolsCall('fast-forward', requestId, contextOutput, reply, onModelResponse);
-          return;
-        } else if (lines[0]?.match(/\s*CONTEXT:/)) {
-          const contextInput = context;
+    const _handleContextOutput = async (
+      model: TFastModel,
+      buckets: TContextBuckets,
+    ) => {
+      const calls = _toSetContextToolCalls(model, requestId, buckets);
+
+      await _handleToolCalls(context, error, toolCall, calls);
+    };
+
+    try {
+      const _runStage = async (stageSpec: YahlStage = stage) => {
+        if (contextAfter != null) {
+          await _handleContextOutput('fast-forward', await fastForward(contextAfter));
+
+          return await end();
+        }
+
+        if (stageSpec.contextMode) {
           const contextOutput = await runScript(
-            ['{', ...lines.slice(1)].join('\n').trim(),
-            contextInput,
+            wrapVmLogic(stageSpec.logic),
+            context,
           );
-  
-          await _toToolsCall('vm', requestId, contextOutput, reply, onModelResponse);
-          return;
-        } else if (lines[0]?.match(/^\s*IF:/)) {
-          const winningCondition = await runConditionScript(script, context);
-          
-          if (winningCondition) {
-            await _runStage(winningCondition);
+
+          await _handleContextOutput('vm', _contextBucketsFromVm(contextOutput));
+          return await end();
+        }
+
+        if (stageSpec.conditionMode) {
+          const winningCondition = await runConditionScript(stageSpec.logic, context);
+
+          if (!winningCondition) {
+            return await end();
           }
+
+          if (isVmConditionBranch(winningCondition)) {
+            const contextOutput = await runScript(
+              wrapVmLogic(winningCondition),
+              context,
+            );
+
+            await _handleContextOutput('vm', _contextBucketsFromVm(contextOutput));
+            return await end();
+          }
+
+          await _runStage({
+            ...stageSpec,
+            conditionMode: undefined,
+            logic: winningCondition,
+          });
 
           return;
         }
-  
-        const out = await runStageSession(
+
+        await runStageSession(
           {
             context,
-            currentStage: script,
-            ...(temperature === undefined ? {} : { temperature }),
+            stage: stageSpec,
+            temperature: effectiveTemperature,
           },
           messages,
           {
@@ -152,18 +208,35 @@ export const startRedisDaemon = async () => {
               const start = Date.now();
               const result = await chatWithTools(messages, opts);
 
+              const allowedTools = ['set_context', 'ask_user', 'rag'];
+
               await onModelResponse({
                 ...result.response,
                 durationMs: Date.now() - start,
                 thinkingMode: config.thinkingMode,
               });
-  
-              return result;
+
+              const { toolCallMessages } = await _handleToolCalls(
+                context,
+                error,
+                toolCall,
+                (result.tool_calls || [])
+                  .filter(tool => allowedTools.includes(tool.function.name)),
+              );
+
+              return [
+                result,
+                ...toolCallMessages,
+              ] as any[];
             },
           },
+          {
+            resumeFrom,
+            resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,
+          },
         );
-  
-        await reply(out);
+
+        return await end();
       };
 
       await _runStage();

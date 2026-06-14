@@ -1,87 +1,56 @@
-import "dotenv/config";
+import config from '@/config';
 
-import cors from "cors";
-import express from "express";
-import mongoose from "mongoose";
+import '@omni-infra/core';
+import '@/core';
 
-import type { ServerRoutesDeps } from "./modules/deps";
-import { registerCreateRunRoute } from "./modules/runs/use-cases/create-run";
-import { registerGetRunRoute } from "./modules/runs/use-cases/get-run";
-import { registerStreamRunLogsSseRoute } from "./modules/runs/use-cases/stream-run-logs-sse";
-import { registerCreateStageRoute } from "./modules/sessions/use-cases/create-stage";
-import { registerCreateStageModelResponseRoute } from "./modules/sessions/use-cases/create-stage-model-response";
-import { registerCreateStageToolCallsRoute } from "./modules/sessions/use-cases/create-stage-tool-calls";
-import { registerCreateAskUserQuestionRoute } from "./modules/sessions/use-cases/create-ask-user-question";
-import { registerFinalizeSessionRoute } from "./modules/sessions/use-cases/finalize-session";
-import { registerGetForkrunFormRoute } from "./modules/sessions/use-cases/get-forkrun-form";
-import { registerGetAskUserQuestionRoute } from "./modules/sessions/use-cases/get-ask-user-question";
-import { registerGetSessionRoute } from "./modules/sessions/use-cases/get-session";
-import { registerHardDeleteSessionRoute } from "./modules/sessions/use-cases/hard-delete-session";
-import { registerListSessionsRoute } from "./modules/sessions/use-cases/list-sessions";
-import { registerPatchStageRuntimeSnapshotRoute } from "./modules/sessions/use-cases/patch-stage-runtime-snapshot";
-import { registerRegisterSessionRoute } from "./modules/sessions/use-cases/register-session";
-import { registerRerunRequestRoute } from "./modules/sessions/use-cases/rerun-request";
-import { registerSoftDeleteSessionRoute } from "./modules/sessions/use-cases/soft-delete-session";
-import { registerStreamSessionSseRoute } from "./modules/sessions/use-cases/stream-session-sse";
-import { registerStreamSessionsSseRoute } from "./modules/sessions/use-cases/stream-sessions-sse";
-import { registerAnswerAskUserQuestionRoute } from "./modules/sessions/use-cases/answer-ask-user-question";
-import { registerDeleteAskUserRecoveryRoute } from "./modules/sessions/use-cases/delete-ask-user-recovery";
-import { registerPostAskUserTimedOutRecoveryRoute } from "./modules/sessions/use-cases/post-ask-user-timed-out-recovery";
-import { registerResumeAskUserRoute } from "./modules/sessions/use-cases/resume-ask-user";
-import { registerUpdateSessionTitleRoute } from "./modules/sessions/use-cases/update-session-title";
-import { registerErrorHandler } from "./modules/system/use-cases/register-error-handler";
-import { registerGetHealthRoute } from "./modules/system/use-cases/get-health";
-import { registerListTasksRoute } from "./modules/tasks/use-cases/list-tasks";
-import { createRunManager } from "./run-manager";
+import { createLogger } from '@omni-infra/logger-winston';
 
-const app = express();
+import fs from 'fs/promises';
+import path from 'path';
+import url from 'url';
+import mongoose from 'mongoose';
 
-const port = Number(process.env.PORT || 4000);
-const mongoUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/yahl";
+import * as Servers from './servers';
 
-const runManager = createRunManager();
+declare global {
+  var appConfig: typeof config;
+}
 
-const deps: ServerRoutesDeps = { runManager };
+globalThis.appConfig = config;
 
-app.use(cors());
-app.use(express.json({ limit: "50mb" }));
+const initialize = async () => {
+  logger = createLogger();
 
-registerGetHealthRoute(app);
-registerListTasksRoute(app, deps);
-registerCreateRunRoute(app, deps);
-registerGetRunRoute(app, deps);
-registerStreamRunLogsSseRoute(app, deps);
-registerRegisterSessionRoute(app);
-registerRerunRequestRoute(app, deps);
-registerCreateStageRoute(app);
-registerCreateStageToolCallsRoute(app);
-registerCreateStageModelResponseRoute(app);
-registerCreateAskUserQuestionRoute(app);
-registerPatchStageRuntimeSnapshotRoute(app);
-registerFinalizeSessionRoute(app);
-registerGetForkrunFormRoute(app);
-registerGetAskUserQuestionRoute(app);
-registerStreamSessionSseRoute(app);
-registerStreamSessionsSseRoute(app);
-registerListSessionsRoute(app);
-registerGetSessionRoute(app);
-registerSoftDeleteSessionRoute(app);
-registerHardDeleteSessionRoute(app);
-registerAnswerAskUserQuestionRoute(app);
-registerPostAskUserTimedOutRecoveryRoute(app);
-registerDeleteAskUserRecoveryRoute(app);
-registerResumeAskUserRoute(app, deps);
-registerUpdateSessionTitleRoute(app);
-registerErrorHandler(app);
-
-const start = async () => {
-  await mongoose.connect(mongoUri);
-  app.listen(port, () => {
-    process.stdout.write(`[server] listening on ${port}\n`);
-  });
+  try {
+    logger.info('Connecting to MongoDB');
+    await mongoose.connect(config.mongoDb.url);
+    logger.info('Connected to MongoDB');
+  } catch (error: unknown) {
+    logger.error('Failed to connect to MongoDB', { error: error as Error });
+    throw error;
+  }
 };
 
-start().catch((error: unknown) => {
-  console.error(`[server] failed to boot: ${String(error)}\n`);
-  process.exit(1);
+const loadModules = async () => {
+  const prefix = '@project-yahl/server/modules/';
+  const pathToModules = url.pathToFileURL(path.resolve(config.cwd, 'src/modules'));
+
+  try {
+    const modules = (await fs
+      .readdir(pathToModules, { withFileTypes: true }))
+      .filter((value) => value.isDirectory())
+      .map((value) => value.name);
+
+    await Promise.all(
+      modules.map((module) => import(`${prefix}${module}`)),
+    );
+  } catch (ex: unknown) {
+    logger.warn('Load modules/* failed');
+    logger.debug('Load modules error', { error: ex as Error });
+  }
+};
+
+initialize().then(async () => {
+  await loadModules();
+  Servers.startAll();
 });

@@ -1,5 +1,4 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -14,8 +13,24 @@
     "forceConsistentCasingInFileNames": true,
     "sourceMap": true,
     "declaration": true,
+    "outDir": "dist",
+    "rootDir": ".",
     "paths": {
       "@/*": ["./*"]
     }
+  },
+  "include": [
+    "agent/**/*.ts",
+    "orchestrator/**/*.ts",
+    "shared/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "dist",
+    "node_modules"
+  ],
+  "tsc-alias": {
+    "resolveFullPaths": true,
+    "resolveFullExtension": ".js"
   }
 }

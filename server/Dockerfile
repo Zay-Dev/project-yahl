@@ -1,6 +1,33 @@
-FROM node:22
+FROM node:22-bookworm AS base
 
-WORKDIR /app
+ARG OMNIFLEX_APP_DIR=project-yahl
+
+WORKDIR /omniflex
+
+RUN corepack enable
+
+FROM base AS deps
+
+ARG OMNIFLEX_APP_DIR=project-yahl
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.infras.json ./
+COPY infras ./infras
+COPY ${OMNIFLEX_APP_DIR} ./${OMNIFLEX_APP_DIR}
+
+RUN pnpm install --frozen-lockfile \
+  --filter @project-yahl/server... \
+  --filter @project-yahl/runtime...
+
+FROM deps AS build
+
+ARG OMNIFLEX_APP_DIR=project-yahl
+
+RUN pnpm --filter @project-yahl/server... run build \
+  && pnpm --filter @project-yahl/runtime run build
+
+FROM node:22-bookworm-slim AS prod
+
+ARG OMNIFLEX_APP_DIR=project-yahl
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
@@ -12,7 +39,35 @@ RUN apt-get update \
   $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" \
   > /etc/apt/sources.list.d/docker.list \
   && apt-get update \
-  && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
+  && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin docker-buildx-plugin \
   && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable
+WORKDIR /omniflex
+
+COPY --from=build /omniflex/node_modules ./node_modules
+COPY --from=build /omniflex/infras ./infras
+COPY --from=build /omniflex/package.json ./package.json
+COPY --from=build /omniflex/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=build /omniflex/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/package.json
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.agent.yml ./${OMNIFLEX_APP_DIR}/docker-compose.agent.yml
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.yml ./${OMNIFLEX_APP_DIR}/docker-compose.yml
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server ./${OMNIFLEX_APP_DIR}/server
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/dist ./${OMNIFLEX_APP_DIR}/runtime/dist
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/node_modules ./${OMNIFLEX_APP_DIR}/runtime/node_modules
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/Dockerfile.agent ./${OMNIFLEX_APP_DIR}/runtime/
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/tsconfig.json ./${OMNIFLEX_APP_DIR}/runtime/tsconfig.json
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/agent ./${OMNIFLEX_APP_DIR}/runtime/agent
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/orchestrator ./${OMNIFLEX_APP_DIR}/runtime/orchestrator
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/shared ./${OMNIFLEX_APP_DIR}/runtime/shared
+
+WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/server
+
+ENV NODE_ENV=production
+ENV OMNIFLEX_APP_DIR=${OMNIFLEX_APP_DIR}
+ENV RUNTIME_REPO_ROOT=/omniflex/${OMNIFLEX_APP_DIR}/runtime
+
+EXPOSE 4000
+
+CMD ["node", "dist/src/index.js"]

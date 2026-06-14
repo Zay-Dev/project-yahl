@@ -8,6 +8,22 @@ Use this skill when the stage requires user decision before continuing.
 - collect deterministic answer ids for downstream context updates
 - avoid guessing when user preference is required
 
+## Stage registry
+
+Stages may declare questions in YAML:
+
+```yaml
+askUser:
+  - id: 1
+    question: Choose pricing scope
+logic: |
+  scope = /ask-user(1);
+```
+
+- `question` is the required tool `title` and UI heading
+- `/ask-user(<id>)` must match a registry entry
+- server fills `answer` after the user responds
+
 ## Required tool
 
 Call `ask_user` with this exact argument shape:
@@ -16,6 +32,7 @@ Call `ask_user` with this exact argument shape:
 {
   "version": "askUser.v1",
   "kind": "multipleChoice",
+  "questionRef": "1",
   "title": "Choose pricing scope",
   "description": "Pick one scope before continuing.",
   "options": [
@@ -28,11 +45,12 @@ Call `ask_user` with this exact argument shape:
 
 ## Rules
 
-- always include `version` and `kind`
+- always include `version`, `kind`, and `questionRef`
+- `title` must exactly match the registered `question` for that ref
 - only `kind: "multipleChoice"` is supported
 - include at least 2 options
 - never use empty `id` or `label`
-- ask one question at a time
+- ask one question at a time (one registry id per tool call)
 - keep title concise and action oriented
 
 ## Optional fields
@@ -42,12 +60,15 @@ Call `ask_user` with this exact argument shape:
 - `minChoices`
 - `maxChoices`
 
-## Invalid examples
+## Runtime behavior
 
-- missing `version`
-- options length `< 2`
-- blank option id/label
-- non-multiple-choice kinds
+- orchestrator persists a checkpoint and stops the agent container
+- web UI shows agent options plus a free-text counter-option
+- after the user answers, a new orchestrator resumes the same stage
+- inline `/ask-user(<id>)` is replaced with the selected answer value
+- answer is also stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
+- on resume, the agent user prompt includes the ask-user question and answer (preset option or custom free-text)
+- on resume, before you made the desicion, repeat the question and the answer, to understand the context of the user's answer
 
 ## When to use
 

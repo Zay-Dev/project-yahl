@@ -1,58 +1,105 @@
-import type { ComponentProps } from "react";
-import { Activity, ListChecks, PlayCircle } from "lucide-react";
+"use client"
 
-import { NavMain } from "@/components/nav-main";
-import { NavRecentSessions } from "@/components/nav-recent-sessions";
-import { NavUser } from "@/components/nav-user";
-import { TeamSwitcher } from "@/components/team-switcher";
+import * as React from "react"
+
+import type { TResponseSessionListItem } from "@project-yahl/server/modules/sessions/-api-types"
+
+import { NavMain } from "@/components/nav-main"
+import { NavProjects } from "@/components/nav-projects"
+import { NavUser } from "@/components/nav-user"
+import { TeamSwitcher } from "@/components/team-switcher"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-} from "@/components/ui/sidebar";
+} from "@/components/ui/sidebar"
+import { ActivityIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon } from "lucide-react"
 
-const navMain = [
-  {
-    icon: PlayCircle,
-    title: "Runner",
-    to: "/runner",
+const data = {
+  user: {
+    name: "Zay Lau",
+    email: "license@omniflex.io",
+    avatar: "/avatars/shadcn.jpg",
   },
-  {
-    icon: ListChecks,
-    title: "Backstage",
-    to: "/sessions",
-  },
-];
+  teams: [
+    {
+      name: "Acme Inc",
+      logo: (
+        <GalleryVerticalEndIcon
+        />
+      ),
+      plan: "Enterprise",
+    },
+    {
+      name: "Acme Corp.",
+      logo: (
+        <ActivityIcon
+        />
+      ),
+      plan: "Startup",
+    },
+    {
+      name: "Evil Corp.",
+      logo: (
+        <HeartPulseIcon
+        />
+      ),
+      plan: "Free",
+    },
+  ],
+}
 
-const brand = {
-  name: "Project Yahl",
-  plan: "Local runtime",
-  icon: Activity,
-};
+type TAppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  sessions: TResponseSessionListItem[]
+}
 
-const user = {
-  name: "yahl",
-  email: "local",
-  avatar: "",
-};
+export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
+  const navMain = [
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: (
+        <LayoutDashboardIcon
+        />
+      ),
+    },
+    {
+      title: "Sessions",
+      url: "/sessions",
+      icon: (
+        <ListIcon
+        />
+      ),
+      items: sessions.slice(0, 6).map((session) => ({
+        title: session.taskId?.trim() || "Unknown task",
+        url: `/sessions/${encodeURIComponent(session.sessionId)}`,
+      })),
+    },
+    {
+      title: "Health",
+      url: "/health",
+      icon: (
+        <HeartPulseIcon
+        />
+      ),
+    },
+  ]
 
-export const AppSidebar = (props: ComponentProps<typeof Sidebar>) => (
-  <Sidebar collapsible="icon" {...props}>
-    <SidebarHeader>
-      <TeamSwitcher brand={brand} />
-    </SidebarHeader>
-
-    <SidebarContent>
-      <NavMain items={navMain} />
-      <NavRecentSessions />
-    </SidebarContent>
-
-    <SidebarFooter>
-      <NavUser user={user} />
-    </SidebarFooter>
-
-    <SidebarRail />
-  </Sidebar>
-);
+  return (
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarHeader>
+        <TeamSwitcher teams={data.teams} />
+      </SidebarHeader>
+      <SidebarContent>
+        <NavMain items={navMain} />
+        <NavProjects sessions={sessions} />
+      </SidebarContent>
+      <SidebarFooter>
+        <NavUser user={data.user} />
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
+  )
+}

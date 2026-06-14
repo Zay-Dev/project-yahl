@@ -2,6 +2,28 @@
 
 YAHL is a new language that allow developer to write pseudo code to communicate with AI.
 
+## SKILL.yahl file format
+
+Each task lives in `TASKS/<id>/SKILL.yahl` as one YAML document:
+
+- `name`, `description` — task metadata
+- `types` (optional) — multiline type definitions (`|`), emitted as the first AI stage
+- `stages` — ordered list of stage objects
+
+Per-stage fields:
+
+| Field | Purpose |
+|-------|---------|
+| `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
+| `contextMode` | VM-only `CONTEXT: { ... }` before the next AI stage |
+| `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` |
+| `loopSetup` | Orchestrator-only (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
+| `temperature` | Model temperature for AI stages (0–2) |
+| `contextKeys` | Allowlist of context/stage keys passed into the runner |
+| `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |
+| `produceContextKeys` | Allowlist for VM / `set_context` writes to global context |
+| `produceTypeKeys` | Allowlist for VM / `set_context` writes to the types bucket |
+
 ### Syntaxes
 
 #### System tags
@@ -36,9 +58,6 @@ examples:
 Syntax of "/skill(...args)" is a skill, that means
 1. search SKILLS/ for the skill, (e.g. /web-search('apple new CEO') means there is a skill 'web-search')
 2. follow the skill instruction to complete the command and return the result (e.g. const result = /web-search('apple new CEO'))
-
-examples:
-- `/a2ui(result)` — skill **a2ui** in `SKILLS/a2ui/`; use in an **AI stage after** `CONTEXT:` (or `set_context`) has written `context.context.result`, then call the **`render_a2ui_plan`** API tool per the skill (session stores A2UI at finalize). Unlike `*func` virtual calls, this skill is completed by a **registered function tool**, not by generating a shell command that echoes JSON. The `render_a2ui_plan` tool is only available when `/a2ui(...)` exists in the stage script.
 
 #### ~/file-system
 
@@ -93,6 +112,7 @@ Constraints:
 - only `multipleChoice` is supported
 
 Execution semantics:
-- when an ask_user call resolves, runtime resumes the same stage and replaces inline `/ask-user(...)` with the selected answer value
-- runtime writes the selected value into global context key `ask_user_last_answer`
+- stages may register `askUser[]` entries; logic uses `/ask-user(<id>)`
+- when an ask_user call resolves, runtime resumes the same stage and replaces the inline ref with the selected answer value
+- runtime writes the answer onto `askUser[].answer` and into context as `ask_user_<id>_answer`
 - `ask_user_last_answer` is scalar only: numeric option ids become numbers, otherwise string

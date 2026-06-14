@@ -39,48 +39,25 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`ask_user`** tool when user choice is required before proceeding.
 
+- Stage YAML may register questions under `askUser[]` with `id` and `question`.
+- Stage logic references them as `/ask-user(<id>)`.
 - Required arguments:
   - `version: "askUser.v1"`
   - `kind: "multipleChoice"`
-  - `title: "<non-empty>"`
+  - `questionRef: "<id>"` matching the registry entry
+  - `title: "<non-empty>"` must exactly match the registered `question`
   - `options: [{ "id":"<non-empty>", "label":"<non-empty>" }, ...]` with at least 2 options
 - Optional arguments:
   - `description`, `allowMultiple`, `minChoices`, `maxChoices`
 - Validation constraints:
-  - do not omit `version` or `kind`
+  - do not omit `version`, `kind`, or `questionRef`
   - do not send fewer than 2 options
   - do not send empty option ids or labels
 - Runtime behavior:
-  - orchestrator will pause and wait for user answer after this tool call
-  - continuation resumes the same stage by replacing the inline `/ask-user(...)` expression with the selected answer value
-  - selected answer value is persisted as `ask_user_last_answer` in global context
-  - `ask_user_last_answer` is a scalar only (number when option id is numeric, otherwise string)
-
-## `/a2ui(...)` skill and `render_a2ui_plan` (API tool)
-
-The **`render_a2ui_plan`** tool is only provided when the stage text includes **`/a2ui(<key>)`** (e.g. `/a2ui(result)`). When `/a2ui(...)` is absent, do not call or simulate this tool.
-
-When the stage text includes **`/a2ui(<key>)`**, follow **`SKILLS/a2ui/SKILL.md`**. You may use **`run_bash`** only to **read** that file from `/opt/skills` if you need it on disk; you must still invoke the **`render_a2ui_plan`** function tool with JSON arguments (same as `set_context` / `ask_user`). **Do not** use `run_bash` to `echo` a tool-call JSON line — that is not executed as A2UI.
-
-**A2UI v0.8** for the session is stored when the run **finalizes** (`resultA2ui` on the session document), not on per-stage runtime snapshots and not via stage PATCH. Multiple successful calls are merged per `surfaceId`.
-
-Put `/a2ui(...)` in an **AI stage after** the data exists (e.g. after a `CONTEXT:` block wrote global `result`).
-
-Underlying tool **`render_a2ui_plan`**:
-
-- Required: `version: "renderA2uiPlan.v1"`, `dataRef: { scope, key }` (must point at JSON already stored via **`set_context`**), `plan` matching **`a2uiPlan.v1`** (`version`, `surfaceId`, `ui_kind`, `bindings` with JSON Pointer values).
-- Optional: `mode: "replace" | "append"`; default `replace`.
-- `ui_kind`: `summary_card` | `detail_card` (bindings: `title`, `body`, optional `subtitle`), `list_cards` (`items`, `item_title`, optional `item_subtitle`), `metric_cards` (`items`, optional `item_label` default `/label`, `item_value` default `/value`), `table` (`rows` + top-level `column_bindings` with row-relative paths).
-- `table` link columns are supported via `column_bindings[].kind = "link"` with `urlPath` (required for link kind) and optional `labelPath`.
-- Markdown mapping rule: full markdown field -> `summary_card`/`detail_card` `body`; repeated section arrays -> `list_cards`; KPI arrays -> `metric_cards`; row arrays -> `table`.
-- Markdown decomposition rule: bind finalized markdown as one field when available; only decompose when structured arrays/rows already exist in context; never invent synthetic parsed arrays in `plan`.
-- Translator-first rule: prefer compact plan generation from `dataRef` shape and bindings; do not inline large raw markdown or row payload in tool arguments.
-- Optional: `surfaceId` on the tool call overrides `plan.surfaceId`.
-- Optional: `limits.maxItems` (capped server-side).
-- Merge behavior: `replace` updates only the same `surfaceId`; `append` keeps prior envelopes for that `surfaceId` and appends new ones.
-- Use unique `surfaceId` for distinct component trees. Reuse the same `surfaceId` only for continuation updates of the same UI kind.
-- For `table`, keep structured row/cell components. Never collapse table output to a pipe-delimited `Text` block like `A | B | C`.
-- Use only the supported `ui_kind` and bindings listed in `SKILLS/a2ui/SKILL.md` ("Supported components (canonical)"); do not invent new component names.
+  - orchestrator checkpoints context, stops the agent container, and waits for a user answer in the web UI
+  - after answer, a new orchestrator resumes the same stage with prior model responses replayed
+  - continuation replaces `/ask-user(<id>)` with the selected answer value
+  - answer is stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
 
 ### Examples (conceptual tool arguments)
 
