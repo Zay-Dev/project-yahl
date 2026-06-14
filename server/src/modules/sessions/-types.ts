@@ -103,12 +103,15 @@ export interface IStage extends TWithTimestamps {
   temperature?: number;
 }
 
+export type TModelResponseTag = 'browse' | 'bash' | 'tool' | 'chat' | 'unknown';
+
 export interface IModelResponse extends TWithTimestamps {
   _id: string;
   session: string;
   requestId: string;
   durationMs?: number;
   response: Record<string, unknown>;
+  tags?: TModelResponseTag[];
   thinkingMode?: boolean;
 }
 

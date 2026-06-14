@@ -51,13 +51,13 @@ examples:
 - const sum = *sum([1,3,5,6,10]) means get the sum of the args (1+3+5+6+10)
 - const filtered = *filter([1,3,2,5,6,3,2,692345,3], even_number) means find the even numbers in the array
 - const filtered = *filter([1,3,2,5,6,3,2,692345,3], even_number, new Set() as Array) means find the even numbers in the array, remove all duplicated numbers ('2' should show only one time in the result)
-- const html = *browse_or_curl('https://x.com') means getting the html from x.com
+- const page = *browse('https://x.com') means fetch page content via `/stagehand(goto, url)` then `/stagehand(extract, ...)`
 
 #### /skill(...args)
 
 Syntax of "/skill(...args)" is a skill, that means
-1. search SKILLS/ for the skill, (e.g. /web-search('apple new CEO') means there is a skill 'web-search')
-2. follow the skill instruction to complete the command and return the result (e.g. const result = /web-search('apple new CEO'))
+1. search SKILLS/ for the skill, (e.g. /stagehand('apple new CEO') means there is a skill 'stagehand')
+2. follow the skill instruction and call the `browser` API tool (e.g. const result = /stagehand(search, 'apple new CEO'))
 
 #### ~/file-system
 

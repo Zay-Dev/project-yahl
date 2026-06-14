@@ -21,7 +21,7 @@ stages:
 
   - loopSetup: for each source of [news_sources]
     logic: |
-      EXTENDS: news = *extract_news(/web-search(source), within_24hours, allow_unknown_date, keep_datetime, keep_full_url);
+      EXTENDS: news = *extract_news(/stagehand(search, source), within_24hours, allow_unknown_date, keep_datetime, keep_full_url);
 
   - logic: |
       const zh_news = *translate(news, 'zh-TW', use_ai_capability, flat_map_to: TNews);

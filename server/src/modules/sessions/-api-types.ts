@@ -1,5 +1,6 @@
 import type {
   TForkSessionStageSetup,
+  TModelResponseTag,
   TParsedStage,
   TSessionForkedFrom,
   TStageLoopMeta,
@@ -71,6 +72,7 @@ export type TResponseStageModelResponseItem = {
   durationMs?: number;
   model?: string;
   response?: Record<string, unknown>;
+  tags?: TModelResponseTag[];
   thinkingMode?: boolean;
   usage: TTokenTotals | null;
 };

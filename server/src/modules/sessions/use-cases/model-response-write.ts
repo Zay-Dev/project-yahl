@@ -9,9 +9,12 @@ import { modelModelResponse, modelStage } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
 
+const MODEL_RESPONSE_TAGS = ['browse', 'bash', 'tool', 'chat', 'unknown'] as const;
+
 export type TRequestCreateModelResponseBody = {
   durationMs?: number;
   response: Record<string, unknown>;
+  tags?: (typeof MODEL_RESPONSE_TAGS)[number][];
   thinkingMode?: boolean;
 };
 
@@ -22,6 +25,7 @@ export type TResponseCreateModelResponse = {
 const bodySchema = Joi.object<TRequestCreateModelResponseBody>({
   durationMs: Joi.number().optional(),
   response: Joi.object().required(),
+  tags: Joi.array().items(Joi.string().valid(...MODEL_RESPONSE_TAGS)).optional(),
   thinkingMode: Joi.boolean().optional(),
 });
 
@@ -50,6 +54,7 @@ export const createModelResponse = [
         requestId: params.requestId,
         response: body.response,
         session: sessionRef,
+        ...(body.tags?.length ? { tags: body.tags } : {}),
         thinkingMode: body.thinkingMode,
       });
 

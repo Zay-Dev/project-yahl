@@ -180,6 +180,7 @@ export const runYahl: TRunYahl = async (
     const finishContextAfter = options?.contextAfterRecord ?? storage;
 
     publisher.emitStageFinish({ requestId, contextAfter: finishContextAfter });
+    await globalThis.sessionTracker?.flush?.();
   }
 
   return {

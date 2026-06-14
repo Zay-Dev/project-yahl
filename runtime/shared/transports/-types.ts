@@ -1,5 +1,7 @@
 import type { OpenAI } from 'openai';
 
+import type { TModelResponseTag } from '../model-response-tags.js';
+
 import { EventEmitter } from 'events';
 
 import type { StageExecutionMeta } from '../transport';
@@ -7,8 +9,9 @@ import type { AskUserToolCallEnvelope } from '../stage-contract';
 import type { YahlStage } from '../yahl-stage';
 
 export type TModelResponse = OpenAI.Chat.Completions.ChatCompletion & {
-  thinkingMode: boolean;
   durationMs: number;
+  tags?: TModelResponseTag[];
+  thinkingMode: boolean;
 };
 
 export type TStorage = {

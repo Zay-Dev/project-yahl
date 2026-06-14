@@ -19,4 +19,7 @@ COPY ${OMNIFLEX_APP_DIR}/runtime/tsconfig.json ./${OMNIFLEX_APP_DIR}/runtime/tsc
 
 WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/runtime
 
+RUN npx playwright install-deps chromium \
+  && npx playwright install chromium
+
 CMD ["pnpm", "--silent", "--filter", "@project-yahl/runtime", "run", "agent", "--", "--daemon"]

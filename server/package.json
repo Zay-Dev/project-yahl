@@ -43,6 +43,7 @@
     "build": "tsc && tsc-alias",
     "debug:fork-plan": "tsx scripts/debug-fork-plan.ts",
     "debug:fork-replay": "tsx scripts/debug-fork-replay.ts",
+    "debug:tool-call": "tsx scripts/debug-session-tool-call.ts",
     "dev": "nodemon",
     "start": "node dist/src/index.js",
     "test": "tsx --test \"src/**/*.test.ts\"",

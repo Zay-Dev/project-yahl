@@ -44,6 +44,18 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 export type SetContextToolArguments = SetContextToolCallEnvelope["arguments"];
 
+export const BROWSER_MODES = ["goto", "act", "extract", "observe", "agent"] as const;
+
+export type TBrowserMode = (typeof BROWSER_MODES)[number];
+
+export type BrowserToolArguments = {
+  instruction: string;
+  maxSteps?: number;
+  mode: TBrowserMode;
+  schema?: Record<string, unknown>;
+  url?: string;
+};
+
 export const STAGE_TOOLS = [
   {
     function: {
@@ -77,6 +89,41 @@ export const STAGE_TOOLS = [
           version: { enum: ["askUser.v1"], type: "string" },
         },
         required: ["version", "kind", "title", "options", "questionRef"],
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
+  {
+    function: {
+      description:
+        "Control a headless browser via Stagehand. Use for /stagehand(...) in stage logic: web search, page fetch, structured extract, observe elements, or multi-step agent tasks. Returns JSON { ok, data } or { ok: false, error }.",
+      name: "browser",
+      parameters: {
+        properties: {
+          instruction: {
+            description: "Natural language instruction for act, extract, observe, or agent mode.",
+            type: "string",
+          },
+          maxSteps: {
+            description: "Max agent steps when mode is agent. Default 15.",
+            type: "number",
+          },
+          mode: {
+            description: "Stagehand operation mode.",
+            enum: [...BROWSER_MODES],
+            type: "string",
+          },
+          schema: {
+            description: "JSON Schema for structured extract (extract mode only).",
+            type: "object",
+          },
+          url: {
+            description: "Required for goto; optional starting URL for other modes.",
+            type: "string",
+          },
+        },
+        required: ["mode", "instruction"],
         type: "object",
       },
     },
@@ -211,6 +258,38 @@ export const parseRunBashToolArguments = (raw: string): string | null => {
   if (!parsed.command.trim()) return null;
 
   return parsed.command;
+};
+
+export const parseBrowserToolArguments = (raw: string): BrowserToolArguments | null => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed)) return null;
+  if (typeof parsed.mode !== "string") return null;
+  if (!BROWSER_MODES.includes(parsed.mode as TBrowserMode)) return null;
+  if (typeof parsed.instruction !== "string") return null;
+  if (!parsed.instruction.trim()) return null;
+
+  const url = typeof parsed.url === "string" && parsed.url.trim() ? parsed.url.trim() : undefined;
+  const maxSteps = typeof parsed.maxSteps === "number" && parsed.maxSteps > 0
+    ? parsed.maxSteps
+    : undefined;
+  const schema = isRecord(parsed.schema) ? parsed.schema : undefined;
+
+  if (parsed.mode === "goto" && !url) return null;
+
+  return {
+    instruction: parsed.instruction.trim(),
+    ...(maxSteps === undefined ? {} : { maxSteps }),
+    mode: parsed.mode as TBrowserMode,
+    ...(schema === undefined ? {} : { schema }),
+    ...(url === undefined ? {} : { url }),
+  };
 };
 
 export const parseAskUserToolArguments = (
