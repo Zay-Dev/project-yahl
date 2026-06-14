@@ -399,12 +399,8 @@ next-env.d.ts
 
 # Mac files
 .DS_Store
-/.pnpm-store/
-
 # Docker bind mounts (see docker-compose.yml, docker-compose.agent.yml)
 /data/
 /workspace/
-/runtime/.onecli/
-/mongo_data/
 
 tsconfig.tsbuildinfo
