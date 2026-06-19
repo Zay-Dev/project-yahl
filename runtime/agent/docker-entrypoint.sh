@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-export NO_PROXY="${NO_PROXY:-localhost,127.0.0.1,::1}"
+export NO_PROXY="${NO_PROXY:-localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,host.docker.internal}"
 export no_proxy="${no_proxy:-$NO_PROXY}"
 
 if [ -z "${CHROME_PATH:-}" ] && [ -f /opt/chrome-path ]; then

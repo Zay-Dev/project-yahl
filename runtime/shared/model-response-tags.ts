@@ -7,7 +7,7 @@ const TAG_ORDER: TModelResponseTag[] = ["browse", "bash", "tool", "chat", "unkno
 const TOOL_NAME_TAGS: Record<string, TModelResponseTag> = {
   ask_user: "tool",
   browser: "browse",
-  rag: "tool",
+  mastermind: "tool",
   run_bash: "bash",
   set_context: "tool",
 };

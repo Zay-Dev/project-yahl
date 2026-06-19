@@ -30,6 +30,10 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   produceTypeKeys: stringArraySchema.optional(),
   temperature: Joi.number().min(0).max(2).optional(),
   updateContextKeys: stringArraySchema.optional(),
+  verify: Joi.boolean().optional(),
+  verifyMinScore: Joi.number().min(0).max(1).optional(),
+  verifyRubric: Joi.string().trim().optional(),
+  version: Joi.number().integer().min(1).optional(),
 })
   .custom((value, helpers) => {
     if (value.contextMode === true && value.conditionMode === true) {

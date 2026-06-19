@@ -6,7 +6,7 @@ export { TStorage, TLoopMeta };
 type TResumeStage = {
   loopMeta?: TLoopMeta;
   requestId: string;
-  resumeFrom: TAskUserResumeFrom;
+  resumeFrom?: TAskUserResumeFrom;
   stage: ParsedStage;
 };
 

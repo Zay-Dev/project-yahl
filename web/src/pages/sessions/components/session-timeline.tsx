@@ -128,16 +128,30 @@ export function SessionTimeline({
   const [detailErrors, setDetailErrors] = useState<Map<string, string>>(() => new Map());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(() => new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const detailsRef = useRef(details);
+  const inFlightRef = useRef<Set<string>>(new Set());
+  const lastProcessedEventRef = useRef<TSessionLiveEvent | null>(null);
+  const loadingIdsRef = useRef(loadingIds);
   const openIdsRef = useRef(openIds);
 
+  detailsRef.current = details;
+  loadingIdsRef.current = loadingIds;
   openIdsRef.current = openIds;
 
   const loadDetail = useCallback(
     async (requestId: string, options?: { force?: boolean }) => {
-      if (!options?.force && (details.has(requestId) || loadingIds.has(requestId))) {
+      if (inFlightRef.current.has(requestId)) {
         return;
       }
 
+      if (
+        !options?.force
+        && (detailsRef.current.has(requestId) || loadingIdsRef.current.has(requestId))
+      ) {
+        return;
+      }
+
+      inFlightRef.current.add(requestId);
       setLoadingIds((current) => new Set(current).add(requestId));
       setDetailErrors((current) => {
         const next = new Map(current);
@@ -157,6 +171,7 @@ export function SessionTimeline({
           loadError instanceof Error ? loadError.message : "Failed to load stage detail",
         ));
       } finally {
+        inFlightRef.current.delete(requestId);
         setLoadingIds((current) => {
           const next = new Set(current);
 
@@ -166,21 +181,27 @@ export function SessionTimeline({
         });
       }
     },
-    [details, loadingIds, sessionId],
+    [sessionId],
   );
 
   useEffect(() => {
     openIds.forEach((requestId) => {
-      if (!details.has(requestId) && !loadingIds.has(requestId)) {
+      if (!detailsRef.current.has(requestId) && !loadingIdsRef.current.has(requestId)) {
         void loadDetail(requestId);
       }
     });
-  }, [details, loadDetail, loadingIds, openIds]);
+  }, [loadDetail, openIds]);
 
   useEffect(() => {
     if (!lastEvent || !needsDetailRefresh(lastEvent)) {
       return;
     }
+
+    if (lastProcessedEventRef.current === lastEvent) {
+      return;
+    }
+
+    lastProcessedEventRef.current = lastEvent;
 
     const requestId = lastEvent.requestId;
 

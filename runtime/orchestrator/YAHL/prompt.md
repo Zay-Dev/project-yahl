@@ -39,9 +39,16 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
 
+Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, extract-knowledge, persist-knowledge, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
+
+Knowledge read/write: use **`extract-knowledge`** and **`persist-knowledge`** with semantic `need` / `key` / `topic` only — never pass file paths to those skills.
+
+**`~/` always means the shared workspace folder** (`/root` in the agent container).
+
 - Arguments: `{ "mode": "goto|act|extract|observe|agent", "instruction": "<text>", "url"?: "<url>", "schema"?: { ... }, "maxSteps"?: <number> }`.
 - Returns JSON `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.
-- Do not use `run_bash` + curl for web search or page browse; use **`browser`** instead.
+- Do not use `run_bash` + curl for web search, HTML page browse, or scraping; use **`browser`** instead.
+- **Exception:** when stage logic references a documented HTTP API in a workspace file (e.g. `~/hk_observatory_api.md`), use `run_bash` + `curl` to fetch JSON/API responses per that file.
 - After `browser`, call **`set_context`** to persist `data`.
 
 ## ask_user (API tool)
@@ -67,6 +74,16 @@ Use the **`ask_user`** tool when user choice is required before proceeding.
   - after answer, a new orchestrator resumes the same stage with prior model responses replayed
   - continuation replaces `/ask-user(<id>)` with the selected answer value
   - answer is stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
+  - on resume, re-execute **full** `stage.logic` from the first line (do not treat the stage as finished)
+
+### `*answer_of(<id>)` (pseudo-op)
+
+Read a prior ask-user answer from Input context without calling `ask_user` again.
+
+- `*answer_of(hk_region)` → `context.context["ask_user_hk_region_answer"]`
+- empty / missing on first pass (before the user answers)
+- populated on resume by the orchestrator before the agent runs
+- use at the top of logic to branch resume vs first-pass paths
 
 ### Examples (conceptual tool arguments)
 

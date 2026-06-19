@@ -22,6 +22,10 @@ export interface YahlStage {
   produceTypeKeys?: string[];
   temperature?: number;
   updateContextKeys?: string[];
+  verify?: boolean;
+  verifyMinScore?: number;
+  verifyRubric?: string;
+  version?: number;
 }
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
@@ -139,6 +143,22 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     }
   }
 
+  if (stage.verifyMinScore !== undefined) {
+    const score = Number(stage.verifyMinScore);
+
+    if (!Number.isFinite(score) || score < 0 || score > 1) {
+      throw new Error(`${label}.verifyMinScore: must be a number from 0 to 1`);
+    }
+  }
+
+  if (stage.version !== undefined) {
+    const version = Number(stage.version);
+
+    if (!Number.isInteger(version) || version < 1) {
+      throw new Error(`${label}.version: must be a positive integer`);
+    }
+  }
+
   if (stage.conditionMode === true && !stage.logic.includes("IF:")) {
     throw new Error(`${label}: conditionMode logic must contain IF:`);
   }
@@ -176,6 +196,10 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     ...(isStringArray(stage.updateContextKeys) ? { updateContextKeys: stage.updateContextKeys } : {}),
     ...(isStringArray(stage.produceContextKeys) ? { produceContextKeys: stage.produceContextKeys } : {}),
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
+    ...(stage.verify === true ? { verify: true } : {}),
+    ...(stage.verifyMinScore !== undefined ? { verifyMinScore: Number(stage.verifyMinScore) } : {}),
+    ...(typeof stage.verifyRubric === 'string' ? { verifyRubric: stage.verifyRubric.trim() } : {}),
+    ...(stage.version !== undefined ? { version: Number(stage.version) } : {}),
   };
 };
 

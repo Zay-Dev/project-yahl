@@ -4,6 +4,7 @@ import { useOne } from "@refinedev/core";
 import { useParams } from "react-router";
 
 import { AskUserPendingBanner } from "@/pages/sessions/components/ask-user-pending-banner";
+import { VerifyPendingBanner } from "@/pages/sessions/components/verify-pending-banner";
 import { AskUserQuestionDialog } from "@/pages/sessions/components/ask-user-question-dialog";
 import { SessionJsonFallback } from "@/pages/sessions/components/session-json-fallback";
 import { SessionOverview } from "@/pages/sessions/components/session-overview";
@@ -76,6 +77,10 @@ export function SessionDetailPage() {
           <AskUserPendingBanner
             onOpenQuestion={openQuestion}
             questions={pendingQuestions}
+          />
+          <VerifyPendingBanner
+            lastEvent={lastEvent}
+            sessionId={session.sessionId}
           />
           <AskUserQuestionDialog
             onAnswered={handleAnswered}

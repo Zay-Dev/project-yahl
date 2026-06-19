@@ -21,15 +21,19 @@ export const runCommand = program
 
   .addOption(
     new Option('--task-path <path>')
-      .conflicts(['resume-id', 'forkrun-id'])
+      .conflicts(['resume-id', 'forkrun-id', 'verify-resume-id'])
   )
   .addOption(
     new Option('--resume-id <id>')
-      .conflicts(['task-path', 'forkrun-id'])
+      .conflicts(['task-path', 'forkrun-id', 'verify-resume-id'])
+  )
+  .addOption(
+    new Option('--verify-resume-id <id>')
+      .conflicts(['task-path', 'forkrun-id', 'resume-id'])
   )
   .addOption(
     new Option('--forkrun-id <id>')
-      .conflicts(['task-path', 'resume-id'])
+      .conflicts(['task-path', 'resume-id', 'verify-resume-id'])
   )
   .addOption(
     new Option('--session-id <id>')

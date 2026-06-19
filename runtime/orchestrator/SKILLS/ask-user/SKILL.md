@@ -68,7 +68,25 @@ Call `ask_user` with this exact argument shape:
 - inline `/ask-user(<id>)` is replaced with the selected answer value
 - answer is also stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
 - on resume, the agent user prompt includes the ask-user question and answer (preset option or custom free-text)
-- on resume, before you made the desicion, repeat the question and the answer, to understand the context of the user's answer
+- on resume, re-execute **full** `stage.logic` from the first line — do not end the stage until every `produceContextKeys` entry is written via `set_context`
+- on resume, `context.context["ask_user_<id>_answer"]` is already set; stage logic may use `*answer_of(<id>)` to read it (see YAHL prompt)
+
+## `*answer_of(<id>)`
+
+Pseudo-op for resume-aware logic:
+
+```yahl
+const prior = *answer_of(hk_region);
+IF: prior;
+  const choice = prior;
+ELSE;
+  const choice = /ask-user(hk_region);
+END:
+```
+
+- reads `ask_user_<id>_answer` from Input `context.context`
+- empty on first pass; populated after the user answers
+- option ids are scalars — resolve to typed objects with `*matches` when needed
 
 ## When to use
 

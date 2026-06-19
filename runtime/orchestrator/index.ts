@@ -20,7 +20,9 @@ import { initForkSessionManager } from './-runners/fork/manager';
 
 import { runForkSession } from './-runners/fork';
 import { runAskUserResume } from './-runners/resume';
+import { runVerifyResume } from './-runners/verify-resume';
 import { resolveTaskPath } from './-runners/path';
+import { VerifyFailedError } from './-verify';
 
 declare global {
   var sessionId: string;
@@ -127,11 +129,21 @@ runCommand.action(async options => {
       const { resultContextKey, storage } = await runAskUserResume(sessionId, options.resumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);
+    } else if (options.verifyResumeId) {
+      const { resultContextKey, storage } = await runVerifyResume(sessionId, options.verifyResumeId);
+
+      await publishSessionResult(sessionId, resultContextKey, storage);
     } else {
-      throw new Error('No task path, resume id, or forkrun id provided');
+      throw new Error('No task path, resume id, verify resume id, or forkrun id provided');
     }
   } catch (error) {
     if (error instanceof AskUserPausedError) {
+      await tracker.flush();
+      process.exit(0);
+      return;
+    }
+
+    if (error instanceof VerifyFailedError) {
       await tracker.flush();
       process.exit(0);
       return;

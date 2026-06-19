@@ -6,6 +6,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { AppLayout } from "@/layouts/app-layout";
 import { DashboardPage } from "@/pages/dashboard";
 import { HealthPage } from "@/pages/health";
+import { PlatformApprovalsPage } from "@/pages/platform/approvals";
 import { SessionDetailPage } from "@/pages/sessions/detail";
 import { SessionsPage } from "@/pages/sessions";
 import { RESOURCES } from "@/providers/constants";
@@ -38,6 +39,7 @@ export function App() {
             <Route path="health" element={<HealthPage />} />
             <Route path="sessions" element={<SessionsPage />} />
             <Route path="sessions/:id" element={<SessionDetailPage />} />
+            <Route path="platform/approvals" element={<PlatformApprovalsPage />} />
           </Route>
         </Routes>
       </Refine>

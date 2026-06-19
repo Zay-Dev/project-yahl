@@ -5,6 +5,7 @@ import type {
   ISession,
   IStage,
   IToolCall,
+  IVerifyCheckpoint,
 } from './-types';
 
 import type { Document } from 'mongoose';
@@ -16,6 +17,7 @@ export type TDbStage = IStage & Document;
 export type TDbModelResponse = IModelResponse & Document;
 export type TDbToolCall = IToolCall & Document;
 export type TDbAskUserQuestion = IAskUserQuestion & Document;
+export type TDbVerifyCheckpoint = IVerifyCheckpoint & Document;
 
 const loopMetaSchema = new Schema({
   arraySnapshot: { type: [Schema.Types.Mixed], required: true },
@@ -66,6 +68,7 @@ const stageSchema = new Schema<TDbStage>({
   requestId: model.d.requiredString(),
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   temperature: model.d.optionalNumber(),
+  verifyResult: model.d.mixed(),
 }, {
   collection: modelsName.Stages,
   timestamps: true,
@@ -140,6 +143,29 @@ askUserQuestionSchema.index({ questionId: 1 }, { unique: true });
 askUserQuestionSchema.index({ requestId: 1, session: 1 });
 askUserQuestionSchema.index({ session: 1, status: 1 });
 
+const verifyCheckpointSchema = new Schema<TDbVerifyCheckpoint>({
+  contextSnapshot: model.d.mixed(),
+  feedback: model.d.requiredString(),
+  forkSetupIndex: model.d.optionalNumber(),
+  loopMeta: loopMetaSchema,
+  parsedStageSnapshot: model.d.mixed(),
+  requestId: model.d.requiredString(),
+  score: model.d.requiredNumber(),
+  session: model.d.toRequiredObjectId(modelsName.Sessions),
+  stage: model.d.mixed(),
+  stageIndex: model.d.optionalNumber(),
+  status: model.d.requiredString(),
+  storageSnapshot: model.d.mixed(),
+  verifyId: model.d.requiredString(),
+}, {
+  collection: modelsName.SessionVerifyCheckpoints,
+  timestamps: true,
+});
+
+verifyCheckpointSchema.index({ verifyId: 1 }, { unique: true });
+verifyCheckpointSchema.index({ requestId: 1, session: 1 });
+verifyCheckpointSchema.index({ session: 1, status: 1 });
+
 export type TDbForkSession = IForkSession & Document;
 
 export const modelForkSession = createModel<TDbForkSession>(
@@ -156,4 +182,8 @@ export const modelToolCall = createModel<TDbToolCall>(modelsName.SessionToolCall
 export const modelAskUserQuestion = createModel<TDbAskUserQuestion>(
   modelsName.SessionAskUserQuestions,
   askUserQuestionSchema,
+);
+export const modelVerifyCheckpoint = createModel<TDbVerifyCheckpoint>(
+  modelsName.SessionVerifyCheckpoints,
+  verifyCheckpointSchema,
 );

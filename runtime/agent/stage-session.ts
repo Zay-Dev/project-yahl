@@ -14,8 +14,10 @@ import {
   type ChatAssistantMessage,
   type ChatToolCall,
   parseBrowserToolArguments,
+  parseMastermindToolArguments,
   parseRunBashToolArguments,
 } from "@/shared/stage-tools";
+import { callMastermindSkill } from "@/shared/mastermind-client";
 
 import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
@@ -285,7 +287,35 @@ export const runStageSession = async (
           continue;
         }
 
-        if (name === "set_context" || name === "rag" || name === "ask_user") {
+        if (name === "mastermind") {
+          const mastermindArgs = parseMastermindToolArguments(rawArgs);
+
+          if (!mastermindArgs) {
+            stageMessages.push({
+              content: toolErrorContent("mastermind: invalid arguments"),
+              role: "tool",
+              tool_call_id: call.id,
+            });
+
+            continue;
+          }
+
+          const mastermindResult = await callMastermindSkill(
+            mastermindArgs.skill,
+            mastermindArgs.args,
+            config.cliOptions.sessionId,
+          );
+
+          stageMessages.push({
+            content: JSON.stringify(mastermindResult),
+            role: "tool",
+            tool_call_id: call.id,
+          });
+
+          continue;
+        }
+
+        if (name === "set_context" || name === "ask_user") {
           continue;
         }
 

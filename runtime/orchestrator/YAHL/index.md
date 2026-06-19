@@ -116,3 +116,4 @@ Execution semantics:
 - when an ask_user call resolves, runtime resumes the same stage and replaces the inline ref with the selected answer value
 - runtime writes the answer onto `askUser[].answer` and into context as `ask_user_<id>_answer`
 - `ask_user_last_answer` is scalar only: numeric option ids become numbers, otherwise string
+- on resume, re-run full `stage.logic` from line 1; use `*answer_of(<id>)` to read `ask_user_<id>_answer` from Input context

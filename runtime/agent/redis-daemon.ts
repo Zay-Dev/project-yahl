@@ -224,7 +224,7 @@ export const startRedisDaemon = async () => {
                 `[agent-daemon] chat turn end requestId=${requestId} turn=${turn} durationMs=${durationMs} toolCalls=${toolCallCount}\n`,
               );
 
-              const allowedTools = ['set_context', 'ask_user', 'rag'];
+              const allowedTools = ['set_context', 'ask_user'];
 
               await onModelResponse({
                 ...result.response,

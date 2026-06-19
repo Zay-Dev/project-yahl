@@ -7,6 +7,7 @@ import { createStorage } from '@/orchestrator/-tools/set_context';
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
+import { runVerifyGate, VerifyFailedError } from '@/orchestrator/-verify';
 
 import {
   applySetContextToolCall,
@@ -177,10 +178,37 @@ export const runYahl: TRunYahl = async (
       options.resumeStage = undefined;
     }
 
+    const missingProduceKeys = activeStage.spec.produceContextKeys?.filter(
+      (key) => storage.context.get(key) == null,
+    ) ?? [];
+
+    if (missingProduceKeys.length > 0) {
+      throw new Error(
+        `stage finished without produceContextKeys: ${missingProduceKeys.join(', ')}`,
+      );
+    }
+
     const finishContextAfter = options?.contextAfterRecord ?? storage;
 
     publisher.emitStageFinish({ requestId, contextAfter: finishContextAfter });
     await globalThis.sessionTracker?.flush?.();
+
+    try {
+      await runVerifyGate({
+        agentName,
+        pipelineStageIndex,
+        requestId,
+        sessionId,
+        stage: activeStage,
+        storage,
+      });
+    } catch (error) {
+      if (error instanceof VerifyFailedError) {
+        throw error;
+      }
+
+      throw error;
+    }
   }
 
   return {

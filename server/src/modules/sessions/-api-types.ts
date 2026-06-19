@@ -113,7 +113,9 @@ export type TSessionLiveEvent =
   | { type: 'stage.created'; requestId: string }
   | { type: 'stage.finished'; requestId: string }
   | { type: 'stage.model-response'; requestId: string }
-  | { type: 'stage.tool-call'; requestId: string };
+  | { type: 'stage.tool-call'; requestId: string }
+  | { type: 'verify.failed'; requestId: string; verifyId: string }
+  | { type: 'verify.resumed'; requestId: string; verifyId: string };
 
 export type TStageListSource = {
   contextAfter?: Record<string, unknown>;

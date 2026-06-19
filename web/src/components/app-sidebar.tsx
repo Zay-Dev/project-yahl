@@ -85,6 +85,14 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
         />
       ),
     },
+    {
+      title: "Approvals",
+      url: "/platform/approvals",
+      icon: (
+        <ActivityIcon
+        />
+      ),
+    },
   ]
 
   return (

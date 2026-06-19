@@ -24,6 +24,11 @@ import {
   answerAskUserQuestion,
   createAskUserQuestion,
 } from './use-cases/ask-user-write';
+import {
+  createVerifyCheckpoint,
+  getVerifyCheckpoint,
+  resumeVerifyCheckpoint,
+} from './use-cases/verify-write';
 
 exposedRoute('/api/fork-sessions')
   .get('/:forkSessionId', getForkSession);
@@ -46,4 +51,7 @@ exposedRoute('/api/sessions')
   .get('/:sessionId/ask-user/questions', listAskUserQuestions)
   .post('/:sessionId/ask-user/questions', createAskUserQuestion)
   .get('/:sessionId/ask-user/questions/:questionId', getAskUserQuestion)
-  .post('/:sessionId/ask-user/questions/:questionId/answer', answerAskUserQuestion);
+  .post('/:sessionId/ask-user/questions/:questionId/answer', answerAskUserQuestion)
+  .post('/:sessionId/verify-checkpoints', createVerifyCheckpoint)
+  .get('/:sessionId/verify-checkpoints/:verifyId', getVerifyCheckpoint)
+  .post('/:sessionId/verify-checkpoints/:verifyId/resume', resumeVerifyCheckpoint);

@@ -61,6 +61,8 @@ const readFirstExistingFile = async (candidates: string[]) => {
 
 const yamlQuote = (value: string) => JSON.stringify(value);
 
+const agentNoProxy = 'localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,host.docker.internal';
+
 export const writeSharedOneCliOverride = async () => {
   const onecliApiKey = process.env.ONECLI_API_KEY || "";
   const onecliDashboardUrl = process.env.ONECLI_DASHBOARD_URL || process.env.ONECLI_URL || "";
@@ -103,8 +105,8 @@ export const writeSharedOneCliOverride = async () => {
 
   const envLines = Object.entries(configEnv).map(([key, value]) =>
     `      ${key}: ${yamlQuote(String(value))}`);
-  envLines.push(`      NO_PROXY: ${yamlQuote("localhost,127.0.0.1,::1")}`);
-  envLines.push(`      no_proxy: ${yamlQuote("localhost,127.0.0.1,::1")}`);
+  envLines.push(`      NO_PROXY: ${yamlQuote(agentNoProxy)}`);
+  envLines.push(`      no_proxy: ${yamlQuote(agentNoProxy)}`);
   if (hasCombinedBundle) {
     envLines.push(`      SSL_CERT_FILE: ${yamlQuote("/tmp/onecli-combined-ca.pem")}`);
     envLines.push(`      DENO_CERT: ${yamlQuote("/tmp/onecli-combined-ca.pem")}`);
