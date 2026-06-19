@@ -33,6 +33,7 @@ types: |
 
 stages:
   - contextMode: true
+    produceContextKeys: [competitors, intel]
     logic: |
       (() => ({
         competitors: [
@@ -43,81 +44,75 @@ stages:
         intel: [],
       }))
 
-  - logic: |
-      *aware_echo('I understand I need to set the tools\' path to context keys "search_tool" and "extract_intel_tool" separately')
-
-      const search_tool = *get_or_create_python_tool(
-        dir: ~/tools,
-        skill: /web-search,
-        query: 'xxx news last 7 days',
-        args: {multiple_sources_name}
-        max_results: 10,
+  - loopSetup: for each competitor of [competitors]
+    updateContextKeys: [intel]
+    logic: |
+      *tmp(~/uuid-article.txt) = /stagehand(
+        search,
+        competitor: competitor.name,
+        sources: competitor.news_sources,
+        all_sources_at_once,
         filter: business_relevant,
-        requirements: [always_accept_multiple_sources_at_once]
+        max_results: 10,
       );
 
-      const extract_intel_tool = *get_or_create_python_tool(
-        dir: ~/tools,
-        input: output_of_search_tool,
-        output: flat_mapped(TIntelItem),
-        set_competitor: {competitor.name},
+      EXTENDS: intel = *analyze(
+        raw_articles,
+        set_competitor: competitor.name,
         categorize: true,
         sentiment_analysis: true,
-        requirements: [leave_summary_zh_empty]
-      );
-
-  - loopSetup: for each competitor of [competitors]
-    logic: |
-      *aware_echo('I understand I do not need to call set_context for raw_articles');
-      *aware_echo('I understand the api key is placeholder and still work');
-
-      raw_articles = *invoke(search_tool, competitor.news_sources, all_sources_at once, fallback: curl_to_file);
-
-      *aware_echo('I understand set_context writes runtime context outside the sandbox, so I will not self-validate writeback in-run');
-      *aware_echo('I understand the set_context key is intel instead of result');
-      *aware_echo('I also understand the summary language is zh-TW');
-      EXTENDS: intel = *invoke(
-        extract_intel_tool,
-        competitor.name,
+        output: flat_mapped(TIntelItem),
         requirements: [fill_summary_zh],
       );
 
-      *improve_or_add_remark([search_tool, extract_intel_tool]);
+      *rm(~/uuid-article.txt);
 
-  - logic: |
-      *aware_echo('I understand set_context writes runtime context outside the sandbox, so I will not self-validate writeback in-run');
-      *aware_echo('I understand the set_context key is intel instead of result');
-      *aware_echo('I also understand I will need to flat the intel to TIntelItem');
-
-      *get_or_create_python_tool(
+  - contextKeys: [intel]
+    updateContextKeys: [intel]
+    logic: |
+      intel = *get_or_create_python_tool(
         quality_check & deduplicate_and_sort,
-        this.intel,
+        intel,
+        flatten_extends_nesting,
+        output: flat(TIntelItem[]),
+        dedupe_by: source_url,
         ensure_completeness,
         remove_empty_summaries,
-        sort: date_desc
+        sort: date_desc,
       );
 
-  - logic: |
-      *aware_echo('I understand set_context writes runtime context outside the sandbox, so I will not self-validate writeback in-run');
-      *aware_echo('I understand set_context keys are title, executive_summary_md, takeaways, sections, intel — not result');
-      *aware_echo('I also understand the brief language is zh-TW and takeaway lines stay short for list_cards');
+  - contextKeys: [intel]
+    produceContextKeys: [title]
+    logic: |
       const title = *summary(concise_title, lang: zh-TW);
+
+  - contextKeys: [intel]
+    produceContextKeys: [executive_summary_md]
+    logic: |
       const executive_summary_md = *generate_brief(
-        this.intel,
+        intel,
         format: markdown,
         role: executive_overview,
         tone: professional,
         lang: zh-TW,
       );
+
+  - contextKeys: [intel]
+    produceContextKeys: [takeaways]
+    logic: |
       const takeaways = *generate_brief(
-        this.intel,
+        intel,
         as: TBriefTakeaway[],
         include_key_takeaways: true,
         lang: zh-TW,
         max_items: 12,
       );
+
+  - contextKeys: [intel]
+    produceContextKeys: [sections]
+    logic: |
       const sections = *generate_brief(
-        this.intel,
+        intel,
         as: TBriefSection[],
         format: markdown,
         include_toc: true,
@@ -125,6 +120,8 @@ stages:
       );
 
   - contextMode: true
+    contextKeys: [title, executive_summary_md, takeaways, sections, intel]
+    updateContextKeys: [result]
     logic: |
       (() => ({
         result: {

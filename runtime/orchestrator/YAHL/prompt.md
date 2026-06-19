@@ -35,6 +35,15 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 - Do not use bash for durable context writes; use **`set_context`**.
 - After `run_bash`, continue reasoning, then finish the stage with final **`content`** JSON: `{"type":"result","output":"<text>"}` when no further context mutation is needed, or rely on the last successful **`set_context`** tool call as documented in Agent.md.
 
+## browser (API tool)
+
+Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
+
+- Arguments: `{ "mode": "goto|act|extract|observe|agent", "instruction": "<text>", "url"?: "<url>", "schema"?: { ... }, "maxSteps"?: <number> }`.
+- Returns JSON `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.
+- Do not use `run_bash` + curl for web search or page browse; use **`browser`** instead.
+- After `browser`, call **`set_context`** to persist `data`.
+
 ## ask_user (API tool)
 
 Use the **`ask_user`** tool when user choice is required before proceeding.
@@ -74,7 +83,7 @@ Examples
 1. `const a = 1;` -> call `set_context` with `scope="stage"` (or `global` if cross-stage), `key="a"`, `operation="set"`, `value=1`.
 2. `const b = 2;` -> call `set_context` with `scope="stage"` (or `global` if cross-stage), `key="b"`, `operation="set"`, `value=2`.
 3. `const content = *read(~/some_file.json);` -> execute `*read` first, then call `set_context` with `scope="stage"` (or `global`), `key="content"`, `operation="set"`, `value=<result_of_read>`.
-4. `const web_result = /web-search;` -> execute `/web-search` first, then call `set_context` with `scope="stage"` (or `global`), `key="web_result"`, `operation="set"`, `value=<tool_result>`.
+4. `const web_result = /stagehand(search, topic);` -> call `browser` per `/opt/skills/stagehand/SKILL.md`, then call `set_context` with `scope="stage"` (or `global`), `key="web_result"`, `operation="set"`, `value=<tool_result.data>`.
 5. `const escapedArray = array.map(item => *escape(item));` -> compute mapped values first, then call `set_context` with `scope="stage"` (or `global`), `key="escapedArray"`, `operation="set"`, `value=<mapped_array>`.
 6. `type TType = {...};` -> call `set_context` with `scope="types"`, `key="TType"`, `operation="set"`, `value=<type_definition_object_or_string>`.
 7. `records = [...records, ...new_records];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array>`.

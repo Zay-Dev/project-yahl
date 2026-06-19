@@ -12,11 +12,12 @@ import type {
   TResponseStageStatus,
   TStageListSource,
 } from '../-api-types';
-import type { IStage, TYahlStage } from '../-types';
+import type { IStage, TModelResponseTag, TYahlStage } from '../-types';
 import {
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
 } from '../-usage-normalize';
+import { parseToolSummaries } from '../-utils/normalize-tool-call';
 import { modelModelResponse, modelStage, modelToolCall } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
@@ -66,26 +67,6 @@ const logicPreviewFrom = (logic: string | undefined) => {
   return `${joined.slice(0, LOGIC_PREVIEW_MAX_CHARS)}…`;
 };
 
-const parseToolArguments = (raw: unknown) => {
-  if (raw === undefined || raw === null) {
-    return null;
-  }
-
-  if (typeof raw === 'object' && !Array.isArray(raw)) {
-    return raw;
-  }
-
-  if (typeof raw !== 'string' || !raw.trim()) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return null;
-  }
-};
-
 export const resolveStageStatus = (
   stage: Pick<TStageListSource, 'finishedAt'>,
 ): TResponseStageStatus => (isStageFinished(stage) ? 'finished' : 'running');
@@ -119,18 +100,6 @@ const extractContentPreview = (response: Record<string, unknown>) => {
   }
 
   return '';
-};
-
-const parseToolSummaries = (toolCalls: Record<string, unknown>[]) => {
-  return toolCalls.map((toolCall, index) => {
-    const fn = toolCall.function as { arguments?: unknown; name?: string } | undefined;
-
-    return {
-      arguments: parseToolArguments(fn?.arguments),
-      id: typeof toolCall.id === 'string' ? toolCall.id : `tool-${index}`,
-      name: typeof fn?.name === 'string' ? fn.name : 'unknown',
-    };
-  });
 };
 
 const countByRequestId = async (
@@ -300,6 +269,7 @@ export const getSessionStage = [
             durationMs: doc.durationMs,
             model: typeof response.model === 'string' ? response.model : undefined,
             response,
+            tags: Array.isArray(doc.tags) ? doc.tags as TModelResponseTag[] : undefined,
             thinkingMode: doc.thinkingMode,
             usage: normalizeUsageToTokenTotals(response.usage),
           };

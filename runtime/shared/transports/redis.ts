@@ -20,7 +20,8 @@ const _getToolCallChannel = (sessionId: string, requestId: string) =>
   `yahl:tool:${sessionId}:${requestId}`;
 const _getToolCallResultChannel = (sessionId: string, requestId: string) =>
   `yahl:tool-result:${sessionId}:${requestId}`;
-const _getModelResponseChannel = (sessionId: string) => `yahl:model-response:${sessionId}`;
+const _getModelResponseChannel = (sessionId: string, requestId: string) =>
+  `yahl:model-response:${sessionId}:${requestId}`;
 
 const _isStorage = (value: unknown): value is TStorage =>
   typeof value === 'object'
@@ -49,11 +50,12 @@ class RedisTransport {
 
   protected readonly requestQueue: string;
 
-  protected readonly modelResponseChannel: string;
-
   constructor(protected readonly redis: Redis, protected readonly sessionId: string) {
     this.requestQueue = _getRequestQueue(this.sessionId);
-    this.modelResponseChannel = _getModelResponseChannel(this.sessionId);
+  }
+
+  protected _modelResponseQueue(requestId: string) {
+    return _getModelResponseChannel(this.sessionId, requestId);
   }
 
   protected _toolCallChannel(requestId: string) {
@@ -109,6 +111,20 @@ class RedisTransport {
 
     return null;
   }
+
+  protected async _brpopKeys(redis: Redis, keys: string[], timeoutSeconds: number) {
+    if (keys.length === 0) {
+      return null;
+    }
+
+    const popped = await redis.brpop(...keys, timeoutSeconds);
+
+    if (popped?.[0] && popped?.[1]) {
+      return { key: popped[0], value: popped[1] };
+    }
+
+    return null;
+  }
 }
 
 export class RedisPublisher extends RedisTransport implements IPublisher {
@@ -122,17 +138,21 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
   waitForReady: IPublisher['waitForReady'] =
     async (options) => {
       await super.waitForReady(options);
-
-      this.connections.push(this.redis.duplicate());
-
-      this.connections.at(-1)!
-        .on("message", (channel, message) => {
-          if (channel === this.modelResponseChannel) {
-            this.emit("modelResponse", JSON.parse(message));
-          }
-        })
-        .subscribe(this.modelResponseChannel);
     };
+
+  private async _drainModelResponses(requestId: string) {
+    const queue = this._modelResponseQueue(requestId);
+
+    while (true) {
+      const raw = await this.redis.lpop(queue);
+
+      if (!raw) {
+        return;
+      }
+
+      this.emit("modelResponse", JSON.parse(raw));
+    }
+  }
 
   pushRequest: IPublisher['pushRequest'] =
     async (context, stage, temperature, {
@@ -201,7 +221,9 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
     this.connections.push(redis);
 
+    await this._drainModelResponses(requestId);
     await this._brpop(redis, replyQueue, timeoutSeconds);
+    await this._drainModelResponses(requestId);
     await redis.quit();
   }
 
@@ -221,10 +243,21 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
         while (true) {
           try {
             const toolCallChannel = this._toolCallChannel(requestId);
-            const popped = await this._brpop(redis, toolCallChannel, timeoutSeconds);
+            const modelResponseQueue = this._modelResponseQueue(requestId);
+            const popped = await this._brpopKeys(
+              redis,
+              [toolCallChannel, modelResponseQueue],
+              timeoutSeconds,
+            );
+
             if (!popped) continue;
 
-            const toolCall = JSON.parse(popped) as TChatToolCall;
+            if (popped.key === modelResponseQueue) {
+              this.emit("modelResponse", JSON.parse(popped.value));
+              continue;
+            }
+
+            const toolCall = JSON.parse(popped.value) as TChatToolCall;
 
             this.emit("toolCall", { requestId, toolCalls: [toolCall] });
 
@@ -305,8 +338,8 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
         end: () => this.redis.lpush(replyQueue, 'END'),
 
         onModelResponse: async (response) => {
-          await this.redis.publish(
-            this.modelResponseChannel,
+          await this.redis.lpush(
+            this._modelResponseQueue(requestId),
             JSON.stringify({ requestId, response }),
           );
         },

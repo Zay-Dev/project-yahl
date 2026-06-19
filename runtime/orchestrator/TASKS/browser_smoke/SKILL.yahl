@@ -1,0 +1,41 @@
+name: browser-smoke
+description: Minimal Stagehand goto smoke test (live view + OneCLI debugging)
+resultContextKey: result
+
+types: |
+  type TIntelItem = {
+    title: string;
+    source_url: string;
+    date: Date;
+    competitor: string;
+    category: 'product_launch' | 'pricing_change' | 'partnership' | 'funding' | 'other';
+    sentiment: 'positive' | 'neutral' | 'negative';
+    summary_zh: string;
+  };
+
+stages:
+  - contextMode: true
+    produceContextKeys: [competitor, news_sources, intel]
+    logic: |
+      (() => ({
+        competitor: 'XiaoMi EV',
+        news_sources: ['bloomberg', 'techinasia'],
+        intel: [],
+      }))
+
+  - loopSetup: for each source of [news_sources]
+    contextKeys: [competitor, TIntelItem]
+    updateContextKeys: [intel]
+    logic: |
+      EXTENDS: intel = /stagehand(
+        search,
+        competitor: competitor,
+        source: source,
+        filter: business_relevant,
+        max_results: 10,
+      );
+
+  - contextKeys: [intel, TIntelItem]
+    updateContextKeys: [result]
+    logic: |
+      const result = *flat_map(intel, TIntelItem);

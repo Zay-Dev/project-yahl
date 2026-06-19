@@ -147,7 +147,7 @@ pnpm -r --filter "./infras/**" run build
 4. Add provider credentials to OneCLI vault with correct host/path patterns.
 5. Set both `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` in `.env` so orchestrator can fetch shared OneCLI container config.
 6. Run one orchestrator session once to bootstrap shared override files under `runtime/.onecli/`.
-7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` / `BRAVE_SEARCH_API_KEY` as placeholders only.
+7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` as placeholders only. Browser automation uses Stagehand (local Chromium in the agent container); see [docs/stagehand-integration.md](docs/stagehand-integration.md).
 
 ### Smoke tests
 

@@ -78,6 +78,7 @@ const modelResponseSchema = new Schema<TDbModelResponse>({
   requestId: model.d.requiredString(),
   response: model.d.mixed(),
   session: model.d.toRequiredObjectId(modelsName.Sessions),
+  tags: [model.d.optionalString()],
   thinkingMode: model.d.optionalBoolean(),
 }, {
   collection: modelsName.SessionModelResponses,

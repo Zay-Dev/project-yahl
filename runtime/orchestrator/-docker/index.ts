@@ -6,6 +6,8 @@ export { composeDown, composeUp, writeSharedOneCliOverride } from './compose-one
 
 export const buildAgent = () => {
   try {
+    process.env.AGENT_IMAGE = process.env.AGENT_IMAGE || "project-yahl-agent:latest";
+
     console.log("Running: docker compose build agent...");
     execSync(`docker compose -f "${composeFile}" build agent`, {
       cwd: repoRoot,

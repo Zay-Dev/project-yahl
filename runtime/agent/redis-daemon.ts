@@ -11,6 +11,8 @@ import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 import { buildResumeStageMessages } from './-utils/resume-messages';
 import { runStageSession } from "./stage-session";
 
+import { deriveModelResponseTags } from "@/shared/model-response-tags";
+
 import { fastForward, type TContextBuckets } from './-utils/ff-client';
 import { chatWithTools } from "./-utils/llm-client";
 import { isVmConditionBranch, wrapVmLogic } from "./condition-branch";
@@ -195,6 +197,8 @@ export const startRedisDaemon = async () => {
           return;
         }
 
+        let chatTurn = 0;
+
         await runStageSession(
           {
             context,
@@ -205,14 +209,27 @@ export const startRedisDaemon = async () => {
           {
             runCommand,
             chatWithTools: async (messages, opts) => {
+              chatTurn += 1;
+              const turn = chatTurn;
               const start = Date.now();
+
+              console.log(`[agent-daemon] chat turn start requestId=${requestId} turn=${turn}\n`);
+
               const result = await chatWithTools(messages, opts);
+              const durationMs = Date.now() - start;
+              const assistantMessage = result.response.choices?.[0]?.message;
+              const toolCallCount = (result.tool_calls || []).length;
+
+              console.log(
+                `[agent-daemon] chat turn end requestId=${requestId} turn=${turn} durationMs=${durationMs} toolCalls=${toolCallCount}\n`,
+              );
 
               const allowedTools = ['set_context', 'ask_user', 'rag'];
 
               await onModelResponse({
                 ...result.response,
-                durationMs: Date.now() - start,
+                durationMs,
+                tags: assistantMessage ? deriveModelResponseTags(assistantMessage) : ["unknown"],
                 thinkingMode: config.thinkingMode,
               });
 

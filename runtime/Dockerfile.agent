@@ -12,11 +12,24 @@ COPY ${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
 
 RUN pnpm install --frozen-lockfile --filter @project-yahl/runtime...
 
-COPY ${OMNIFLEX_APP_DIR}/runtime/agent ./${OMNIFLEX_APP_DIR}/runtime/agent
-COPY ${OMNIFLEX_APP_DIR}/runtime/orchestrator ./${OMNIFLEX_APP_DIR}/runtime/orchestrator
-COPY ${OMNIFLEX_APP_DIR}/runtime/shared ./${OMNIFLEX_APP_DIR}/runtime/shared
-COPY ${OMNIFLEX_APP_DIR}/runtime/tsconfig.json ./${OMNIFLEX_APP_DIR}/runtime/tsconfig.json
-
 WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/runtime
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends xvfb x11vnc \
+  && rm -rf /var/lib/apt/lists/* \
+  && npx playwright install-deps chromium \
+  && npx playwright install chromium
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+
+COPY ${OMNIFLEX_APP_DIR}/runtime/agent ./agent
+COPY ${OMNIFLEX_APP_DIR}/runtime/orchestrator ./orchestrator
+COPY ${OMNIFLEX_APP_DIR}/runtime/shared ./shared
+COPY ${OMNIFLEX_APP_DIR}/runtime/tsconfig.json ./tsconfig.json
+
+RUN node ./agent/resolve-chrome-path.cjs > /opt/chrome-path
+
+RUN chmod +x agent/docker-entrypoint.sh
+
+ENTRYPOINT ["./agent/docker-entrypoint.sh"]
 CMD ["pnpm", "--silent", "--filter", "@project-yahl/runtime", "run", "agent", "--", "--daemon"]

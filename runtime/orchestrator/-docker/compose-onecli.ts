@@ -103,6 +103,8 @@ export const writeSharedOneCliOverride = async () => {
 
   const envLines = Object.entries(configEnv).map(([key, value]) =>
     `      ${key}: ${yamlQuote(String(value))}`);
+  envLines.push(`      NO_PROXY: ${yamlQuote("localhost,127.0.0.1,::1")}`);
+  envLines.push(`      no_proxy: ${yamlQuote("localhost,127.0.0.1,::1")}`);
   if (hasCombinedBundle) {
     envLines.push(`      SSL_CERT_FILE: ${yamlQuote("/tmp/onecli-combined-ca.pem")}`);
     envLines.push(`      DENO_CERT: ${yamlQuote("/tmp/onecli-combined-ca.pem")}`);
@@ -131,6 +133,8 @@ export const writeSharedOneCliOverride = async () => {
 };
 
 export const composeUp = async (opts: ComposeUpOptions) => {
+  process.env.AGENT_IMAGE = process.env.AGENT_IMAGE || "project-yahl-agent:latest";
+
   const composeArgs = [
     "-f",
     composeFile,

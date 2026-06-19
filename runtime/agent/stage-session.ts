@@ -13,9 +13,11 @@ import {
   type ChatApiMessage,
   type ChatAssistantMessage,
   type ChatToolCall,
+  parseBrowserToolArguments,
   parseRunBashToolArguments,
 } from "@/shared/stage-tools";
 
+import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
 
 type BootstrapMessage = {
@@ -198,28 +200,55 @@ export const runStageSession = async (
   ];
 
   let bashCalls = 0;
+  let browserCalls = 0;
   let turns = 0;
 
-  while (turns < maxTurns) {
-    turns += 1;
+  try {
+    while (turns < maxTurns) {
+      turns += 1;
 
-    const chatOpts =
-      stageInput.temperature === undefined ? undefined : { temperature: stageInput.temperature };
-    const assistantMessage = await runner.chatWithTools(stageMessages, chatOpts);
-    stageMessages.push(...assistantMessage);
+      const chatOpts =
+        stageInput.temperature === undefined ? undefined : { temperature: stageInput.temperature };
+      const assistantMessage = await runner.chatWithTools(stageMessages, chatOpts);
+      stageMessages.push(...assistantMessage);
 
-    const toolCalls = assistantMessage.flatMap((message) => message.tool_calls || []);
-    
-    for (const call of toolCalls) {
-      const name = call.function.name;
-      const rawArgs = call.function.arguments ?? "";
+      const toolCalls = assistantMessage.flatMap((message) => message.tool_calls || []);
 
-      if (name === "run_bash") {
-        const command = parseRunBashToolArguments(rawArgs);
+      for (const call of toolCalls) {
+        const name = call.function.name;
+        const rawArgs = call.function.arguments ?? "";
 
-        if (!command) {
+        if (name === "run_bash") {
+          const command = parseRunBashToolArguments(rawArgs);
+
+          if (!command) {
+            stageMessages.push({
+              content: toolErrorContent("run_bash: invalid or empty command"),
+              role: "tool",
+              tool_call_id: call.id,
+            });
+
+            continue;
+          }
+
+          if (bashCalls >= maxBashCalls) {
+            stageMessages.push({
+              content: toolErrorContent(`run_bash: exceeded max calls (${maxBashCalls})`),
+              role: "tool",
+              tool_call_id: call.id,
+            });
+
+            continue;
+          }
+
+          bashCalls += 1;
+          const commandResult = await runner.runCommand(command);
+          if (config.debug) {
+            console.log(`[DEBUG] [RUN_BASH] ${command}: ${commandResult}\n`);
+          }
+
           stageMessages.push({
-            content: toolErrorContent("run_bash: invalid or empty command"),
+            content: commandResult,
             role: "tool",
             tool_call_id: call.id,
           });
@@ -227,9 +256,28 @@ export const runStageSession = async (
           continue;
         }
 
-        if (bashCalls >= maxBashCalls) {
+        if (name === "browser") {
+          const browserArgs = parseBrowserToolArguments(rawArgs);
+
+          if (!browserArgs) {
+            stageMessages.push({
+              content: toolErrorContent("browser: invalid arguments"),
+              role: "tool",
+              tool_call_id: call.id,
+            });
+
+            continue;
+          }
+
+          browserCalls += 1;
+          const browserResult = await runBrowserCommand(browserArgs);
+
+          if (config.debug) {
+            console.log(`[DEBUG] [BROWSER] ${browserArgs.mode}: ${JSON.stringify(browserResult)}\n`);
+          }
+
           stageMessages.push({
-            content: toolErrorContent(`run_bash: exceeded max calls (${maxBashCalls})`),
+            content: JSON.stringify(browserResult),
             role: "tool",
             tool_call_id: call.id,
           });
@@ -237,39 +285,29 @@ export const runStageSession = async (
           continue;
         }
 
-        bashCalls += 1;
-        const commandResult = await runner.runCommand(command);
-        if (config.debug) {
-          console.log(`[DEBUG] [RUN_BASH] ${command}: ${commandResult}\n`);
+        if (name === "set_context" || name === "rag" || name === "ask_user") {
+          continue;
         }
 
         stageMessages.push({
-          content: commandResult,
+          content: toolErrorContent(`unknown tool: ${name}`),
           role: "tool",
           tool_call_id: call.id,
         });
-
-        continue;
       }
 
-      if (name === "set_context" || name === "rag" || name === "ask_user") {
-        continue;
-      }
+      if (toolCalls.length > 0) continue;
 
-      stageMessages.push({
-        content: toolErrorContent(`unknown tool: ${name}`),
-        role: "tool",
-        tool_call_id: call.id,
-      });
+      return finalizeEnvelope(assistantMessage.at(-1)?.content || '');
     }
 
-    if (toolCalls.length > 0) continue;
-
-    return finalizeEnvelope(assistantMessage.at(-1)?.content || '');
+    return {
+      output: `执行失败 stage对话轮次超过限制 ${maxTurns}`,
+      type: "result",
+    };
+  } finally {
+    if (browserCalls > 0) {
+      await closeStagehandSession();
+    }
   }
-
-  return {
-    output: `执行失败 stage对话轮次超过限制 ${maxTurns}`,
-    type: "result",
-  };
 };

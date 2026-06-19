@@ -4,6 +4,9 @@ import http from 'http';
 import { Response } from 'express';
 
 import { Manager, Servers } from '@omni-infra/express';
+import type { TMiddleware } from '@omni-infra/express/types';
+
+import { JSON_BODY_LIMIT, payloadTooLargeHandler } from '@/middleware/json-body';
 
 export type TServerType = typeof serverTypes[number];
 
@@ -32,7 +35,8 @@ const startServer = (serverType: TServerType) => {
       origin: config.corsOrigin,
     },
     doubleCsrf: false,
-    frontingMiddlewares: [],
+    expressJson: { limit: JSON_BODY_LIMIT },
+    fallbackMiddlewares: [payloadTooLargeHandler as unknown as TMiddleware],
     getRouters: () => [getRouter(serverType)],
     hideErrorStack: config.hideErrorStack || undefined,
     serverType,

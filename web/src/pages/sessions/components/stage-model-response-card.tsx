@@ -10,6 +10,14 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
   return (
     <li className="rounded-md border bg-background p-2">
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+        {response.tags?.map((tag) => (
+          <span
+            className="rounded border bg-muted/40 px-1.5 py-0.5 font-medium uppercase tracking-wide"
+            key={tag}
+          >
+            {tag}
+          </span>
+        ))}
         {response.model ? <span>{response.model}</span> : null}
         {typeof response.durationMs === "number" ? (
           <span>{response.durationMs}ms</span>

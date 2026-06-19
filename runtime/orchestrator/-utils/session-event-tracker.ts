@@ -30,26 +30,43 @@ type TStageFinishEnvelope = {
   requestId: string;
 };
 
+export class SessionEventTrackerError extends Error {
+  constructor(
+    message: string,
+    readonly url: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'SessionEventTrackerError';
+  }
+}
+
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
 
 const _request = async (url: string, init: RequestInit) => {
+  let response: Response;
+
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       ...init,
       headers: {
         'content-type': 'application/json',
         ...init.headers,
       },
     });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      console.warn(
-        `[WARN] ${init.method ?? 'GET'} ${url} failed with ${response.status} ${response.statusText}: ${detail || '<empty body>'}\n`,
-      );
-    }
   } catch (error) {
-    console.warn(`[WARN] failed ${init.method ?? 'GET'} ${url}: ${String(error)}\n`);
+    const message = `failed ${init.method ?? 'GET'} ${url}: ${String(error)}`;
+
+    console.error(`[ERROR] session-event-tracker ${message}\n`);
+    throw new SessionEventTrackerError(message, url);
+  }
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    const message = `${init.method ?? 'GET'} ${url} failed with ${response.status} ${response.statusText}: ${detail || '<empty body>'}`;
+
+    console.error(`[ERROR] session-event-tracker ${message}\n`);
+    throw new SessionEventTrackerError(message, url, response.status);
   }
 };
 
@@ -65,11 +82,15 @@ export const createSessionEventTracker = () => {
 
   let queue: Promise<void> = Promise.resolve();
 
-  const enqueue = (fn: () => Promise<void>) => {
+  const enqueue = (fn: () => Promise<void>, critical = false) => {
     queue = queue
       .then(fn)
       .catch((error: unknown) => {
-        console.warn(`[WARN] session-event-tracker queue error: ${String(error)}\n`);
+        console.error(`[ERROR] session-event-tracker queue error: ${String(error)}\n`);
+
+        if (critical) {
+          throw error;
+        }
       });
 
     return queue;
@@ -136,6 +157,7 @@ export const createSessionEventTracker = () => {
       await _post(url, {
         durationMs: envelope.response.durationMs,
         response: envelope.response,
+        tags: envelope.response.tags,
         thinkingMode: envelope.response.thinkingMode,
       });
     });
@@ -151,7 +173,7 @@ export const createSessionEventTracker = () => {
       await _patch(url, {
         contextAfter: envelope.contextAfter,
       });
-    });
+    }, true);
   };
 
   const patchSession = (
