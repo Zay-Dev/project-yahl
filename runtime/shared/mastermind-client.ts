@@ -8,9 +8,18 @@ export type TMastermindSkillResponse = {
 };
 
 export type TMastermindVerifyResponse = {
+  askUserRef?: string;
   feedback: string;
   pass: boolean;
+  resumeAction?: 'edit_answer' | 'reask' | 'rerun';
   score: number;
+};
+
+export type TVerifyStageSnapshot = {
+  askUser?: Record<string, unknown>[];
+  contextKeys?: string[];
+  logic?: string;
+  produceContextKeys?: string[];
 };
 
 export const callMastermindSkill = async (
@@ -69,7 +78,9 @@ export const callMastermindVerify = async (body: {
   rubric?: string;
   sessionId: string;
   stageIndex: number;
+  stageSnapshot?: TVerifyStageSnapshot;
   stageVersion?: number;
+  verifyResume?: boolean;
 }): Promise<TMastermindVerifyResponse> => {
   const url = `${mastermindBaseUrl()}/v1/verify`;
   const startedAt = Date.now();

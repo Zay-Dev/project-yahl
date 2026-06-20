@@ -106,7 +106,13 @@ export type TResponseAskUserQuestionListItem = {
   status: 'answered' | 'pending';
 };
 
+export type TVerifyResumeAction = 'edit_answer' | 'reask' | 'rerun';
+
 export type TResponseVerifyCheckpoint = {
+  askUserQuestion?: Record<string, unknown>;
+  askUserRef?: string;
+  editedAnswerFreeText?: string;
+  editedAnswerOptionIds?: string[];
   feedback: string;
   kind: 'produce_keys' | 'verify';
   parsedStageSnapshot?: {
@@ -115,6 +121,7 @@ export type TResponseVerifyCheckpoint = {
     type: 'loop' | 'plain';
   };
   requestId: string;
+  resumeAction?: TVerifyResumeAction;
   score: number;
   stage: TYahlStage;
   stageIndex?: number;

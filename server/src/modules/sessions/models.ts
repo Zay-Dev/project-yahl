@@ -144,13 +144,18 @@ askUserQuestionSchema.index({ requestId: 1, session: 1 });
 askUserQuestionSchema.index({ session: 1, status: 1 });
 
 const verifyCheckpointSchema = new Schema<TDbVerifyCheckpoint>({
+  askUserQuestion: model.d.mixed(),
+  askUserRef: model.d.optionalString(),
   contextSnapshot: model.d.mixed(),
+  editedAnswerFreeText: model.d.optionalString(),
+  editedAnswerOptionIds: [model.d.optionalString()],
   feedback: model.d.requiredString(),
   forkSetupIndex: model.d.optionalNumber(),
   kind: model.d.optionalString(),
   loopMeta: loopMetaSchema,
   parsedStageSnapshot: model.d.mixed(),
   requestId: model.d.requiredString(),
+  resumeAction: model.d.optionalString(),
   score: model.d.requiredNumber(),
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   stage: model.d.mixed(),

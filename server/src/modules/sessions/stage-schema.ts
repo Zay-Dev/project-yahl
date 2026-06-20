@@ -33,6 +33,7 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   updateContextKeys: stringArraySchema.optional(),
   verify: Joi.boolean().optional(),
   verifyMinScore: Joi.number().min(0).max(1).optional(),
+  verifyResume: Joi.boolean().optional(),
   verifyRubric: Joi.string().trim().optional(),
   version: Joi.number().integer().min(1).optional(),
 })

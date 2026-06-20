@@ -87,13 +87,23 @@ describe('runVerifyGate', () => {
     process.env.MASTERMIND_API_URL = 'http://mastermind.test';
     process.env.SESSION_API_BASE_URL = 'http://session.test';
 
+    let checkpointBody: Record<string, unknown> | undefined;
+
     await withMockFetch(
       (url, init) => {
         if (url.endsWith('/v1/verify')) {
-          return Response.json({ feedback: 'metric missing', pass: false, score: 0 });
+          return Response.json({
+            askUserRef: 'target_metric',
+            feedback: 'metric missing',
+            pass: false,
+            resumeAction: 'edit_answer',
+            score: 0,
+          });
         }
 
         if (url.includes('/verify-checkpoints') && init?.method === 'POST') {
+          checkpointBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+
           return Response.json({ data: { verifyId: 'verify-1' } }, { status: 201 });
         }
 
@@ -117,6 +127,9 @@ describe('runVerifyGate', () => {
             return true;
           },
         );
+
+        assert.equal(checkpointBody?.resumeAction, 'edit_answer');
+        assert.equal(checkpointBody?.askUserRef, 'target_metric');
       },
     );
   });

@@ -12,6 +12,7 @@ import { SessionResult } from "@/pages/sessions/components/session-result";
 import { SessionTimeline } from "@/pages/sessions/components/session-timeline";
 import { useAskUserQuestions } from "@/pages/sessions/hooks/use-ask-user-questions";
 import { useSessionEventsStream } from "@/pages/sessions/hooks/use-session-events-stream";
+import { useVerifyCheckpoints } from "@/pages/sessions/hooks/use-verify-checkpoints";
 import { RESOURCES } from "@/providers/constants";
 
 export function SessionDetailPage() {
@@ -49,6 +50,14 @@ export function SessionDetailPage() {
     sessionId: id ?? '',
   });
 
+  const {
+    pendingCheckpoint,
+    refetch: refetchVerifyCheckpoints,
+  } = useVerifyCheckpoints({
+    lastEvent,
+    sessionId: id ?? '',
+  });
+
   const session = result;
   const error = query.error;
   const isLoading = query.isLoading;
@@ -78,10 +87,13 @@ export function SessionDetailPage() {
             onOpenQuestion={openQuestion}
             questions={pendingQuestions}
           />
-          <VerifyPendingBanner
-            lastEvent={lastEvent}
-            sessionId={session.sessionId}
-          />
+          {pendingCheckpoint ? (
+            <VerifyPendingBanner
+              checkpoint={pendingCheckpoint}
+              onDismiss={() => void refetchVerifyCheckpoints()}
+              sessionId={session.sessionId}
+            />
+          ) : null}
           <AskUserQuestionDialog
             onAnswered={handleAnswered}
             onOpenChange={setDialogOpen}

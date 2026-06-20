@@ -322,13 +322,39 @@ export const runVerify = async (
 
   const rubricText = await loadRubric(body.rubric);
   const minScore = body.minScore ?? 0.75;
+  const classifyResume = body.verifyResume !== false && Boolean(body.stageSnapshot?.askUser?.length);
+  const resumeFields = classifyResume
+    ? ',"resumeAction":"rerun"|"edit_answer"|"reask","askUserRef":"<id when edit_answer or reask>"'
+    : '';
+  const resumeGuidance = classifyResume
+    ? [
+      'When pass is false, also set resumeAction:',
+      '- rerun: if it is not a problem of the ask-user question/options/answer',
+      '- rerun: ask-user question/options/answer are valid but stage output failed verify',
+      '- edit_answer: question/options valid but the user answer is invalid for the rubric',
+      '- reask: the ask-user question or options are invalid or unusable',
+      'Set askUserRef to the askUser registry id when resumeAction is edit_answer or reask.',
+    ].join('\n')
+    : '';
 
-  const prompt = [
-    'You are a YAHL stage output verifier. Return JSON only: {"score":0-1,"pass":boolean,"feedback":"..."}',
+  const promptParts = [
+    `You are a YAHL stage output verifier. Return JSON only: {"score":0-1,"pass":boolean,"feedback":"..."${resumeFields}}`,
     `Rubric:\n${rubricText}`,
     `Minimum score to pass: ${minScore}`,
-    `Context snapshot:\n${JSON.stringify(body.contextSnapshot, null, 2).slice(0, 24_000)}`,
-  ].join('\n\n');
+    `Context snapshot:\n${JSON.stringify(body.contextSnapshot, null, 2).slice(0, 16_000)}`,
+  ];
+
+  if (body.stageSnapshot) {
+    promptParts.push(
+      `Stage snapshot:\n${JSON.stringify(body.stageSnapshot, null, 2).slice(0, 8_000)}`,
+    );
+  }
+
+  if (resumeGuidance) {
+    promptParts.push(resumeGuidance);
+  }
+
+  const prompt = promptParts.join('\n\n');
 
   let text: string;
 
@@ -365,8 +391,10 @@ export const runVerify = async (
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse(jsonMatch?.[0] ?? text) as {
+      askUserRef?: string;
       feedback?: string;
       pass?: boolean;
+      resumeAction?: string;
       score?: number;
     };
 
@@ -375,12 +403,24 @@ export const runVerify = async (
       : 0;
 
     const pass = typeof parsed.pass === 'boolean' ? parsed.pass : score >= minScore;
+    const resumeAction = !pass && classifyResume
+      ? (parsed.resumeAction === 'edit_answer'
+        || parsed.resumeAction === 'reask'
+        || parsed.resumeAction === 'rerun'
+        ? parsed.resumeAction
+        : 'rerun')
+      : undefined;
+    const askUserRef = resumeAction === 'edit_answer' || resumeAction === 'reask'
+      ? (typeof parsed.askUserRef === 'string' ? parsed.askUserRef.trim() : undefined)
+      : undefined;
 
     logDone(pass, score);
 
     return {
+      ...(askUserRef ? { askUserRef } : {}),
       feedback: parsed.feedback ?? text,
       pass,
+      ...(resumeAction ? { resumeAction } : {}),
       score,
     };
   } catch {

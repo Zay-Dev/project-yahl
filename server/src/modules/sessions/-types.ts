@@ -47,6 +47,7 @@ export type TYahlStage = {
   updateContextKeys?: string[];
   verify?: boolean;
   verifyMinScore?: number;
+  verifyResume?: boolean;
   verifyRubric?: string;
   version?: number;
 };
@@ -173,15 +174,22 @@ export type TVerifyCheckpointKind = 'produce_keys' | 'verify';
 
 export type TVerifyCheckpointStatus = 'pending' | 'resumed';
 
+export type TVerifyResumeAction = 'edit_answer' | 'reask' | 'rerun';
+
 export interface IVerifyCheckpoint extends TWithTimestamps {
   _id: string;
+  askUserQuestion?: Record<string, unknown>;
+  askUserRef?: string;
   contextSnapshot: Record<string, unknown>;
+  editedAnswerFreeText?: string;
+  editedAnswerOptionIds?: string[];
   feedback: string;
   forkSetupIndex?: number;
   kind?: TVerifyCheckpointKind;
   loopMeta?: TStageLoopMeta;
   parsedStageSnapshot?: TParsedStageSnapshot;
   requestId: string;
+  resumeAction?: TVerifyResumeAction;
   score: number;
   session: string;
   stage: TYahlStage;

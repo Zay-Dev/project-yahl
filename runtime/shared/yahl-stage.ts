@@ -25,6 +25,7 @@ export interface YahlStage {
   updateContextKeys?: string[];
   verify?: boolean;
   verifyMinScore?: number;
+  verifyResume?: boolean;
   verifyRubric?: string;
   version?: number;
 }
@@ -200,6 +201,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
     ...(stage.verify === true ? { verify: true } : {}),
     ...(stage.verifyMinScore !== undefined ? { verifyMinScore: Number(stage.verifyMinScore) } : {}),
+    ...(stage.verifyResume === false ? { verifyResume: false } : {}),
     ...(typeof stage.verifyRubric === 'string' ? { verifyRubric: stage.verifyRubric.trim() } : {}),
     ...(stage.version !== undefined ? { version: Number(stage.version) } : {}),
   };

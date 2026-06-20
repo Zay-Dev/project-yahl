@@ -7,10 +7,15 @@ const sessionApiBaseUrl = () =>
     .replace(/\/+$/, '');
 
 export type TVerifyCheckpoint = {
+  askUserQuestion?: Record<string, unknown>;
+  askUserRef?: string;
+  editedAnswerFreeText?: string;
+  editedAnswerOptionIds?: string[];
   feedback: string;
   kind?: 'produce_keys' | 'verify';
   parsedStageSnapshot?: TParsedStageSnapshot;
   requestId: string;
+  resumeAction?: 'edit_answer' | 'reask' | 'rerun';
   score: number;
   stage: YahlStage;
   stageIndex?: number;

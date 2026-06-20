@@ -5,6 +5,7 @@ import { composeDown } from '@/orchestrator/-docker';
 
 import { VerifyFailedError } from './errors';
 import { postVerifyCheckpoint } from './session-api';
+import { resolveVerifyResumeEnabled, toVerifyStageSnapshot } from './stage-snapshot';
 import { toParsedStageSnapshot } from '@/orchestrator/-ask-user/parsed-stage-snapshot';
 
 const _serializeStorage = (storage: TStorage) => ({
@@ -48,7 +49,9 @@ export const runVerifyGate = async (params: {
     rubric: spec.verifyRubric,
     sessionId: params.sessionId,
     stageIndex: params.pipelineStageIndex,
+    stageSnapshot: toVerifyStageSnapshot(spec),
     stageVersion: spec.version,
+    verifyResume: resolveVerifyResumeEnabled(spec),
   });
 
   if (result.pass) {
@@ -69,6 +72,8 @@ export const runVerifyGate = async (params: {
     stage: spec,
     stageIndex: params.pipelineStageIndex,
     storageSnapshot: _serializeStorage(params.storage),
+    ...(result.askUserRef ? { askUserRef: result.askUserRef } : {}),
+    ...(result.resumeAction ? { resumeAction: result.resumeAction } : {}),
   });
 
   await globalThis.sessionTracker?.flush?.();

@@ -51,6 +51,19 @@ export const skillResponseSchema = z.object({
 
 export type TSkillResponse = z.infer<typeof skillResponseSchema>;
 
+export const verifyStageSnapshotSchema = z.object({
+  askUser: z.array(z.record(z.string(), z.unknown())).optional(),
+  contextKeys: z.array(z.string()).optional(),
+  logic: z.string().optional(),
+  produceContextKeys: z.array(z.string()).optional(),
+});
+
+export type TVerifyStageSnapshot = z.infer<typeof verifyStageSnapshotSchema>;
+
+export const verifyResumeActionSchema = z.enum(['rerun', 'edit_answer', 'reask']);
+
+export type TVerifyResumeAction = z.infer<typeof verifyResumeActionSchema>;
+
 export const verifyRequestSchema = z.object({
   contextSnapshot: z.record(z.string(), z.unknown()),
   minScore: z.number().min(0).max(1).optional(),
@@ -58,15 +71,19 @@ export const verifyRequestSchema = z.object({
   rubric: z.string().optional(),
   sessionId: z.string(),
   stageIndex: z.number().int().nonnegative(),
+  stageSnapshot: verifyStageSnapshotSchema.optional(),
   stageVersion: z.number().int().positive().optional(),
+  verifyResume: z.boolean().optional(),
   ...orgScopeSchema.shape,
 });
 
 export type TVerifyRequest = z.infer<typeof verifyRequestSchema>;
 
 export const verifyResponseSchema = z.object({
+  askUserRef: z.string().optional(),
   feedback: z.string(),
   pass: z.boolean(),
+  resumeAction: verifyResumeActionSchema.optional(),
   score: z.number().min(0).max(1),
 });
 
