@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { TSessionLiveEvent } from '@project-yahl/server/modules/sessions/-api-types';
 
@@ -14,56 +14,98 @@ type TCheckpoint = {
   verifyId: string;
 };
 
+const isVerifyFailedEvent = (event: TSessionLiveEvent | null) =>
+  event?.type === 'verify.failed' || event?.type === 'produce_keys.failed';
+
+const isVerifyResumedEvent = (event: TSessionLiveEvent | null) =>
+  event?.type === 'verify.resumed' || event?.type === 'produce_keys.resumed';
+
 export function VerifyPendingBanner(props: {
   lastEvent: TSessionLiveEvent | null;
   sessionId: string;
 }) {
   const [checkpoint, setCheckpoint] = useState<TCheckpoint | null>(null);
-  const verifyId = props.lastEvent?.type === 'verify.failed'
-    || props.lastEvent?.type === 'produce_keys.failed'
-    ? props.lastEvent.verifyId
-    : undefined;
+  const [activeVerifyId, setActiveVerifyId] = useState<string | undefined>();
+  const [resuming, setResuming] = useState(false);
 
-  useEffect(() => {
-    if (!verifyId) {
+  const loadCheckpoint = useCallback(async (verifyId: string) => {
+    const res = await fetch(
+      `${apiBase}/api/sessions/${encodeURIComponent(props.sessionId)}/verify-checkpoints/${encodeURIComponent(verifyId)}`,
+    );
+
+    if (!res.ok) {
       return;
     }
 
-    const load = async () => {
-      const res = await fetch(
-        `${apiBase}/api/sessions/${encodeURIComponent(props.sessionId)}/verify-checkpoints/${encodeURIComponent(verifyId)}`,
-      );
-
-      if (!res.ok) {
-        return;
-      }
-
-      const data = await res.json() as {
-        data?: TCheckpoint;
-        feedback?: string;
-        kind?: TCheckpoint['kind'];
-        score?: number;
-        status?: string;
-        verifyId?: string;
-      };
-
-      const loaded = data.data ?? (data.verifyId ? data as TCheckpoint : null);
-
-      setCheckpoint(loaded);
+    const data = await res.json() as {
+      data?: TCheckpoint;
+      feedback?: string;
+      kind?: TCheckpoint['kind'];
+      score?: number;
+      status?: string;
+      verifyId?: string;
     };
 
-    void load();
-  }, [props.sessionId, verifyId]);
+    const loaded = data.data ?? (data.verifyId ? data as TCheckpoint : null);
+
+    if (loaded?.status === 'pending') {
+      setCheckpoint(loaded);
+      return;
+    }
+
+    setCheckpoint(null);
+  }, [props.sessionId]);
+
+  useEffect(() => {
+    const event = props.lastEvent;
+
+    if (!event) {
+      return;
+    }
+
+    if (isVerifyFailedEvent(event)) {
+      setActiveVerifyId(event.verifyId);
+    }
+
+    if (isVerifyResumedEvent(event)) {
+      setCheckpoint((current) => (
+        current?.verifyId === event.verifyId ? null : current
+      ));
+      setActiveVerifyId((current) => (
+        current === event.verifyId ? undefined : current
+      ));
+    }
+  }, [props.lastEvent]);
+
+  useEffect(() => {
+    if (!activeVerifyId) {
+      return;
+    }
+
+    void loadCheckpoint(activeVerifyId);
+  }, [activeVerifyId, loadCheckpoint]);
 
   if (!checkpoint || checkpoint.status !== 'pending') {
     return null;
   }
 
   const resume = async () => {
-    await fetch(
-      `${apiBase}/api/sessions/${encodeURIComponent(props.sessionId)}/verify-checkpoints/${encodeURIComponent(checkpoint.verifyId)}/resume`,
-      { method: 'POST' },
-    );
+    setResuming(true);
+
+    try {
+      const res = await fetch(
+        `${apiBase}/api/sessions/${encodeURIComponent(props.sessionId)}/verify-checkpoints/${encodeURIComponent(checkpoint.verifyId)}/resume`,
+        { method: 'POST' },
+      );
+
+      if (!res.ok) {
+        throw new Error(`Resume failed (${res.status})`);
+      }
+
+      setCheckpoint(null);
+    } finally {
+      setResuming(false);
+    }
   };
 
   const isProduceKeys = checkpoint.kind === 'produce_keys';
@@ -76,7 +118,14 @@ export function VerifyPendingBanner(props: {
           : `Stage verification failed (score ${checkpoint.score.toFixed(2)})`}
       </p>
       <p className="mt-1 text-sm text-muted-foreground">{checkpoint.feedback}</p>
-      <Button className="mt-3" onClick={() => void resume()} size="sm">Resume from checkpoint</Button>
+      <Button
+        className="mt-3"
+        disabled={resuming}
+        onClick={() => void resume()}
+        size="sm"
+      >
+        {resuming ? 'Resuming…' : 'Resume from checkpoint'}
+      </Button>
     </div>
   );
-}
+};

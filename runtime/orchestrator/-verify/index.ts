@@ -33,6 +33,12 @@ export const runVerifyGate = async (params: {
     return;
   }
 
+  const startedAt = Date.now();
+
+  console.log(
+    `[agent] verify start sessionId=${params.sessionId} requestId=${params.requestId} stageIndex=${params.pipelineStageIndex}`,
+  );
+
   const { callMastermindVerify } = await import('@/shared/mastermind-client');
 
   const result = await callMastermindVerify({
@@ -46,6 +52,9 @@ export const runVerifyGate = async (params: {
   });
 
   if (result.pass) {
+    console.log(
+      `[agent] verify done pass=true score=${result.score} durationMs=${Date.now() - startedAt}`,
+    );
     return;
   }
 
@@ -63,6 +72,10 @@ export const runVerifyGate = async (params: {
   });
 
   await globalThis.sessionTracker?.flush?.();
+
+  console.log(
+    `[agent] verify done pass=false score=${result.score} durationMs=${Date.now() - startedAt} verifyId=${verifyId}`,
+  );
 
   await composeDown(params.agentName);
 

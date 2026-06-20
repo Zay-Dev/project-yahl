@@ -72,16 +72,46 @@ export const callMastermindVerify = async (body: {
   stageVersion?: number;
 }): Promise<TMastermindVerifyResponse> => {
   const url = `${mastermindBaseUrl()}/v1/verify`;
+  const startedAt = Date.now();
 
-  const res = await fetch(url, {
-    body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  });
+  console.log(
+    `[mastermind-client] POST verify sessionId=${body.sessionId} requestId=${body.requestId} stageIndex=${body.stageIndex}`,
+  );
 
-  if (!res.ok) {
-    throw new Error(`mastermind verify failed: ${res.status}`);
+  try {
+    const res = await fetch(url, {
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+
+    if (!res.ok) {
+      const durationMs = Date.now() - startedAt;
+
+      console.log(
+        `[mastermind-client] verify http=${res.status} pass=false durationMs=${durationMs}`,
+      );
+      throw new Error(`mastermind verify failed: ${res.status}`);
+    }
+
+    const result = await res.json() as TMastermindVerifyResponse;
+    const durationMs = Date.now() - startedAt;
+
+    console.log(
+      `[mastermind-client] verify http=${res.status} pass=${result.pass} score=${result.score} durationMs=${durationMs}`,
+    );
+
+    return result;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('mastermind verify failed:')) {
+      throw error;
+    }
+
+    const durationMs = Date.now() - startedAt;
+    const message = error instanceof Error ? error.message : 'mastermind verify request failed';
+
+    console.log(`[mastermind-client] verify failed durationMs=${durationMs} error=${message}`);
+
+    throw error;
   }
-
-  return await res.json() as TMastermindVerifyResponse;
 };

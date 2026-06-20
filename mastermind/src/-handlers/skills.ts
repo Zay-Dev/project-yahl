@@ -298,7 +298,21 @@ export const runVerify = async (
   agent: TMastermindAgent,
   body: TVerifyRequest,
 ): Promise<TVerifyResponse> => {
+  const startedAt = Date.now();
+
+  console.log(
+    `[mastermind] verify start sessionId=${body.sessionId} caller=orchestrator requestId=${body.requestId} stageIndex=${body.stageIndex}`,
+  );
+
+  const logDone = (pass: boolean, score: number) => {
+    console.log(
+      `[mastermind] verify done pass=${pass} score=${score} durationMs=${Date.now() - startedAt}`,
+    );
+  };
+
   if (agent.status !== 'ready') {
+    logDone(false, 0);
+
     return {
       feedback: 'mastermind unavailable',
       pass: false,
@@ -339,6 +353,8 @@ export const runVerify = async (
       console.error('[mastermind] crash report failed', reportError);
     });
 
+    logDone(false, 0);
+
     return {
       feedback: formatShortError(error),
       pass: false,
@@ -360,12 +376,16 @@ export const runVerify = async (
 
     const pass = typeof parsed.pass === 'boolean' ? parsed.pass : score >= minScore;
 
+    logDone(pass, score);
+
     return {
       feedback: parsed.feedback ?? text,
       pass,
       score,
     };
   } catch {
+    logDone(false, 0);
+
     return {
       feedback: text || 'verify parse failed',
       pass: false,

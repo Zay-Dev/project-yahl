@@ -8,6 +8,7 @@ import { Queries } from '@omni-infra/mongoose';
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { isStageFinished } from '../-stage-status';
 import { emitSessionEvent } from '../-session-events';
+import type { TResponseVerifyCheckpoint } from '../-api-types';
 import type { TParsedStageSnapshot, TYahlStage } from '../-types';
 import { modelStage, modelVerifyCheckpoint } from '../models';
 import { yahlStageSchema } from '../stage-schema';
@@ -56,6 +57,30 @@ const createBodySchema = Joi.object<TRequestCreateVerifyCheckpointBody>({
   storageSnapshot: Joi.object().required(),
 });
 
+export const toVerifyCheckpointResponse = (checkpoint: {
+  feedback: string;
+  kind?: 'produce_keys' | 'verify';
+  parsedStageSnapshot?: TParsedStageSnapshot;
+  requestId: string;
+  score: number;
+  stage: TYahlStage;
+  stageIndex?: number;
+  status: 'pending' | 'resumed';
+  storageSnapshot: Record<string, unknown>;
+  verifyId: string;
+}): TResponseVerifyCheckpoint => ({
+  feedback: checkpoint.feedback,
+  kind: checkpoint.kind ?? 'verify',
+  parsedStageSnapshot: checkpoint.parsedStageSnapshot,
+  requestId: checkpoint.requestId,
+  score: checkpoint.score,
+  stage: checkpoint.stage,
+  stageIndex: checkpoint.stageIndex,
+  status: checkpoint.status,
+  storageSnapshot: checkpoint.storageSnapshot,
+  verifyId: checkpoint.verifyId,
+});
+
 export const createVerifyCheckpoint = [
   Middlewares.Chainable
     .validate(({ req }) => ({
@@ -96,6 +121,9 @@ export const createVerifyCheckpoint = [
               score: body.score,
             },
           },
+          $unset: {
+            finishedAt: '',
+          },
         },
       );
 
@@ -132,7 +160,10 @@ export const resumeVerifyCheckpoint = [
       });
 
       if (isStageFinished(stage)) {
-        throw errors.badRequest('stage already finished');
+        await modelStage.updateOne(
+          { requestId: checkpoint.requestId, session: sessionRef },
+          { $unset: { finishedAt: '' } },
+        );
       }
 
       await modelVerifyCheckpoint.updateOne(
@@ -170,13 +201,7 @@ export const getVerifyCheckpoint = [
         verifyId: params.verifyId,
       });
 
-      express.respondOne({
-        feedback: checkpoint.feedback,
-        kind: checkpoint.kind ?? 'verify',
-        score: checkpoint.score,
-        status: checkpoint.status,
-        verifyId: checkpoint.verifyId,
-      });
+      express.respondOne(toVerifyCheckpointResponse(checkpoint));
     })
     .toMiddleware(),
 ];

@@ -10,11 +10,11 @@ services:
       - ${COMPOSE_ENV_FILE:-.env}
     environment:
       AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
+      AGENT_REDIS_URL: redis://redis:6379
       AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}
       DISPLAY: ${STAGEHAND_LIVEVIEW_DISPLAY:-:99}
+      MASTERMIND_API_URL: http://mastermind:4100
       NO_PROXY: localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,host.docker.internal
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      MASTERMIND_API_URL: ${MASTERMIND_API_URL:-http://mastermind:4100}
       STAGEHAND_CHROME_PATH: ${STAGEHAND_CHROME_PATH:-}
       STAGEHAND_LIVEVIEW: ${STAGEHAND_LIVEVIEW:-0}
       no_proxy: localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,host.docker.internal

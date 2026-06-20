@@ -355,9 +355,6 @@ class YahlAgentRunner {
 
     const finishContextAfter = this.options.contextAfterRecord ?? this.storage;
 
-    publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
-    await globalThis.sessionTracker?.flush?.();
-
     try {
       await runVerifyGate({
         agentName: this.agentName,
@@ -374,6 +371,9 @@ class YahlAgentRunner {
 
       throw error;
     }
+
+    publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
+    await globalThis.sessionTracker?.flush?.();
   }
 }
 

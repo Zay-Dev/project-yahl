@@ -106,6 +106,23 @@ export type TResponseAskUserQuestionListItem = {
   status: 'answered' | 'pending';
 };
 
+export type TResponseVerifyCheckpoint = {
+  feedback: string;
+  kind: 'produce_keys' | 'verify';
+  parsedStageSnapshot?: {
+    lines: string;
+    sourceStartLine: number;
+    type: 'loop' | 'plain';
+  };
+  requestId: string;
+  score: number;
+  stage: TYahlStage;
+  stageIndex?: number;
+  status: 'pending' | 'resumed';
+  storageSnapshot: Record<string, unknown>;
+  verifyId: string;
+};
+
 export type TSessionLiveEvent =
   | { type: 'ask-user.answered'; questionId: string; requestId: string }
   | { type: 'ask-user.created'; questionId: string; requestId: string }
