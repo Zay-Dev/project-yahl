@@ -75,4 +75,4 @@ export const runVerifyGate = async (params: {
   });
 };
 
-export { VerifyFailedError } from './errors';
+export { VerifyFailedError, ProduceKeysFailedError } from './errors';

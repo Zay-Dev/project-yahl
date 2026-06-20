@@ -57,16 +57,20 @@ export function PlatformApprovalsPage() {
         <p className="text-sm">No pending proposals.</p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {items.map((item) => (
-            <li className="rounded-md border p-4" key={item.proposalId}>
-              <div className="mb-2 text-sm font-medium">{item.kind} — {item.proposalId}</div>
-              <pre className="mb-3 overflow-auto text-xs">{JSON.stringify(item.payload, null, 2)}</pre>
-              <div className="flex gap-2">
-                <Button onClick={() => void approve(item.proposalId)} size="sm">Approve</Button>
-                <Button onClick={() => void reject(item.proposalId)} size="sm" variant="outline">Reject</Button>
-              </div>
-            </li>
-          ))}
+          {items.map((item) => {
+            const proposalId = item.proposalId ?? (item as TProposal & { id?: string }).id ?? '';
+
+            return (
+              <li className="rounded-md border p-4" key={proposalId}>
+                <div className="mb-2 text-sm font-medium">{item.kind} — {proposalId}</div>
+                <pre className="mb-3 overflow-auto text-xs">{JSON.stringify(item.payload, null, 2)}</pre>
+                <div className="flex gap-2">
+                  <Button disabled={!proposalId} onClick={() => void approve(proposalId)} size="sm">Approve</Button>
+                  <Button disabled={!proposalId} onClick={() => void reject(proposalId)} size="sm" variant="outline">Reject</Button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

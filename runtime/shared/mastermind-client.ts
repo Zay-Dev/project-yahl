@@ -19,6 +19,9 @@ export const callMastermindSkill = async (
   sessionId?: string,
 ): Promise<TMastermindSkillResponse> => {
   const url = `${mastermindBaseUrl()}/v1/skills/${encodeURIComponent(name)}`;
+  const startedAt = Date.now();
+
+  console.log(`[mastermind-client] POST ${name} url=${mastermindBaseUrl()} sessionId=${sessionId ?? '-'}`);
 
   try {
     const res = await fetch(url, {
@@ -32,6 +35,11 @@ export const callMastermindSkill = async (
     });
 
     const body = await res.json() as TMastermindSkillResponse;
+    const durationMs = Date.now() - startedAt;
+
+    console.log(
+      `[mastermind-client] ${name} http=${res.status} ok=${body.ok} durationMs=${durationMs}`,
+    );
 
     if (!res.ok) {
       return {
@@ -42,8 +50,13 @@ export const callMastermindSkill = async (
 
     return body;
   } catch (error) {
+    const durationMs = Date.now() - startedAt;
+    const message = error instanceof Error ? error.message : 'mastermind request failed';
+
+    console.log(`[mastermind-client] ${name} failed durationMs=${durationMs} error=${message}`);
+
     return {
-      error: error instanceof Error ? error.message : 'mastermind request failed',
+      error: message,
       ok: false,
     };
   }

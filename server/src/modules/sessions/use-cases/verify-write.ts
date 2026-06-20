@@ -17,6 +17,7 @@ export type TRequestCreateVerifyCheckpointBody = {
   contextSnapshot: Record<string, unknown>;
   feedback: string;
   forkSetupIndex?: number;
+  kind?: 'produce_keys' | 'verify';
   loopMeta?: Record<string, unknown>;
   parsedStageSnapshot: TParsedStageSnapshot;
   requestId: string;
@@ -45,6 +46,7 @@ const createBodySchema = Joi.object<TRequestCreateVerifyCheckpointBody>({
   contextSnapshot: Joi.object().required(),
   feedback: Joi.string().required(),
   forkSetupIndex: Joi.number().optional(),
+  kind: Joi.string().valid('produce_keys', 'verify').optional(),
   loopMeta: Joi.object().optional(),
   parsedStageSnapshot: parsedStageSnapshotSchema.required(),
   requestId: Joi.string().trim().required(),
@@ -64,11 +66,13 @@ export const createVerifyCheckpoint = [
       const session = await resolveSessionBySessionId(params.sessionId);
       const sessionRef = session._id;
       const verifyId = randomUUID();
+      const kind = body.kind ?? 'verify';
 
       await modelVerifyCheckpoint.create({
         contextSnapshot: body.contextSnapshot,
         feedback: body.feedback,
         forkSetupIndex: body.forkSetupIndex,
+        kind,
         loopMeta: body.loopMeta,
         parsedStageSnapshot: body.parsedStageSnapshot,
         requestId: body.requestId,
@@ -87,6 +91,7 @@ export const createVerifyCheckpoint = [
           $set: {
             verifyResult: {
               feedback: body.feedback,
+              kind,
               pass: false,
               score: body.score,
             },
@@ -96,7 +101,7 @@ export const createVerifyCheckpoint = [
 
       emitSessionEvent(params.sessionId, {
         requestId: body.requestId,
-        type: 'verify.failed',
+        type: kind === 'produce_keys' ? 'produce_keys.failed' : 'verify.failed',
         verifyId,
       });
 
@@ -137,11 +142,15 @@ export const resumeVerifyCheckpoint = [
 
       emitSessionEvent(params.sessionId, {
         requestId: checkpoint.requestId,
-        type: 'verify.resumed',
+        type: checkpoint.kind === 'produce_keys' ? 'produce_keys.resumed' : 'verify.resumed',
         verifyId: params.verifyId,
       });
 
-      spawnOrchestrate(params.sessionId, ['--verify-resume-id', params.verifyId]);
+      const resumeFlag = checkpoint.kind === 'produce_keys'
+        ? '--produce-keys-resume-id'
+        : '--verify-resume-id';
+
+      spawnOrchestrate(params.sessionId, [resumeFlag, params.verifyId]);
 
       express.respondOne({ ok: true, verifyId: params.verifyId });
     })
@@ -163,6 +172,7 @@ export const getVerifyCheckpoint = [
 
       express.respondOne({
         feedback: checkpoint.feedback,
+        kind: checkpoint.kind ?? 'verify',
         score: checkpoint.score,
         status: checkpoint.status,
         verifyId: checkpoint.verifyId,

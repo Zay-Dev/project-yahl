@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
-type TVerifyCheckpoint = {
+type TCheckpoint = {
   feedback: string;
+  kind?: 'produce_keys' | 'verify';
   score: number;
   status: string;
   verifyId: string;
@@ -17,8 +18,9 @@ export function VerifyPendingBanner(props: {
   lastEvent: TSessionLiveEvent | null;
   sessionId: string;
 }) {
-  const [checkpoint, setCheckpoint] = useState<TVerifyCheckpoint | null>(null);
+  const [checkpoint, setCheckpoint] = useState<TCheckpoint | null>(null);
   const verifyId = props.lastEvent?.type === 'verify.failed'
+    || props.lastEvent?.type === 'produce_keys.failed'
     ? props.lastEvent.verifyId
     : undefined;
 
@@ -37,16 +39,17 @@ export function VerifyPendingBanner(props: {
       }
 
       const data = await res.json() as {
-        data?: TVerifyCheckpoint;
+        data?: TCheckpoint;
         feedback?: string;
+        kind?: TCheckpoint['kind'];
         score?: number;
         status?: string;
         verifyId?: string;
       };
 
-      const checkpoint = data.data ?? (data.verifyId ? data as TVerifyCheckpoint : null);
+      const loaded = data.data ?? (data.verifyId ? data as TCheckpoint : null);
 
-      setCheckpoint(checkpoint);
+      setCheckpoint(loaded);
     };
 
     void load();
@@ -63,9 +66,15 @@ export function VerifyPendingBanner(props: {
     );
   };
 
+  const isProduceKeys = checkpoint.kind === 'produce_keys';
+
   return (
     <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4">
-      <p className="text-sm font-medium">Stage verification failed (score {checkpoint.score.toFixed(2)})</p>
+      <p className="text-sm font-medium">
+        {isProduceKeys
+          ? 'Stage missing required context keys'
+          : `Stage verification failed (score ${checkpoint.score.toFixed(2)})`}
+      </p>
       <p className="mt-1 text-sm text-muted-foreground">{checkpoint.feedback}</p>
       <Button className="mt-3" onClick={() => void resume()} size="sm">Resume from checkpoint</Button>
     </div>

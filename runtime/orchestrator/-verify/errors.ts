@@ -21,3 +21,27 @@ export class VerifyFailedError extends Error {
     this.verifyId = params.verifyId;
   }
 }
+
+export class ProduceKeysFailedError extends Error {
+  readonly feedback: string;
+  readonly missingKeys: string[];
+  readonly requestId: string;
+  readonly stageIndex: number;
+  readonly verifyId?: string;
+
+  constructor(params: {
+    feedback: string;
+    missingKeys: string[];
+    requestId: string;
+    stageIndex: number;
+    verifyId?: string;
+  }) {
+    super('produce keys failed');
+    this.name = 'ProduceKeysFailedError';
+    this.feedback = params.feedback;
+    this.missingKeys = params.missingKeys;
+    this.requestId = params.requestId;
+    this.stageIndex = params.stageIndex;
+    this.verifyId = params.verifyId;
+  }
+}

@@ -3,7 +3,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 export { TStorage, TLoopMeta };
 
-type TResumeStage = {
+export type TResumeStage = {
   loopMeta?: TLoopMeta;
   requestId: string;
   resumeFrom?: TAskUserResumeFrom;
@@ -20,7 +20,9 @@ export type TRunYahl = (
     resumeStage?: TResumeStage;
     stages?: ParsedStage[];
     pipelineStageIndex?: number;
+    produceKeysResumeAttempt?: boolean;
     startFromStageIndex?: number;
+    systemAppend?: string;
     temperature?: number;
     useStorage?: () => TStorage;
   },

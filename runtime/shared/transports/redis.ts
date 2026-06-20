@@ -9,8 +9,6 @@ import type {
   TToolCallResult,
 } from "./-types";
 
-import { randomUUID } from 'crypto';
-
 import { PublisherEmitter } from "./-types";
 
 const _getReplyQueue = (requestId: string) => `yahl:reply:${requestId}`;
@@ -155,17 +153,16 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
   }
 
   pushRequest: IPublisher['pushRequest'] =
-    async (context, stage, temperature, {
+    async (context, stage, requestId, {
       contextAfter,
       executionMeta,
       loopMeta,
       persistedStage,
-      requestId: requestIdOverride,
       resumeFrom,
       skipStageCreate,
+      systemAppend,
+      temperature,
     } = {}) => {
-      const requestId = requestIdOverride ?? randomUUID();
-
       if (!skipStageCreate) {
         this.emit("pushRequest", {
           context: _serializeStorage(context)!,
@@ -179,17 +176,17 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
       await this.redis.lpush(this.requestQueue,
         JSON.stringify({
-          requestId,
-          temperature,
-          stage,
           context: _serializeStorage(context),
           contextAfter: _serializeStorage(contextAfter),
+          requestId,
           resumeFrom,
+          stage,
+          systemAppend,
+          temperature,
         })
       );
 
       return {
-        requestId,
         wait: () => this._waitForReply(requestId),
         getWaitForToolCall: (callback) => this._getWaitForToolCall(requestId, callback),
       }

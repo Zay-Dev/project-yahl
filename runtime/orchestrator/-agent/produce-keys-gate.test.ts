@@ -3,13 +3,7 @@ import { describe, it } from 'node:test';
 
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
-const _missingProduceKeys = (
-  stage: ParsedStage,
-  storage: { context: Map<string, unknown> },
-) =>
-  stage.spec.produceContextKeys?.filter(
-    (key) => storage.context.get(key) == null,
-  ) ?? [];
+import { missingProduceKeys } from '@/orchestrator/-agent/produce-keys-retry';
 
 describe('produceContextKeys gate', () => {
   it('returns missing keys when produceContextKeys not in storage', () => {
@@ -17,7 +11,7 @@ describe('produceContextKeys gate', () => {
       spec: { produceContextKeys: ['user_region', 'other'] },
     } as ParsedStage;
 
-    const missing = _missingProduceKeys(stage, { context: new Map() });
+    const missing = missingProduceKeys(stage, { context: new Map(), types: new Map() });
 
     assert.deepEqual(missing, ['user_region', 'other']);
   });
@@ -27,8 +21,9 @@ describe('produceContextKeys gate', () => {
       spec: { produceContextKeys: ['user_region'] },
     } as ParsedStage;
 
-    const missing = _missingProduceKeys(stage, {
+    const missing = missingProduceKeys(stage, {
       context: new Map([['user_region', { id: 'hko' }]]),
+      types: new Map(),
     });
 
     assert.deepEqual(missing, []);
@@ -37,7 +32,7 @@ describe('produceContextKeys gate', () => {
   it('skips gate when stage has no produceContextKeys', () => {
     const stage = { spec: {} } as ParsedStage;
 
-    const missing = _missingProduceKeys(stage, { context: new Map() });
+    const missing = missingProduceKeys(stage, { context: new Map(), types: new Map() });
 
     assert.deepEqual(missing, []);
   });

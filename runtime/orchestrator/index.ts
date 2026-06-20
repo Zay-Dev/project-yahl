@@ -21,8 +21,9 @@ import { initForkSessionManager } from './-runners/fork/manager';
 import { runForkSession } from './-runners/fork';
 import { runAskUserResume } from './-runners/resume';
 import { runVerifyResume } from './-runners/verify-resume';
+import { runProduceKeysResume } from './-runners/produce-keys-resume';
 import { resolveTaskPath } from './-runners/path';
-import { VerifyFailedError } from './-verify';
+import { ProduceKeysFailedError, VerifyFailedError } from './-verify';
 
 declare global {
   var sessionId: string;
@@ -133,8 +134,12 @@ runCommand.action(async options => {
       const { resultContextKey, storage } = await runVerifyResume(sessionId, options.verifyResumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);
+    } else if (options.produceKeysResumeId) {
+      const { resultContextKey, storage } = await runProduceKeysResume(sessionId, options.produceKeysResumeId);
+
+      await publishSessionResult(sessionId, resultContextKey, storage);
     } else {
-      throw new Error('No task path, resume id, verify resume id, or forkrun id provided');
+      throw new Error('No task path, resume id, verify resume id, produce-keys resume id, or forkrun id provided');
     }
   } catch (error) {
     if (error instanceof AskUserPausedError) {
@@ -144,6 +149,12 @@ runCommand.action(async options => {
     }
 
     if (error instanceof VerifyFailedError) {
+      await tracker.flush();
+      process.exit(0);
+      return;
+    }
+
+    if (error instanceof ProduceKeysFailedError) {
       await tracker.flush();
       process.exit(0);
       return;

@@ -88,7 +88,15 @@ export const listPendingProposals = [
         status: 'pending',
       });
 
-      express.respondMany(items);
+      express.respondMany(items.map((item) => ({
+        createdAt: item.createdAt,
+        done: item.done,
+        kind: item.kind,
+        payload: item.payload,
+        proposalId: item.proposalId,
+        reason: item.reason,
+        status: item.status,
+      })));
     })
     .toMiddleware(),
 ];

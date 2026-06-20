@@ -36,9 +36,15 @@ type StageRunner = {
   ) => Promise<ChatAssistantMessage[]>;
 };
 
+export type TLocalToolCallRecord = {
+  call: ChatToolCall;
+  resultContent: string;
+};
+
 type StageSessionOptions = {
   maxBashCalls?: number;
   maxTurns?: number;
+  onLocalToolCall?: (record: TLocalToolCallRecord) => Promise<void>;
   resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
 };
@@ -255,6 +261,8 @@ export const runStageSession = async (
             tool_call_id: call.id,
           });
 
+          await options.onLocalToolCall?.({ call, resultContent: commandResult });
+
           continue;
         }
 
@@ -278,11 +286,15 @@ export const runStageSession = async (
             console.log(`[DEBUG] [BROWSER] ${browserArgs.mode}: ${JSON.stringify(browserResult)}\n`);
           }
 
+          const browserContent = JSON.stringify(browserResult);
+
           stageMessages.push({
-            content: JSON.stringify(browserResult),
+            content: browserContent,
             role: "tool",
             tool_call_id: call.id,
           });
+
+          await options.onLocalToolCall?.({ call, resultContent: browserContent });
 
           continue;
         }
@@ -306,11 +318,15 @@ export const runStageSession = async (
             config.cliOptions.sessionId,
           );
 
+          const mastermindContent = JSON.stringify(mastermindResult);
+
           stageMessages.push({
-            content: JSON.stringify(mastermindResult),
+            content: mastermindContent,
             role: "tool",
             tool_call_id: call.id,
           });
+
+          await options.onLocalToolCall?.({ call, resultContent: mastermindContent });
 
           continue;
         }

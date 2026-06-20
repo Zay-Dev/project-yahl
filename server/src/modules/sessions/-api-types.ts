@@ -114,6 +114,8 @@ export type TSessionLiveEvent =
   | { type: 'stage.finished'; requestId: string }
   | { type: 'stage.model-response'; requestId: string }
   | { type: 'stage.tool-call'; requestId: string }
+  | { type: 'produce_keys.failed'; requestId: string; verifyId: string }
+  | { type: 'produce_keys.resumed'; requestId: string; verifyId: string }
   | { type: 'verify.failed'; requestId: string; verifyId: string }
   | { type: 'verify.resumed'; requestId: string; verifyId: string };
 

@@ -100,12 +100,32 @@ const buildSkillPrompt = async (
         'Transcribe or summarize the media content as plain text.',
       ].filter(Boolean).join('\n\n');
 
-    case 'plan':
+    case 'plan': {
+      const goal = String(args.goal ?? args.topic ?? args.stageLogic ?? '');
+      const stageLogic = typeof args.stageLogic === 'string' ? args.stageLogic.trim() : '';
+      const contextJson = args.context && typeof args.context === 'object' && !Array.isArray(args.context)
+        ? JSON.stringify(args.context, null, 2).slice(0, 8_000)
+        : '';
+
       return [
         'You are the YAHL mastermind planning helper.',
-        `Goal: ${topic}`,
-        'Produce a step-by-step plan. Do not execute changes.',
-      ].join('\n\n');
+        'Design a step-by-step execution plan for a stage agent.',
+        'Do NOT execute changes, run tools, or write files.',
+        'Your entire reply must be markdown only — no preamble, no status lines, no "I found…" narration.',
+        '',
+        'Use exactly this structure:',
+        '# Plan',
+        '## Goal',
+        '## Context',
+        '## Steps',
+        '1. ...',
+        '## Success criteria',
+        '',
+        `Goal: ${goal}`,
+        stageLogic ? `Stage logic:\n${stageLogic.slice(0, 2_000)}` : '',
+        contextJson ? `Available context:\n${contextJson}` : '',
+      ].filter(Boolean).join('\n\n');
+    }
 
     default:
       return `Unknown skill ${name}`;
@@ -215,16 +235,32 @@ export const runSkill = async (
   }
 
   const prompt = await buildSkillPrompt(name, body.args);
-  const mode = name === 'plan' ? 'plan' as const : 'agent' as const;
+  const mode = 'agent' as const;
+  const startedAt = Date.now();
+
+  console.log(
+    `[mastermind] skill=${name} start sessionId=${body.sessionId ?? '-'} caller=${body.caller}`,
+  );
 
   try {
     const { result } = await agent.prompt(prompt, { mode });
+    const text = typeof result === 'string' ? result.trim() : '';
+    const durationMs = Date.now() - startedAt;
+
+    console.log(
+      `[mastermind] skill=${name} done ok=true durationMs=${durationMs} chars=${text.length}`,
+    );
 
     return {
-      data: result ?? '',
+      data: text,
       ok: true,
     };
   } catch (error) {
+    const durationMs = Date.now() - startedAt;
+
+    console.log(
+      `[mastermind] skill=${name} done ok=false durationMs=${durationMs} error=${formatShortError(error)}`,
+    );
     void writeAndAnalyzeCrash({
       args: body.args,
       caller: body.caller,

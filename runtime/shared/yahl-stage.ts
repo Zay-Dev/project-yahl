@@ -18,6 +18,7 @@ export interface YahlStage {
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
+  planMode?: boolean;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   temperature?: number;
@@ -194,6 +195,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     ...(stage.temperature !== undefined ? { temperature: Number(stage.temperature) } : {}),
     ...(isStringArray(stage.contextKeys) ? { contextKeys: stage.contextKeys } : {}),
     ...(isStringArray(stage.updateContextKeys) ? { updateContextKeys: stage.updateContextKeys } : {}),
+    ...(stage.planMode === true ? { planMode: true } : {}),
     ...(isStringArray(stage.produceContextKeys) ? { produceContextKeys: stage.produceContextKeys } : {}),
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
     ...(stage.verify === true ? { verify: true } : {}),

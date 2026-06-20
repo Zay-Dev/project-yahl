@@ -23,6 +23,10 @@ Per-stage fields:
 | `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |
 | `produceContextKeys` | Allowlist for VM / `set_context` writes to global context |
 | `produceTypeKeys` | Allowlist for VM / `set_context` writes to the types bucket |
+| `planMode` | When true, orchestrator calls mastermind plan before the agent stage and writes `~/plans/<requestId>.md` |
+| `verify` | When true, mastermind scores stage output after finish; failure pauses for resume |
+| `verifyMinScore` | Minimum pass score (0–1, default 0.75) |
+| `verifyRubric` | Rubric name or inline string for verify gate |
 
 ### Syntaxes
 

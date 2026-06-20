@@ -40,6 +40,7 @@ export type TYahlStage = {
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
+  planMode?: boolean;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   temperature?: number;
@@ -112,7 +113,13 @@ export interface IStage extends TWithTimestamps {
   };
 }
 
-export type TModelResponseTag = 'browse' | 'bash' | 'tool' | 'chat' | 'unknown';
+export type TModelResponseTag =
+  | 'browse'
+  | 'bash'
+  | 'chat'
+  | 'tool'
+  | 'unknown'
+  | `mastermind:${string}`;
 
 export interface IModelResponse extends TWithTimestamps {
   _id: string;
@@ -162,6 +169,8 @@ export interface IAskUserQuestion extends TWithTimestamps {
   toolCallId: string;
 }
 
+export type TVerifyCheckpointKind = 'produce_keys' | 'verify';
+
 export type TVerifyCheckpointStatus = 'pending' | 'resumed';
 
 export interface IVerifyCheckpoint extends TWithTimestamps {
@@ -169,6 +178,7 @@ export interface IVerifyCheckpoint extends TWithTimestamps {
   contextSnapshot: Record<string, unknown>;
   feedback: string;
   forkSetupIndex?: number;
+  kind?: TVerifyCheckpointKind;
   loopMeta?: TStageLoopMeta;
   parsedStageSnapshot?: TParsedStageSnapshot;
   requestId: string;

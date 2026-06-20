@@ -147,6 +147,7 @@ const verifyCheckpointSchema = new Schema<TDbVerifyCheckpoint>({
   contextSnapshot: model.d.mixed(),
   feedback: model.d.requiredString(),
   forkSetupIndex: model.d.optionalNumber(),
+  kind: model.d.optionalString(),
   loopMeta: loopMetaSchema,
   parsedStageSnapshot: model.d.mixed(),
   requestId: model.d.requiredString(),
