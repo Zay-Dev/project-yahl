@@ -157,7 +157,7 @@ class YahlAgentRunner {
     await run();
 
     if (this.activeStage.spec.planMode === true) {
-      await archiveStagePlan(this.requestId);
+      await archiveStagePlan(this.sessionId, this.requestId);
     }
   }
 
@@ -174,6 +174,7 @@ class YahlAgentRunner {
       const diagnostic = await writeProduceKeysDiagnostic({
         attempt: this.produceKeysAttempt,
         requestId: this.requestId,
+        sessionId: this.sessionId,
         stage: this.activeStage,
         storage: this.storage,
       });
@@ -203,6 +204,7 @@ class YahlAgentRunner {
     const diagnostic = await writeProduceKeysDiagnostic({
       attempt: this.produceKeysAttempt + 1,
       requestId: this.requestId,
+      sessionId: this.sessionId,
       stage: this.activeStage,
       storage: this.storage,
     });

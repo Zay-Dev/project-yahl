@@ -2,7 +2,19 @@ import { execSync } from "child_process";
 
 import { composeFile, repoRoot } from "./paths";
 
-export { composeDown, composeUp, writeSharedOneCliOverride } from './compose-onecli';
+export {
+  buildComposeDownArgs,
+  buildComposeUpArgs,
+  composeDown,
+  composeUp,
+  resolveAgentComposeOverrideFiles,
+  writeAgentSessionOverride,
+  writeSharedOneCliOverride,
+} from './compose-onecli';
+
+export { shutdownAgent } from './agent-lifecycle';
+
+export { resolvePublishedVncPort } from './resolve-published-vnc-port';
 
 export const buildAgent = () => {
   try {

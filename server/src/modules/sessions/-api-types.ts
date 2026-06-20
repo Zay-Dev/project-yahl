@@ -15,6 +15,7 @@ export type TResponseGetSession = {
   createdAt: string;
   deletedAt?: string;
   forkedFrom?: TSessionForkedFrom;
+  liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   result?: unknown;
   resultContextKey?: string;

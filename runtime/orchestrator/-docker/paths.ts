@@ -81,3 +81,9 @@ export const onecliSharedComposeOverrideFile = path.join(
 
 export const tasksRoot = path.join(runtimeRoot, "orchestrator", "TASKS");
 export const workspacePath = path.join(repoRoot, "workspace");
+
+export const agentSessionRuntimePath = (sessionId: string) =>
+  path.join(runtimeRoot, ".agents", sessionId);
+
+export const agentSessionComposeOverrideFile = (sessionId: string) =>
+  path.join(agentSessionRuntimePath(sessionId), "compose.override.yml");

@@ -21,10 +21,30 @@ const toContainerConfig = (config: unknown): OneCliContainerConfig | null | unde
   };
 };
 
+export const resolveOneCliDashboardUrl = (raw: string) => {
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+
+    if (parsed.hostname === 'onecli') {
+      parsed.hostname = '127.0.0.1';
+    }
+
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return trimmed.replace(/\/+$/, '');
+  }
+};
+
 export const createOneCliDashboardClient = (opts: { apiKey: string; url: string }): OneCliDashboardClient => {
   const onecli = new OneCLI({
     apiKey: opts.apiKey,
-    url: opts.url,
+    url: resolveOneCliDashboardUrl(opts.url),
   });
 
   return {

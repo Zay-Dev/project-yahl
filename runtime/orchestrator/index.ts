@@ -7,12 +7,20 @@ import Redis from "ioredis";
 
 import { RedisPublisher } from '@/shared/transports/redis';
 
-import { buildAgent, composeDown, composeUp, writeSharedOneCliOverride } from './-docker';
+import {
+  buildAgent,
+  composeUp,
+  resolvePublishedVncPort,
+  shutdownAgent,
+  writeAgentSessionOverride,
+  writeSharedOneCliOverride,
+} from './-docker';
 import { program, resolveSessionId, runCommand } from './-cli';
 
 import { deriveTaskNameFromYahl, parseYahlTask } from './-utils/yahl';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
+import { ensureSessionWorkspace } from './-utils/workspace-paths';
 
 import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
@@ -61,20 +69,44 @@ const isStagehandLiveview = () => {
   return value === "1" || value === "true";
 };
 
-const _composeUp = async (agentName: string) => {
+const _shutdownAgent = (
+  agentName: string,
+  sessionId: string,
+) => shutdownAgent(agentName, sessionId);
+
+const _composeUp = async (
+  agentName: string,
+  sessionId: string,
+  tracker: ReturnType<typeof createSessionEventTracker>,
+) => {
+  await ensureSessionWorkspace(sessionId);
+
+  const liveView = isStagehandLiveview();
+
+  const sessionOverrideFilePath = await writeAgentSessionOverride({
+    publishVnc: liveView,
+    sessionId,
+  });
   const onecliOverrideFilePath = await writeSharedOneCliOverride();
 
   process.env.AGENT_CONTAINER_NAME = agentName;
   process.env.AGENT_SESSION_ID = sessionId;
 
-  if (isStagehandLiveview()) {
-    console.log("[stagehand] live view enabled — connect VNC to localhost:5900");
-  }
-
   await composeUp({
+    composeOverrideFilePaths: [
+      sessionOverrideFilePath,
+      ...(onecliOverrideFilePath ? [onecliOverrideFilePath] : []),
+    ],
     composeProjectName: agentName,
-    ...(onecliOverrideFilePath ? { onecliOverrideFilePath } : {}),
   });
+
+  if (liveView) {
+    const vncHostPort = await resolvePublishedVncPort(agentName);
+
+    console.log(`[stagehand] live view enabled — VNC → localhost:${vncHostPort}`);
+    await tracker.patchLiveViewVncPort(sessionId, vncHostPort);
+    await tracker.flush();
+  }
 };
 
 runCommand.action(async options => {
@@ -93,8 +125,8 @@ runCommand.action(async options => {
   try {
     buildAgent();
 
-    await composeDown(agentName);
-    await _composeUp(agentName);
+    await _shutdownAgent(agentName, sessionId);
+    await _composeUp(agentName, sessionId, tracker);
     await _setupPublisher(tracker, sessionId);
 
     if (options.taskPath) {
@@ -165,7 +197,7 @@ runCommand.action(async options => {
     throw error;
   }
 
-  await composeDown(agentName);
+  await _shutdownAgent(agentName, sessionId);
   await publisher.close();
   process.exit(0);
 });

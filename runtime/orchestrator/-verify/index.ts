@@ -1,7 +1,7 @@
 import type { TStorage } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
-import { composeDown } from '@/orchestrator/-docker';
+import { shutdownAgent } from '@/orchestrator/-docker';
 
 import { VerifyFailedError } from './errors';
 import { postVerifyCheckpoint } from './session-api';
@@ -82,7 +82,7 @@ export const runVerifyGate = async (params: {
     `[agent] verify done pass=false score=${result.score} durationMs=${Date.now() - startedAt} verifyId=${verifyId}`,
   );
 
-  await composeDown(params.agentName);
+  await shutdownAgent(params.agentName, params.sessionId);
 
   throw new VerifyFailedError({
     feedback: result.feedback,

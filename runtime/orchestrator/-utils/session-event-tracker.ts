@@ -99,6 +99,7 @@ export const createSessionEventTracker = () => {
   const registerSession = async (
     sessionId: string,
     opts: {
+      liveViewVncPort?: number;
       parsedStages?: ParsedStage[];
       resultContextKey?: string;
       taskId: string;
@@ -114,6 +115,7 @@ export const createSessionEventTracker = () => {
       taskId: opts.taskId,
       taskYahlPath: opts.taskYahlPath,
       ...(opts.resultContextKey ? { resultContextKey: opts.resultContextKey } : {}),
+      ...(opts.liveViewVncPort ? { liveViewVncPort: opts.liveViewVncPort } : {}),
     });
   };
 
@@ -178,7 +180,7 @@ export const createSessionEventTracker = () => {
 
   const patchSession = (
     sessionId: string,
-    body: { result?: unknown },
+    body: { liveViewVncPort?: number | null; result?: unknown },
   ) => {
     enqueue(async () => {
       if (!baseUrl) return;
@@ -187,8 +189,21 @@ export const createSessionEventTracker = () => {
 
       await _patch(url, {
         ...('result' in body ? { result: body.result } : {}),
+        ...('liveViewVncPort' in body ? { liveViewVncPort: body.liveViewVncPort } : {}),
       });
     });
+  };
+
+  const patchLiveViewVncPort = (sessionId: string, port: number | null) => {
+    enqueue(async () => {
+      if (!baseUrl) return;
+
+      const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}`;
+
+      await _patch(url, { liveViewVncPort: port });
+    }, true);
+
+    return queue;
   };
 
   const flush = () => queue;
@@ -198,6 +213,7 @@ export const createSessionEventTracker = () => {
     appendToolCall,
     createStage,
     flush,
+    patchLiveViewVncPort,
     patchSession,
     patchStage,
     registerSession,

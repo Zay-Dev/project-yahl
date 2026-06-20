@@ -79,7 +79,7 @@ export const prepareStagePlan = async (params: {
   }, params.sessionId);
 
   const planBody = extractPlanText(response);
-  const absolute = planFilePath(params.requestId);
+  const absolute = planFilePath(params.sessionId, params.requestId);
 
   await fs.mkdir(path.dirname(absolute), { recursive: true });
   await fs.writeFile(absolute, planBody, 'utf8');
@@ -94,9 +94,9 @@ export const prepareStagePlan = async (params: {
   ].join('\n');
 };
 
-export const archiveStagePlan = async (requestId: string) => {
-  const source = planFilePath(requestId);
-  const target = planBacklogFilePath(requestId);
+export const archiveStagePlan = async (sessionId: string, requestId: string) => {
+  const source = planFilePath(sessionId, requestId);
+  const target = planBacklogFilePath(sessionId, requestId);
 
   try {
     await fs.access(source);
@@ -110,6 +110,6 @@ export const archiveStagePlan = async (requestId: string) => {
     await fs.rename(source, target);
   } catch {
     const stamp = Date.now();
-    await fs.rename(source, planBacklogFilePath(`${requestId}-${stamp}`));
+    await fs.rename(source, planBacklogFilePath(sessionId, `${requestId}-${stamp}`));
   }
 };

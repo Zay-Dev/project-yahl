@@ -18,8 +18,6 @@ services:
       STAGEHAND_CHROME_PATH: ${STAGEHAND_CHROME_PATH:-}
       STAGEHAND_LIVEVIEW: ${STAGEHAND_LIVEVIEW:-0}
       no_proxy: localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,host.docker.internal
-    ports:
-      - "5900:5900"
     shm_size: 2gb
     extra_hosts:
       - "host.docker.internal:host-gateway"

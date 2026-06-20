@@ -4,7 +4,7 @@ import path from 'path';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TStorage } from '@/shared/transports/-types';
 
-import { composeDown } from '@/orchestrator/-docker';
+import { shutdownAgent } from '@/orchestrator/-docker';
 import { toParsedStageSnapshot } from '@/orchestrator/-ask-user/parsed-stage-snapshot';
 
 import {
@@ -76,11 +76,12 @@ const buildDiagnosticBody = (params: {
 
 export const writeProduceKeysDiagnostic = async (params: {
   attempt: number;
+  requestId: string;
+  sessionId: string;
   stage: ParsedStage;
   storage: TStorage;
-  requestId: string;
 }) => {
-  const absolute = produceKeysDiagnosticPath(params.requestId, params.attempt);
+  const absolute = produceKeysDiagnosticPath(params.sessionId, params.requestId, params.attempt);
   const logicPreview = params.stage.lines.trim().slice(0, 2_000);
   const missingKeys = missingProduceKeys(params.stage, params.storage);
   const body = buildDiagnosticBody({
@@ -142,7 +143,7 @@ export const pauseForProduceKeys = async (params: {
 
   await globalThis.sessionTracker?.flush?.();
 
-  await composeDown(params.agentName);
+  await shutdownAgent(params.agentName, params.sessionId);
 
   throw new ProduceKeysFailedError({
     feedback,

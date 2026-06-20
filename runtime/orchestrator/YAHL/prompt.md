@@ -43,7 +43,7 @@ Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, ex
 
 Knowledge read/write: use **`extract-knowledge`** and **`persist-knowledge`** with semantic `need` / `key` / `topic` only — never pass file paths to those skills.
 
-**`~/` always means the shared workspace folder** (`/root` in the agent container).
+**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container). Shared knowledge lives at **`~/knowledges/`** (symlink to `/root/knowledges/`).
 
 - Arguments: `{ "mode": "goto|act|extract|observe|agent", "instruction": "<text>", "url"?: "<url>", "schema"?: { ... }, "maxSteps"?: <number> }`.
 - Returns JSON `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.

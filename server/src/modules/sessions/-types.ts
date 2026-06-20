@@ -89,6 +89,7 @@ export interface IForkSession extends TWithTimestamps {
 export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
   forkedFrom?: TSessionForkedFrom;
+  liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
   sessionId: string;
