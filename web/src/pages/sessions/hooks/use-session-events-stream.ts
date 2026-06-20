@@ -57,6 +57,11 @@ export const useSessionEventsStream = ({
           setError(streamError.message);
         }
       },
+      onRecovered: () => {
+        if (!cancelled) {
+          setError(null);
+        }
+      },
       onEvent: (event) => {
         if (cancelled) {
           return;

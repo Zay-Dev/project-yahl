@@ -15,6 +15,18 @@ import { useSessionEventsStream } from "@/pages/sessions/hooks/use-session-event
 import { useVerifyCheckpoints } from "@/pages/sessions/hooks/use-verify-checkpoints";
 import { RESOURCES } from "@/providers/constants";
 
+const isSessionNotFoundError = (error: unknown) => {
+  if (typeof error === "object" && error !== null && "statusCode" in error) {
+    return (error as { statusCode?: number }).statusCode === 404;
+  }
+
+  if (error instanceof Error) {
+    return /404|not found/i.test(error.message);
+  }
+
+  return false;
+};
+
 export function SessionDetailPage() {
   const { id } = useParams();
 
@@ -22,6 +34,8 @@ export function SessionDetailPage() {
     id: id ?? "",
     queryOptions: {
       enabled: !!id,
+      retry: (failureCount, error) => failureCount < 10 && isSessionNotFoundError(error),
+      retryDelay: 500,
     },
     resource: RESOURCES.sessions,
   });
@@ -111,6 +125,7 @@ export function SessionDetailPage() {
             lastEvent={lastEvent}
             sessionId={session.sessionId}
             stages={stages}
+            startingRun={!session.parsedStages?.length && stages.length === 0}
           />
           <SessionJsonFallback label="Developer" value={session} />
         </>

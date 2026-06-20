@@ -72,6 +72,7 @@ services:
       - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
       - ./workspace:${HOST_REPO_ROOT}/workspace
+      - ./server/tasks:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/server/tasks
       - /var/run/docker.sock:/var/run/docker.sock
 
   web:

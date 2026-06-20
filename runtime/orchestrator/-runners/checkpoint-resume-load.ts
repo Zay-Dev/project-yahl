@@ -2,15 +2,12 @@ import type { TStorage } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
-import fs from 'fs/promises';
-
 import { fetchSession } from '@/orchestrator/-ask-user';
 import { parsedStageFromSnapshot } from '@/orchestrator/-ask-user/parsed-stage-snapshot';
+import { fetchTaskYahl } from '@/orchestrator/-tasks/session-api';
 import { fetchVerifyCheckpoint } from '@/orchestrator/-verify/session-api';
-import { parseYahlFile, deriveTaskIdFromYahlPath } from '@/orchestrator/-utils/yahl';
+import { deriveTaskIdFromYahlPath, parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
-
-import { resolveTaskPath } from './path';
 
 export const deserializeCheckpointStorage = (snapshot: Record<string, unknown>): TStorage => {
   const context = snapshot.context;
@@ -32,16 +29,31 @@ export const deserializeCheckpointStorage = (snapshot: Record<string, unknown>):
   return storage;
 };
 
+const resolveTaskId = (session: {
+  taskId?: string;
+  taskYahlPath?: string;
+}) => {
+  if (session.taskId?.trim()) {
+    return session.taskId.trim();
+  }
+
+  if (!session.taskYahlPath?.trim()) {
+    throw new Error('checkpoint resume: session missing taskId and taskYahlPath');
+  }
+
+  return deriveTaskIdFromYahlPath(session.taskYahlPath);
+};
+
 export const resolveResumeYahlStages = async (
   session: {
     parsedStages?: ParsedStage[];
+    taskId?: string;
     taskYahlPath?: string;
   },
-  readTaskFile: (taskFolder: string) => Promise<ParsedStage[]> = async (taskFolder) => {
-    const yahlPath = await resolveTaskPath(taskFolder);
-    const yahl = await fs.readFile(yahlPath, 'utf8');
+  readTaskFile: (taskId: string) => Promise<ParsedStage[]> = async (taskId) => {
+    const task = await fetchTaskYahl(taskId);
 
-    return parseYahlFile(yahl);
+    return parseYahlFile(task.yahl);
   },
 ): Promise<ParsedStage[]> => {
   const yahlStages = (session.parsedStages ?? []) as ParsedStage[];
@@ -50,13 +62,9 @@ export const resolveResumeYahlStages = async (
     return yahlStages;
   }
 
-  if (!session.taskYahlPath?.trim()) {
-    throw new Error('checkpoint resume: session missing parsedStages and taskYahlPath');
-  }
+  const taskId = resolveTaskId(session);
 
-  const taskFolder = deriveTaskIdFromYahlPath(session.taskYahlPath);
-
-  return readTaskFile(taskFolder);
+  return readTaskFile(taskId);
 };
 
 export const loadCheckpointResumeContext = async (sessionId: string, verifyId: string) => {

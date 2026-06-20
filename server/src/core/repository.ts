@@ -1,8 +1,16 @@
+import type { ChildProcess } from 'child_process';
+
 import type { TYahlDocument } from './-base-types';
 
 import * as awilix from 'awilix';
 
 type TServices = {
+  createPendingSession: (input: {
+    sessionId: string;
+    taskId: string;
+    taskYahlPath: string;
+  }) => Promise<void>;
+  spawnOrchestrate: (sessionId: string, args: string[]) => ChildProcess;
   validateSessionById: (sessionId: string) => Promise<TYahlDocument>;
 };
 
@@ -14,6 +22,10 @@ const _asValue = <K extends keyof TServices>(key: K) => {
 
 export namespace Repository {
   export const resolve = <K extends keyof TServices>(key: K) => _container.resolve(key);
+
+  export const registerCreatePendingSession = _asValue('createPendingSession');
+
+  export const registerSpawnOrchestrate = _asValue('spawnOrchestrate');
 
   export const registerValidateSessionById = _asValue('validateSessionById');
 }

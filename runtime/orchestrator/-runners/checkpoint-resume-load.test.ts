@@ -5,7 +5,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import { resolveResumeYahlStages } from './checkpoint-resume-load';
 
-const hostTaskYahlPath = '/Users/zay.lau/Documents/Gits/Omniflex/project-yahl/runtime/orchestrator/TASKS/verify_test/SKILL.yahl';
+const taskYahlPath = 'server/tasks/verify_test/SKILL.yahl';
 
 const parsedStages: ParsedStage[] = [
   { lines: 'a', sourceStartLine: 1, spec: { logic: 'a' }, type: 'plain' },
@@ -19,7 +19,7 @@ describe('resolveResumeYahlStages', () => {
     const stages = await resolveResumeYahlStages(
       {
         parsedStages,
-        taskYahlPath: hostTaskYahlPath,
+        taskYahlPath,
       },
       async () => {
         readCalled = true;
@@ -33,28 +33,46 @@ describe('resolveResumeYahlStages', () => {
     assert.equal(stages.length, 2);
   });
 
-  it('falls back to task folder derived from stored host path when parsedStages missing', async () => {
-    let resolvedFolder = '';
+  it('falls back to task id from session when parsedStages missing', async () => {
+    let resolvedTaskId = '';
 
     const stages = await resolveResumeYahlStages(
       {
-        taskYahlPath: hostTaskYahlPath,
+        taskId: 'verify_test',
       },
-      async (taskFolder) => {
-        resolvedFolder = taskFolder;
+      async (taskId) => {
+        resolvedTaskId = taskId;
 
         return parsedStages;
       },
     );
 
-    assert.equal(resolvedFolder, 'verify_test');
+    assert.equal(resolvedTaskId, 'verify_test');
     assert.equal(stages, parsedStages);
   });
 
-  it('throws when parsedStages and taskYahlPath are both missing', async () => {
+  it('falls back to task folder derived from stored path when taskId missing', async () => {
+    let resolvedTaskId = '';
+
+    const stages = await resolveResumeYahlStages(
+      {
+        taskYahlPath,
+      },
+      async (taskId) => {
+        resolvedTaskId = taskId;
+
+        return parsedStages;
+      },
+    );
+
+    assert.equal(resolvedTaskId, 'verify_test');
+    assert.equal(stages, parsedStages);
+  });
+
+  it('throws when parsedStages, taskId, and taskYahlPath are all missing', async () => {
     await assert.rejects(
       () => resolveResumeYahlStages({}),
-      /missing parsedStages and taskYahlPath/,
+      /missing taskId and taskYahlPath/,
     );
   });
 });

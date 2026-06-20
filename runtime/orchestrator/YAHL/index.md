@@ -4,7 +4,7 @@ YAHL is a new language that allow developer to write pseudo code to communicate 
 
 ## SKILL.yahl file format
 
-Each task lives in `TASKS/<id>/SKILL.yahl` as one YAML document:
+Each task lives in `server/tasks/<id>/SKILL.yahl` as one YAML document:
 
 - `name`, `description` — task metadata
 - `types` (optional) — multiline type definitions (`|`), emitted as the first AI stage

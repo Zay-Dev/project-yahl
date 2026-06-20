@@ -11,6 +11,7 @@ type TUseSessionsStreamParams = {
 type TUseSessionEventsStreamParams = {
   onError?: (error: Error) => void;
   onEvent: (event: TSessionLiveEvent) => void;
+  onRecovered?: () => void;
   onSnapshot: (stages: TResponseStageListItem[]) => void;
   onStatus?: (status: "connecting" | "connected" | "disconnected") => void;
   sessionId: string;
@@ -54,6 +55,7 @@ export const connectSessionsStream = ({
 export const connectSessionEventsStream = ({
   onError,
   onEvent,
+  onRecovered,
   onSnapshot,
   onStatus,
   sessionId,
@@ -62,11 +64,16 @@ export const connectSessionEventsStream = ({
   const url = `${API_BASE_URL}/api/sessions/${encodeURIComponent(sessionId)}/events/stream`;
   const source = new EventSource(url);
 
+  const markRecovered = () => {
+    onRecovered?.();
+    onStatus?.("connected");
+  };
+
   const handleSnapshot = (event: MessageEvent) => {
     try {
       const parsed = JSON.parse(event.data) as { stages: TResponseStageListItem[] };
       onSnapshot(parsed.stages);
-      onStatus?.("connected");
+      markRecovered();
     } catch (error) {
       const message = error instanceof Error ? error : new Error("Failed to parse SSE snapshot");
       onError?.(message);
@@ -77,7 +84,7 @@ export const connectSessionEventsStream = ({
     try {
       const parsed = JSON.parse(event.data) as TSessionLiveEvent;
       onEvent(parsed);
-      onStatus?.("connected");
+      markRecovered();
     } catch (error) {
       const message = error instanceof Error ? error : new Error("Failed to parse SSE event");
       onError?.(message);
@@ -87,12 +94,11 @@ export const connectSessionEventsStream = ({
   source.addEventListener("snapshot", handleSnapshot);
   source.addEventListener("session-event", handleSessionEvent);
   source.addEventListener("heartbeat", () => {
-    onStatus?.("connected");
+    markRecovered();
   });
 
   source.onerror = () => {
     onStatus?.("disconnected");
-    onError?.(new Error("Disconnected from session events stream"));
   };
 
   return () => {

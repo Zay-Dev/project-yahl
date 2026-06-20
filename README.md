@@ -24,7 +24,7 @@ This isn't a victory lap. The shape just happens to line up with where the indus
 
 ## Status
 
-With the 'tasks' in ~/orchestrator/TASKS, ~95% runs are pretty much the same flow (will even failed at the same place for the same reason), I do feel like the AI is now debuggable, observing the context movements gave me insight of how to 'fix' the AI steps, for example, in some loops, AI got confused about some unwanted temp variables (e.g. website), I could fix that by simply apply `website = null;` by the end of the previous loop.
+With the tasks in `server/tasks/`, ~95% runs are pretty much the same flow (will even failed at the same place for the same reason), I do feel like the AI is now debuggable, observing the context movements gave me insight of how to 'fix' the AI steps, for example, in some loops, AI got confused about some unwanted temp variables (e.g. website), I could fix that by simply apply `website = null;` by the end of the previous loop.
 
 And yes, this still feels like operating a very smart but very old machine. You watch memory budget, babysit stage boundaries, and count tokens like it's 1998 and you pay per SMS. Still fun though.
 
@@ -32,7 +32,7 @@ But more important is - it does feel like patching to the right direction! no mo
 
 Stuff that already works (aka things that surprisingly do not explode):
 - Redis transport between orchestrator and stage agent.
-- Task discovery from `runtime/orchestrator/TASKS`, with resolver support for `SKILL.md`, `index.md`, and `SKILL.yahl` (plus optional direct `--task-path` override when you're feeling fancy).
+- Task catalog from `server/tasks/` via `GET /api/tasks`; orchestrator loads YAML through the server API with `--task-id`.
 - Runtime `ask-user` flow is live: stages can pause for a real user decision and continue with deterministic answer ids (finally, less mind-reading). If the orchestrator times out waiting, the session saves a checkpoint; after you answer, **Resume from checkpoint** in Session Detail kicks off continuation (Redis push wakes an in-flight wait faster when `REDIS_URL` is aligned).
 - Session/event tracking with replayable step history and usage/cost visibility.
 - Web UI now has proper Runner + Sessions + Session Detail flow with live logs/status and jump-to-session links.
@@ -79,7 +79,7 @@ A quick tour of the shapes:
 - `/skill_name(...)` — call into a skill from the skills folder; think of it as a named, well-documented capability.
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 
-`SKILL.yahl` is a single YAML document (`name`, `description`, optional `types`, and a `stages` list). Each stage has a `logic: |` block; the runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF:` branches, and brace-wrapped AI blocks). See `runtime/orchestrator/TASKS/test/SKILL.yahl` for the canonical shape.
+`SKILL.yahl` is a single YAML document (`name`, `description`, optional `types`, and a `stages` list). Each stage has a `logic: |` block; the runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF:` branches, and brace-wrapped AI blocks). See `server/tasks/test/SKILL.yahl` for the canonical shape.
 
 ## How it feels under the hood
 
@@ -120,7 +120,7 @@ pnpm -r --filter "./infras/**" run build
   1. Start infra: `pnpm run compose:up` (mongo, redis, onecli, postgres)
   2. Run apps: `pnpm run dev` (server + runtime) and `pnpm run dev:web` in another terminal
   3. Run sessions: `pnpm run orchestrate`
-- **Full Docker stack** (optional, CI/demo): `pnpm run compose:up:all` (infra + built server + web)
+- **Full Docker stack** (optional, CI/demo): `pnpm run compose:up:all` (infra + built server + web). The server container bind-mounts `./server/tasks` so create/edit from the web Tasks UI persists on the host repo (not only inside the image).
 - Dockerfiles: [`server/Dockerfile`](server/Dockerfile) (API + built orchestrator), [`web/Dockerfile`](web/Dockerfile) (static nginx), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (agent; built on the host when orchestrator runs)
 - Copy [`.env.example`](.env.example) to `.env`, set `HOST_REPO_ROOT` to the **absolute path** of this repo, and set `ONECLI_DASHBOARD_URL` + `ONECLI_API_KEY`
 - Runtime only: `pnpm run orchestrate`.
@@ -132,7 +132,7 @@ pnpm -r --filter "./infras/**" run build
 
 ### Advanced orchestrate flags
 
-- Run a specific task file directly: `pnpm run orchestrate -- --task-path runtime/orchestrator/TASKS/test/SKILL.yahl`
+- Run a specific task: `pnpm run orchestrate -- --task-id test`
 - Pin session id for easier debugging: `pnpm run orchestrate -- --session-id my-debug-session`
 - Resume/fork flow inputs:
   - `--resume-source-session-id <sessionId>`

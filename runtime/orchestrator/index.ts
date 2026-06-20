@@ -2,7 +2,6 @@ import type { IPublisher } from '@/shared/transports/-types';
 
 import config from "./config";
 
-import fs from 'fs/promises';
 import Redis from "ioredis";
 
 import { RedisPublisher } from '@/shared/transports/redis';
@@ -17,7 +16,7 @@ import {
 } from './-docker';
 import { program, resolveSessionId, runCommand } from './-cli';
 
-import { deriveTaskNameFromYahl, parseYahlTask } from './-utils/yahl';
+import { parseYahlTask } from './-utils/yahl';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
 import { ensureSessionWorkspace } from './-utils/workspace-paths';
@@ -30,7 +29,7 @@ import { runForkSession } from './-runners/fork';
 import { runAskUserResume } from './-runners/resume';
 import { runVerifyResume } from './-runners/verify-resume';
 import { runProduceKeysResume } from './-runners/produce-keys-resume';
-import { resolveTaskPath } from './-runners/path';
+import { fetchTaskYahl } from './-tasks/session-api';
 import { ProduceKeysFailedError, VerifyFailedError } from './-verify';
 
 declare global {
@@ -129,20 +128,18 @@ runCommand.action(async options => {
     await _composeUp(agentName, sessionId, tracker);
     await _setupPublisher(tracker, sessionId);
 
-    if (options.taskPath) {
-      const taskYahlPath = await resolveTaskPath(options.taskPath);
-      const yahl = await fs.readFile(taskYahlPath, 'utf-8');
-      const { stages, resultContextKey } = parseYahlTask(yahl);
-      const taskId = options.taskId ?? deriveTaskNameFromYahl(yahl, taskYahlPath);
+    if (options.taskId) {
+      const task = await fetchTaskYahl(options.taskId);
+      const { stages, resultContextKey } = parseYahlTask(task.yahl);
 
       await tracker.registerSession(sessionId, {
         parsedStages: stages,
         resultContextKey,
-        taskId,
-        taskYahlPath,
+        taskId: task.taskId,
+        taskYahlPath: task.path,
       });
 
-      const { storage } = await runYahl(yahl, { stages });
+      const { storage } = await runYahl(task.yahl, { stages });
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.forkrunId) {
@@ -171,7 +168,7 @@ runCommand.action(async options => {
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else {
-      throw new Error('No task path, resume id, verify resume id, produce-keys resume id, or forkrun id provided');
+      throw new Error('No task id, resume id, verify resume id, produce-keys resume id, or forkrun id provided');
     }
   } catch (error) {
     if (error instanceof AskUserPausedError) {

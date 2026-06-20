@@ -12,7 +12,7 @@ import {
 
 import { config } from './config.js';
 
-const spawnOrchestrate = (sessionId: string, taskPath: string) => {
+const spawnOrchestrate = (sessionId: string, taskId: string) => {
   const runtimeDir = config.runtimeDir;
   const tsxCli = `${runtimeDir}/node_modules/tsx/dist/cli.mjs`;
   const args = [
@@ -21,8 +21,8 @@ const spawnOrchestrate = (sessionId: string, taskPath: string) => {
     'run',
     '--session-id',
     sessionId,
-    '--task-path',
-    taskPath,
+    '--task-id',
+    taskId,
   ];
 
   const child = spawn(process.execPath, args, {
@@ -38,7 +38,7 @@ const spawnOrchestrate = (sessionId: string, taskPath: string) => {
   });
 
   child.unref();
-  console.log(`[worker] spawned orchestrate session=${sessionId} task=${taskPath}`);
+  console.log(`[worker] spawned orchestrate session=${sessionId} taskId=${taskId}`);
 };
 
 const processNotification = async (payload: Record<string, unknown>) => {

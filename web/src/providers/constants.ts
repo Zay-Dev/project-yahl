@@ -5,4 +5,5 @@ export const API_BASE_URL = (
 
 export const RESOURCES = {
   sessions: "api/sessions",
+  tasks: "api/tasks",
 } as const;

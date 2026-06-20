@@ -20,24 +20,24 @@ export const runCommand = program
   .description("Run the orchestrator")
 
   .addOption(
-    new Option('--task-path <path>')
+    new Option('--task-id <id>')
       .conflicts(['resume-id', 'forkrun-id', 'verify-resume-id', 'produce-keys-resume-id'])
   )
   .addOption(
     new Option('--resume-id <id>')
-      .conflicts(['task-path', 'forkrun-id', 'verify-resume-id', 'produce-keys-resume-id'])
+      .conflicts(['task-id', 'forkrun-id', 'verify-resume-id', 'produce-keys-resume-id'])
   )
   .addOption(
     new Option('--verify-resume-id <id>')
-      .conflicts(['task-path', 'forkrun-id', 'resume-id', 'produce-keys-resume-id'])
+      .conflicts(['task-id', 'forkrun-id', 'resume-id', 'produce-keys-resume-id'])
   )
   .addOption(
     new Option('--produce-keys-resume-id <id>')
-      .conflicts(['task-path', 'forkrun-id', 'resume-id', 'verify-resume-id'])
+      .conflicts(['task-id', 'forkrun-id', 'resume-id', 'verify-resume-id'])
   )
   .addOption(
     new Option('--forkrun-id <id>')
-      .conflicts(['task-path', 'resume-id', 'verify-resume-id', 'produce-keys-resume-id'])
+      .conflicts(['task-id', 'resume-id', 'verify-resume-id', 'produce-keys-resume-id'])
   )
   .addOption(
     new Option('--session-id <id>')
