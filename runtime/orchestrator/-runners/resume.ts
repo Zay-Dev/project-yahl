@@ -6,12 +6,10 @@ import { runYahl } from '@/orchestrator/-agent';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import {
   applyAskUserAnswerToStage,
-  buildAskUserContinuation,
   fetchAskUserCheckpoint,
   fetchSession,
   fetchStageDetail,
   parsedStageFromSnapshot,
-  toAskUserAnswerValue,
 } from '@/orchestrator/-ask-user';
 import type { TStageDetailForResume } from '@/orchestrator/-ask-user/session-api';
 import { buildResumeFrom } from '@/orchestrator/-ask-user/resume-from';
@@ -79,14 +77,6 @@ const _deserializeStorage = (snapshot: Record<string, unknown>): TStorage => {
   return storage;
 };
 
-const _resolveAnswerValue = (checkpoint: Awaited<ReturnType<typeof fetchAskUserCheckpoint>>) => {
-  if (checkpoint.freeText?.trim()) {
-    return checkpoint.freeText.trim();
-  }
-
-  return toAskUserAnswerValue(checkpoint.answerIds?.[0]);
-};
-
 const _resolveBaseParsed = (
   checkpoint: Awaited<ReturnType<typeof fetchAskUserCheckpoint>>,
   yahlStages: ParsedStage[],
@@ -113,34 +103,7 @@ const _resolveBaseParsed = (
 export const buildResumedStage = (
   parsedStage: ParsedStage,
   patchedStage: YahlStage,
-  questionRef: string,
-  answerValue: number | string,
-) => {
-  const continuationSources = [
-    patchedStage.logic,
-    parsedStage.spec.logic,
-    parsedStage.lines,
-  ].filter((source, index, all) => source && all.indexOf(source) === index);
-
-  for (const source of continuationSources) {
-    const continuation = buildAskUserContinuation(source, questionRef, answerValue);
-
-    if (!continuation) {
-      continue;
-    }
-
-    const spec = {
-      ...patchedStage,
-      logic: continuation.stageText,
-    };
-
-    return compileStage(spec, parsedStage.sourceStartLine);
-  }
-
-  throw new Error(
-    `resume: could not replace /ask-user(${questionRef}) in stage logic`,
-  );
-};
+) => compileStage(patchedStage, parsedStage.sourceStartLine);
 
 const _resumeAnchorStage = async (params: {
   checkpoint: Awaited<ReturnType<typeof fetchAskUserCheckpoint>>;
@@ -183,28 +146,29 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
     throw new Error('resume: session missing parsedStages');
   }
 
-  const answerValue = _resolveAnswerValue(checkpoint);
   const stageBase = (checkpoint.stage ?? stageDetail.stage) as unknown as YahlStage;
-  const patchedStage = applyAskUserAnswerToStage(
-    stageBase,
-    checkpoint.questionRef,
-    answerValue,
-  );
+  let patchedStage = stageBase;
 
   const storage = _deserializeStorage(checkpoint.storageSnapshot);
-  const answerKey = `ask_user_${checkpoint.askUserId}_answer`;
 
-  storage.context.set(answerKey, answerValue);
-  storage.context.set('ask_user_last_answer', answerValue);
+  for (const answer of checkpoint.batchAnswers ?? []) {
+    patchedStage = applyAskUserAnswerToStage(
+      patchedStage,
+      answer.questionRef,
+      answer.answerValue,
+    );
+
+    storage.context.set(`ask_user_${answer.questionRef}_answer`, answer.answerValue);
+  }
+
+  if ((checkpoint.batchAnswers ?? []).length > 0) {
+    const last = checkpoint.batchAnswers!.at(-1)!;
+    storage.context.set('ask_user_last_answer', last.answerValue);
+  }
 
   const resumeFrom = buildResumeFrom(checkpoint, stageDetail as TStageDetailForResume);
   const baseParsed = _resolveBaseParsed(checkpoint, yahlStages);
-  const resumedStage = buildResumedStage(
-    baseParsed,
-    patchedStage,
-    checkpoint.questionRef,
-    answerValue,
-  );
+  const resumedStage = buildResumedStage(baseParsed, patchedStage);
 
   if (isFork) {
     await _resumeAnchorStage({

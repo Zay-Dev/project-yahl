@@ -100,14 +100,38 @@ export type TResponseStageDetail = TResponseStageListItem & {
 };
 
 export type TResponseAskUserQuestionListItem = {
-  question: Record<string, unknown>;
+  batch?: {
+    batchId?: string;
+    description?: string;
+    questions?: {
+      allowMultiple?: boolean;
+      description?: string;
+      kind: 'multipleChoice' | 'text';
+      minChoices?: number;
+      options?: { id: string; label: string }[];
+      placeholder?: string;
+      questionRef: string;
+      title: string;
+    }[];
+    title?: string;
+  };
+  batchId?: string;
+  questionCount?: number;
   questionId: string;
-  questionRef: string;
+  requestId: string;
+  status: 'answered' | 'pending';
+  title?: string;
+};
+
+export type TResponseAskUserQuestionDetail = {
+  batch?: TResponseAskUserQuestionListItem['batch'];
+  batchId?: string;
+  questionId: string;
   requestId: string;
   status: 'answered' | 'pending';
 };
 
-export type TVerifyResumeAction = 'edit_answer' | 'reask' | 'rerun';
+export type TVerifyResumeAction = 'edit_answer' | 'follow_up' | 'reask' | 'rerun';
 
 export type TResponseVerifyCheckpoint = {
   askUserQuestion?: Record<string, unknown>;
@@ -126,7 +150,7 @@ export type TResponseVerifyCheckpoint = {
   score: number;
   stage: TYahlStage;
   stageIndex?: number;
-  status: 'pending' | 'resumed';
+  status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
   verifyId: string;
 };
@@ -142,6 +166,7 @@ export type TSessionLiveEvent =
   | { type: 'produce_keys.failed'; requestId: string; verifyId: string }
   | { type: 'produce_keys.resumed'; requestId: string; verifyId: string }
   | { type: 'verify.failed'; requestId: string; verifyId: string }
+  | { type: 'verify.passed'; requestId: string }
   | { type: 'verify.resumed'; requestId: string; verifyId: string };
 
 export type TStageListSource = {

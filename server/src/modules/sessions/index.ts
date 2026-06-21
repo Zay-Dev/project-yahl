@@ -21,14 +21,15 @@ import {
   listAskUserQuestions,
 } from './use-cases/ask-user-read';
 import {
-  answerAskUserQuestion,
-  createAskUserQuestion,
+  answerAskUserBatch,
+  createAskUserBatch,
 } from './use-cases/ask-user-write';
 import {
   createVerifyCheckpoint,
   editVerifyCheckpointAnswer,
   getVerifyCheckpoint,
   listVerifyCheckpoints,
+  resolveVerifyPass,
   resumeVerifyCheckpoint,
 } from './use-cases/verify-write';
 
@@ -51,9 +52,10 @@ exposedRoute('/api/sessions')
   .post('/:sessionId/stages/:requestId/model-responses', createModelResponse)
   .post('/:sessionId/stages/:requestId/tool-calls', createToolCall)
   .get('/:sessionId/ask-user/questions', listAskUserQuestions)
-  .post('/:sessionId/ask-user/questions', createAskUserQuestion)
+  .post('/:sessionId/ask-user/batches', createAskUserBatch)
+  .post('/:sessionId/ask-user/batches/:batchId/answer', answerAskUserBatch)
   .get('/:sessionId/ask-user/questions/:questionId', getAskUserQuestion)
-  .post('/:sessionId/ask-user/questions/:questionId/answer', answerAskUserQuestion)
+  .post('/:sessionId/stages/:requestId/verify-pass', resolveVerifyPass)
   .post('/:sessionId/verify-checkpoints', createVerifyCheckpoint)
   .get('/:sessionId/verify-checkpoints', listVerifyCheckpoints)
   .get('/:sessionId/verify-checkpoints/:verifyId', getVerifyCheckpoint)

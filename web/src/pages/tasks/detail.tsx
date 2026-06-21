@@ -79,8 +79,8 @@ export function TaskDetailPage() {
           <Button onClick={() => void run()} size="sm">
             Run
           </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/tasks">Back to tasks</Link>
+          <Button render={<Link to="/tasks" />} size="sm" variant="outline">
+            Back to tasks
           </Button>
         </div>
       </div>

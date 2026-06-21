@@ -29,6 +29,7 @@ export const skillNames = [
   'persist-knowledge',
   'media-to-text',
   'plan',
+  'design-questions',
   'propose-notification',
 ] as const;
 
@@ -60,7 +61,7 @@ export const verifyStageSnapshotSchema = z.object({
 
 export type TVerifyStageSnapshot = z.infer<typeof verifyStageSnapshotSchema>;
 
-export const verifyResumeActionSchema = z.enum(['rerun', 'edit_answer', 'reask']);
+export const verifyResumeActionSchema = z.enum(['rerun', 'edit_answer', 'reask', 'follow_up']);
 
 export type TVerifyResumeAction = z.infer<typeof verifyResumeActionSchema>;
 

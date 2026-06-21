@@ -61,14 +61,23 @@ describe('runVerifyGate', () => {
 
   it('returns when mastermind verify passes', async () => {
     process.env.MASTERMIND_API_URL = 'http://mastermind.test';
+    process.env.SESSION_API_BASE_URL = 'http://session.test';
+
+    let verifyPassBody: Record<string, unknown> | undefined;
 
     await withMockFetch(
-      (url) => {
+      (url, init) => {
         if (url.endsWith('/v1/verify')) {
           return Response.json({ feedback: 'ok', pass: true, score: 1 });
         }
 
-        throw new Error(`unexpected fetch: ${url}`);
+        if (url.includes('/verify-pass') && init?.method === 'POST') {
+          verifyPassBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+          return Response.json({ data: { ok: true } });
+        }
+
+        throw new Error(`unexpected fetch: ${url} ${init?.method ?? 'GET'}`);
       },
       async () => {
         await runVerifyGate({
@@ -79,6 +88,8 @@ describe('runVerifyGate', () => {
           stage: verifyStage,
           storage,
         });
+
+        assert.deepEqual(verifyPassBody, { feedback: 'ok', score: 1 });
       },
     );
   });

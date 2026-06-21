@@ -8,12 +8,15 @@ export const buildResumeStageMessages = (
   const completedToolIds = new Set<string>();
 
   const answerPayload = JSON.stringify({
-    ...(resumeFrom.answer.freeText
-      ? { freeText: resumeFrom.answer.freeText }
-      : {
-        selectedLabels: resumeFrom.answer.selectedLabels,
-        selectedOptionIds: resumeFrom.answer.selectedOptionIds,
-      }),
+    batchId: resumeFrom.batch.batchId,
+    answers: resumeFrom.batchAnswers.map((answer) => ({
+      ...(answer.freeText ? { freeText: answer.freeText } : {}),
+      ...(answer.selectedOptionIds?.length
+        ? { optionIds: answer.selectedOptionIds }
+        : {}),
+      questionRef: answer.questionRef,
+    })),
+    ok: true,
   });
 
   for (const response of resumeFrom.modelResponses) {

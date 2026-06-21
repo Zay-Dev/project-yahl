@@ -63,6 +63,8 @@ sessionSchema.index({ sessionId: 1 }, { unique: true });
 const stageSchema = new Schema<TDbStage>({
   context: model.d.mixed(),
   contextAfter: model.d.mixed(),
+  parsedStageIndex: model.d.optionalNumber(),
+  sourceStartLine: model.d.optionalNumber(),
   stage: model.d.mixed(),
   finishedAt: model.d.optionalDate(),
   loopMeta: loopMetaSchema,
@@ -115,19 +117,22 @@ const forkSessionSchema = new Schema<IForkSession & Document>({
 
 forkSessionSchema.index({ forkSessionId: 1 }, { unique: true });
 
+const askUserBatchAnswerSchema = new Schema({
+  answerValue: model.d.mixed(),
+  freeText: model.d.optionalString(),
+  optionIds: [model.d.optionalString()],
+  questionRef: model.d.requiredString(),
+}, { _id: false });
+
 const askUserQuestionSchema = new Schema<TDbAskUserQuestion>({
-  answerIds: [model.d.optionalString()],
-  answerLabels: [model.d.optionalString()],
-  answeredAt: model.d.optionalDate(),
-  askUserId: model.d.mixed(),
+  batch: model.d.mixed(),
+  batchAnswers: [askUserBatchAnswerSchema],
+  batchId: model.d.optionalString(),
   contextSnapshot: model.d.mixed(),
   forkSetupIndex: model.d.optionalNumber(),
-  freeText: model.d.optionalString(),
   loopMeta: loopMetaSchema,
-  question: model.d.mixed(),
-  questionId: model.d.requiredString(),
   parsedStageSnapshot: model.d.mixed(),
-  questionRef: model.d.requiredString(),
+  questionId: model.d.requiredString(),
   requestId: model.d.requiredString(),
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   stage: model.d.mixed(),
@@ -141,7 +146,7 @@ const askUserQuestionSchema = new Schema<TDbAskUserQuestion>({
 });
 
 askUserQuestionSchema.index({ questionId: 1 }, { unique: true });
-askUserQuestionSchema.index({ requestId: 1, session: 1 });
+askUserQuestionSchema.index({ batchId: 1, session: 1 });
 askUserQuestionSchema.index({ session: 1, status: 1 });
 
 const verifyCheckpointSchema = new Schema<TDbVerifyCheckpoint>({

@@ -1,26 +1,34 @@
 import type {
+  TResponseGetSession,
+  TResponseStageListItem,
   TResponseVerifyCheckpoint,
   TSessionLiveEvent,
 } from '@project-yahl/server/modules/sessions/-api-types';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { fetchPendingVerifyCheckpoints } from '@/pages/sessions/lib/sessions-api';
+import { resolveVerifyBannerState } from '@/pages/sessions/hooks/resolve-verify-banner';
 
 const isVerifyCheckpointEvent = (event: TSessionLiveEvent | null) =>
   event?.type === 'verify.failed'
   || event?.type === 'produce_keys.failed'
+  || event?.type === 'verify.passed'
   || event?.type === 'verify.resumed'
   || event?.type === 'produce_keys.resumed';
 
 type TUseVerifyCheckpointsParams = {
   lastEvent: TSessionLiveEvent | null;
+  session: Pick<TResponseGetSession, 'liveViewVncPort'> | null;
   sessionId: string;
+  stages: TResponseStageListItem[];
 };
 
 export const useVerifyCheckpoints = ({
   lastEvent,
+  session,
   sessionId,
+  stages,
 }: TUseVerifyCheckpointsParams) => {
   const [pendingCheckpoints, setPendingCheckpoints] = useState<TResponseVerifyCheckpoint[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -51,9 +59,15 @@ export const useVerifyCheckpoints = ({
     void refetch();
   }, [lastEvent, refetch]);
 
+  const bannerState = useMemo(
+    () => (session ? resolveVerifyBannerState(pendingCheckpoints, stages, session) : null),
+    [pendingCheckpoints, session, stages],
+  );
+
   return {
+    bannerState,
     error,
-    pendingCheckpoint: pendingCheckpoints[0] ?? null,
+    pendingCheckpoint: bannerState?.checkpoint ?? null,
     pendingCheckpoints,
     refetch,
   };

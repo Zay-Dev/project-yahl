@@ -157,9 +157,11 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
       contextAfter,
       executionMeta,
       loopMeta,
+      parsedStageIndex,
       persistedStage,
       resumeFrom,
       skipStageCreate,
+      sourceStartLine,
       systemAppend,
       temperature,
     } = {}) => {
@@ -168,7 +170,9 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
           context: _serializeStorage(context)!,
           executionMeta,
           loopMeta,
+          parsedStageIndex,
           requestId,
+          sourceStartLine,
           stage: persistedStage ?? stage,
           temperature,
         });

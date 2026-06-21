@@ -3,6 +3,8 @@ import fs from 'fs/promises';
 import { reportProcessLevelCrash } from '../-crash-reports/index.js';
 import { config, paths } from '../config.js';
 
+import { createPromptQueue } from './agent-prompt-queue.js';
+
 const AUTH_PROBE_TIMEOUT_MS = 30_000;
 
 export type TMastermindAgentStatus = 'auth_failed' | 'ready' | 'unconfigured';
@@ -98,13 +100,15 @@ export const createMastermindAgent = async (): Promise<TMastermindAgent> => {
     };
   }
 
+  const enqueuePrompt = createPromptQueue();
+
   return {
-    prompt: async (message, options) => {
+    prompt: (message, options) => enqueuePrompt(async () => {
       const run = await agent.send(message, options?.mode ? { mode: options.mode } : undefined);
       const result = await run.wait();
 
       return { result: result.result };
-    },
+    }),
     status: 'ready',
   };
 };

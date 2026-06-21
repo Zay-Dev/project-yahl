@@ -64,17 +64,19 @@ export function SessionDetailPage() {
     sessionId: id ?? '',
   });
 
-  const {
-    pendingCheckpoint,
-    refetch: refetchVerifyCheckpoints,
-  } = useVerifyCheckpoints({
-    lastEvent,
-    sessionId: id ?? '',
-  });
-
   const session = result;
   const error = query.error;
   const isLoading = query.isLoading;
+
+  const {
+    bannerState,
+    refetch: refetchVerifyCheckpoints,
+  } = useVerifyCheckpoints({
+    lastEvent,
+    session: session ?? null,
+    sessionId: id ?? '',
+    stages,
+  });
 
   if (!id) {
     return <div className="rounded-xl bg-muted/50 p-4">Missing session id.</div>;
@@ -101,9 +103,10 @@ export function SessionDetailPage() {
             onOpenQuestion={openQuestion}
             questions={pendingQuestions}
           />
-          {pendingCheckpoint ? (
+          {bannerState ? (
             <VerifyPendingBanner
-              checkpoint={pendingCheckpoint}
+              autoRetry={bannerState.mode === 'auto_retry'}
+              checkpoint={bannerState.checkpoint}
               onDismiss={() => void refetchVerifyCheckpoints()}
               sessionId={session.sessionId}
             />

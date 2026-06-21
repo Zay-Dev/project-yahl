@@ -9,3 +9,4 @@ See [docs/decision-log/mastermind.md](../docs/decision-log/mastermind.md).
 - `/health` agent status: `ready` | `unconfigured` | `auth_failed`.
 - Mastermind skills live in `mastermind/skills/` and must not document `/mastermind(...)` self-calls.
 - Proposals go to server API; mastermind never sends email/WhatsApp directly.
+- All Cursor SDK `agent.send` calls are serialized through a single in-process prompt queue (one active run per agent).

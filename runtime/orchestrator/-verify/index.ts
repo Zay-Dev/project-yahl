@@ -4,9 +4,22 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import { shutdownAgent } from '@/orchestrator/-docker';
 
 import { VerifyFailedError } from './errors';
-import { postVerifyCheckpoint } from './session-api';
+import { postVerifyCheckpoint, postVerifyPass } from './session-api';
 import { resolveVerifyResumeEnabled, toVerifyStageSnapshot } from './stage-snapshot';
 import { toParsedStageSnapshot } from '@/orchestrator/-ask-user/parsed-stage-snapshot';
+
+export type TVerifyGateResult = {
+  askUserRef?: string;
+  feedback: string;
+  pass: true;
+} | {
+  askUserRef?: string;
+  feedback: string;
+  pass: false;
+  resumeAction?: 'edit_answer' | 'follow_up' | 'reask' | 'rerun';
+  score: number;
+  verifyId: string;
+};
 
 const _serializeStorage = (storage: TStorage) => ({
   context: Object.fromEntries(storage.context.entries()),
@@ -26,12 +39,14 @@ export const runVerifyGate = async (params: {
   sessionId: string;
   stage: ParsedStage;
   storage: TStorage;
-}) => {
+  shutdownOnFail?: boolean;
+  throwOnFail?: boolean;
+}): Promise<TVerifyGateResult> => {
   const { stage } = params;
   const spec = stage.spec;
 
   if (spec.verify !== true) {
-    return;
+    return { feedback: '', pass: true };
   }
 
   const startedAt = Date.now();
@@ -55,10 +70,19 @@ export const runVerifyGate = async (params: {
   });
 
   if (result.pass) {
+    await globalThis.sessionTracker?.flush?.();
+
+    await postVerifyPass(params.sessionId, params.requestId, {
+      feedback: result.feedback,
+      score: result.score,
+    });
+
+    await globalThis.sessionTracker?.flush?.();
+
     console.log(
       `[agent] verify done pass=true score=${result.score} durationMs=${Date.now() - startedAt}`,
     );
-    return;
+    return { feedback: result.feedback, pass: true };
   }
 
   await globalThis.sessionTracker?.flush?.();
@@ -82,15 +106,30 @@ export const runVerifyGate = async (params: {
     `[agent] verify done pass=false score=${result.score} durationMs=${Date.now() - startedAt} verifyId=${verifyId}`,
   );
 
-  await shutdownAgent(params.agentName, params.sessionId);
-
-  throw new VerifyFailedError({
+  const failure: TVerifyGateResult = {
+    ...(result.askUserRef ? { askUserRef: result.askUserRef } : {}),
     feedback: result.feedback,
-    requestId: params.requestId,
+    pass: false,
+    ...(result.resumeAction ? { resumeAction: result.resumeAction } : {}),
     score: result.score,
-    stageIndex: params.pipelineStageIndex,
     verifyId,
-  });
+  };
+
+  if (params.shutdownOnFail !== false) {
+    await shutdownAgent(params.agentName, params.sessionId);
+  }
+
+  if (params.throwOnFail !== false) {
+    throw new VerifyFailedError({
+      feedback: result.feedback,
+      requestId: params.requestId,
+      score: result.score,
+      stageIndex: params.pipelineStageIndex,
+      verifyId,
+    });
+  }
+
+  return failure;
 };
 
 export { VerifyFailedError, ProduceKeysFailedError } from './errors';

@@ -15,11 +15,11 @@ export type TVerifyCheckpoint = {
   kind?: 'produce_keys' | 'verify';
   parsedStageSnapshot?: TParsedStageSnapshot;
   requestId: string;
-  resumeAction?: 'edit_answer' | 'reask' | 'rerun';
+  resumeAction?: 'edit_answer' | 'follow_up' | 'reask' | 'rerun';
   score: number;
   stage: YahlStage;
   stageIndex?: number;
-  status: 'pending' | 'resumed';
+  status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
   verifyId: string;
 };
@@ -45,6 +45,27 @@ export const postVerifyCheckpoint = async (
   const json = await res.json() as { data?: { verifyId: string }; verifyId?: string };
 
   return json.data ?? json as { verifyId: string };
+};
+
+export const postVerifyPass = async (
+  sessionId: string,
+  requestId: string,
+  body: { feedback: string; score: number },
+): Promise<void> => {
+  const res = await fetch(
+    `${sessionApiBaseUrl()}/api/sessions/${encodeURIComponent(sessionId)}` +
+    `/stages/${encodeURIComponent(requestId)}/verify-pass`,
+    {
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    },
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`verify pass failed: ${res.status} ${text}`);
+  }
 };
 
 export const fetchVerifyCheckpoint = async (

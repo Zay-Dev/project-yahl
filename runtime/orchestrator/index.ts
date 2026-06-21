@@ -17,9 +17,10 @@ import {
 import { program, resolveSessionId, runCommand } from './-cli';
 
 import { parseYahlTask } from './-utils/yahl';
+import { deriveTaskIdFromYahlPath } from './-utils/yahl/derive-task-id';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
-import { ensureSessionWorkspace } from './-utils/workspace-paths';
+import { ensureSessionWorkspace, mountTaskSkillsToSession } from './-utils/workspace-paths';
 
 import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
@@ -30,6 +31,7 @@ import { runAskUserResume } from './-runners/resume';
 import { runVerifyResume } from './-runners/verify-resume';
 import { runProduceKeysResume } from './-runners/produce-keys-resume';
 import { fetchTaskYahl } from './-tasks/session-api';
+import { fetchSession } from './-ask-user/session-api';
 import { ProduceKeysFailedError, VerifyFailedError } from './-verify';
 
 declare global {
@@ -139,6 +141,8 @@ runCommand.action(async options => {
         taskYahlPath: task.path,
       });
 
+      await mountTaskSkillsToSession(sessionId, task.taskId);
+
       const { storage } = await runYahl(task.yahl, { stages });
 
       await publishSessionResult(sessionId, resultContextKey, storage);
@@ -152,18 +156,43 @@ runCommand.action(async options => {
         );
       }
 
+      if (forkManager.taskYahlPath) {
+        await mountTaskSkillsToSession(
+          sessionId,
+          deriveTaskIdFromYahlPath(forkManager.taskYahlPath),
+        );
+      }
+
       const { storage } = await runForkSession(options.forkrunId, forkManager);
 
       await publishSessionResult(sessionId, forkManager.resultContextKey, storage);
     } else if (options.resumeId) {
+      const session = await fetchSession(sessionId);
+
+      if (session.taskId) {
+        await mountTaskSkillsToSession(sessionId, session.taskId);
+      }
+
       const { resultContextKey, storage } = await runAskUserResume(sessionId, options.resumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.verifyResumeId) {
+      const session = await fetchSession(sessionId);
+
+      if (session.taskId) {
+        await mountTaskSkillsToSession(sessionId, session.taskId);
+      }
+
       const { resultContextKey, storage } = await runVerifyResume(sessionId, options.verifyResumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.produceKeysResumeId) {
+      const session = await fetchSession(sessionId);
+
+      if (session.taskId) {
+        await mountTaskSkillsToSession(sessionId, session.taskId);
+      }
+
       const { resultContextKey, storage } = await runProduceKeysResume(sessionId, options.produceKeysResumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);

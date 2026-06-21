@@ -8,12 +8,14 @@ import { resumeVerifyCheckpoint } from '@/pages/sessions/lib/sessions-api';
 import { VerifyEditAnswerDialog } from './verify-edit-answer-dialog';
 
 type TVerifyPendingBannerProps = {
+  autoRetry?: boolean;
   checkpoint: TResponseVerifyCheckpoint;
   onDismiss: () => void;
   sessionId: string;
 };
 
 export function VerifyPendingBanner({
+  autoRetry = false,
   checkpoint,
   onDismiss,
   sessionId,
@@ -34,7 +36,7 @@ export function VerifyPendingBanner({
 
   const isProduceKeys = checkpoint.kind === 'produce_keys';
   const resumeAction = checkpoint.resumeAction ?? 'rerun';
-  const showEditAnswer = !isProduceKeys && resumeAction === 'edit_answer';
+  const showEditAnswer = !autoRetry && !isProduceKeys && resumeAction === 'edit_answer';
 
   return (
     <>
@@ -42,9 +44,16 @@ export function VerifyPendingBanner({
         <p className="text-sm font-medium">
           {isProduceKeys
             ? 'Stage missing required context keys'
-            : `Stage verification failed (score ${checkpoint.score.toFixed(2)})`}
+            : autoRetry
+              ? `Auto-retrying verification (last score ${checkpoint.score.toFixed(2)})`
+              : `Stage verification failed (score ${checkpoint.score.toFixed(2)})`}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">{checkpoint.feedback}</p>
+        {autoRetry ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            The orchestrator is correcting this stage automatically. Do not resume manually while the agent is running.
+          </p>
+        ) : null}
         {showEditAnswer ? (
           <Button
             className="mt-3"
@@ -54,7 +63,7 @@ export function VerifyPendingBanner({
           >
             Edit answer
           </Button>
-        ) : (
+        ) : showEditAnswer ? null : autoRetry ? null : (
           <Button
             className="mt-3"
             disabled={resuming}

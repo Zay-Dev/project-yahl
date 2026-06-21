@@ -16,20 +16,21 @@ export function AskUserPendingBanner({
   }
 
   const first = questions[0]!;
-  const questionTitle = (first.question as { title?: string }).title?.trim() || 'Answer required';
+  const batchTitle = first.batch?.title?.trim() || first.title?.trim() || 'Answer required';
+  const questionCount = first.questionCount ?? first.batch?.questions?.length ?? 1;
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="text-sm font-medium">Waiting for your answer</p>
         <p className="text-sm text-muted-foreground">
-          {questions.length === 1
-            ? questionTitle
-            : `${questions.length} pending questions`}
+          {questionCount > 1
+            ? `${batchTitle} (${questionCount} questions)`
+            : batchTitle}
         </p>
       </div>
       <Button onClick={() => onOpenQuestion(first)} variant="default">
-        Answer question
+        {questionCount > 1 ? 'Answer questions' : 'Answer question'}
       </Button>
     </div>
   );

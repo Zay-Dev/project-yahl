@@ -5,19 +5,25 @@ import { buildResumeFrom } from './resume-from';
 import type { TAskUserCheckpoint, TStageDetailForResume } from './session-api';
 
 const checkpoint = (overrides: Partial<TAskUserCheckpoint> = {}): TAskUserCheckpoint => ({
-  answerIds: ['3'],
-  answerLabels: ['three'],
-  askUserId: '1',
-  contextSnapshot: {},
-  question: {
-    kind: 'multipleChoice',
-    options: [{ id: '3', label: 'three' }],
-    questionRef: '1',
-    title: 'pick',
-    version: 'askUser.v1',
+  batch: {
+    batchId: 'round1',
+    questions: [{
+      kind: 'multipleChoice',
+      options: [{ id: '3', label: 'three' }],
+      questionRef: '1',
+      title: 'pick',
+    }],
+    title: 'Pick one',
+    version: 'askUserBatch.v1',
   },
+  batchAnswers: [{
+    answerValue: '3',
+    optionIds: ['3'],
+    questionRef: '1',
+  }],
+  batchId: 'round1',
+  contextSnapshot: {},
   questionId: 'q-1',
-  questionRef: '1',
   requestId: 'req-1',
   stage: {},
   stageIndex: 4,
@@ -52,7 +58,7 @@ const stageDetail = (overrides: Partial<TStageDetailForResume> = {}): TStageDeta
   stage: {},
   toolCalls: [{
     tools: [{
-      arguments: { questionRef: '1' },
+      arguments: { batchId: 'round1' },
       id: 'tool-ask-1',
       name: 'ask_user',
     }],
@@ -65,10 +71,9 @@ describe('buildResumeFrom', () => {
     const result = buildResumeFrom(checkpoint(), stageDetail());
 
     assert.equal(result.pendingToolCallId, 'tool-ask-1');
-    assert.deepEqual(result.answer.selectedOptionIds, ['3']);
-    assert.deepEqual(result.answer.selectedLabels, ['three']);
-    assert.equal(result.questionRef, '1');
-    assert.equal(result.question.title, 'pick');
+    assert.equal(result.batchAnswers[0]?.questionRef, '1');
+    assert.deepEqual(result.batchAnswers[0]?.selectedOptionIds, ['3']);
+    assert.equal(result.batch.batchId, 'round1');
     assert.equal(result.modelResponses.length, 1);
     assert.equal(result.toolCalls.length, 1);
     assert.equal(result.toolCalls[0]?.id, 'tool-ask-1');
@@ -76,11 +81,17 @@ describe('buildResumeFrom', () => {
 
   it('uses freeText answer when present', () => {
     const result = buildResumeFrom(
-      checkpoint({ answerIds: undefined, freeText: 'custom' }),
+      checkpoint({
+        batchAnswers: [{
+          answerValue: 'custom',
+          freeText: 'custom',
+          questionRef: '1',
+        }],
+      }),
       stageDetail(),
     );
 
-    assert.equal(result.answer.freeText, 'custom');
-    assert.deepEqual(result.answer.selectedOptionIds, []);
+    assert.equal(result.batchAnswers[0]?.freeText, 'custom');
+    assert.deepEqual(result.batchAnswers[0]?.selectedOptionIds, undefined);
   });
 });

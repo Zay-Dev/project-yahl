@@ -108,6 +108,44 @@ describe('createSessionEventTracker', () => {
     );
   });
 
+  it('POSTs parsedStageIndex and sourceStartLine on createStage', async () => {
+    process.env.SESSION_API_BASE_URL = 'http://localhost:4000';
+
+    const tracker = createSessionEventTracker();
+    let createdBody: unknown;
+
+    await withMockFetch(
+      (url, init) => {
+        if (init?.method === 'POST' && url.endsWith('/stages')) {
+          createdBody = JSON.parse(String(init.body));
+
+          return new Response(JSON.stringify({ ok: true }), { status: 202 });
+        }
+
+        return new Response(JSON.stringify({ ok: true }), { status: 202 });
+      },
+      async () => {
+        tracker.createStage('sess-audit', {
+          context: { context: {}, types: {} },
+          parsedStageIndex: 2,
+          requestId: 'stage-req-audit',
+          sourceStartLine: 42,
+          stage: { logic: 'goals logic' },
+        });
+
+        await tracker.flush();
+
+        assert.deepEqual(createdBody, {
+          context: { context: {}, types: {} },
+          parsedStageIndex: 2,
+          requestId: 'stage-req-audit',
+          sourceStartLine: 42,
+          stage: { logic: 'goals logic' },
+        });
+      },
+    );
+  });
+
   it('logs but continues the queue when non-critical POST fails', async () => {
     process.env.SESSION_API_BASE_URL = 'http://localhost:4000';
 

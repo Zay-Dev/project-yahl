@@ -6,8 +6,8 @@ import { shutdownAgent } from '@/orchestrator/-docker';
 import { parseAskUserToolArguments } from '@/shared/stage-tools';
 
 import { AskUserPausedError } from './errors';
-import { resolveAskUserEntry, validateAskUserToolCall } from './registry';
-import { postAskUserQuestion } from './session-api';
+import { mergeBatchIntoStage, validateAskUserToolCall } from './registry';
+import { postAskUserBatch } from './session-api';
 import { toParsedStageSnapshot } from './parsed-stage-snapshot';
 
 const askUserEnabled = process.env.YAHL_ENABLE_ASK_USER !== 'false';
@@ -51,29 +51,19 @@ export const handleAskUserToolCall = async (params: {
     return { hasError: true, result: validationError };
   }
 
-  const questionRef = args.questionRef.trim();
-  const entry = resolveAskUserEntry(params.stage.spec, questionRef);
-
-  if (entry?.answer !== undefined) {
-    return { hasError: true, result: 'ask_user: question already answered' };
-  }
-
-  if (!entry) {
-    return { hasError: true, result: `ask_user: unknown questionRef "${questionRef}"` };
-  }
+  const mergedStage = mergeBatchIntoStage(params.stage.spec, args);
 
   await globalThis.sessionTracker?.flush?.();
 
-  await postAskUserQuestion(params.sessionId, {
-    askUserId: entry.id,
+  await postAskUserBatch(params.sessionId, {
+    batch: args,
+    batchId: args.batchId,
     contextSnapshot: _serializeContextSnapshot(params.storage),
     forkSetupIndex: params.forkSetupIndex,
     loopMeta: params.loopMeta,
     parsedStageSnapshot: toParsedStageSnapshot(params.stage),
-    question: args,
-    questionRef,
     requestId: params.requestId,
-    stage: params.stage.spec as unknown as Record<string, unknown>,
+    stage: mergedStage as unknown as Record<string, unknown>,
     ...(params.stageIndex === undefined ? {} : { stageIndex: params.stageIndex }),
     storageSnapshot: _serializeStorage(params.storage),
     toolCallId: params.toolCall.id,
@@ -90,10 +80,10 @@ export const handleAskUserToolCall = async (params: {
 export const applyAskUserAnswerToStage = (
   stage: YahlStage,
   questionRef: string,
-  answerValue: number | string,
+  answerValue: number | string | string[],
 ) => {
   const trimmed = questionRef.trim();
-  const entry = stage.askUser?.find((item) => item.id === trimmed);
+  const entry = stage.askUser?.find((item) => String(item.id) === trimmed);
 
   if (!entry) {
     return stage;
@@ -102,7 +92,7 @@ export const applyAskUserAnswerToStage = (
   return {
     ...stage,
     askUser: stage.askUser?.map((item) => (
-      item.id === trimmed
+      String(item.id) === trimmed
         ? { ...item, answer: answerValue }
         : item
     )),
@@ -125,6 +115,7 @@ export { parsedStageFromSnapshot, toParsedStageSnapshot } from './parsed-stage-s
 export type { TParsedStageSnapshot } from './parsed-stage-snapshot';
 export {
   listAskUserRefs,
+  mergeBatchIntoStage,
   resolveAskUserEntry,
   validateAskUserToolCall,
 } from './registry';

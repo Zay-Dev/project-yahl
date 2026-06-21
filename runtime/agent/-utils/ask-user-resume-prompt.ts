@@ -1,40 +1,43 @@
 import type { TAskUserResumeFrom } from '@/shared/transports/-types';
 
-const _formatOptions = (
-  options: TAskUserResumeFrom['question']['options'] | undefined,
-) =>
-  options?.map((option) => `${option.id}=${option.label}`).join(', ') ?? '';
-
 export const buildAskUserResumePrompt = (resumeFrom: TAskUserResumeFrom) => {
-  const { answer, question, questionRef } = resumeFrom;
-  const optionsText = _formatOptions(question.options);
-  const answerKey = `ask_user_${questionRef}_answer`;
+  const answerLines = resumeFrom.batchAnswers.flatMap((answer) => {
+    const question = resumeFrom.batch.questions.find(
+      (item) => item.questionRef === answer.questionRef,
+    );
+    const answerKey = `ask_user_${answer.questionRef}_answer`;
 
-  const answerLines = answer.freeText?.trim()
-    ? [
-      `custom free-text answer: ${JSON.stringify(answer.freeText.trim())}`,
-      'The user did not pick a preset option; use this free-text value in logic.',
-    ]
-    : [
-      `answer option id: ${JSON.stringify(answer.selectedOptionIds[0] ?? '')}`,
-      ...(answer.selectedLabels[0]
-        ? [`answer label: ${JSON.stringify(answer.selectedLabels[0])}`]
+    if (answer.freeText?.trim()) {
+      return [
+        `questionRef ${answer.questionRef}: custom free-text answer ${JSON.stringify(answer.freeText.trim())}`,
+        `Input context already has ${JSON.stringify(answerKey)} set.`,
+      ];
+    }
+
+    if (Array.isArray(answer.answerValue)) {
+      return [
+        `questionRef ${answer.questionRef}: selected option ids ${JSON.stringify(answer.answerValue)}`,
+        `Input context already has ${JSON.stringify(answerKey)} set.`,
+      ];
+    }
+
+    return [
+      `questionRef ${answer.questionRef}: answer ${JSON.stringify(answer.answerValue)}`,
+      ...(question?.kind === 'multipleChoice'
+        ? [`options: ${question.options?.map((option) => `${option.id}=${option.label}`).join(', ') ?? ''}`]
         : []),
-      `Input context already has ${JSON.stringify(answerKey)} set to that option id.`,
-      'Use the option id (not the label) for *answer_of and /ask-user substitution.',
+      `Input context already has ${JSON.stringify(answerKey)} set.`,
     ];
+  });
 
   return [
-    'Ask-user was answered. Do not call ask_user again.',
+    'Ask-user batch was answered. Do not call ask_user again for answered questionRefs.',
     'Re-execute the full stage.logic from the first line — the stage is not finished.',
     'Read prior answers with *answer_of(<id>) from Input context.context (already populated).',
     'Complete every produceContextKeys entry via set_context before ending the stage.',
     'Call mastermind for every /mastermind(...) in logic, including persist-knowledge.',
-    'When the answer is an option id, resolve typed objects via *matches against context arrays.',
-    `questionRef: ${JSON.stringify(questionRef)}`,
-    `question: ${JSON.stringify(question.title)}`,
-    ...(optionsText ? [`options: ${optionsText}`] : []),
+    `batchId: ${JSON.stringify(resumeFrom.batch.batchId)}`,
+    `batch title: ${JSON.stringify(resumeFrom.batch.title)}`,
     ...answerLines,
-    'Substitute /ask-user(<id>) with JSON.stringify(scalar answer) when that line runs.',
   ].join('\n');
 };
