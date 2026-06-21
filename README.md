@@ -1,5 +1,3 @@
-<meta name="google-site-verification" content="1sHq-JOcCRksNSejR94-tqdhtnWhchDQ8RINRkqVgTc" />
-
 # Project YAHL (Yet Another High-level Language)
 
 YAHL is a loose language for writing pseudo-code that talks to AI without pretending you've invented a compiler. [GitHub](https://github.com/Zay-Dev/project-yahl/tree/develop)
