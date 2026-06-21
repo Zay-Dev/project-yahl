@@ -1,6 +1,8 @@
+<meta name="google-site-verification" content="1sHq-JOcCRksNSejR94-tqdhtnWhchDQ8RINRkqVgTc" />
+
 # Project YAHL (Yet Another High-level Language)
 
-YAHL is a loose language for writing pseudo-code that talks to AI without pretending you've invented a compiler.
+YAHL is a loose language for writing pseudo-code that talks to AI without pretending you've invented a compiler. [GitHub](https://github.com/Zay-Dev/project-yahl/tree/develop)
 
 This is supposed to be a fun project. As of late April 2026, AI models still feel unpredictable, even with skills — and the worst part is tracing and debugging what they did and why.
 
