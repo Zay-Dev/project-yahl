@@ -2,7 +2,7 @@ import type { TChatToolCall, TLoopMeta, TStorage } from '@/shared/transports/-ty
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
-import { composeDown } from '@/orchestrator/-docker';
+import { shutdownAgent } from '@/orchestrator/-docker';
 import { parseAskUserToolArguments } from '@/shared/stage-tools';
 
 import { AskUserPausedError } from './errors';
@@ -82,7 +82,7 @@ export const handleAskUserToolCall = async (params: {
   await globalThis.sessionTracker?.flush?.();
 
   params.onPause();
-  await composeDown(params.agentName);
+  await shutdownAgent(params.agentName, params.sessionId);
 
   throw new AskUserPausedError();
 };

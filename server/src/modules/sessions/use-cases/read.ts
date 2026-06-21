@@ -43,6 +43,7 @@ const toResponse = (
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
   forkedFrom: session.forkedFrom,
+  liveViewVncPort: session.liveViewVncPort ?? null,
   parsedStages: session.parsedStages,
   result: session.result,
   resultContextKey: session.resultContextKey,

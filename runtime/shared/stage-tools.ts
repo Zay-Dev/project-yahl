@@ -4,7 +4,6 @@ import {
   CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
   AskUserToolCallEnvelope,
-  RagToolCallEnvelope,
   type ContextScope,
   type SetContextToolCallEnvelope,
 } from "./stage-contract";
@@ -132,7 +131,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Run a single shell command inside the agent container. Use for listing files, reading paths under /opt/skills, etc. Do not use for persisting context. Do not use echo/printf to fake other API tools; call those tools by name instead.",
+        "Run a single shell command inside the agent container. Use for listing files, reading paths under /opt/skills, and curl for documented HTTP APIs in workspace files referenced by stage logic. Do not use curl for web search, HTML browse, or scraping. Do not use for persisting context. Do not use echo/printf to fake other API tools; call those tools by name instead.",
       name: "run_bash",
       parameters: {
         properties: {
@@ -181,32 +180,28 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Perform a RAG operation on a file. Use for searching for information in a file.",
-      name: "rag",
+        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|extract-knowledge|persist-knowledge|media-to-text|plan, ...) in stage logic. Returns JSON { ok, data } or { ok: false, error }.",
+      name: "mastermind",
       parameters: {
         properties: {
-          lookingFor: {
-            description: "The content description of what we want to extract.",
-            type: "string",
+          args: {
+            description: "Skill-specific arguments object.",
+            type: "object",
           },
-          chunkSize: {
-            description: "The size of each chunk to read from the file.",
-            type: "number",
-          },
-          tmp_file_path: {
-            description: "The path to the temporary file to read from.",
-            type: "string",
-          },
-          byteLength: {
-            description: "The length of the file in bytes.",
-            type: "number",
-          },
-          context_key: {
-            description: "The key to store the result in the context.",
+          skill: {
+            description: "Helper skill name.",
+            enum: [
+              "research",
+              "extract-info",
+              "extract-knowledge",
+              "persist-knowledge",
+              "media-to-text",
+              "plan",
+            ],
             type: "string",
           },
         },
-        required: ["lookingFor", "chunkSize", "tmp_file_path", "byteLength", "context_key"],
+        required: ["skill"],
         type: "object",
       },
     },
@@ -214,7 +209,9 @@ export const STAGE_TOOLS = [
   },
 ];
 
-export const parseRagToolArguments = (raw: string): RagToolCallEnvelope["arguments"] | null => {
+export const parseMastermindToolArguments = (
+  raw: string,
+): { args: Record<string, unknown>; skill: string } | null => {
   let parsed: unknown;
 
   try {
@@ -224,23 +221,13 @@ export const parseRagToolArguments = (raw: string): RagToolCallEnvelope["argumen
   }
 
   if (!isRecord(parsed)) return null;
-  if (typeof parsed.lookingFor !== "string") return null;
-  if (!parsed.lookingFor.trim()) return null;
-  if (typeof parsed.chunkSize !== "number") return null;
-  if (parsed.chunkSize <= 0) return null;
-  if (typeof parsed.tmp_file_path !== "string") return null;
-  if (!parsed.tmp_file_path.trim()) return null;
-  if (typeof parsed.byteLength !== "number") return null;
-  if (parsed.byteLength <= 0) return null;
-  if (typeof parsed.context_key !== "string") return null;
-  if (!parsed.context_key.trim()) return null;
+  if (typeof parsed.skill !== 'string' || !parsed.skill.trim()) return null;
+
+  const args = isRecord(parsed.args) ? parsed.args : {};
 
   return {
-    lookingFor: parsed.lookingFor,
-    chunkSize: parsed.chunkSize,
-    tmp_file_path: parsed.tmp_file_path,
-    byteLength: parsed.byteLength,
-    context_key: parsed.context_key,
+    args,
+    skill: parsed.skill.trim(),
   };
 };
 

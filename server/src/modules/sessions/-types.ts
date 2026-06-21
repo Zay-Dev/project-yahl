@@ -40,10 +40,16 @@ export type TYahlStage = {
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
+  planMode?: boolean;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   temperature?: number;
   updateContextKeys?: string[];
+  verify?: boolean;
+  verifyMinScore?: number;
+  verifyResume?: boolean;
+  verifyRubric?: string;
+  version?: number;
 };
 
 export type TParsedStage = {
@@ -83,6 +89,7 @@ export interface IForkSession extends TWithTimestamps {
 export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
   forkedFrom?: TSessionForkedFrom;
+  liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
   sessionId: string;
@@ -101,9 +108,20 @@ export interface IStage extends TWithTimestamps {
   stage: TYahlStage;
   loopMeta?: TStageLoopMeta;
   temperature?: number;
+  verifyResult?: {
+    feedback: string;
+    pass: boolean;
+    score: number;
+  };
 }
 
-export type TModelResponseTag = 'browse' | 'bash' | 'tool' | 'chat' | 'unknown';
+export type TModelResponseTag =
+  | 'browse'
+  | 'bash'
+  | 'chat'
+  | 'tool'
+  | 'unknown'
+  | `mastermind:${string}`;
 
 export interface IModelResponse extends TWithTimestamps {
   _id: string;
@@ -151,4 +169,33 @@ export interface IAskUserQuestion extends TWithTimestamps {
   status: TAskUserQuestionStatus;
   storageSnapshot: Record<string, unknown>;
   toolCallId: string;
+}
+
+export type TVerifyCheckpointKind = 'produce_keys' | 'verify';
+
+export type TVerifyCheckpointStatus = 'pending' | 'resumed';
+
+export type TVerifyResumeAction = 'edit_answer' | 'reask' | 'rerun';
+
+export interface IVerifyCheckpoint extends TWithTimestamps {
+  _id: string;
+  askUserQuestion?: Record<string, unknown>;
+  askUserRef?: string;
+  contextSnapshot: Record<string, unknown>;
+  editedAnswerFreeText?: string;
+  editedAnswerOptionIds?: string[];
+  feedback: string;
+  forkSetupIndex?: number;
+  kind?: TVerifyCheckpointKind;
+  loopMeta?: TStageLoopMeta;
+  parsedStageSnapshot?: TParsedStageSnapshot;
+  requestId: string;
+  resumeAction?: TVerifyResumeAction;
+  score: number;
+  session: string;
+  stage: TYahlStage;
+  stageIndex?: number;
+  status: TVerifyCheckpointStatus;
+  storageSnapshot: Record<string, unknown>;
+  verifyId: string;
 }

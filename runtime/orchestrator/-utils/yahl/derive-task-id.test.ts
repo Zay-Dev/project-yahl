@@ -8,7 +8,7 @@ import { deriveTaskIdFromYahlPath, deriveTaskNameFromYahl } from './derive-task-
 
 const testSkillPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../TASKS/test/SKILL.yahl',
+  '../../../../server/tasks/test/SKILL.yahl',
 );
 
 describe('deriveTaskNameFromYahl', () => {
@@ -16,21 +16,21 @@ describe('deriveTaskNameFromYahl', () => {
     const yahl = readFileSync(testSkillPath, 'utf-8');
 
     assert.equal(
-      deriveTaskNameFromYahl(yahl, '/orchestrator/TASKS/test/SKILL.yahl'),
+      deriveTaskNameFromYahl(yahl, 'server/tasks/test/SKILL.yahl'),
       'test the syntax',
     );
   });
 
   it('falls back to task folder name for non-yahl text', () => {
     assert.equal(
-      deriveTaskNameFromYahl('plain logic only', '/orchestrator/TASKS/research/SKILL.yahl'),
+      deriveTaskNameFromYahl('plain logic only', 'server/tasks/research/SKILL.yahl'),
       'research',
     );
   });
 
   it('deriveTaskIdFromYahlPath returns folder name', () => {
     assert.equal(
-      deriveTaskIdFromYahlPath('/orchestrator/TASKS/test/SKILL.yahl'),
+      deriveTaskIdFromYahlPath('server/tasks/test/SKILL.yahl'),
       'test',
     );
   });

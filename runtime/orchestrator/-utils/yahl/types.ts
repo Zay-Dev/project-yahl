@@ -21,6 +21,12 @@ export interface ParsedStage {
 }
 
 export interface ComposeUpOptions {
+  composeOverrideFilePaths?: string[];
   composeProjectName: string;
-  onecliOverrideFilePath?: string;
+}
+
+export interface ComposeDownOptions {
+  composeOverrideFilePaths?: string[];
+  composeProjectName: string;
+  sessionId?: string;
 }

@@ -4,6 +4,7 @@ import { useOne } from "@refinedev/core";
 import { useParams } from "react-router";
 
 import { AskUserPendingBanner } from "@/pages/sessions/components/ask-user-pending-banner";
+import { VerifyPendingBanner } from "@/pages/sessions/components/verify-pending-banner";
 import { AskUserQuestionDialog } from "@/pages/sessions/components/ask-user-question-dialog";
 import { SessionJsonFallback } from "@/pages/sessions/components/session-json-fallback";
 import { SessionOverview } from "@/pages/sessions/components/session-overview";
@@ -11,7 +12,20 @@ import { SessionResult } from "@/pages/sessions/components/session-result";
 import { SessionTimeline } from "@/pages/sessions/components/session-timeline";
 import { useAskUserQuestions } from "@/pages/sessions/hooks/use-ask-user-questions";
 import { useSessionEventsStream } from "@/pages/sessions/hooks/use-session-events-stream";
+import { useVerifyCheckpoints } from "@/pages/sessions/hooks/use-verify-checkpoints";
 import { RESOURCES } from "@/providers/constants";
+
+const isSessionNotFoundError = (error: unknown) => {
+  if (typeof error === "object" && error !== null && "statusCode" in error) {
+    return (error as { statusCode?: number }).statusCode === 404;
+  }
+
+  if (error instanceof Error) {
+    return /404|not found/i.test(error.message);
+  }
+
+  return false;
+};
 
 export function SessionDetailPage() {
   const { id } = useParams();
@@ -20,6 +34,8 @@ export function SessionDetailPage() {
     id: id ?? "",
     queryOptions: {
       enabled: !!id,
+      retry: (failureCount, error) => failureCount < 10 && isSessionNotFoundError(error),
+      retryDelay: 500,
     },
     resource: RESOURCES.sessions,
   });
@@ -44,6 +60,14 @@ export function SessionDetailPage() {
     pendingQuestions,
     setDialogOpen,
   } = useAskUserQuestions({
+    lastEvent,
+    sessionId: id ?? '',
+  });
+
+  const {
+    pendingCheckpoint,
+    refetch: refetchVerifyCheckpoints,
+  } = useVerifyCheckpoints({
     lastEvent,
     sessionId: id ?? '',
   });
@@ -77,6 +101,13 @@ export function SessionDetailPage() {
             onOpenQuestion={openQuestion}
             questions={pendingQuestions}
           />
+          {pendingCheckpoint ? (
+            <VerifyPendingBanner
+              checkpoint={pendingCheckpoint}
+              onDismiss={() => void refetchVerifyCheckpoints()}
+              sessionId={session.sessionId}
+            />
+          ) : null}
           <AskUserQuestionDialog
             onAnswered={handleAnswered}
             onOpenChange={setDialogOpen}
@@ -94,6 +125,7 @@ export function SessionDetailPage() {
             lastEvent={lastEvent}
             sessionId={session.sessionId}
             stages={stages}
+            startingRun={!session.parsedStages?.length && stages.length === 0}
           />
           <SessionJsonFallback label="Developer" value={session} />
         </>

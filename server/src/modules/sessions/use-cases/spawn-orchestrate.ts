@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
@@ -152,6 +153,16 @@ export const resolveRepoRoot = () => path.dirname(_resolveRuntimeDir());
 
 export const resolvePnpmWorkspaceRoot = () => _resolveWorkspaceRoot();
 
+const _loadRootEnv = () => {
+  const rootEnvPath = path.join(resolveRepoRoot(), '.env');
+
+  if (!fs.existsSync(rootEnvPath)) {
+    return {};
+  }
+
+  return dotenv.parse(fs.readFileSync(rootEnvPath));
+};
+
 const resolveSessionApiBaseUrl = () => {
   const explicit = process.env.SESSION_API_BASE_URL?.trim();
 
@@ -198,8 +209,12 @@ export const spawnOrchestrate = (
   const runtimeDir = _resolveRuntimeDir();
   const workspaceRoot = _resolveWorkspaceRoot();
   const sessionApiBaseUrl = resolveSessionApiBaseUrl();
-  const spawnSpec = _resolveBuiltOrchestratorSpawn(runtimeDir, sessionId, args)
-    ?? _resolveNodeTsxSpawn(runtimeDir, sessionId, args)
+  const preferSource = process.env.NODE_ENV !== 'production';
+  const spawnSpec = (preferSource
+    ? _resolveNodeTsxSpawn(runtimeDir, sessionId, args)
+      ?? _resolveBuiltOrchestratorSpawn(runtimeDir, sessionId, args)
+    : _resolveBuiltOrchestratorSpawn(runtimeDir, sessionId, args)
+      ?? _resolveNodeTsxSpawn(runtimeDir, sessionId, args))
     ?? _resolvePnpmExecSpawn(workspaceRoot, sessionId, args);
 
   const logPath = path.join('/tmp', `yahl-orchestrator-${sessionId}.log`);
@@ -213,11 +228,13 @@ export const spawnOrchestrate = (
   _logSpawnDiagnostics(sessionId, runtimeDir, workspaceRoot, spawnSpec, logPath);
 
   const redisUrl = process.env.REDIS_URL?.trim() || 'redis://redis:6379';
+  const rootParsed = _loadRootEnv();
 
   const child = spawn(spawnSpec.cmd, spawnSpec.args, {
     cwd: spawnSpec.cwd,
     detached: true,
     env: {
+      ...rootParsed,
       ...process.env,
       REDIS_URL: redisUrl,
       SESSION_API_BASE_URL: sessionApiBaseUrl,

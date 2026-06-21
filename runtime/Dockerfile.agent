@@ -6,6 +6,12 @@ WORKDIR /omniflex
 
 RUN corepack enable
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends xvfb x11vnc \
+  && rm -rf /var/lib/apt/lists/* \
+  && npx playwright install-deps chromium \
+  && npx playwright install chromium
+
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY ${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/
 COPY ${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
@@ -13,12 +19,6 @@ COPY ${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
 RUN pnpm install --frozen-lockfile --filter @project-yahl/runtime...
 
 WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/runtime
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends xvfb x11vnc \
-  && rm -rf /var/lib/apt/lists/* \
-  && npx playwright install-deps chromium \
-  && npx playwright install chromium
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 

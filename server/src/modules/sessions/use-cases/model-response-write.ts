@@ -5,16 +5,37 @@ import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { emitSessionEvent } from '../-session-events';
+import type { TModelResponseTag } from '../-types';
 import { modelModelResponse, modelStage } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
 
-const MODEL_RESPONSE_TAGS = ['browse', 'bash', 'tool', 'chat', 'unknown'] as const;
+const BASE_MODEL_RESPONSE_TAGS = ['browse', 'bash', 'tool', 'chat', 'unknown'] as const;
+
+const isModelResponseTag = (value: unknown): value is TModelResponseTag => {
+  if (typeof value !== 'string' || !value.trim()) {
+    return false;
+  }
+
+  if ((BASE_MODEL_RESPONSE_TAGS as readonly string[]).includes(value)) {
+    return true;
+  }
+
+  return value.startsWith('mastermind:') && value.length > 'mastermind:'.length;
+};
+
+const modelResponseTagSchema = Joi.string().custom((value, helpers) => {
+  if (isModelResponseTag(value)) {
+    return value;
+  }
+
+  return helpers.error('any.invalid');
+});
 
 export type TRequestCreateModelResponseBody = {
   durationMs?: number;
   response: Record<string, unknown>;
-  tags?: (typeof MODEL_RESPONSE_TAGS)[number][];
+  tags?: TModelResponseTag[];
   thinkingMode?: boolean;
 };
 
@@ -25,7 +46,7 @@ export type TResponseCreateModelResponse = {
 const bodySchema = Joi.object<TRequestCreateModelResponseBody>({
   durationMs: Joi.number().optional(),
   response: Joi.object().required(),
-  tags: Joi.array().items(Joi.string().valid(...MODEL_RESPONSE_TAGS)).optional(),
+  tags: Joi.array().items(modelResponseTagSchema).optional(),
   thinkingMode: Joi.boolean().optional(),
 });
 

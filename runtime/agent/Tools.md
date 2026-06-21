@@ -1,9 +1,9 @@
-- You have API tools run_bash, browser, set_context, rag, and ask_user. Use run_bash for shell inside this container (e.g. ls /opt/skills). Never use run_bash to echo JSON as a substitute for other API tools. Never use curl for web search — use browser for /stagehand(...).
+- You have API tools run_bash, browser, set_context, ask_user, and mastermind. Use run_bash for shell inside this container (e.g. ls /opt/skills). Never use run_bash to echo JSON as a substitute for other API tools. Never use curl for web search or HTML scraping — use browser for /stagehand(...). Exception: when stage logic references a documented HTTP API workspace file (e.g. ~/hk_observatory_api.md), use run_bash + curl for JSON/API data.
 - Use browser for web search, page fetch, and structured extract per /opt/skills/stagehand/SKILL.md. Arguments: mode (goto|act|extract|observe|agent), instruction, optional url, schema, maxSteps. Returns { ok, data } or { ok: false, error }.
+- Use mastermind for /mastermind(...) per /opt/skills/mastermind/SKILL.md. Skills: research, extract-info (workspace-file RAG: source + need), extract-knowledge (knowledges/ scan; need/topic only), persist-knowledge (knowledges/ write; key/value/topic only), media-to-text, plan, propose-notification (draft outbound; does not send). For large saved files use extract-info, not the removed rag tool. Never pass source/file/path to extract-knowledge or persist-knowledge. Returns { ok, data } or { ok: false, error }.
 - Use set_context to persist values for the orchestrator (scope global, stage, or types; non-empty key; JSON value; optional operation set or extend).
   - when *extend, you MUST use extend regardless if the original context/var value, 'extend' is mandantory when *extend
   - do not try to validate persisted writeback in the same sandbox run; orchestrator applies context mutation outside the sandbox boundary
-- Use rag for file chunk extraction tasks requiring orchestrator-assisted retrieval.
 - Use ask_user to pause for user choice with strict schema:
   - `version: "askUser.v1"`
   - `kind: "multipleChoice"`

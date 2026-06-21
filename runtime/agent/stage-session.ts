@@ -14,8 +14,10 @@ import {
   type ChatAssistantMessage,
   type ChatToolCall,
   parseBrowserToolArguments,
+  parseMastermindToolArguments,
   parseRunBashToolArguments,
 } from "@/shared/stage-tools";
+import { callMastermindSkill } from "@/shared/mastermind-client";
 
 import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
@@ -34,9 +36,15 @@ type StageRunner = {
   ) => Promise<ChatAssistantMessage[]>;
 };
 
+export type TLocalToolCallRecord = {
+  call: ChatToolCall;
+  resultContent: string;
+};
+
 type StageSessionOptions = {
   maxBashCalls?: number;
   maxTurns?: number;
+  onLocalToolCall?: (record: TLocalToolCallRecord) => Promise<void>;
   resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
 };
@@ -253,6 +261,8 @@ export const runStageSession = async (
             tool_call_id: call.id,
           });
 
+          await options.onLocalToolCall?.({ call, resultContent: commandResult });
+
           continue;
         }
 
@@ -276,16 +286,52 @@ export const runStageSession = async (
             console.log(`[DEBUG] [BROWSER] ${browserArgs.mode}: ${JSON.stringify(browserResult)}\n`);
           }
 
+          const browserContent = JSON.stringify(browserResult);
+
           stageMessages.push({
-            content: JSON.stringify(browserResult),
+            content: browserContent,
             role: "tool",
             tool_call_id: call.id,
           });
 
+          await options.onLocalToolCall?.({ call, resultContent: browserContent });
+
           continue;
         }
 
-        if (name === "set_context" || name === "rag" || name === "ask_user") {
+        if (name === "mastermind") {
+          const mastermindArgs = parseMastermindToolArguments(rawArgs);
+
+          if (!mastermindArgs) {
+            stageMessages.push({
+              content: toolErrorContent("mastermind: invalid arguments"),
+              role: "tool",
+              tool_call_id: call.id,
+            });
+
+            continue;
+          }
+
+          const mastermindResult = await callMastermindSkill(
+            mastermindArgs.skill,
+            mastermindArgs.args,
+            config.cliOptions.sessionId,
+          );
+
+          const mastermindContent = JSON.stringify(mastermindResult);
+
+          stageMessages.push({
+            content: mastermindContent,
+            role: "tool",
+            tool_call_id: call.id,
+          });
+
+          await options.onLocalToolCall?.({ call, resultContent: mastermindContent });
+
+          continue;
+        }
+
+        if (name === "set_context" || name === "ask_user") {
           continue;
         }
 

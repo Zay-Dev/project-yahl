@@ -22,7 +22,14 @@ const writeSse = (res: Response, event: string, payload: unknown) => {
 
 export const streamSessionEvents = async (req: Request, res: Response) => {
   const params = joi.getValidatedOrThrow(paramsSchema, req.params);
-  const stages = await resolveSessionStagesList(params.sessionId);
+
+  let stages: TResponseStageListItem[] = [];
+
+  try {
+    stages = await resolveSessionStagesList(params.sessionId);
+  } catch {
+    stages = [];
+  }
 
   res.status(200);
   res.setHeader('Cache-Control', 'no-cache, no-transform');

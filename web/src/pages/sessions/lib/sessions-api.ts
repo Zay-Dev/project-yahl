@@ -5,6 +5,7 @@ import type {
   TResponseDeleteSession,
   TResponseStageDetail,
   TResponseStageListItem,
+  TResponseVerifyCheckpoint,
 } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { API_BASE_URL } from "@/providers/constants";
@@ -81,4 +82,50 @@ export const deleteSession = async (
   const response = await fetch(url, { method: 'DELETE' });
 
   return parseJson<TResponseDeleteSession>(response);
+};
+
+export const fetchVerifyCheckpoint = async (sessionId: string, verifyId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    `/verify-checkpoints/${encodeURIComponent(verifyId)}`;
+  const response = await fetch(url);
+
+  const json = await parseJson<{ data?: TResponseVerifyCheckpoint } & TResponseVerifyCheckpoint>(response);
+
+  return json.data ?? json;
+};
+
+export const fetchPendingVerifyCheckpoints = async (sessionId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    '/verify-checkpoints?status=pending';
+  const response = await fetch(url);
+
+  const json = await parseJson<{ data?: TResponseVerifyCheckpoint[] } | TResponseVerifyCheckpoint[]>(
+    response,
+  );
+
+  return Array.isArray(json) ? json : (json.data ?? []);
+};
+
+export const resumeVerifyCheckpoint = async (sessionId: string, verifyId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    `/verify-checkpoints/${encodeURIComponent(verifyId)}/resume`;
+  const response = await fetch(url, { method: 'POST' });
+
+  return parseJson<{ ok: true; verifyId: string }>(response);
+};
+
+export const submitVerifyEditAnswer = async (
+  sessionId: string,
+  verifyId: string,
+  body: { freeText?: string; optionIds?: string[] },
+) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    `/verify-checkpoints/${encodeURIComponent(verifyId)}/edit-answer`;
+  const response = await fetch(url, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  return parseJson<{ ok: true; verifyId: string }>(response);
 };

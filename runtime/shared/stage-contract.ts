@@ -41,18 +41,6 @@ export type SetContextToolCallEnvelope = {
   type: "tool_call";
 };
 
-export type RagToolCallEnvelope = {
-  arguments: {
-    lookingFor: string;
-    chunkSize: number;
-    tmp_file_path: string;
-    byteLength: number;
-    context_key: string;
-  };
-  tool: "rag";
-  type: "tool_call";
-};
-
 export type AskUserToolCallEnvelope = {
   arguments: {
     allowMultiple?: boolean;
@@ -74,7 +62,6 @@ export type AskUserToolCallEnvelope = {
 };
 
 export type StageToolCallEnvelope = SetContextToolCallEnvelope |
-  RagToolCallEnvelope |
   AskUserToolCallEnvelope;
 
 export type StageEnvelope = StageResultEnvelope |
@@ -130,32 +117,6 @@ const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
         version: "askUser.v1",
       },
       tool: "ask_user",
-      type: "tool_call",
-    };
-  }
-
-  if (
-    item.tool === "rag" &&
-    typeof parsedArgs.lookingFor === "string" &&
-    typeof parsedArgs.chunkSize === "number" &&
-    typeof parsedArgs.tmp_file_path === "string" &&
-    typeof parsedArgs.byteLength === "number" &&
-    typeof parsedArgs.context_key === "string" &&
-    !!parsedArgs.lookingFor.trim() &&
-    parsedArgs.chunkSize > 0 &&
-    !!parsedArgs.tmp_file_path.trim() &&
-    parsedArgs.byteLength > 0 &&
-    !!parsedArgs.context_key.trim()
-  ) {
-    return {
-      arguments: {
-        lookingFor: parsedArgs.lookingFor,
-        chunkSize: parsedArgs.chunkSize,
-        tmp_file_path: parsedArgs.tmp_file_path,
-        byteLength: parsedArgs.byteLength,
-        context_key: parsedArgs.context_key,
-      },
-      tool: "rag",
       type: "tool_call",
     };
   }

@@ -15,7 +15,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { ActivityIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon } from "lucide-react"
+import { ActivityIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon } from "lucide-react"
 
 const data = {
   user: {
@@ -66,6 +66,14 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       ),
     },
     {
+      title: "Tasks",
+      url: "/tasks",
+      icon: (
+        <ListTodoIcon
+        />
+      ),
+    },
+    {
       title: "Sessions",
       url: "/sessions",
       icon: (
@@ -82,6 +90,14 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       url: "/health",
       icon: (
         <HeartPulseIcon
+        />
+      ),
+    },
+    {
+      title: "Approvals",
+      url: "/platform/approvals",
+      icon: (
+        <ActivityIcon
         />
       ),
     },

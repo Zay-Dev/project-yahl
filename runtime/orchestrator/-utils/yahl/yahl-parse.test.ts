@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 
 const testSkillPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../TASKS/test/SKILL.yahl",
+  "../../../../server/tasks/test/SKILL.yahl",
 );
 
 describe("parseYahlDocument", () => {

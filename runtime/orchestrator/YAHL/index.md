@@ -4,7 +4,7 @@ YAHL is a new language that allow developer to write pseudo code to communicate 
 
 ## SKILL.yahl file format
 
-Each task lives in `TASKS/<id>/SKILL.yahl` as one YAML document:
+Each task lives in `server/tasks/<id>/SKILL.yahl` as one YAML document:
 
 - `name`, `description` — task metadata
 - `types` (optional) — multiline type definitions (`|`), emitted as the first AI stage
@@ -23,6 +23,10 @@ Per-stage fields:
 | `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |
 | `produceContextKeys` | Allowlist for VM / `set_context` writes to global context |
 | `produceTypeKeys` | Allowlist for VM / `set_context` writes to the types bucket |
+| `planMode` | When true, orchestrator calls mastermind plan before the agent stage and writes `~/plans/<requestId>.md` |
+| `verify` | When true, mastermind scores stage output after finish; failure pauses for resume |
+| `verifyMinScore` | Minimum pass score (0–1, default 0.75) |
+| `verifyRubric` | Rubric name or inline string for verify gate |
 
 ### Syntaxes
 
@@ -116,3 +120,4 @@ Execution semantics:
 - when an ask_user call resolves, runtime resumes the same stage and replaces the inline ref with the selected answer value
 - runtime writes the answer onto `askUser[].answer` and into context as `ask_user_<id>_answer`
 - `ask_user_last_answer` is scalar only: numeric option ids become numbers, otherwise string
+- on resume, re-run full `stage.logic` from line 1; use `*answer_of(<id>)` to read `ask_user_<id>_answer` from Input context

@@ -15,6 +15,7 @@ export type TResponseGetSession = {
   createdAt: string;
   deletedAt?: string;
   forkedFrom?: TSessionForkedFrom;
+  liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   result?: unknown;
   resultContextKey?: string;
@@ -106,6 +107,30 @@ export type TResponseAskUserQuestionListItem = {
   status: 'answered' | 'pending';
 };
 
+export type TVerifyResumeAction = 'edit_answer' | 'reask' | 'rerun';
+
+export type TResponseVerifyCheckpoint = {
+  askUserQuestion?: Record<string, unknown>;
+  askUserRef?: string;
+  editedAnswerFreeText?: string;
+  editedAnswerOptionIds?: string[];
+  feedback: string;
+  kind: 'produce_keys' | 'verify';
+  parsedStageSnapshot?: {
+    lines: string;
+    sourceStartLine: number;
+    type: 'loop' | 'plain';
+  };
+  requestId: string;
+  resumeAction?: TVerifyResumeAction;
+  score: number;
+  stage: TYahlStage;
+  stageIndex?: number;
+  status: 'pending' | 'resumed';
+  storageSnapshot: Record<string, unknown>;
+  verifyId: string;
+};
+
 export type TSessionLiveEvent =
   | { type: 'ask-user.answered'; questionId: string; requestId: string }
   | { type: 'ask-user.created'; questionId: string; requestId: string }
@@ -113,7 +138,11 @@ export type TSessionLiveEvent =
   | { type: 'stage.created'; requestId: string }
   | { type: 'stage.finished'; requestId: string }
   | { type: 'stage.model-response'; requestId: string }
-  | { type: 'stage.tool-call'; requestId: string };
+  | { type: 'stage.tool-call'; requestId: string }
+  | { type: 'produce_keys.failed'; requestId: string; verifyId: string }
+  | { type: 'produce_keys.resumed'; requestId: string; verifyId: string }
+  | { type: 'verify.failed'; requestId: string; verifyId: string }
+  | { type: 'verify.resumed'; requestId: string; verifyId: string };
 
 export type TStageListSource = {
   contextAfter?: Record<string, unknown>;

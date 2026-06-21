@@ -26,10 +26,16 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   contextMode: Joi.boolean().optional(),
   logic: Joi.string().trim().required(),
   loopSetup: Joi.string().trim().pattern(LOOP_SETUP_PATTERN).optional(),
+  planMode: Joi.boolean().optional(),
   produceContextKeys: stringArraySchema.optional(),
   produceTypeKeys: stringArraySchema.optional(),
   temperature: Joi.number().min(0).max(2).optional(),
   updateContextKeys: stringArraySchema.optional(),
+  verify: Joi.boolean().optional(),
+  verifyMinScore: Joi.number().min(0).max(1).optional(),
+  verifyResume: Joi.boolean().optional(),
+  verifyRubric: Joi.string().trim().optional(),
+  version: Joi.number().integer().min(1).optional(),
 })
   .custom((value, helpers) => {
     if (value.contextMode === true && value.conditionMode === true) {

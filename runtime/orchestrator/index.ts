@@ -2,17 +2,24 @@ import type { IPublisher } from '@/shared/transports/-types';
 
 import config from "./config";
 
-import fs from 'fs/promises';
 import Redis from "ioredis";
 
 import { RedisPublisher } from '@/shared/transports/redis';
 
-import { buildAgent, composeDown, composeUp, writeSharedOneCliOverride } from './-docker';
+import {
+  buildAgent,
+  composeUp,
+  resolvePublishedVncPort,
+  shutdownAgent,
+  writeAgentSessionOverride,
+  writeSharedOneCliOverride,
+} from './-docker';
 import { program, resolveSessionId, runCommand } from './-cli';
 
-import { deriveTaskNameFromYahl, parseYahlTask } from './-utils/yahl';
+import { parseYahlTask } from './-utils/yahl';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
+import { ensureSessionWorkspace } from './-utils/workspace-paths';
 
 import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
@@ -20,7 +27,10 @@ import { initForkSessionManager } from './-runners/fork/manager';
 
 import { runForkSession } from './-runners/fork';
 import { runAskUserResume } from './-runners/resume';
-import { resolveTaskPath } from './-runners/path';
+import { runVerifyResume } from './-runners/verify-resume';
+import { runProduceKeysResume } from './-runners/produce-keys-resume';
+import { fetchTaskYahl } from './-tasks/session-api';
+import { ProduceKeysFailedError, VerifyFailedError } from './-verify';
 
 declare global {
   var sessionId: string;
@@ -58,20 +68,44 @@ const isStagehandLiveview = () => {
   return value === "1" || value === "true";
 };
 
-const _composeUp = async (agentName: string) => {
+const _shutdownAgent = (
+  agentName: string,
+  sessionId: string,
+) => shutdownAgent(agentName, sessionId);
+
+const _composeUp = async (
+  agentName: string,
+  sessionId: string,
+  tracker: ReturnType<typeof createSessionEventTracker>,
+) => {
+  await ensureSessionWorkspace(sessionId);
+
+  const liveView = isStagehandLiveview();
+
+  const sessionOverrideFilePath = await writeAgentSessionOverride({
+    publishVnc: liveView,
+    sessionId,
+  });
   const onecliOverrideFilePath = await writeSharedOneCliOverride();
 
   process.env.AGENT_CONTAINER_NAME = agentName;
   process.env.AGENT_SESSION_ID = sessionId;
 
-  if (isStagehandLiveview()) {
-    console.log("[stagehand] live view enabled — connect VNC to localhost:5900");
-  }
-
   await composeUp({
+    composeOverrideFilePaths: [
+      sessionOverrideFilePath,
+      ...(onecliOverrideFilePath ? [onecliOverrideFilePath] : []),
+    ],
     composeProjectName: agentName,
-    ...(onecliOverrideFilePath ? { onecliOverrideFilePath } : {}),
   });
+
+  if (liveView) {
+    const vncHostPort = await resolvePublishedVncPort(agentName);
+
+    console.log(`[stagehand] live view enabled — VNC → localhost:${vncHostPort}`);
+    await tracker.patchLiveViewVncPort(sessionId, vncHostPort);
+    await tracker.flush();
+  }
 };
 
 runCommand.action(async options => {
@@ -90,24 +124,22 @@ runCommand.action(async options => {
   try {
     buildAgent();
 
-    await composeDown(agentName);
-    await _composeUp(agentName);
+    await _shutdownAgent(agentName, sessionId);
+    await _composeUp(agentName, sessionId, tracker);
     await _setupPublisher(tracker, sessionId);
 
-    if (options.taskPath) {
-      const taskYahlPath = await resolveTaskPath(options.taskPath);
-      const yahl = await fs.readFile(taskYahlPath, 'utf-8');
-      const { stages, resultContextKey } = parseYahlTask(yahl);
-      const taskId = options.taskId ?? deriveTaskNameFromYahl(yahl, taskYahlPath);
+    if (options.taskId) {
+      const task = await fetchTaskYahl(options.taskId);
+      const { stages, resultContextKey } = parseYahlTask(task.yahl);
 
       await tracker.registerSession(sessionId, {
         parsedStages: stages,
         resultContextKey,
-        taskId,
-        taskYahlPath,
+        taskId: task.taskId,
+        taskYahlPath: task.path,
       });
 
-      const { storage } = await runYahl(yahl, { stages });
+      const { storage } = await runYahl(task.yahl, { stages });
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.forkrunId) {
@@ -127,11 +159,31 @@ runCommand.action(async options => {
       const { resultContextKey, storage } = await runAskUserResume(sessionId, options.resumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);
+    } else if (options.verifyResumeId) {
+      const { resultContextKey, storage } = await runVerifyResume(sessionId, options.verifyResumeId);
+
+      await publishSessionResult(sessionId, resultContextKey, storage);
+    } else if (options.produceKeysResumeId) {
+      const { resultContextKey, storage } = await runProduceKeysResume(sessionId, options.produceKeysResumeId);
+
+      await publishSessionResult(sessionId, resultContextKey, storage);
     } else {
-      throw new Error('No task path, resume id, or forkrun id provided');
+      throw new Error('No task id, resume id, verify resume id, produce-keys resume id, or forkrun id provided');
     }
   } catch (error) {
     if (error instanceof AskUserPausedError) {
+      await tracker.flush();
+      process.exit(0);
+      return;
+    }
+
+    if (error instanceof VerifyFailedError) {
+      await tracker.flush();
+      process.exit(0);
+      return;
+    }
+
+    if (error instanceof ProduceKeysFailedError) {
       await tracker.flush();
       process.exit(0);
       return;
@@ -142,7 +194,7 @@ runCommand.action(async options => {
     throw error;
   }
 
-  await composeDown(agentName);
+  await _shutdownAgent(agentName, sessionId);
   await publisher.close();
   process.exit(0);
 });

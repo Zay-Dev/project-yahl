@@ -37,6 +37,14 @@
       "import": [
         "./dist/src/modules/sessions/-api-types.js"
       ]
+    },
+    "./modules/tasks/-api-types": {
+      "development": [
+        "./src/modules/tasks/-api-types.ts"
+      ],
+      "import": [
+        "./dist/src/modules/tasks/-api-types.js"
+      ]
     }
   },
   "scripts": {

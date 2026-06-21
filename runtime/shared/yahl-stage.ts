@@ -18,10 +18,16 @@ export interface YahlStage {
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
+  planMode?: boolean;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   temperature?: number;
   updateContextKeys?: string[];
+  verify?: boolean;
+  verifyMinScore?: number;
+  verifyResume?: boolean;
+  verifyRubric?: string;
+  version?: number;
 }
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
@@ -139,6 +145,22 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     }
   }
 
+  if (stage.verifyMinScore !== undefined) {
+    const score = Number(stage.verifyMinScore);
+
+    if (!Number.isFinite(score) || score < 0 || score > 1) {
+      throw new Error(`${label}.verifyMinScore: must be a number from 0 to 1`);
+    }
+  }
+
+  if (stage.version !== undefined) {
+    const version = Number(stage.version);
+
+    if (!Number.isInteger(version) || version < 1) {
+      throw new Error(`${label}.version: must be a positive integer`);
+    }
+  }
+
   if (stage.conditionMode === true && !stage.logic.includes("IF:")) {
     throw new Error(`${label}: conditionMode logic must contain IF:`);
   }
@@ -174,8 +196,14 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     ...(stage.temperature !== undefined ? { temperature: Number(stage.temperature) } : {}),
     ...(isStringArray(stage.contextKeys) ? { contextKeys: stage.contextKeys } : {}),
     ...(isStringArray(stage.updateContextKeys) ? { updateContextKeys: stage.updateContextKeys } : {}),
+    ...(stage.planMode === true ? { planMode: true } : {}),
     ...(isStringArray(stage.produceContextKeys) ? { produceContextKeys: stage.produceContextKeys } : {}),
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
+    ...(stage.verify === true ? { verify: true } : {}),
+    ...(stage.verifyMinScore !== undefined ? { verifyMinScore: Number(stage.verifyMinScore) } : {}),
+    ...(stage.verifyResume === false ? { verifyResume: false } : {}),
+    ...(typeof stage.verifyRubric === 'string' ? { verifyRubric: stage.verifyRubric.trim() } : {}),
+    ...(stage.version !== undefined ? { version: Number(stage.version) } : {}),
   };
 };
 

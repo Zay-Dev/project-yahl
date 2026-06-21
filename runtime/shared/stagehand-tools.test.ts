@@ -86,4 +86,19 @@ describe("deriveModelResponseTags", () => {
   it("returns unknown for empty content and no tools", () => {
     assert.deepEqual(deriveModelResponseTags({ content: "", tool_calls: [] }), ["unknown"]);
   });
+
+  it("returns tool and mastermind skill tag for mastermind calls", () => {
+    assert.deepEqual(
+      deriveModelResponseTags({
+        content: null,
+        tool_calls: [{
+          function: {
+            arguments: JSON.stringify({ args: { topic: 'x' }, skill: 'research' }),
+            name: 'mastermind',
+          },
+        }],
+      }),
+      ["tool", "mastermind:research"],
+    );
+  });
 });

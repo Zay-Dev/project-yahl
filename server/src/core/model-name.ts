@@ -1,7 +1,10 @@
 const _modelsName = {
+  CronJobs: 'CronJobs',
   ForkSessions: 'ForkSessions',
+  PlatformProposals: 'PlatformProposals',
   SessionAskUserQuestions: 'SessionAskUserQuestions',
   SessionModelResponses: 'SessionModelResponses',
+  SessionVerifyCheckpoints: 'SessionVerifyCheckpoints',
   Sessions: 'Sessions',
   SessionToolCalls: 'SessionToolCalls',
   Stages: 'Stages',

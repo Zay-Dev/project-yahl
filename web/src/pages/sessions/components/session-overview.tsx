@@ -3,6 +3,7 @@ import type { TResponseGetSession } from "@project-yahl/server/modules/sessions/
 import { Link } from "react-router";
 
 import { SessionDeleteDialog } from "@/pages/sessions/components/session-delete-dialog";
+import { SessionLiveViewMenu } from "@/pages/sessions/components/session-live-view-menu";
 import { SessionTitle } from "@/pages/sessions/components/session-title";
 
 type TSessionOverviewProps = {
@@ -39,6 +40,9 @@ export function SessionOverview({ session }: TSessionOverviewProps) {
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {typeof session.liveViewVncPort === 'number' && session.liveViewVncPort > 0 ? (
+            <SessionLiveViewMenu port={session.liveViewVncPort} />
+          ) : null}
           <SessionDeleteDialog
             deletedAt={session.deletedAt}
             navigateAfterDelete

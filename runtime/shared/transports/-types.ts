@@ -61,11 +61,12 @@ export type TAskUserResumeFrom = {
 };
 
 export type TRequestEnvelope = {
-  requestId: string;
   context: TStorage;
-  stage: YahlStage;
   contextAfter?: TStorage;
+  requestId: string;
   resumeFrom?: TAskUserResumeFrom;
+  stage: YahlStage;
+  systemAppend?: string;
   temperature?: number;
 };
 
@@ -106,18 +107,18 @@ export interface IPublisher extends IBase {
   pushRequest: (
     context: TStorage,
     stage: YahlStage,
-    temperature: number | undefined,
+    requestId: string,
     options?: {
       contextAfter?: TStorage | undefined,
       executionMeta?: StageExecutionMeta,
       loopMeta?: TLoopMeta | undefined,
       persistedStage?: YahlStage,
-      requestId?: string,
       resumeFrom?: TAskUserResumeFrom,
       skipStageCreate?: boolean,
+      systemAppend?: string,
+      temperature?: number,
     },
   ) => Promise<{
-    requestId: string,
     wait: () => Promise<void>,
     getWaitForToolCall: (
       callback: (toolCall: TChatToolCall) => Promise<TToolCallResult>

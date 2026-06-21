@@ -54,6 +54,60 @@ describe('createSessionEventTracker', () => {
     );
   });
 
+  it('surfaces HTTP failures from patchLiveViewVncPort via flush', async () => {
+    process.env.SESSION_API_BASE_URL = 'http://localhost:4000';
+
+    const tracker = createSessionEventTracker();
+
+    await withMockFetch(
+      (url, init) => {
+        if (init?.method === 'PATCH' && url.endsWith('/api/sessions/sess-vnc')) {
+          return new Response('not found', { status: 404, statusText: 'Not Found' });
+        }
+
+        return new Response(JSON.stringify({ ok: true }), { status: 202 });
+      },
+      async () => {
+        tracker.patchLiveViewVncPort('sess-vnc', 5901);
+
+        await assert.rejects(
+          tracker.flush(),
+          (error: unknown) => {
+            assert.ok(error instanceof SessionEventTrackerError);
+            assert.equal(error.status, 404);
+
+            return true;
+          },
+        );
+      },
+    );
+  });
+
+  it('PATCHes liveViewVncPort on flush', async () => {
+    process.env.SESSION_API_BASE_URL = 'http://localhost:4000';
+
+    const tracker = createSessionEventTracker();
+    let patchedBody: unknown;
+
+    await withMockFetch(
+      (url, init) => {
+        if (init?.method === 'PATCH' && url.endsWith('/api/sessions/sess-vnc-ok')) {
+          patchedBody = JSON.parse(String(init.body));
+
+          return new Response(JSON.stringify({ ok: true }), { status: 202 });
+        }
+
+        return new Response(JSON.stringify({ ok: true }), { status: 202 });
+      },
+      async () => {
+        tracker.patchLiveViewVncPort('sess-vnc-ok', 5902);
+        await tracker.flush();
+
+        assert.deepEqual(patchedBody, { liveViewVncPort: 5902 });
+      },
+    );
+  });
+
   it('logs but continues the queue when non-critical POST fails', async () => {
     process.env.SESSION_API_BASE_URL = 'http://localhost:4000';
 

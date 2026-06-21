@@ -72,6 +72,7 @@ services:
       - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
       - ./workspace:${HOST_REPO_ROOT}/workspace
+      - ./server/tasks:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/server/tasks
       - /var/run/docker.sock:/var/run/docker.sock
 
   web:
@@ -85,6 +86,55 @@ services:
       - "5173:80"
     depends_on:
       - server
+
+  mastermind:
+    container_name: mastermind
+    build:
+      context: ..
+      dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/mastermind/Dockerfile
+      args:
+        OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
+    env_file:
+      - .env
+    environment:
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      MASTERMIND_DATA_ROOT: /data
+      MASTERMIND_PORT: "4100"
+      SESSION_API_BASE_URL: http://server:4000
+      WORKSPACE_ROOT: /root
+    ports:
+      - "4100:4100"
+    volumes:
+      - ./workspace:/root
+      - ./data/mastermind:/data
+      - ./mastermind/skills:/opt/mastermind-skills:ro
+    depends_on:
+      - server
+
+  worker:
+    build:
+      context: ..
+      dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/worker/Dockerfile
+      args:
+        OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
+    env_file:
+      - .env
+    environment:
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      MASTERMIND_API_URL: http://mastermind:4100
+      REDIS_URL: redis://redis:6379
+      RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
+      SESSION_API_BASE_URL: http://server:4000
+      WORKER_BATCH_RUNS_ROOT: /tmp/yahl-batch-runs
+      WORKER_POLL_INTERVAL_MS: "5000"
+    volumes:
+      - ./workspace:/root
+      - ./data/mastermind:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - server
+      - redis
+      - mastermind
 
 networks:
   default:

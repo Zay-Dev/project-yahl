@@ -13,6 +13,7 @@ export type TRequestRegisterSessionParams = {
 };
 
 export type TRequestRegisterSessionBody = {
+  liveViewVncPort?: number;
   parsedStages: TParsedStage[];
   resultContextKey?: string;
   taskId: string;
@@ -24,6 +25,7 @@ export type TResponseRegisterSession = {
 };
 
 export type TRequestPatchSessionBody = {
+  liveViewVncPort?: number | null;
   result?: unknown;
 };
 
@@ -32,15 +34,20 @@ export type TResponsePatchSession = {
 };
 
 const patchBodySchema = Joi.object<TRequestPatchSessionBody>({
+  liveViewVncPort: Joi.number().integer().min(1).max(65535).allow(null).optional(),
   result: Joi.any().optional(),
 });
 
 const bodySchema = Joi.object<TRequestRegisterSessionBody>({
+  liveViewVncPort: Joi.number().integer().min(1).max(65535).optional(),
   parsedStages: Joi.array().items(parsedStageSchema).min(1).required(),
   resultContextKey: Joi.string().trim().optional(),
   taskId: Joi.string().trim().required(),
   taskYahlPath: Joi.string().trim().required(),
 });
+
+const isLiveViewPortOnlyPatch = (body: TRequestPatchSessionBody) =>
+  'liveViewVncPort' in body && !('result' in body);
 
 const paramsSchema = Joi.object<TRequestRegisterSessionParams>({
   sessionId: Joi.string().trim().required(),
@@ -64,6 +71,7 @@ export const registerSession = [
             taskYahlPath: body.taskYahlPath,
             updatedAt: now,
             ...(body.resultContextKey ? { resultContextKey: body.resultContextKey } : {}),
+            ...(body.liveViewVncPort ? { liveViewVncPort: body.liveViewVncPort } : {}),
           },
           $setOnInsert: {
             sessionId: params.sessionId,
@@ -89,17 +97,34 @@ export const patchSession = [
     .next(async (express, { body, params }) => {
       const now = new Date();
 
-      await Queries.hasExactOne(modelSession, { sessionId: params.sessionId });
-
-      await modelSession.updateOne(
-        { sessionId: params.sessionId },
-        {
-          $set: {
-            ...('result' in body ? { result: body.result } : {}),
-            updatedAt: now,
+      if (isLiveViewPortOnlyPatch(body)) {
+        await modelSession.updateOne(
+          { sessionId: params.sessionId },
+          {
+            $set: {
+              liveViewVncPort: body.liveViewVncPort,
+              updatedAt: now,
+            },
+            $setOnInsert: {
+              sessionId: params.sessionId,
+            },
           },
-        },
-      );
+          { upsert: true },
+        );
+      } else {
+        await Queries.hasExactOne(modelSession, { sessionId: params.sessionId });
+
+        await modelSession.updateOne(
+          { sessionId: params.sessionId },
+          {
+            $set: {
+              ...('result' in body ? { result: body.result } : {}),
+              ...('liveViewVncPort' in body ? { liveViewVncPort: body.liveViewVncPort } : {}),
+              updatedAt: now,
+            },
+          },
+        );
+      }
 
       emitSessionEvent(params.sessionId, { type: 'session.updated' });
 

@@ -140,9 +140,19 @@ export const startRedisDaemon = async () => {
     const envelope = await subscriber.waitForRequest();
     if (!envelope) continue;
 
-    const { context, contextAfter, requestId, resumeFrom, stage, temperature } = envelope;
+    const { context, contextAfter, requestId, resumeFrom, stage, systemAppend, temperature } = envelope;
     const effectiveTemperature = temperature ?? stage.temperature;
     const { end, error, toolCall, onModelResponse } = subscriber.getReply(requestId);
+
+    const stageMessages = systemAppend
+      ? [
+        ...messages,
+        {
+          content: systemAppend.trim(),
+          role: "system" as const,
+        },
+      ]
+      : messages;
 
     const _handleContextOutput = async (
       model: TFastModel,
@@ -205,7 +215,7 @@ export const startRedisDaemon = async () => {
             stage: stageSpec,
             temperature: effectiveTemperature,
           },
-          messages,
+          stageMessages,
           {
             runCommand,
             chatWithTools: async (messages, opts) => {
@@ -224,7 +234,7 @@ export const startRedisDaemon = async () => {
                 `[agent-daemon] chat turn end requestId=${requestId} turn=${turn} durationMs=${durationMs} toolCalls=${toolCallCount}\n`,
               );
 
-              const allowedTools = ['set_context', 'ask_user', 'rag'];
+              const allowedTools = ['set_context', 'ask_user'];
 
               await onModelResponse({
                 ...result.response,
@@ -248,6 +258,9 @@ export const startRedisDaemon = async () => {
             },
           },
           {
+            onLocalToolCall: async ({ call }) => {
+              await toolCall(call);
+            },
             resumeFrom,
             resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,
           },

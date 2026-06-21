@@ -1,9 +1,27 @@
-import "dotenv/config";
-
-import url from "url";
+import dotenv from "dotenv";
+import fs from "fs";
 import path from "path";
+import url from "url";
 
 const _moduleDir = path.dirname(url.fileURLToPath(import.meta.url));
+
+dotenv.config();
+
+const _resolveRepoRootForEnv = () => {
+  const hostRepoRoot = process.env.HOST_REPO_ROOT?.trim();
+
+  if (hostRepoRoot) {
+    return path.resolve(hostRepoRoot);
+  }
+
+  return path.resolve(_moduleDir, '../..');
+};
+
+const _rootEnvFile = path.join(_resolveRepoRootForEnv(), ".env");
+
+if (fs.existsSync(_rootEnvFile)) {
+  dotenv.config({ path: _rootEnvFile });
+}
 
 const __dirname = (() => {
   const value = process.cwd() || _moduleDir;
