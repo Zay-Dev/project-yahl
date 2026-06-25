@@ -19,7 +19,7 @@ const checkpoint = (requestId: string, score = 0.72) => ({
   verifyId: `verify-${requestId}`,
 });
 
-const stage = (requestId: string, status: 'finished' | 'running') => ({
+const stage = (requestId: string, status: 'finished' | 'running' | 'verifying') => ({
   createdAt: '2026-06-21T12:00:00.000Z',
   logicPreview: 'logic',
   modelCallCount: 1,
@@ -71,5 +71,43 @@ describe('resolveVerifyBannerState', () => {
     );
 
     assert.equal(state, null);
+  });
+
+  it('shows infra_busy for mastermind infrastructure feedback even when agent is active', () => {
+    const state = resolveVerifyBannerState(
+      [{
+        ...checkpoint('req-3', 0),
+        feedback: 'Agent agent-abc already has active run',
+      }],
+      [stage('req-3', 'running')],
+      { liveViewVncPort: 5901 },
+    );
+
+    assert.equal(state?.mode, 'infra_busy');
+    assert.equal(state?.checkpoint.requestId, 'req-3');
+  });
+
+  it('hides banner while stage is verifying', () => {
+    const state = resolveVerifyBannerState(
+      [checkpoint('req-3')],
+      [stage('req-3', 'verifying')],
+      { liveViewVncPort: 5901 },
+    );
+
+    assert.equal(state, null);
+  });
+
+  it('shows infra_busy when checkpoint unavailable flag is set', () => {
+    const state = resolveVerifyBannerState(
+      [{
+        ...checkpoint('req-3', 0),
+        feedback: 'verification service unavailable',
+        unavailable: true,
+      }],
+      [stage('req-3', 'running')],
+      { liveViewVncPort: 5901 },
+    );
+
+    assert.equal(state?.mode, 'infra_busy');
   });
 });

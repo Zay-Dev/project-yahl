@@ -15,6 +15,12 @@ type TStageLoopMeta = {
 
 import { storageFromSnapshot } from '@/orchestrator/-context/storage-context';
 
+export type TReplayStageVerifyResult = {
+  feedback: string;
+  pass: boolean;
+  score: number;
+};
+
 export type TReplayStageRow = {
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
@@ -23,6 +29,7 @@ export type TReplayStageRow = {
   stage: YahlStage;
   stageId: string;
   temperature?: number;
+  verifyResult?: TReplayStageVerifyResult;
 };
 
 export type TForkSessionSetup = {

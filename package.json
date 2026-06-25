@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
+    "build:shared": "pnpm --filter @project-yahl/shared build",
     "compose:down": "docker compose down",
     "compose:up": "docker compose up -d mongo redis onecli onecli_postgres mastermind worker",
     "compose:up:all": "docker compose up -d --build mongo redis onecli onecli_postgres server web",

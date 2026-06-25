@@ -42,8 +42,10 @@ export const stripProduceKeysFromStorage = (
 export const buildVerifyRecoverySystemAppend = (
   params: {
     feedback: string;
+    produceContextKeys?: string[];
     resumeAction: TVerifyResumeAction;
     score: number;
+    updateContextKeys?: string[];
   },
 ) => {
   const parts = [
@@ -52,8 +54,16 @@ export const buildVerifyRecoverySystemAppend = (
   ];
 
   if (params.resumeAction === 'rerun') {
+    const writeKeys = [
+      ...(params.produceContextKeys ?? []),
+      ...(params.updateContextKeys ?? []),
+    ];
+    const uniqueWriteKeys = [...new Set(writeKeys)];
+
     parts.push(
-      'Re-run this stage and fix the output. Use set_context to write every produceContextKeys value before finishing.',
+      uniqueWriteKeys.length > 0
+        ? `Re-run this stage and fix the output. Use set_context to write these keys before finishing: ${uniqueWriteKeys.join(', ')}.`
+        : 'Re-run this stage and fix the output. Use set_context to write every required context key before finishing.',
     );
   }
 

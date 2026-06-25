@@ -58,7 +58,7 @@ stages:
         const identity_profile = assessment.profile;
         const stage1_qa_log = onboarding_qa_1 || [];
       ELSE;
-        const batches = /mastermind(design-questions, stage: 1, gaps: assessment.gaps, priorQa: onboarding_qa_1, goal: identity and background);
+        const batches = /mastermind(design-questions, stage: 1, mission: Build a personal assistant user profile for future teamwork — questions are about the USER not about onboarding mechanics, gaps: assessment.gaps, priorQa: onboarding_qa_1, goal: identity and background);
         const batchAnswers = /ask-user-batch(batches);
         const stage1_qa_log = *merge_qa(onboarding_qa_1, batchAnswers);
         const identity_profile = *build_identity_profile(stage1_qa_log, knowledge);
@@ -82,7 +82,7 @@ stages:
         const goals_profile = assessment.profile;
         const stage2_qa_log = onboarding_qa_2 || [];
       ELSE;
-        const batches = /mastermind(design-questions, stage: 2, gaps: assessment.gaps, priorQa: onboarding_qa_2, goal: goals and priorities);
+        const batches = /mastermind(design-questions, stage: 2, mission: Build a personal assistant user profile for future teamwork — questions are about the USER not about onboarding mechanics, gaps: assessment.gaps, priorQa: onboarding_qa_2, goal: goals and priorities);
         const batchAnswers = /ask-user-batch(batches);
         const stage2_qa_log = *merge_qa(onboarding_qa_2, batchAnswers);
         const goals_profile = *build_goals_profile(stage2_qa_log, knowledge, identity_profile);
@@ -107,7 +107,7 @@ stages:
         const preferences_profile = assessment.profile;
         const stage3_qa_log = onboarding_qa_3 || [];
       ELSE;
-        const batches = /mastermind(design-questions, stage: 3, gaps: assessment.gaps, priorQa: onboarding_qa_3, goal: preferences and constraints);
+        const batches = /mastermind(design-questions, stage: 3, mission: Build a personal assistant user profile for future teamwork — questions are about the USER not about onboarding mechanics, gaps: assessment.gaps, priorQa: onboarding_qa_3, goal: preferences and constraints);
         const batchAnswers = /ask-user-batch(batches);
         const stage3_qa_log = *merge_qa(onboarding_qa_3, batchAnswers);
         const preferences_profile = *build_preferences_profile(stage3_qa_log, knowledge);
@@ -132,7 +132,7 @@ stages:
         const communication_profile = assessment.profile;
         const stage4_qa_log = onboarding_qa_4 || [];
       ELSE;
-        const batches = /mastermind(design-questions, stage: 4, gaps: assessment.gaps, priorQa: onboarding_qa_4, goal: communication style);
+        const batches = /mastermind(design-questions, stage: 4, mission: Build a personal assistant user profile for future teamwork — questions are about the USER not about onboarding mechanics, gaps: assessment.gaps, priorQa: onboarding_qa_4, goal: communication style);
         const batchAnswers = /ask-user-batch(batches);
         const stage4_qa_log = *merge_qa(onboarding_qa_4, batchAnswers);
         const communication_profile = *build_communication_profile(stage4_qa_log, knowledge);

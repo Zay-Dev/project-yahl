@@ -8,6 +8,7 @@ import { fetchTaskYahl } from '@/orchestrator/-tasks/session-api';
 import { fetchVerifyCheckpoint } from '@/orchestrator/-verify/session-api';
 import { deriveTaskIdFromYahlPath, parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
+import { seedDefaultContext } from '@/orchestrator/-context/default-context';
 
 export const deserializeCheckpointStorage = (snapshot: Record<string, unknown>): TStorage => {
   const context = snapshot.context;
@@ -25,6 +26,8 @@ export const deserializeCheckpointStorage = (snapshot: Record<string, unknown>):
       storage.types.set(key, value);
     });
   }
+
+  seedDefaultContext(storage);
 
   return storage;
 };

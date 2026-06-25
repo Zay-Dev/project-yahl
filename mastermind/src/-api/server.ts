@@ -2,15 +2,20 @@ import http from 'http';
 
 import {
   notificationProposalSchema,
+  requestStatusQuerySchema,
   settingProposalSchema,
   skillNames,
   skillRequestSchema,
-  verifyRequestSchema,
 } from '../../contract/index.js';
+
+import { isInternalRequest } from './internal-auth.js';
 
 import { config } from '../config.js';
 import type { TMastermindAgent } from '../-sdk/agent.js';
-import { postProposal, runSkill, runVerify } from '../-handlers/skills.js';
+import { buildRequestStatusPayload, getActiveSkillActivity, getRequestActivity } from '../-sdk/request-activity.js';
+import { runSelfCheck } from '../-sdk/self-check.js';
+import { postProposal, runSkill } from '../-handlers/skills.js';
+import { rebuildPersistedPathsFromTopic } from '../-knowledge/index.js';
 
 const readJsonBody = async (req: http.IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = [];
@@ -41,7 +46,65 @@ export const createApiServer = (agent: TMastermindAgent) => {
       const { pathname } = url;
 
       if (req.method === 'GET' && pathname === '/health') {
-        sendJson(res, 200, { agent: agent.status, ok: true, service: 'mastermind' });
+        const ready = agent.status === 'ready';
+        sendJson(res, ready ? 200 : 503, {
+          agent: agent.status,
+          ok: ready,
+          service: 'mastermind',
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/v1/internal/self-check') {
+        if (!isInternalRequest(req)) {
+          sendJson(res, 403, { error: 'forbidden' });
+          return;
+        }
+
+        const ping = url.searchParams.get('ping') === '1';
+        const result = await runSelfCheck(agent, { ping });
+        sendJson(res, result.ok ? 200 : 503, { ...result, service: 'mastermind' });
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/v1/request-status') {
+        const parsed = requestStatusQuerySchema.safeParse({
+          invocationId: url.searchParams.get('invocationId') ?? undefined,
+          requestId: url.searchParams.get('requestId') ?? undefined,
+          sessionId: url.searchParams.get('sessionId') ?? undefined,
+        });
+
+        if (!parsed.success) {
+          sendJson(res, 400, { error: parsed.error.message });
+          return;
+        }
+
+        const request = getRequestActivity(
+          parsed.data.sessionId,
+          parsed.data.requestId,
+          parsed.data.invocationId,
+        );
+        const payload = buildRequestStatusPayload({
+          agent: agent.status,
+          request,
+        });
+
+        sendJson(res, 200, payload);
+        return;
+      }
+
+      const persistedIndexMatch = pathname.match(/^\/v1\/knowledges\/([^/]+)\/persisted-index$/);
+
+      if (req.method === 'GET' && persistedIndexMatch) {
+        const topic = decodeURIComponent(persistedIndexMatch[1] ?? '').trim();
+
+        if (!topic) {
+          sendJson(res, 400, { error: 'topic required' });
+          return;
+        }
+
+        const persisted = await rebuildPersistedPathsFromTopic(topic);
+        sendJson(res, 200, { ok: true, persisted });
         return;
       }
 
@@ -65,21 +128,27 @@ export const createApiServer = (agent: TMastermindAgent) => {
           return;
         }
 
-        const result = await runSkill(agent, name, parsed.data);
-        sendJson(res, result.ok ? 200 : 500, result);
-        return;
-      }
+        const sessionId = parsed.data.sessionId?.trim();
+        const requestId = parsed.data.requestId?.trim();
 
-      if (req.method === 'POST' && pathname === '/v1/verify') {
-        const parsed = verifyRequestSchema.safeParse(await readJsonBody(req));
+        if (sessionId && requestId) {
+          const active = getActiveSkillActivity(sessionId, requestId);
 
-        if (!parsed.success) {
-          sendJson(res, 400, { error: parsed.error.message });
-          return;
+          if (
+            active
+            && active.invocationId
+            && active.invocationId !== parsed.data.invocationId?.trim()
+          ) {
+            sendJson(res, 409, buildRequestStatusPayload({
+              agent: agent.status,
+              request: active,
+            }));
+            return;
+          }
         }
 
-        const result = await runVerify(agent, parsed.data);
-        sendJson(res, 200, result);
+        const result = await runSkill(agent, name, parsed.data);
+        sendJson(res, result.ok ? 200 : 500, result);
         return;
       }
 

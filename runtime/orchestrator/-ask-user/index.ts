@@ -71,6 +71,10 @@ export const handleAskUserToolCall = async (params: {
 
   await globalThis.sessionTracker?.flush?.();
 
+  console.log(
+    `[yahl-diag] ask-user pause requestId=${params.requestId} sessionId=${params.sessionId} pid=${process.pid}`,
+  );
+
   params.onPause();
   await shutdownAgent(params.agentName, params.sessionId);
 

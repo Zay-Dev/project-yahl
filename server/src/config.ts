@@ -12,6 +12,7 @@ type TConfig = {
   corsOrigin: string[] | true;
   cwd: string;
   hideErrorStack: boolean;
+  mastermindApiUrl: string;
   mongoDb: {
     url: string;
   };
@@ -36,6 +37,7 @@ export const config: TConfig = {
   corsOrigin: corsOrigin.length > 0 ? corsOrigin : true,
   cwd: path.resolve(import.meta.dirname, '..'),
   hideErrorStack: process.env.HIDE_ERROR_STACK === 'true',
+  mastermindApiUrl: (process.env.MASTERMIND_API_URL?.trim() || 'http://mastermind:4100').replace(/\/+$/, ''),
   mongoDb,
   requestTimeoutInSeconds: parseInt(process.env.REQUEST_TIMEOUT_IN_SECONDS || '60', 10),
   servers,

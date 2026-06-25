@@ -21,6 +21,7 @@ export type TVerifyCheckpoint = {
   stageIndex?: number;
   status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
+  unavailable?: boolean;
   verifyId: string;
 };
 
@@ -65,6 +66,25 @@ export const postVerifyPass = async (
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`verify pass failed: ${res.status} ${text}`);
+  }
+};
+
+export const postVerifyStart = async (
+  sessionId: string,
+  requestId: string,
+): Promise<void> => {
+  const res = await fetch(
+    `${sessionApiBaseUrl()}/api/sessions/${encodeURIComponent(sessionId)}` +
+    `/stages/${encodeURIComponent(requestId)}/verify-start`,
+    {
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    },
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`verify start failed: ${res.status} ${text}`);
   }
 };
 

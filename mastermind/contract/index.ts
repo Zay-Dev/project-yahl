@@ -2,8 +2,27 @@ import { z } from 'zod';
 
 export const WORKSPACE_CONTAINER_ROOT = '/root';
 
-export const resolveWorkspacePath = (input: string): string => {
+export const resolveSessionWorkspacePath = (input: string, sessionId: string): string => {
   const trimmed = input.trim();
+  const sessionRoot = `${WORKSPACE_CONTAINER_ROOT}/sessions/${sessionId}`;
+
+  if (trimmed.startsWith('~/')) {
+    return `${sessionRoot}/${trimmed.slice(2)}`;
+  }
+
+  if (trimmed === '~') {
+    return sessionRoot;
+  }
+
+  return trimmed;
+};
+
+export const resolveWorkspacePath = (input: string, sessionId?: string): string => {
+  const trimmed = input.trim();
+
+  if (sessionId && (trimmed.startsWith('~/') || trimmed === '~')) {
+    return resolveSessionWorkspacePath(trimmed, sessionId);
+  }
 
   if (trimmed.startsWith('~/')) {
     return `${WORKSPACE_CONTAINER_ROOT}/${trimmed.slice(2)}`;
@@ -38,6 +57,8 @@ export type TSkillName = (typeof skillNames)[number];
 export const skillRequestSchema = z.object({
   args: z.record(z.string(), z.unknown()).default({}),
   caller: z.enum(['stage-agent', 'orchestrator']).default('stage-agent'),
+  invocationId: z.string().optional(),
+  requestId: z.string().optional(),
   sessionId: z.string().optional(),
   ...orgScopeSchema.shape,
 });
@@ -67,6 +88,7 @@ export type TVerifyResumeAction = z.infer<typeof verifyResumeActionSchema>;
 
 export const verifyRequestSchema = z.object({
   contextSnapshot: z.record(z.string(), z.unknown()),
+  invocationId: z.string().optional(),
   minScore: z.number().min(0).max(1).optional(),
   requestId: z.string(),
   rubric: z.string().optional(),
@@ -86,9 +108,49 @@ export const verifyResponseSchema = z.object({
   pass: z.boolean(),
   resumeAction: verifyResumeActionSchema.optional(),
   score: z.number().min(0).max(1),
+  unavailable: z.boolean().optional(),
 });
 
 export type TVerifyResponse = z.infer<typeof verifyResponseSchema>;
+
+export const requestActivityStatusSchema = z.enum(['failed', 'queued', 'running', 'succeeded']);
+
+export type TRequestActivityStatus = z.infer<typeof requestActivityStatusSchema>;
+
+export const requestActivityRecordSchema = z.object({
+  error: z.string().optional(),
+  invocationId: z.string().optional(),
+  kind: z.enum(['skill', 'verify']),
+  requestId: z.string(),
+  resultData: z.string().optional(),
+  sessionId: z.string(),
+  skill: z.string().optional(),
+  startedAt: z.string(),
+  status: requestActivityStatusSchema,
+  unavailable: z.boolean().optional(),
+  updatedAt: z.string(),
+});
+
+export type TRequestActivityRecord = z.infer<typeof requestActivityRecordSchema>;
+
+export const requestStatusQuerySchema = z.object({
+  invocationId: z.string().trim().min(1).optional(),
+  requestId: z.string().trim().min(1),
+  sessionId: z.string().trim().min(1),
+});
+
+export type TRequestStatusQuery = z.infer<typeof requestStatusQuerySchema>;
+
+export const requestStatusResponseSchema = z.object({
+  agent: z.string(),
+  error: z.string().optional(),
+  ok: z.boolean(),
+  queueDepth: z.number().int().nonnegative(),
+  request: requestActivityRecordSchema.nullable(),
+  unavailable: z.boolean().optional(),
+});
+
+export type TRequestStatusResponse = z.infer<typeof requestStatusResponseSchema>;
 
 export const notificationDirectionSchema = z.enum(['to_user', 'on_behalf_of_user']);
 

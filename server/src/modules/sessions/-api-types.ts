@@ -37,7 +37,7 @@ export type TResponseSessionListItem = {
   updatedAt: string;
 };
 
-export type TResponseStageStatus = 'finished' | 'running';
+export type TResponseStageStatus = 'finished' | 'running' | 'verifying';
 
 export type TResponseStageListItem = {
   createdAt: string;
@@ -55,6 +55,12 @@ export type TResponseStageListItem = {
   updatedAt: string;
 };
 
+export type TResponseStageReplayVerifyResult = {
+  feedback: string;
+  pass: boolean;
+  score: number;
+};
+
 export type TResponseStageReplayItem = {
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
@@ -64,6 +70,7 @@ export type TResponseStageReplayItem = {
   stage: TYahlStage;
   stageId: string;
   temperature?: number;
+  verifyResult?: TResponseStageReplayVerifyResult;
 };
 
 export type TResponseStageModelResponseItem = {
@@ -152,6 +159,7 @@ export type TResponseVerifyCheckpoint = {
   stageIndex?: number;
   status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
+  unavailable?: boolean;
   verifyId: string;
 };
 
@@ -161,6 +169,7 @@ export type TSessionLiveEvent =
   | { type: 'session.updated' }
   | { type: 'stage.created'; requestId: string }
   | { type: 'stage.finished'; requestId: string }
+  | { type: 'stage.verifying'; requestId: string }
   | { type: 'stage.model-response'; requestId: string }
   | { type: 'stage.tool-call'; requestId: string }
   | { type: 'produce_keys.failed'; requestId: string; verifyId: string }
@@ -179,6 +188,7 @@ export type TStageListSource = {
   stage: TYahlStage;
   temperature?: number;
   updatedAt: Date | string;
+  verifyingAt?: Date | string;
 };
 
 export type TResponseGetForkSession = {

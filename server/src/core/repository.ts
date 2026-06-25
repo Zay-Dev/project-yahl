@@ -10,7 +10,7 @@ type TServices = {
     taskId: string;
     taskYahlPath: string;
   }) => Promise<void>;
-  spawnOrchestrate: (sessionId: string, args: string[]) => ChildProcess;
+  spawnOrchestrate: (sessionId: string, args: string[]) => Promise<ChildProcess>;
   validateSessionById: (sessionId: string) => Promise<TYahlDocument>;
 };
 

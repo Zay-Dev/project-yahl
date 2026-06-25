@@ -1,19 +1,22 @@
+let queueDepth = 0;
+
+export const getPromptQueueDepth = () => queueDepth;
+
 export const createPromptQueue = () => {
   let chain: Promise<void> = Promise.resolve();
-  let pending = 0;
 
   return <T>(fn: () => Promise<T>): Promise<T> => {
-    pending += 1;
+    queueDepth += 1;
 
-    if (pending > 1) {
-      console.log(`[mastermind] agent prompt queued depth=${pending}`);
+    if (queueDepth > 1) {
+      console.log(`[mastermind] agent prompt queued depth=${queueDepth}`);
     }
 
     const result = chain.then(async () => {
       try {
         return await fn();
       } finally {
-        pending -= 1;
+        queueDepth -= 1;
       }
     });
 
@@ -24,4 +27,8 @@ export const createPromptQueue = () => {
 
     return result;
   };
+};
+
+export const resetPromptQueueDepthForTests = () => {
+  queueDepth = 0;
 };

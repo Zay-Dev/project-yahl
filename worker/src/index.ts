@@ -1,6 +1,9 @@
 import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 
+import { startApiServer } from './-api/server.js';
+import { exitIfMissingApiKey, markPollSucceeded } from './-health/server.js';
+import { assertAgentCliOnBoot } from './-verify/agent-cli.js';
 import { sendEmail, sendWhatsApp } from './-channels/outbound.js';
 import { runIsolatedBatchCli } from './-cli/run-isolated-batch.js';
 import { startCronScheduler } from './-cron/scheduler.js';
@@ -33,6 +36,7 @@ const spawnOrchestrate = (sessionId: string, taskId: string) => {
       MASTERMIND_API_URL: config.mastermindApiUrl,
       REDIS_URL: config.redisUrl,
       SESSION_API_BASE_URL: config.sessionApiBaseUrl,
+      WORKER_API_URL: config.workerApiUrl,
     },
     stdio: 'ignore',
   });
@@ -64,34 +68,46 @@ const processNotification = async (payload: Record<string, unknown>) => {
 };
 
 const pollApprovedWork = async () => {
-  const items = await fetchPendingApproved();
+  try {
+    const items = await fetchPendingApproved();
 
-  for (const item of items) {
-    try {
-      if (item.kind === 'notification') {
-        const result = await processNotification(item.payload);
+    for (const item of items) {
+      try {
+        if (item.kind === 'notification') {
+          const result = await processNotification(item.payload);
 
-        if (!result.ok) {
-          console.error('[worker] notification failed', item.id, result.error);
+          if (!result.ok) {
+            console.error('[worker] notification failed', item.id, result.error);
+            continue;
+          }
+
+          await markWorkDone(item.id, 'notification');
           continue;
         }
 
-        await markWorkDone(item.id, 'notification');
-        continue;
+        if (item.kind === 'setting') {
+          await applySettingProposal(item.id);
+          await markWorkDone(item.id, 'setting');
+        }
+      } catch (error) {
+        console.error('[worker] item failed', item.id, error);
       }
-
-      if (item.kind === 'setting') {
-        await applySettingProposal(item.id);
-        await markWorkDone(item.id, 'setting');
-      }
-    } catch (error) {
-      console.error('[worker] item failed', item.id, error);
     }
+
+    markPollSucceeded();
+  } catch (error) {
+    console.error('[worker] poll failed', error);
   }
 };
 
-const main = () => {
+const main = async () => {
+  exitIfMissingApiKey(config.apiKey);
+
   console.log('[worker] starting');
+
+  await assertAgentCliOnBoot();
+
+  startApiServer();
 
   startCronScheduler((job) => {
     const sessionId = randomUUID();
@@ -111,4 +127,4 @@ const main = () => {
   }
 };
 
-main();
+void main();

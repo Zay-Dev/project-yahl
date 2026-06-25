@@ -4,41 +4,13 @@ import { reportProcessLevelCrash } from '../-crash-reports/index.js';
 import { config, paths } from '../config.js';
 
 import { createPromptQueue } from './agent-prompt-queue.js';
-
-const AUTH_PROBE_TIMEOUT_MS = 30_000;
+import { probeSdkAuth } from './self-check.js';
 
 export type TMastermindAgentStatus = 'auth_failed' | 'ready' | 'unconfigured';
 
 export type TMastermindAgent = {
   prompt: (message: string, options?: { mode?: 'agent' | 'plan' }) => Promise<{ result?: string }>;
   status: TMastermindAgentStatus;
-};
-
-const probeAuth = async (
-  agent: { send: (message: string) => Promise<{ wait: () => Promise<unknown> }> },
-): Promise<boolean> => {
-  const probe = async () => {
-    const run = await agent.send('Reply with exactly: ok');
-    await run.wait();
-  };
-
-  try {
-    await Promise.race([
-      probe(),
-      new Promise<never>((_, reject) => {
-        setTimeout(
-          () => reject(new Error(`auth probe timed out after ${AUTH_PROBE_TIMEOUT_MS}ms`)),
-          AUTH_PROBE_TIMEOUT_MS,
-        );
-      }),
-    ]);
-
-    return true;
-  } catch (error) {
-    await reportProcessLevelCrash(error, 'startup');
-
-    return false;
-  }
 };
 
 export const createMastermindAgent = async (): Promise<TMastermindAgent> => {
@@ -87,7 +59,7 @@ export const createMastermindAgent = async (): Promise<TMastermindAgent> => {
     };
   }
 
-  const authOk = await probeAuth(agent);
+  const authOk = await probeSdkAuth(agent);
 
   if (!authOk) {
     console.warn('[mastermind] CURSOR_API_KEY auth failed — skills unavailable');

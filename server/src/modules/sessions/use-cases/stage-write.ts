@@ -115,6 +115,7 @@ export const createStage = [
           $unset: {
             contextAfter: '',
             finishedAt: '',
+            verifyingAt: '',
           },
         },
         { upsert: true },
@@ -152,6 +153,9 @@ export const patchStage = [
             contextAfter: body.contextAfter,
             finishedAt: now,
             updatedAt: now,
+          },
+          $unset: {
+            verifyingAt: '',
           },
         },
       );

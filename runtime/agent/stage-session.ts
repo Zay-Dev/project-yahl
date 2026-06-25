@@ -14,10 +14,11 @@ import {
   type ChatAssistantMessage,
   type ChatToolCall,
   parseBrowserToolArguments,
+  parseMastermindStatusToolArguments,
   parseMastermindToolArguments,
   parseRunBashToolArguments,
 } from "@/shared/stage-tools";
-import { callMastermindSkill } from "@/shared/mastermind-client";
+import { callMastermindSkill, fetchMastermindRequestStatus } from "@/shared/mastermind-client";
 
 import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
@@ -45,6 +46,7 @@ type StageSessionOptions = {
   maxBashCalls?: number;
   maxTurns?: number;
   onLocalToolCall?: (record: TLocalToolCallRecord) => Promise<void>;
+  requestId?: string;
   resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
 };
@@ -316,6 +318,7 @@ export const runStageSession = async (
             mastermindArgs.skill,
             mastermindArgs.args,
             config.cliOptions.sessionId,
+            options.requestId,
           );
 
           const mastermindContent = JSON.stringify(mastermindResult);
@@ -327,6 +330,39 @@ export const runStageSession = async (
           });
 
           await options.onLocalToolCall?.({ call, resultContent: mastermindContent });
+
+          continue;
+        }
+
+        if (name === "mastermind_status") {
+          const statusArgs = parseMastermindStatusToolArguments(rawArgs);
+          const sessionId = config.cliOptions.sessionId?.trim();
+          const requestId = options.requestId?.trim();
+
+          if (!sessionId || !requestId) {
+            stageMessages.push({
+              content: toolErrorContent("mastermind_status: sessionId and requestId required"),
+              role: "tool",
+              tool_call_id: call.id,
+            });
+
+            continue;
+          }
+
+          const statusResult = await fetchMastermindRequestStatus({
+            ...(statusArgs.invocationId ? { invocationId: statusArgs.invocationId } : {}),
+            requestId,
+            sessionId,
+          });
+          const statusContent = JSON.stringify(statusResult);
+
+          stageMessages.push({
+            content: statusContent,
+            role: "tool",
+            tool_call_id: call.id,
+          });
+
+          await options.onLocalToolCall?.({ call, resultContent: statusContent });
 
           continue;
         }
@@ -343,6 +379,8 @@ export const runStageSession = async (
       }
 
       if (toolCalls.length > 0) continue;
+
+      console.log(`[agent-daemon] stage finalize turn=${turns} toolCalls=0\n`);
 
       return finalizeEnvelope(assistantMessage.at(-1)?.content || '');
     }

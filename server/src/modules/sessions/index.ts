@@ -30,6 +30,7 @@ import {
   getVerifyCheckpoint,
   listVerifyCheckpoints,
   resolveVerifyPass,
+  resolveVerifyStart,
   resumeVerifyCheckpoint,
 } from './use-cases/verify-write';
 
@@ -56,6 +57,7 @@ exposedRoute('/api/sessions')
   .post('/:sessionId/ask-user/batches/:batchId/answer', answerAskUserBatch)
   .get('/:sessionId/ask-user/questions/:questionId', getAskUserQuestion)
   .post('/:sessionId/stages/:requestId/verify-pass', resolveVerifyPass)
+  .post('/:sessionId/stages/:requestId/verify-start', resolveVerifyStart)
   .post('/:sessionId/verify-checkpoints', createVerifyCheckpoint)
   .get('/:sessionId/verify-checkpoints', listVerifyCheckpoints)
   .get('/:sessionId/verify-checkpoints/:verifyId', getVerifyCheckpoint)

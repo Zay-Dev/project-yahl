@@ -7,6 +7,7 @@ import { Manager, Servers } from '@omni-infra/express';
 import type { TMiddleware } from '@omni-infra/express/types';
 
 import { JSON_BODY_LIMIT, payloadTooLargeHandler } from '@/middleware/json-body';
+import { buildServerHealth } from '@/-health/index';
 
 export type TServerType = typeof serverTypes[number];
 
@@ -67,4 +68,8 @@ export const startAll = () => {
 exposedRoute('__')
   .get('/ping', (_, res: Response) => {
     res.json({ message: 'pong', locals: res.locals });
+  })
+  .get('/health', async (_, res: Response) => {
+    const health = await buildServerHealth();
+    res.status(health.ok ? 200 : 503).json(health);
   });

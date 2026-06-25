@@ -111,6 +111,7 @@ export interface IStage extends TWithTimestamps {
   stage: TYahlStage;
   loopMeta?: TStageLoopMeta;
   temperature?: number;
+  verifyingAt?: Date;
   verifyResult?: {
     feedback: string;
     pass: boolean;
@@ -203,5 +204,6 @@ export interface IVerifyCheckpoint extends TWithTimestamps {
   stageIndex?: number;
   status: TVerifyCheckpointStatus;
   storageSnapshot: Record<string, unknown>;
+  unavailable?: boolean;
   verifyId: string;
 }

@@ -1,11 +1,17 @@
 import type { TChatToolCall, TStorage } from '@/shared/transports/-types';
 import type { SetContextToolCallEnvelope } from '@/shared/stage-contract';
 
+import { seedDefaultContext } from '@/orchestrator/-context/default-context';
+
 export const createStorage = () => {
-  return {
+  const storage = {
     context: new Map<string, unknown>(),
     types: new Map<string, unknown>(),
   };
+
+  seedDefaultContext(storage);
+
+  return storage;
 }
 
 export const setContext = async (storage: TStorage, toolCall: TChatToolCall) => {

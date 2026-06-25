@@ -3,6 +3,10 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
+import { assertSessionRunAllowed } from '../-agent-run-active';
+import { waitForOrchestratorIdle } from '../-orchestrator-run-lock';
+import { resolveSessionBySessionId } from '../-resolve-session';
+
 const CONTAINER_WORKSPACE = '/omniflex';
 const CONTAINER_RUNTIME = `/omniflex/${process.env.OMNIFLEX_APP_DIR?.trim() || 'project-yahl'}/runtime`;
 const RUNTIME_FILTER = '@project-yahl/runtime';
@@ -153,6 +157,22 @@ export const resolveRepoRoot = () => path.dirname(_resolveRuntimeDir());
 
 export const resolvePnpmWorkspaceRoot = () => _resolveWorkspaceRoot();
 
+export const resolveOrchestratorWorkspaceRoot = () => {
+  const explicit = process.env.WORKSPACE_ROOT?.trim();
+
+  if (explicit) {
+    return explicit;
+  }
+
+  const hostRepoRoot = process.env.HOST_REPO_ROOT?.trim();
+
+  if (hostRepoRoot) {
+    return path.join(path.resolve(hostRepoRoot), 'workspace');
+  }
+
+  return path.join(resolveRepoRoot(), 'workspace');
+};
+
 const _loadRootEnv = () => {
   const rootEnvPath = path.join(resolveRepoRoot(), '.env');
 
@@ -202,10 +222,20 @@ const _logSpawnDiagnostics = (
   logger.info(line);
 };
 
-export const spawnOrchestrate = (
+export const spawnOrchestrate = async (
   sessionId: string,
   args: string[],
 ) => {
+  const session = await resolveSessionBySessionId(sessionId);
+
+  await assertSessionRunAllowed({
+    _id: String(session._id),
+    liveViewVncPort: session.liveViewVncPort,
+    sessionId: session.sessionId,
+  });
+
+  await waitForOrchestratorIdle(sessionId);
+
   const runtimeDir = _resolveRuntimeDir();
   const workspaceRoot = _resolveWorkspaceRoot();
   const sessionApiBaseUrl = resolveSessionApiBaseUrl();
@@ -238,9 +268,15 @@ export const spawnOrchestrate = (
       ...process.env,
       REDIS_URL: redisUrl,
       SESSION_API_BASE_URL: sessionApiBaseUrl,
+      WORKER_API_URL: process.env.WORKER_API_URL?.trim() || 'http://worker:4200',
+      WORKSPACE_ROOT: resolveOrchestratorWorkspaceRoot(),
     },
     stdio: ['ignore', logFd, logFd],
   });
+
+  console.log(
+    `[yahl-diag] spawn child pid=${child.pid ?? 'unknown'} sessionId=${sessionId} args=${JSON.stringify(args)} log=${logPath}`,
+  );
 
   child.unref();
 

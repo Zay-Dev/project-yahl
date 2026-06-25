@@ -126,11 +126,12 @@ export interface IPublisher extends IBase {
       temperature?: number,
     },
   ) => Promise<{
+    disposeWait: () => void;
     wait: () => Promise<void>,
     getWaitForToolCall: (
       callback: (toolCall: TChatToolCall) => Promise<TToolCallResult>
     ) => {
-      wait: () => unknown;
+      wait: () => Promise<void>;
       dispose: () => void;
     },
   }>;

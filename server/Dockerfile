@@ -22,7 +22,8 @@ FROM deps AS build
 
 ARG OMNIFLEX_APP_DIR=project-yahl
 
-RUN pnpm --filter @project-yahl/server... run build \
+RUN pnpm --filter @project-yahl/shared run build \
+  && pnpm --filter @project-yahl/server... run build \
   && pnpm --filter @project-yahl/runtime run build
 
 FROM node:22-bookworm-slim AS prod
@@ -53,6 +54,7 @@ COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DI
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.agent.yml ./${OMNIFLEX_APP_DIR}/docker-compose.agent.yml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.yml ./${OMNIFLEX_APP_DIR}/docker-compose.yml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server ./${OMNIFLEX_APP_DIR}/server
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/shared ./${OMNIFLEX_APP_DIR}/shared
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/dist ./${OMNIFLEX_APP_DIR}/runtime/dist
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/node_modules ./${OMNIFLEX_APP_DIR}/runtime/node_modules

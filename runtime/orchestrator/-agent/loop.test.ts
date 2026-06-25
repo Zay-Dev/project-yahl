@@ -78,3 +78,34 @@ describe('runLoopIteration', () => {
     assert.equal(scopedStorage?.context.get('i'), 1);
   });
 });
+
+describe('handleLoop dotted context paths', () => {
+  it('iterates study_plan.sources from nested context', async () => {
+    const storage = createStorage();
+
+    storage.context.set('study_plan', {
+      sources: [{ url: 'https://example.com' }, { url: 'https://example.org' }],
+    });
+
+    const loopStage = compileStage({
+      contextKeys: ['study_plan'],
+      logic: '(() => ({ src }))',
+      loopSetup: 'for each src of [study_plan.sources]',
+      updateContextKeys: ['study_plan'],
+    }, 1);
+
+    let iterationCount = 0;
+
+    const runner: TRunYahl = async () => {
+      iterationCount += 1;
+
+      return { storage: createStorage() };
+    };
+
+    const { handleLoop } = await import('@/orchestrator/-agent/loop');
+
+    await handleLoop(loopStage, storage, runner);
+
+    assert.equal(iterationCount, 2);
+  });
+});

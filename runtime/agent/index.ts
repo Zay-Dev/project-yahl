@@ -8,7 +8,7 @@ declare global {
 }
 
 const redis = new Redis(config.redisUrl, {
-  maxRetriesPerRequest: 2,
+  maxRetriesPerRequest: null,
 });
 
 globalThis.subscriber = new RedisSubscriber(redis, config.cliOptions.sessionId);

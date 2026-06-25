@@ -1,18 +1,43 @@
+import { randomUUID } from 'node:crypto';
+
+import type { TRequestStatusResponse } from '@project-yahl/shared/request-activity/types';
+
+import {
+  ActivityRequestFailedError,
+  DEFAULT_ACTIVITY_DEADLINE_MS,
+  fetchRequestStatus,
+  formatActivityFetchError,
+  postWithActivityRecovery,
+} from '@project-yahl/shared/request-activity/client';
+
 const mastermindBaseUrl = () =>
   (process.env.MASTERMIND_API_URL?.trim() || 'http://mastermind:4100').replace(/\/+$/, '');
+
+const activityOptions = () => ({
+  deadlineMs: DEFAULT_ACTIVITY_DEADLINE_MS,
+  errorPrefix: 'mastermind' as const,
+  onPollError: (error: unknown) => {
+    const message = error instanceof Error ? error.message : 'request-status poll failed';
+
+    console.log(`[mastermind-client] request-status poll error=${message}`);
+  },
+});
 
 export type TMastermindSkillResponse = {
   data?: unknown;
   error?: string;
+  invocationId?: string;
   ok: boolean;
+  queueDepth?: number;
+  requestStatus?: 'failed' | 'queued' | 'running' | 'succeeded';
+  retryable?: boolean;
+  unavailable?: boolean;
 };
 
-export type TMastermindVerifyResponse = {
-  askUserRef?: string;
-  feedback: string;
-  pass: boolean;
-  resumeAction?: 'edit_answer' | 'reask' | 'rerun';
-  score: number;
+export type TKnowledgePersistedIndexItem = {
+  absolutePath: string;
+  key: string;
+  relativePath: string;
 };
 
 export type TVerifyStageSnapshot = {
@@ -22,107 +47,150 @@ export type TVerifyStageSnapshot = {
   produceContextKeys?: string[];
 };
 
+export type TMastermindRequestStatusResponse = TRequestStatusResponse;
+
+const mastermindFetch = (url: string, init?: RequestInit): Promise<Response> => {
+  if (init?.signal) {
+    return fetch(url, init);
+  }
+
+  return fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(DEFAULT_ACTIVITY_DEADLINE_MS),
+  });
+};
+
+export const fetchMastermindRequestStatus = async (params: {
+  invocationId?: string;
+  requestId: string;
+  sessionId: string;
+}): Promise<TMastermindRequestStatusResponse> =>
+  fetchRequestStatus(mastermindBaseUrl(), params);
+
+const resolveActivityWatch = (sessionId?: string, requestId?: string) => {
+  const trimmedSessionId = sessionId?.trim();
+  const trimmedRequestId = requestId?.trim();
+
+  if (!trimmedSessionId || !trimmedRequestId) {
+    return null;
+  }
+
+  return {
+    invocationId: randomUUID(),
+    requestId: trimmedRequestId,
+    sessionId: trimmedSessionId,
+  };
+};
+
+const buildSkillFailure = (
+  message: string,
+  watch: ReturnType<typeof resolveActivityWatch>,
+  lastStatus: TMastermindRequestStatusResponse['request'] | null,
+  queueDepth?: number,
+): TMastermindSkillResponse => {
+  const retryable = message.startsWith('mastermind_request_still_running:');
+
+  return {
+    error: message,
+    ...(watch ? { invocationId: watch.invocationId } : {}),
+    ok: false,
+    ...(queueDepth === undefined ? {} : { queueDepth }),
+    ...(lastStatus?.status ? { requestStatus: lastStatus.status } : {}),
+    ...(retryable ? { retryable: true } : {}),
+    ...(message.includes('unavailable') || lastStatus?.unavailable ? { unavailable: true } : {}),
+  };
+};
+
 export const callMastermindSkill = async (
   name: string,
   args: Record<string, unknown>,
   sessionId?: string,
+  requestId?: string,
 ): Promise<TMastermindSkillResponse> => {
-  const url = `${mastermindBaseUrl()}/v1/skills/${encodeURIComponent(name)}`;
+  const baseUrl = mastermindBaseUrl();
+  const url = `${baseUrl}/v1/skills/${encodeURIComponent(name)}`;
   const startedAt = Date.now();
+  const watch = resolveActivityWatch(sessionId, requestId);
+  const options = activityOptions();
 
-  console.log(`[mastermind-client] POST ${name} url=${mastermindBaseUrl()} sessionId=${sessionId ?? '-'}`);
+  console.log(
+    `[mastermind-client] POST ${name} url=${baseUrl} sessionId=${sessionId ?? '-'} requestId=${requestId ?? '-'} invocationId=${watch?.invocationId ?? '-'}`,
+  );
 
   try {
-    const res = await fetch(url, {
-      body: JSON.stringify({
+    const { lastStatus, queueDepth, recovered, response: res } = await postWithActivityRecovery(
+      baseUrl,
+      url,
+      {
         args,
         caller: 'stage-agent',
+        ...(watch ? { invocationId: watch.invocationId } : {}),
+        ...(requestId ? { requestId } : {}),
         sessionId,
-      }),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    });
+      },
+      watch,
+      options,
+    );
 
     const body = await res.json() as TMastermindSkillResponse;
     const durationMs = Date.now() - startedAt;
 
     console.log(
-      `[mastermind-client] ${name} http=${res.status} ok=${body.ok} durationMs=${durationMs}`,
+      `[mastermind-client] ${name} http=${res.status} ok=${body.ok} recovered=${recovered} durationMs=${durationMs}`,
     );
 
     if (!res.ok) {
-      return {
-        error: body.error ?? `mastermind ${name}: HTTP ${res.status}`,
-        ok: false,
-      };
+      return buildSkillFailure(
+        body.error ?? `mastermind ${name}: HTTP ${res.status}`,
+        watch,
+        lastStatus,
+        queueDepth,
+      );
     }
 
     return body;
   } catch (error) {
     const durationMs = Date.now() - startedAt;
-    const message = error instanceof Error ? error.message : 'mastermind request failed';
+
+    if (error instanceof ActivityRequestFailedError) {
+      console.log(`[mastermind-client] ${name} failed durationMs=${durationMs} error=${error.message}`);
+
+      return buildSkillFailure(error.message, watch, null, undefined);
+    }
+
+    const message = error instanceof Error
+      ? error.message
+      : formatActivityFetchError(error, null, 'mastermind');
 
     console.log(`[mastermind-client] ${name} failed durationMs=${durationMs} error=${message}`);
 
-    return {
-      error: message,
-      ok: false,
-    };
+    return buildSkillFailure(message, watch, null);
   }
 };
 
-export const callMastermindVerify = async (body: {
-  contextSnapshot: Record<string, unknown>;
-  minScore?: number;
-  requestId: string;
-  rubric?: string;
-  sessionId: string;
-  stageIndex: number;
-  stageSnapshot?: TVerifyStageSnapshot;
-  stageVersion?: number;
-  verifyResume?: boolean;
-}): Promise<TMastermindVerifyResponse> => {
-  const url = `${mastermindBaseUrl()}/v1/verify`;
-  const startedAt = Date.now();
-
-  console.log(
-    `[mastermind-client] POST verify sessionId=${body.sessionId} requestId=${body.requestId} stageIndex=${body.stageIndex}`,
-  );
+export const fetchMastermindPersistedIndex = async (
+  topic: string,
+): Promise<TKnowledgePersistedIndexItem[]> => {
+  const url = `${mastermindBaseUrl()}/v1/knowledges/${encodeURIComponent(topic)}/persisted-index`;
 
   try {
-    const res = await fetch(url, {
-      body: JSON.stringify(body),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    });
+    const res = await mastermindFetch(url, { method: 'GET' });
 
     if (!res.ok) {
-      const durationMs = Date.now() - startedAt;
-
-      console.log(
-        `[mastermind-client] verify http=${res.status} pass=false durationMs=${durationMs}`,
-      );
-      throw new Error(`mastermind verify failed: ${res.status}`);
+      console.log(`[mastermind-client] persisted-index http=${res.status} topic=${topic}`);
+      return [];
     }
 
-    const result = await res.json() as TMastermindVerifyResponse;
-    const durationMs = Date.now() - startedAt;
+    const body = await res.json() as { ok?: boolean; persisted?: TKnowledgePersistedIndexItem[] };
 
-    console.log(
-      `[mastermind-client] verify http=${res.status} pass=${result.pass} score=${result.score} durationMs=${durationMs}`,
-    );
-
-    return result;
+    return Array.isArray(body.persisted) ? body.persisted : [];
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('mastermind verify failed:')) {
-      throw error;
-    }
+    const message = error instanceof Error ? error.message : 'mastermind persisted-index failed';
 
-    const durationMs = Date.now() - startedAt;
-    const message = error instanceof Error ? error.message : 'mastermind verify request failed';
+    console.log(`[mastermind-client] persisted-index failed topic=${topic} error=${message}`);
 
-    console.log(`[mastermind-client] verify failed durationMs=${durationMs} error=${message}`);
-
-    throw error;
+    return [];
   }
 };
+
+export { ActivityRequestFailedError as MastermindRequestFailedError };

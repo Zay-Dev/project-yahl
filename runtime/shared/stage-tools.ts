@@ -194,7 +194,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|extract-knowledge|persist-knowledge|media-to-text|plan|design-questions, ...) in stage logic. Returns JSON { ok, data } or { ok: false, error }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|extract-knowledge|persist-knowledge|media-to-text|plan|design-questions, ...) in stage logic. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -222,7 +222,48 @@ export const STAGE_TOOLS = [
     },
     type: "function" as const,
   },
+  {
+    function: {
+      description:
+        "Poll mastermind request activity for the current session stage request. Use for debugging long research calls — do not re-POST while status is queued or running. Returns { ok, agent, queueDepth, request: { status, skill, invocationId, startedAt, updatedAt } }.",
+      name: "mastermind_status",
+      parameters: {
+        properties: {
+          invocationId: {
+            description: "Optional invocation id from a prior mastermind tool response.",
+            type: "string",
+          },
+        },
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
 ];
+
+export const parseMastermindStatusToolArguments = (
+  raw: string,
+): { invocationId?: string } => {
+  if (!raw.trim()) {
+    return {};
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return {};
+  }
+
+  if (!isRecord(parsed)) return {};
+
+  const invocationId = typeof parsed.invocationId === 'string' && parsed.invocationId.trim()
+    ? parsed.invocationId.trim()
+    : undefined;
+
+  return invocationId ? { invocationId } : {};
+};
 
 export const parseMastermindToolArguments = (
   raw: string,

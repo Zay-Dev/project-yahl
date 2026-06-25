@@ -49,6 +49,27 @@ describe('toVerifyCheckpointResponse', () => {
     assert.equal(response.parsedStageSnapshot?.sourceStartLine, 24);
     assert.equal(response.stage.verify, true);
   });
+
+  it('returns unavailable when checkpoint is infra-paused', () => {
+    const response = toVerifyCheckpointResponse({
+      feedback: 'Agent agent-abc already has active run',
+      kind: 'verify',
+      parsedStageSnapshot: {
+        lines: '{}',
+        sourceStartLine: 1,
+        type: 'plain',
+      },
+      requestId: 'req-1',
+      score: 0,
+      stage: { logic: 'const x = 1;', verify: true },
+      status: 'pending',
+      storageSnapshot: { context: {} },
+      unavailable: true,
+      verifyId: 'verify-infra',
+    });
+
+    assert.equal(response.unavailable, true);
+  });
 });
 
 describe('verify resume stage gate', () => {

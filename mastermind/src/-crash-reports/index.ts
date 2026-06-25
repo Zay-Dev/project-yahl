@@ -1,7 +1,15 @@
 import fs from 'fs/promises';
 import path from 'path';
 
+import type { TMastermindAgent } from '../-sdk/agent.js';
+
 import { config, paths } from '../config.js';
+
+let crashAnalysisPrompt: TMastermindAgent['prompt'] | undefined;
+
+export const initCrashReports = (prompt: TMastermindAgent['prompt']) => {
+  crashAnalysisPrompt = prompt;
+};
 
 export type TCrashContext = {
   args?: Record<string, unknown>;
@@ -160,7 +168,11 @@ const runCrashAnalysis = async (reportPath: string, ctx: TCrashContext) => {
     return;
   }
 
-  const { Agent } = await import('@cursor/sdk');
+  if (!crashAnalysisPrompt) {
+    await appendAnalysisFailure(reportPath, new Error('crash analyst prompt not initialized'));
+
+    return;
+  }
 
   const diagnosticPrompt = [
     'You are the YAHL mastermind crash analyst.',
@@ -171,11 +183,7 @@ const runCrashAnalysis = async (reportPath: string, ctx: TCrashContext) => {
   ].join('\n');
 
   try {
-    const result = await Agent.prompt(diagnosticPrompt, {
-      apiKey: config.apiKey,
-      local: { cwd: config.workspaceRoot },
-      model: { id: 'auto' },
-    });
+    const result = await crashAnalysisPrompt(diagnosticPrompt, { mode: 'plan' });
 
     await appendAnalysisSection(reportPath, result.result ?? '(empty analysis)');
   } catch (error) {

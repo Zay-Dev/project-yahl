@@ -11,7 +11,7 @@ import { createStorage } from '@/orchestrator/-tools/set_context';
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
-import { runVerifyGate } from '@/orchestrator/-verify';
+import { runVerifyGate, isVerifyRubricFailure } from '@/orchestrator/-verify';
 import {
   applyVerifyRecoveryToStorage,
   buildVerifyRecoverySystemAppend,
@@ -270,7 +270,7 @@ class YahlAgentRunner {
       this.stageDocSourceStartLine = this.activeStage.sourceStartLine;
     }
 
-    const { wait, getWaitForToolCall } = await publisher.pushRequest(
+    const { disposeWait, wait, getWaitForToolCall } = await publisher.pushRequest(
       this.filteredStorage,
       toAgentStage(stageSpec),
       this.requestId,
@@ -360,12 +360,29 @@ class YahlAgentRunner {
       }, 50);
     });
 
-    toolCallHandlers.wait();
+    const toolCallPromise = toolCallHandlers.wait();
+    const waitStartedAt = Date.now();
+
+    console.log(`[orchestrator] stage wait start requestId=${this.requestId}`);
+    console.log(
+      `[yahl-diag] race start requestId=${this.requestId} resumeStage=${Boolean(this.options.resumeStage)} pid=${process.pid}`,
+    );
 
     try {
       await Promise.race([wait(), pausePromise]);
     } catch (error) {
+      disposeWait();
       toolCallHandlers.dispose();
+      await toolCallPromise.catch(() => {});
+
+      const errorName = error instanceof Error ? error.name : 'unknown';
+
+      console.log(
+        `[orchestrator] stage wait end requestId=${this.requestId} durationMs=${Date.now() - waitStartedAt} outcome=error`,
+      );
+      console.log(
+        `[yahl-diag] race error requestId=${this.requestId} errorName=${errorName} pid=${process.pid}`,
+      );
 
       if (error instanceof AskUserPausedError) {
         throw error;
@@ -375,6 +392,12 @@ class YahlAgentRunner {
     }
 
     toolCallHandlers.dispose();
+    await toolCallPromise.catch(() => {});
+
+    console.log(
+      `[orchestrator] stage wait end requestId=${this.requestId} durationMs=${Date.now() - waitStartedAt} outcome=ok`,
+    );
+    console.log(`[yahl-diag] race ok requestId=${this.requestId} pid=${process.pid}`);
 
     if (this.options.resumeStage) {
       this.options.resumeStage = undefined;
@@ -400,6 +423,10 @@ class YahlAgentRunner {
 
       const finishContextAfter = this.options.contextAfterRecord ?? this.storage;
 
+      console.log(
+        `[yahl-diag] verify gate start requestId=${this.requestId} stageIndex=${this.pipelineStageIndex} pid=${process.pid}`,
+      );
+
       const verifyResult = await runVerifyGate({
         agentName: this.agentName,
         pipelineStageIndex: this.pipelineStageIndex,
@@ -409,6 +436,7 @@ class YahlAgentRunner {
         storage: this.storage,
         shutdownOnFail: !verifyAutoRetry || this.verifyRetryAttempt >= maxVerifyRetries,
         throwOnFail: !verifyAutoRetry || this.verifyRetryAttempt >= maxVerifyRetries,
+        verifyFastForward: this.options.verifyFastForward,
       });
 
       if (verifyResult.pass) {
@@ -419,12 +447,18 @@ class YahlAgentRunner {
           );
         }
 
+        console.log(`[yahl-diag] stage finish emit requestId=${this.requestId} pid=${process.pid}`);
+
         publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
         await globalThis.sessionTracker?.flush?.();
         return;
       }
 
       if (!verifyAutoRetry || this.verifyRetryAttempt >= maxVerifyRetries) {
+        return;
+      }
+
+      if (!isVerifyRubricFailure(verifyResult)) {
         return;
       }
 
@@ -466,8 +500,10 @@ class YahlAgentRunner {
       this.produceKeysAttempt = 0;
       this.systemAppendParts.push(buildVerifyRecoverySystemAppend({
         feedback: verifyResult.feedback,
+        produceContextKeys: this.activeStage.produceContextKeys ?? this.activeStage.spec.produceContextKeys,
         resumeAction,
         score: verifyResult.score,
+        updateContextKeys: this.activeStage.updateContextKeys ?? this.activeStage.spec.updateContextKeys,
       }));
     }
   }

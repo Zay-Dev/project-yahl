@@ -10,6 +10,11 @@ export type TResumeStage = {
   stage: ParsedStage;
 };
 
+export type TVerifyFastForward = {
+  feedback: string;
+  score: number;
+};
+
 export type TRunYahl = (
   yahl: string,
   options?: {
@@ -25,6 +30,7 @@ export type TRunYahl = (
     systemAppend?: string;
     temperature?: number;
     useStorage?: () => TStorage;
+    verifyFastForward?: TVerifyFastForward;
   },
 ) => Promise<{
   storage: TStorage;

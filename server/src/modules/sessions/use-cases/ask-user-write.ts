@@ -5,6 +5,7 @@ import Joi from 'joi';
 import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
+import { assertSessionRunAllowed } from '../-agent-run-active';
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { isStageFinished } from '../-stage-status';
 import { emitSessionEvent } from '../-session-events';
@@ -292,6 +293,12 @@ export const answerAskUserBatch = [
       const session = await resolveSessionBySessionId(params.sessionId);
       const sessionRef = session._id;
 
+      await assertSessionRunAllowed({
+        _id: String(sessionRef),
+        liveViewVncPort: session.liveViewVncPort,
+        sessionId: session.sessionId,
+      });
+
       const checkpoint = await Queries.hasExactOne(modelAskUserQuestion, {
         batchId: params.batchId,
         session: sessionRef,
@@ -366,7 +373,11 @@ export const answerAskUserBatch = [
         type: 'ask-user.answered',
       });
 
-      spawnOrchestrate(params.sessionId, ['--resume-id', checkpoint.questionId]);
+      console.log(
+        `[yahl-diag] ask-user answer spawning resume questionId=${checkpoint.questionId} sessionId=${params.sessionId} requestId=${checkpoint.requestId}`,
+      );
+
+      await spawnOrchestrate(params.sessionId, ['--resume-id', checkpoint.questionId]);
 
       express.respondOne<TResponseAnswerAskUserQuestion>({
         ok: true,

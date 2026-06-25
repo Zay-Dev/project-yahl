@@ -3,7 +3,9 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 import { runYahl } from '@/orchestrator/-agent';
+import { mergeTaskSystemAppend } from '@/orchestrator/-utils/workspace-paths';
 import { createStorage } from '@/orchestrator/-tools/set_context';
+import { seedDefaultContext } from '@/orchestrator/-context/default-context';
 import {
   applyAskUserAnswerToStage,
   fetchAskUserCheckpoint,
@@ -74,6 +76,8 @@ const _deserializeStorage = (snapshot: Record<string, unknown>): TStorage => {
     });
   }
 
+  seedDefaultContext(storage);
+
   return storage;
 };
 
@@ -109,7 +113,9 @@ const _resumeAnchorStage = async (params: {
   checkpoint: Awaited<ReturnType<typeof fetchAskUserCheckpoint>>;
   resumedStage: ParsedStage;
   resumeFrom: TAskUserResumeFrom;
+  sessionId: string;
   storage: TStorage;
+  systemAppend?: string;
 }) => {
   await runYahl('', {
     resumeStage: {
@@ -120,11 +126,16 @@ const _resumeAnchorStage = async (params: {
     },
     stages: [params.resumedStage],
     startFromStageIndex: 0,
+    systemAppend: params.systemAppend,
     useStorage: () => params.storage,
   });
 };
 
 export const runAskUserResume = async (sessionId: string, questionId: string) => {
+  console.log(
+    `[yahl-diag] ask-user-resume start questionId=${questionId} sessionId=${sessionId} pid=${process.pid}`,
+  );
+
   const checkpoint = await fetchAskUserCheckpoint(sessionId, questionId);
 
   if (checkpoint.status !== 'answered') {
@@ -169,13 +180,16 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
   const resumeFrom = buildResumeFrom(checkpoint, stageDetail as TStageDetailForResume);
   const baseParsed = _resolveBaseParsed(checkpoint, yahlStages);
   const resumedStage = buildResumedStage(baseParsed, patchedStage);
+  const systemAppend = await mergeTaskSystemAppend(sessionId, session.taskId);
 
   if (isFork) {
     await _resumeAnchorStage({
       checkpoint,
       resumedStage,
       resumeFrom,
+      sessionId,
       storage,
+      systemAppend,
     });
 
     const manager = await initForkSessionManager(forkSessionId);
@@ -202,9 +216,14 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
       },
       stages: pipelineStages,
       startFromStageIndex: 0,
+      systemAppend,
       useStorage: () => storage,
     });
   }
+
+  console.log(
+    `[yahl-diag] ask-user-resume end questionId=${questionId} sessionId=${sessionId} pid=${process.pid}`,
+  );
 
   return {
     resultContextKey: session.resultContextKey,

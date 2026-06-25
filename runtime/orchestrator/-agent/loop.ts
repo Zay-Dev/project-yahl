@@ -16,6 +16,30 @@ export const resolveLoopIndexName = (
   ?? loopIndexNameFromLines(stage.spec.loopSetup ?? '')
   ?? loopIndexNameFromLines(stage.lines);
 
+const resolveContextPath = (storage: TStorage, path: string): unknown => {
+  const segments = path.split('.');
+  let current: unknown = undefined;
+
+  for (const segment of segments) {
+    if (!segment) {
+      return undefined;
+    }
+
+    if (current === undefined) {
+      current = storage.context.get(segment);
+      continue;
+    }
+
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return undefined;
+    }
+
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return current;
+};
+
 const _parseLoop = (yahl: string, storage: TStorage) => {
   const matchMeta = yahl.match(/^\s*for each (\w+) of (\[.*\])/i);
 
@@ -52,11 +76,11 @@ const _parseLoop = (yahl: string, storage: TStorage) => {
       };
     }
 
-    const matchArray = arrayName.match(/\[(\w+)(,[+-]?(\d+))?\]/);
+    const matchArray = arrayName.match(/\[([\w.]+)(,[+-]?(\d+))?\]/);
 
     if (matchArray) {
       const arrayNameInner = matchArray[1];
-      const array = storage.context.get(arrayNameInner);
+      const array = resolveContextPath(storage, arrayNameInner);
 
       if (!array || !Array.isArray(array)) return null;
 

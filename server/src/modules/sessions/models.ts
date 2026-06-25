@@ -8,16 +8,22 @@ import type {
   IVerifyCheckpoint,
 } from './-types';
 
-import type { Document } from 'mongoose';
+import type { Document, Types } from 'mongoose';
 
 import { model as createModel, Schema } from 'mongoose';
 
+type TSessionChildDb<T extends { _id: string; session: string }> =
+  Omit<T, '_id' | 'session'> & Document & {
+    _id: Types.ObjectId;
+    session: Types.ObjectId;
+  };
+
 export type TDbSession = ISession & Document;
-export type TDbStage = IStage & Document;
-export type TDbModelResponse = IModelResponse & Document;
-export type TDbToolCall = IToolCall & Document;
-export type TDbAskUserQuestion = IAskUserQuestion & Document;
-export type TDbVerifyCheckpoint = IVerifyCheckpoint & Document;
+export type TDbStage = TSessionChildDb<IStage>;
+export type TDbModelResponse = TSessionChildDb<IModelResponse>;
+export type TDbToolCall = TSessionChildDb<IToolCall>;
+export type TDbAskUserQuestion = TSessionChildDb<IAskUserQuestion>;
+export type TDbVerifyCheckpoint = TSessionChildDb<IVerifyCheckpoint>;
 
 const loopMetaSchema = new Schema({
   arraySnapshot: { type: [Schema.Types.Mixed], required: true },
@@ -71,6 +77,7 @@ const stageSchema = new Schema<TDbStage>({
   requestId: model.d.requiredString(),
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   temperature: model.d.optionalNumber(),
+  verifyingAt: model.d.optionalDate(),
   verifyResult: model.d.mixed(),
 }, {
   collection: modelsName.Stages,
@@ -168,6 +175,7 @@ const verifyCheckpointSchema = new Schema<TDbVerifyCheckpoint>({
   stageIndex: model.d.optionalNumber(),
   status: model.d.requiredString(),
   storageSnapshot: model.d.mixed(),
+  unavailable: model.d.optionalBoolean(),
   verifyId: model.d.requiredString(),
 }, {
   collection: modelsName.SessionVerifyCheckpoints,

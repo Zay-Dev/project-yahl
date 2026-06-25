@@ -6,6 +6,7 @@ import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
+import { assertSessionResumeAllowed } from '../-agent-run-active';
 import { isStageFinished } from '../-stage-status';
 import { emitSessionEvent } from '../-session-events';
 import type { TResponseVerifyCheckpoint } from '../-api-types';
@@ -28,6 +29,7 @@ export type TRequestCreateVerifyCheckpointBody = {
   stage: TYahlStage;
   stageIndex?: number;
   storageSnapshot: Record<string, unknown>;
+  unavailable?: boolean;
 };
 
 const sessionParamsSchema = Joi.object({
@@ -59,6 +61,7 @@ const createBodySchema = Joi.object<TRequestCreateVerifyCheckpointBody>({
   stage: yahlStageSchema.required(),
   stageIndex: Joi.number().optional(),
   storageSnapshot: Joi.object().required(),
+  unavailable: Joi.boolean().optional(),
 });
 
 const editAnswerBodySchema = Joi.object({
@@ -94,6 +97,7 @@ export const toVerifyCheckpointResponse = (checkpoint: {
   stageIndex?: number;
   status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
+  unavailable?: boolean;
   verifyId: string;
 }): TResponseVerifyCheckpoint => ({
   ...(checkpoint.askUserQuestion ? { askUserQuestion: checkpoint.askUserQuestion } : {}),
@@ -112,6 +116,7 @@ export const toVerifyCheckpointResponse = (checkpoint: {
   stageIndex: checkpoint.stageIndex,
   status: checkpoint.status,
   storageSnapshot: checkpoint.storageSnapshot,
+  ...(checkpoint.unavailable ? { unavailable: true } : {}),
   verifyId: checkpoint.verifyId,
 });
 
@@ -154,6 +159,8 @@ const verifyPassParamsSchema = Joi.object({
   sessionId: Joi.string().trim().required(),
 });
 
+const verifyStartParamsSchema = verifyPassParamsSchema;
+
 const verifyPassBodySchema = Joi.object({
   feedback: Joi.string().allow('').required(),
   score: Joi.number().min(0).max(1).required(),
@@ -161,6 +168,41 @@ const verifyPassBodySchema = Joi.object({
 
 export const isSessionRunActive = (session: { liveViewVncPort?: number | null }) =>
   typeof session.liveViewVncPort === 'number' && session.liveViewVncPort > 0;
+
+export const resolveVerifyStart = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      params: joi.getValidatedOrThrow(verifyStartParamsSchema, req.params),
+    }))
+    .next(async (express, { params }) => {
+      const now = new Date();
+      const session = await resolveSessionBySessionId(params.sessionId);
+      const sessionRef = session._id;
+
+      await Queries.hasExactOne(modelStage, {
+        requestId: params.requestId,
+        session: sessionRef,
+      });
+
+      await modelStage.updateOne(
+        { requestId: params.requestId, session: sessionRef },
+        {
+          $set: {
+            updatedAt: now,
+            verifyingAt: now,
+          },
+        },
+      );
+
+      emitSessionEvent(params.sessionId, {
+        requestId: params.requestId,
+        type: 'stage.verifying',
+      });
+
+      express.respondOne({ ok: true });
+    })
+    .toMiddleware(),
+];
 
 export const resolveVerifyPass = [
   Middlewares.Chainable
@@ -196,6 +238,9 @@ export const resolveVerifyPass = [
               pass: true,
               score: body.score,
             },
+          },
+          $unset: {
+            verifyingAt: '',
           },
         },
       );
@@ -242,6 +287,7 @@ export const createVerifyCheckpoint = [
         ...(body.stageIndex === undefined ? {} : { stageIndex: body.stageIndex }),
         status: 'pending',
         storageSnapshot: body.storageSnapshot,
+        ...(body.unavailable ? { unavailable: true } : {}),
         verifyId,
       });
 
@@ -258,6 +304,7 @@ export const createVerifyCheckpoint = [
           },
           $unset: {
             finishedAt: '',
+            verifyingAt: '',
           },
         },
       );
@@ -283,9 +330,7 @@ export const resumeVerifyCheckpoint = [
       const session = await resolveSessionBySessionId(params.sessionId);
       const sessionRef = session._id;
 
-      if (isSessionRunActive(session)) {
-        throw errors.conflict('Session already has an active agent run');
-      }
+      await assertSessionResumeAllowed(session);
 
       const checkpoint = await Queries.hasExactOne(modelVerifyCheckpoint, {
         session: sessionRef,
@@ -320,7 +365,7 @@ export const resumeVerifyCheckpoint = [
         ? '--produce-keys-resume-id'
         : '--verify-resume-id';
 
-      spawnOrchestrate(params.sessionId, [resumeFlag, params.verifyId]);
+      await spawnOrchestrate(params.sessionId, [resumeFlag, params.verifyId]);
 
       express.respondOne({ ok: true, verifyId: params.verifyId });
     })
@@ -384,15 +429,13 @@ export const editVerifyCheckpointAnswer = [
       const session = await resolveSessionBySessionId(params.sessionId);
       const sessionRef = session._id;
 
+      await assertSessionResumeAllowed(session);
+
       const checkpoint = await Queries.hasExactOne(modelVerifyCheckpoint, {
         session: sessionRef,
         status: 'pending',
         verifyId: params.verifyId,
       });
-
-      if (isSessionRunActive(session)) {
-        throw errors.conflict('Session already has an active agent run');
-      }
 
       if (checkpoint.kind === 'produce_keys') {
         throw errors.badRequest('produce_keys checkpoints do not support edit-answer');
@@ -435,7 +478,7 @@ export const editVerifyCheckpointAnswer = [
         verifyId: params.verifyId,
       });
 
-      spawnOrchestrate(params.sessionId, ['--verify-resume-id', params.verifyId]);
+      await spawnOrchestrate(params.sessionId, ['--verify-resume-id', params.verifyId]);
 
       express.respondOne({ ok: true, verifyId: params.verifyId });
     })

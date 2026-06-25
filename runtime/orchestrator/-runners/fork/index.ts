@@ -1,4 +1,6 @@
-import type { ForkSessionManager, TReplayStageRow } from './manager';
+import type { ForkSessionManager, TReplayStageRow, TReplayStageVerifyResult } from './manager';
+
+import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import { runYahl } from '@/orchestrator/-agent';
 import { createStorage } from '@/orchestrator/-tools/set_context';
@@ -14,6 +16,20 @@ declare global {
 }
 
 const _parsedStage = (stage: TReplayStageRow['stage']) => compileStage(stage, 1);
+
+export const resolvePrefixVerifyFastForward = (
+  parsed: ParsedStage,
+  verifyResult?: TReplayStageVerifyResult,
+) => {
+  if (parsed.spec.verify === true && verifyResult?.pass === true) {
+    return {
+      feedback: verifyResult.feedback,
+      score: verifyResult.score,
+    };
+  }
+
+  return undefined;
+};
 
 const _runForkPlan = async (manager: ForkSessionManager) => {
   const plan = manager.buildExecutionPlan();
@@ -34,6 +50,8 @@ const _runForkPlan = async (manager: ForkSessionManager) => {
 
       const parsed = _parsedStage(step.row.stage);
 
+      const verifyFastForward = resolvePrefixVerifyFastForward(parsed, step.row.verifyResult);
+
       await runYahl('', {
         contextAfter,
         contextAfterRecord: step.row.contextAfter,
@@ -44,6 +62,7 @@ const _runForkPlan = async (manager: ForkSessionManager) => {
           temperature: step.row.temperature,
         }),
         useStorage: () => storage,
+        verifyFastForward,
       });
 
       mergeContextPayloadToStorage(storage, step.row.contextAfter);

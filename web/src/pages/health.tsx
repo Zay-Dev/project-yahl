@@ -1,17 +1,17 @@
 import { useCustom } from "@refinedev/core"
 
-import type { TPingResponse } from "@/lib/types"
+import type { TServerHealthResponse } from "@/lib/types"
 
 export function HealthPage() {
-  const { query, result } = useCustom<TPingResponse>({
+  const { query, result } = useCustom<TServerHealthResponse>({
     method: "get",
     queryOptions: {
-      queryKey: ["health", "ping"],
+      queryKey: ["health"],
     },
-    url: "/__/ping",
+    url: "/__/health",
   })
 
-  const ping = result?.data
+  const health = result?.data
   const error = query.error
   const isLoading = query.isLoading
 
@@ -24,7 +24,19 @@ export function HealthPage() {
           {error instanceof Error ? error.message : "Request failed"}
         </p>
       ) : null}
-      {ping ? <p className="mt-3 text-lg font-semibold">{ping.message}</p> : null}
+      {health ? (
+        <div className="mt-3 space-y-2 text-sm">
+          <p className="text-lg font-semibold">{health.ok ? "Healthy" : "Degraded"}</p>
+          <p>Mongo: {health.mongo.ok ? "ok" : `failed (state ${health.mongo.readyState})`}</p>
+          <p>
+            Mastermind: {health.mastermind.ok ? "ok" : "failed"}
+            {health.mastermind.agent ? ` (${health.mastermind.agent})` : ""}
+          </p>
+          {health.mastermind.error ? (
+            <p className="text-destructive">{health.mastermind.error}</p>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

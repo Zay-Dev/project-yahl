@@ -261,10 +261,14 @@ export const startRedisDaemon = async () => {
             onLocalToolCall: async ({ call }) => {
               await toolCall(call);
             },
+            requestId,
             resumeFrom,
             resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,
           },
         );
+
+        console.log(`[agent-daemon] stage session done requestId=${requestId}\n`);
+        console.log(`[agent-daemon] stage end requestId=${requestId} pushing END\n`);
 
         return await end();
       };

@@ -41,7 +41,7 @@ Stuff that already works (aka things that surprisingly do not explode):
 - Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
 - VM client runs on `isolated-vm` for stronger sandbox boundaries and fewer "hope-this-is-fine" moments.
 - You can attach the orchestrator to a debugger, hit breakpoints, and poke variables manually while tracing execution.
-- **Mastermind stack:** gateway (port 4100) and worker in `docker compose`; orchestrator verify gates and `/mastermind(...)` in the agent (requires `CURSOR_API_KEY`).
+- **Mastermind stack:** gateway (port 4100) and worker (port 4200, verify gates) in `docker compose`; orchestrator verify calls worker; `/mastermind(...)` in the agent for skills (requires `CURSOR_API_KEY`).
 - **Platform approvals UI:** `/platform/approvals` for reviewing notification and settings proposals from Mastermind.
 
 Stuff to build:
@@ -118,7 +118,8 @@ flowchart LR
 | `runtime/` | `@project-yahl/runtime` — YAHL runtime + orchestrator |
 | `server/` | `@project-yahl/server` — Express + Mongoose session/tasks API |
 | `web/` | Vite + shadcn — Sessions, Tasks, platform approvals |
-| `mastermind/` | Personal assistant gateway (Cursor SDK skills, verify gates) |
+| `mastermind/` | Personal assistant gateway (Cursor SDK skills) |
+| `worker/` | Cron, platform approvals, **verify gate** (`agent --yolo` CLI) |
 | `worker/` | Cron worker for approved platform side effects |
 
 Install and build framework packages from the **Omniflex repo root**:
@@ -133,7 +134,7 @@ Copy [`.env.example`](.env.example) to `.env`. Set at minimum:
 
 - `HOST_REPO_ROOT` — absolute path to this repo (required for agent workspace bind mounts)
 - `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` — OneCLI proxy for LLM keys
-- `CURSOR_API_KEY` — required for Mastermind SDK skills (research, verify, etc.)
+- `CURSOR_API_KEY` — required for Mastermind SDK skills and worker verify CLI
 
 Copy `server/.env.example` to `server/.env` if you run the server standalone.
 
@@ -205,7 +206,7 @@ flowchart TB
   server -->|spawn_orchestrate| orch
   orch -->|docker_compose_agent| agent
   orch -->|filtered_stage_via_Redis| agent
-  orch -->|verify_gate| mm
+  orch -->|verify_gate| worker
   agent -->|typed_skills| mm
   agent -->|LLM_via_proxy| onecli
   mm -->|proposals_only| server
@@ -266,6 +267,15 @@ curl -x http://127.0.0.1:10255 -H "Authorization: Bearer placeholder" https://ap
 
 # Mastermind health
 curl -sf http://127.0.0.1:4100/health
+
+# Server aggregated health (mongo + mastermind)
+curl -sf http://127.0.0.1:4000/__/health
+
+# Worker health
+curl -sf http://127.0.0.1:4200/health
+
+# Full stack doctor (host; see docs/doctor.md)
+pnpm run doctor
 
 # Runtime
 pnpm run orchestrate

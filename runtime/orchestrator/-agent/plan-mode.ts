@@ -76,7 +76,7 @@ export const prepareStagePlan = async (params: {
     context: contextSnapshot,
     goal: logicPreview,
     stageLogic: logicPreview,
-  }, params.sessionId);
+  }, params.sessionId, params.requestId);
 
   const planBody = extractPlanText(response);
   const absolute = planFilePath(params.sessionId, params.requestId);

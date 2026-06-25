@@ -39,7 +39,7 @@ export const createRun = [
         taskYahlPath,
       });
 
-      Repository.resolve('spawnOrchestrate')(sessionId, ['--task-id', body.taskId]);
+      await Repository.resolve('spawnOrchestrate')(sessionId, ['--task-id', body.taskId]);
 
       express.res.status(201);
       express.respondOne<TResponseCreateRun>({ sessionId, taskId: body.taskId });

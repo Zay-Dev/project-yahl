@@ -1,10 +1,12 @@
 import Joi from 'joi';
 
+import { Types } from 'mongoose';
+
 import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
-import { isStageFinished } from '../-stage-status';
+import { isStageFinished, isStageVerifying } from '../-stage-status';
 import type {
   TResponseStageDetail,
   TResponseStageListItem,
@@ -12,7 +14,7 @@ import type {
   TResponseStageStatus,
   TStageListSource,
 } from '../-api-types';
-import type { IStage, TModelResponseTag, TYahlStage } from '../-types';
+import type { TModelResponseTag, TYahlStage } from '../-types';
 import {
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
@@ -68,8 +70,18 @@ const logicPreviewFrom = (logic: string | undefined) => {
 };
 
 export const resolveStageStatus = (
-  stage: Pick<TStageListSource, 'finishedAt'>,
-): TResponseStageStatus => (isStageFinished(stage) ? 'finished' : 'running');
+  stage: Pick<TStageListSource, 'finishedAt' | 'verifyingAt'>,
+): TResponseStageStatus => {
+  if (isStageFinished(stage)) {
+    return 'finished';
+  }
+
+  if (isStageVerifying(stage)) {
+    return 'verifying';
+  }
+
+  return 'running';
+};
 
 const extractContentPreview = (response: Record<string, unknown>) => {
   const choices = response.choices;
@@ -104,7 +116,7 @@ const extractContentPreview = (response: Record<string, unknown>) => {
 
 const countByRequestId = async (
   model: { aggregate: typeof modelModelResponse.aggregate },
-  sessionRef: unknown,
+  sessionRef: Types.ObjectId,
   requestIds: string[],
 ) => {
   const counts = new Map<string, number>();
@@ -125,7 +137,7 @@ const countByRequestId = async (
   return counts;
 };
 
-const listStagesBySessionRef = async (sessionRef: unknown) =>
+const listStagesBySessionRef = async (sessionRef: Types.ObjectId) =>
   Queries.queryBy(
     modelStage,
     { session: sessionRef },
@@ -133,7 +145,7 @@ const listStagesBySessionRef = async (sessionRef: unknown) =>
   ).lean();
 
 const toListItem = (
-  stage: TStageListSource & { _id: unknown },
+  stage: TStageListSource & { _id: Types.ObjectId },
   modelCallCount: number,
   toolCallCount: number,
   tokenTotals: TResponseStageListItem['tokenTotals'],
@@ -146,7 +158,7 @@ const toListItem = (
   loopValue: stage.loopMeta?.value,
   modelCallCount,
   requestId: stage.requestId,
-  stageId: String(stage._id),
+  stageId: stage._id.toString(),
   status: resolveStageStatus(stage),
   tokenTotals,
   toolCallCount,
@@ -168,7 +180,7 @@ export const resolveSessionStagesList = async (sessionId: string) => {
   ]);
 
   return stages.map((stage) => toListItem(
-    stage as IStage & { _id: unknown },
+    stage,
     modelCounts.get(stage.requestId) ?? 0,
     toolCounts.get(stage.requestId) ?? 0,
     tokenTotalsByRequestId.get(stage.requestId) ?? null,
@@ -190,6 +202,13 @@ export const resolveSessionStagesReplay = async (sessionId: string) => {
     stage: stage.stage as TYahlStage,
     stageId: String(stage._id),
     temperature: stage.temperature,
+    verifyResult: stage.verifyResult
+      ? {
+        feedback: stage.verifyResult.feedback,
+        pass: stage.verifyResult.pass,
+        score: stage.verifyResult.score,
+      }
+      : undefined,
   }));
 };
 
@@ -246,18 +265,16 @@ export const getSessionStage = [
       );
 
       const listItem = toListItem(
-        stage as IStage & { _id: unknown },
+        stage,
         modelCallCount,
         toolCallCount,
         tokenTotalsByRequestId.get(params.requestId) ?? null,
       );
 
-      const stageDoc = stage as IStage;
-
       const detail: TResponseStageDetail = {
         ...listItem,
-        context: (stageDoc.context ?? {}) as Record<string, unknown>,
-        contextAfter: stageDoc.contextAfter as Record<string, unknown> | undefined,
+        context: (stage.context ?? {}) as Record<string, unknown>,
+        contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
         loopMeta: stage.loopMeta,
         modelResponses: modelResponses.map((doc) => {
           const response = (doc.response ?? {}) as Record<string, unknown>;

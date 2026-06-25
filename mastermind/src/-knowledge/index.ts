@@ -109,6 +109,33 @@ export const readKnowledgeCorpus = async (
   return parts.join('\n\n');
 };
 
+export const findKnowledgeFileByBasename = async (
+  key: string,
+  topic?: string,
+): Promise<string | null> => {
+  const sanitizedKey = sanitizeSegment(key);
+  const topicSegment = topic ? sanitizeSegment(topic) : '';
+  const candidates = await listKnowledgeFiles();
+
+  const scoped = topicSegment
+    ? candidates.filter((file) => {
+      const relative = path.relative(paths.knowledges, file);
+
+      return relative.startsWith(`${topicSegment}/`) || relative.startsWith(`${topicSegment}.`);
+    })
+    : candidates;
+
+  for (const file of scoped) {
+    const basename = path.basename(file, path.extname(file));
+
+    if (basename === sanitizedKey || basename === key) {
+      return file;
+    }
+  }
+
+  return null;
+};
+
 export const findKnowledgeFileForKey = async (
   key: string,
   topic?: string,
@@ -151,7 +178,7 @@ export const resolveKnowledgeWritePath = async (
   key: string,
   topic?: string,
 ): Promise<{ absolute: string; relative: string }> => {
-  const existing = await findKnowledgeFileForKey(key, topic);
+  const existing = await findKnowledgeFileByBasename(key, topic);
 
   if (existing) {
     return {
@@ -176,3 +203,96 @@ export const hasPathArgs = (args: Record<string, unknown>) =>
   typeof args.source === 'string'
   || typeof args.file === 'string'
   || typeof args.path === 'string';
+
+export type TKnowledgePersistedIndexItem = {
+  absolutePath: string;
+  key: string;
+  relativePath: string;
+};
+
+export type TSourceIndexItem = {
+  fetchedAt: string;
+  studyKey: string;
+  title: string;
+  trustTier: 'high' | 'low' | 'medium';
+  url: string;
+};
+
+export const rebuildPersistedPathsFromTopic = async (
+  topic: string,
+): Promise<TKnowledgePersistedIndexItem[]> => {
+  const topicSegment = sanitizeSegment(topic);
+  const candidates = await listKnowledgeFiles();
+  const topicFiles = candidates.filter((file) => {
+    const relative = path.relative(paths.knowledges, file);
+
+    return relative.startsWith(`${topicSegment}/`)
+      && path.extname(file).toLowerCase() === '.json';
+  });
+
+  const persisted: TKnowledgePersistedIndexItem[] = [];
+
+  for (const file of topicFiles) {
+    const relativePath = path.relative(paths.knowledges, file);
+    const key = path.basename(file, path.extname(file));
+
+    persisted.push({
+      absolutePath: `~/knowledges/${relativePath}`,
+      key,
+      relativePath,
+    });
+  }
+
+  return persisted.sort((left, right) => left.key.localeCompare(right.key));
+};
+
+export const rebuildSourcesIndexFromStudies = async (
+  topic: string,
+): Promise<TSourceIndexItem[]> => {
+  const topicSegment = sanitizeSegment(topic);
+  const candidates = await listKnowledgeFiles();
+  const studies = candidates.filter((file) => {
+    const relative = path.relative(paths.knowledges, file);
+    const basename = path.basename(file, path.extname(file));
+
+    return relative.startsWith(`${topicSegment}/`)
+      && basename.startsWith('study_')
+      && path.extname(file).toLowerCase() === '.json';
+  });
+
+  const sources: TSourceIndexItem[] = [];
+
+  for (const file of studies) {
+    const studyKey = path.basename(file, '.json');
+
+    try {
+      const raw = await fs.readFile(file, 'utf8');
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const study = (parsed[studyKey] ?? parsed) as Record<string, unknown>;
+
+      if (typeof study.url !== 'string' || typeof study.title !== 'string') {
+        continue;
+      }
+
+      const trustTier = study.trustTier;
+
+      sources.push({
+        fetchedAt: typeof study.studiedAt === 'string'
+          ? study.studiedAt
+          : typeof study.fetchedAt === 'string'
+            ? study.fetchedAt
+            : new Date().toISOString(),
+        studyKey,
+        title: study.title,
+        trustTier: trustTier === 'high' || trustTier === 'low' || trustTier === 'medium'
+          ? trustTier
+          : 'medium',
+        url: study.url,
+      });
+    } catch {
+      // skip unreadable study files
+    }
+  }
+
+  return sources.sort((left, right) => left.studyKey.localeCompare(right.studyKey));
+};

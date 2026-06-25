@@ -6,6 +6,7 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 export const config = {
   apiKey: process.env.CURSOR_API_KEY?.trim() ?? '',
   dataRoot: process.env.MASTERMIND_DATA_ROOT?.trim() || '/data',
+  internalToken: process.env.MASTERMIND_INTERNAL_TOKEN?.trim() ?? '',
   port: Number(process.env.MASTERMIND_PORT?.trim() || '4100'),
   repoRoot: process.env.HOST_REPO_ROOT?.trim()
     || path.resolve(moduleDir, '../..'),

@@ -15,6 +15,7 @@ Platform skill for dynamic ask-user batch design. Used by any task that needs ag
 | `gaps` | Missing fields or topics to cover |
 | `priorQa` | Prior question/answer pairs this stage |
 | `goal` | Optional stage goal summary |
+| `mission` / `subjectContext` | Why questions are asked — subject/user goal, not task mechanics |
 
 ## Output
 

@@ -107,6 +107,7 @@ export function SessionDetailPage() {
             <VerifyPendingBanner
               autoRetry={bannerState.mode === 'auto_retry'}
               checkpoint={bannerState.checkpoint}
+              infraBusy={bannerState.mode === 'infra_busy'}
               onDismiss={() => void refetchVerifyCheckpoints()}
               sessionId={session.sessionId}
             />

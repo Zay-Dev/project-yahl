@@ -15,8 +15,8 @@ Per-stage fields:
 | Field | Purpose |
 |-------|---------|
 | `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
-| `contextMode` | VM-only `CONTEXT: { ... }` before the next AI stage |
-| `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` |
+| `contextMode` | VM-only stage; read prior keys via `context.context.{key}`; return `(() => ({ ... }))` to write `produceContextKeys` |
+| `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` (same `context.context.{key}` reads as `contextMode`) |
 | `loopSetup` | Orchestrator-only (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
 | `temperature` | Model temperature for AI stages (0–2) |
 | `contextKeys` | Allowlist of context/stage keys passed into the runner |
@@ -27,6 +27,23 @@ Per-stage fields:
 | `verify` | When true, mastermind scores stage output after finish; failure pauses for resume |
 | `verifyMinScore` | Minimum pass score (0–1, default 0.75) |
 | `verifyRubric` | Rubric name or inline string for verify gate |
+
+### VM stages (`contextMode`, `conditionMode`)
+
+Runs in isolated-vm — **not** the agent. Prior context keys are **not** bare variables; read them as `context.context.{key}`.
+
+```yaml
+# Reference: server/tasks/test/SKILL.yahl
+- contextMode: true
+  contextKeys: [c, i]
+  updateContextKeys: [c]
+  logic: |
+    (() => ({
+      c: context.context.c + context.context.i,
+    }));
+```
+
+AI stages (no `contextMode`) may use bare names listed in `contextKeys` — the agent sees them in Input.
 
 ### Syntaxes
 

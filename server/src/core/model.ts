@@ -1,6 +1,6 @@
 import * as Types from '@omni-infra/mongoose/types';
 
-const _model = {
+const _model: { d: typeof Types } = {
   d: { ...Types },
 };
 

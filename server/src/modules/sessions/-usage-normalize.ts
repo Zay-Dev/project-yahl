@@ -1,5 +1,7 @@
 import type { TTokenTotals } from './-types';
 
+import { Types } from 'mongoose';
+
 import { modelModelResponse } from './models';
 
 const num = (value: unknown) =>
@@ -103,7 +105,7 @@ const toNullableTotals = (totals: TTokenTotals | undefined) => {
 };
 
 export const sumModelResponseUsagesByRequestId = async (
-  sessionRef: unknown,
+  sessionRef: Types.ObjectId,
   requestIds: string[],
 ) => {
   const totalsByRequestId = new Map<string, TTokenTotals>();
@@ -135,7 +137,7 @@ export const sumModelResponseUsagesByRequestId = async (
   return out;
 };
 
-export const sumModelResponseUsagesForSession = async (sessionRef: unknown) => {
+export const sumModelResponseUsagesForSession = async (sessionRef: Types.ObjectId) => {
   const docs = await modelModelResponse
     .find({ session: sessionRef })
     .select({ response: 1 })
@@ -155,7 +157,7 @@ export const sumModelResponseUsagesForSession = async (sessionRef: unknown) => {
   return toNullableTotals(totals);
 };
 
-export const sumModelResponseUsagesBySessionRef = async (sessionRefs: unknown[]) => {
+export const sumModelResponseUsagesBySessionRef = async (sessionRefs: Types.ObjectId[]) => {
   const out = new Map<string, TTokenTotals | null>();
 
   if (sessionRefs.length === 0) {
