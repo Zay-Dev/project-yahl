@@ -32,7 +32,7 @@ Stuff that already works (aka things that surprisingly do not explode):
 - Task catalog from `server/tasks/` via the tasks API; orchestrator loads YAML through the server with `--task-id`.
 - **Tasks web UI:** browse, create, and edit `SKILL.yahl` at `/tasks`, `/tasks/new`, and `/tasks/:taskId`. In Docker, the server bind-mounts `./server/tasks` so edits persist on the host repo.
 - **Tasks API:** `GET/POST /api/tasks`, `GET/PUT /api/tasks/:taskId`, `POST /api/runs`.
-- Runtime `ask-user` flow is live: stages can pause for a real user decision and continue with deterministic answer ids (finally, less mind-reading). If the orchestrator times out waiting, the session saves a checkpoint; after you answer, **Resume from checkpoint** in Session Detail kicks off continuation (Redis push wakes an in-flight wait faster when `REDIS_URL` is aligned).
+- **`askUserBatch.v1`:** multi-question ask-user pauses (text + radio/checkbox MC); scrollable drawer UI. Stages pause for a real user decision and continue with deterministic answer ids (finally, less mind-reading). If the orchestrator times out waiting, the session saves a checkpoint; after you answer, **Resume from checkpoint** in Session Detail kicks off continuation (Redis push wakes an in-flight wait faster when `REDIS_URL` is aligned).
 - Session/event tracking with replayable step history and usage/cost visibility.
 - Web UI: Sessions list, Session Detail with live logs/status, jump-to-session links, and Tasks authoring.
 - Session detail view includes live stream panel, model aggregate table, step details dialog, and final result dialog.
@@ -41,8 +41,14 @@ Stuff that already works (aka things that surprisingly do not explode):
 - Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
 - VM client runs on `isolated-vm` for stronger sandbox boundaries and fewer "hope-this-is-fine" moments.
 - You can attach the orchestrator to a debugger, hit breakpoints, and poke variables manually while tracing execution.
-- **Mastermind stack:** gateway (port 4100) and worker (port 4200, verify gates) in `docker compose`; orchestrator verify calls worker; `/mastermind(...)` in the agent for skills (requires `CURSOR_API_KEY`).
-- **Platform approvals UI:** `/platform/approvals` for reviewing notification and settings proposals from Mastermind.
+- **Mastermind stack:** gateway (port 4100) and worker (port 4200, verify gates) in `docker compose`; orchestrator verify calls worker; `/mastermind(...)` in the agent for skills (requires `CURSOR_API_KEY`). Boot fail-fast when the SDK agent is not ready; stack probe via `pnpm run doctor`.
+- **`design-questions`:** platform Mastermind skill for dynamic ask-user batches (pass `mission:` for subject framing).
+- **`verifyAutoRetry`:** orchestrator in-process verify loop on stages with `verify: true` + `verifyAutoRetry: true`.
+- **Task-local skills:** mount from `server/tasks/{taskId}/skills/` to agent `~/task-skills/`; see **Authoring tasks** below.
+- **Knowledge store:** mastermind-private corpus under `data/mastermind/knowledges/`; agents read session extracts only — see **Protecting the knowledge store** below.
+- **Topic governance:** `resolve-topic` + `knowledge_tidy` background task (`background: true` in `SKILL.yahl`).
+- **Background sessions:** cron/utility runs hidden by default on `/sessions` (toggle to show).
+- **Platform UI:** `/platform/approvals` for notification/settings proposals; `/platform/cron-jobs` for cron job create/edit/delete (worker ticks via `POST /api/runs`).
 
 Stuff to build:
 
@@ -75,18 +81,77 @@ for each i of [1..5,+2] {
 
 Syntax reference:
 
-- `~/something` — the workspace; the AI can read and write here, but only here.
+- `~/something` — session scratch workspace (`AGENT_SESSION_HOME`); the agent can read and write here, not the whole repo.
+- `~/task-skills/…` — task-local SKILL files mounted from `server/tasks/{taskId}/skills/` (see **Authoring tasks**).
 - `for each i of [0..100]` and `for each x of [array]` — loops, with an optional step like `,+2`.
 - `CONTEXT: ...` — run deterministic context mutation in the VM before the next AI stage.
 - `IF:` / `ELSE IF:` / `ELSE:` / `END:` — stage branching; condition decides which block runs.
 - `REPLACE: ...` — system tag the runtime uses when a step needs a second pass after a tool call.
 - `EXTENDS: ...` — append or merge into an existing context value without replacing it.
-- `/ask-user(...)` — pause the run, ask one multiple-choice question, then resume with the selected answer.
+- `/ask-user-batch(...)` — pause for **`askUserBatch.v1`** (one or more questions per submit: text, radio, or checkbox MC).
 - `/skill_name(...)` — call into a skill from the skills folder.
 - `/mastermind(...)` — call the Mastermind gateway (research, verify, notifications, etc.).
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 
 `SKILL.yahl` is a single YAML document (`name`, `description`, optional `types`, and a `stages` list). Each stage has a `logic: |` block; the runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF:` branches, and brace-wrapped AI blocks). See `server/tasks/test/SKILL.yahl` for the canonical shape.
+
+## Authoring tasks
+
+Tasks can ship their own SKILL files — handy when you want assess/synthesize rules without bloating `mastermind/skills/`. The orchestrator copies them into the session workspace at run start; the agent reads them under `~/task-skills/`. (Forget `task-mission/SKILL.md` and the run dies before stage 1 — ask me how I know.)
+
+- **Layout:** `server/tasks/{taskId}/SKILL.yahl` + optional `server/tasks/{taskId}/skills/**/*.md`
+- **Mount:** orchestrator copies `skills/` → `workspace/sessions/{sessionId}/task-skills/` (agent `~/task-skills/`)
+- **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at fresh run start; missing file → `task-skills mount incomplete`
+- **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
+- **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` / `plan` (untrusted hints banner)
+- **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_tidy` (see [`mastermind/skills/extract-knowledge/SKILL.md`](mastermind/skills/extract-knowledge/SKILL.md) for the read path)
+
+```
+server/tasks/my_task/
+  SKILL.yahl
+  skills/
+    task-mission/SKILL.md   ← required when YAML references ~/task-skills/
+    my-helper/SKILL.md
+```
+
+## Protecting the knowledge store
+
+Curated knowledge lives in `data/mastermind/knowledges/` on the host. Stage agents do **not** get that folder mounted — they only see what Mastermind extracts into the current session scratch dir. (We removed the old `~/knowledges` symlink for a reason.)
+
+```mermaid
+sequenceDiagram
+  participant Agent as StageAgent
+  participant MM as Mastermind
+  participant Store as data_mastermind_knowledges
+  participant Scratch as workspace_sessions_id
+
+  Agent->>MM: extract-knowledge need topic
+  MM->>Store: read corpus internally
+  MM->>Scratch: write knowledge/key.json
+  MM-->>Agent: key path absent only
+  Agent->>Scratch: read .extracted field
+
+  Agent->>MM: persist-knowledge key value topic
+  MM->>Store: write basename only via resolveTopic
+  MM-->>Agent: relative path only
+```
+
+- **Container mounts** — agent: [`workspace/`](workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** `data/mastermind/` ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Mastermind: `./data/mastermind:/data` ([`docker-compose.yml`](docker-compose.yml)).
+- **No direct corpus access** — agents must not `cat ~/knowledges/…`; canonical store is mastermind-private only.
+- **Session-scoped reads** — `extract-knowledge` scans knowledges internally, writes `workspace/sessions/{sessionId}/knowledge/{key}.json`, returns `{ key, path: "~/knowledge/…", absent }` only — not the full tree ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts), [`skills.ts`](mastermind/src/-handlers/skills.ts)).
+- **Path injection blocked** — `extract-knowledge` and `persist-knowledge` reject caller `source` / `file` / `path` args ([`hasPathArgs`](mastermind/src/-knowledge/index.ts)).
+- **Controlled writes** — `persist-knowledge` accepts `key`, `value`, `topic` only; Mastermind picks the path via `resolveKnowledgeWritePath` + topic registry — basename-only under the canonical topic folder ([`persist-knowledge` SKILL](mastermind/skills/persist-knowledge/SKILL.md)). Narrative keys persist as `.md`; structured keys stay `.json`.
+- **Key sanitization** — session ids and extract keys sanitized before filesystem writes ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts)).
+- **Minimal HTTP surface** — no public knowledges browse API; orchestrator verify uses internal `POST /v1/internal/knowledges/persisted-index` (loopback or `X-Internal-Token`) ([`internal-auth.ts`](mastermind/src/-api/internal-auth.ts)).
+- **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on `research` / `plan` get an explicit untrusted-content banner in the Mastermind prompt ([`UNTRUSTED_GUIDELINE_PREAMBLE`](mastermind/src/-handlers/skills.ts)).
+- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `extract-knowledge` = curated store scan. Different skills, different trust boundary.
+
+Two-step read in stage logic:
+
+```text
+const extractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: identity, goals);
+const knowledge = extractRef.absent ? '<none>' : (*read(extractRef.path)).extracted;
+```
 
 ## How it works under the hood
 
@@ -117,10 +182,9 @@ flowchart LR
 |------|----------------|
 | `runtime/` | `@project-yahl/runtime` — YAHL runtime + orchestrator |
 | `server/` | `@project-yahl/server` — Express + Mongoose session/tasks API |
-| `web/` | Vite + shadcn — Sessions, Tasks, platform approvals |
+| `web/` | Vite + shadcn — Sessions, Tasks, platform approvals, cron jobs |
 | `mastermind/` | Personal assistant gateway (Cursor SDK skills) |
-| `worker/` | Cron, platform approvals, **verify gate** (`agent --yolo` CLI) |
-| `worker/` | Cron worker for approved platform side effects |
+| `worker/` | Cron ticks (via server API), platform approvals, **verify gate** (`agent --yolo` CLI) |
 
 Install and build framework packages from the **Omniflex repo root**:
 
@@ -169,11 +233,11 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Server** | Host (`pnpm run dev:server`) or `server` container (prod) | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic; control plane only |
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/root/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
-| **Mastermind** | `mastermind` container (4100) | `data/mastermind/`, workspace `/root`, Cursor SDK skills | Side effects without approval — proposals go to server first |
+| **Mastermind** | `mastermind` container (4100) | `data/mastermind/knowledges/` (canonical corpus), workspace `/root`, Cursor SDK skills | Side effects without approval — proposals go to server first |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, **verify gate** (Cursor CLI) | Does not spawn orchestrator or agent containers |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
-Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir; see [docs/decision-log/mastermind.md](docs/decision-log/mastermind.md)).
+Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir; see [mastermind/decision-log.md](mastermind/decision-log.md)).
 
 **Local dev:** server on host spawns orchestrator on host; agents still run in Docker via `docker-compose.agent.yml`. Manual `pnpm run orchestrate` bypasses the server spawn path but uses the same agent isolation.
 
@@ -182,8 +246,8 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 **How the agent container is restricted:**
 
 - **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-onecli.ts`](runtime/orchestrator/-docker/compose-onecli.ts), project `agent-{sessionId}`), then tears it down.
-- **Minimal mounts** — only [`workspace/`](workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No server code, tasks tree, or `.env` in the agent image.
-- **Session scratch** — `AGENT_SESSION_HOME=/root/sessions/{sessionId}`; knowledge reads via `extract-knowledge` → `~/knowledge/{key}.json` only ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh)).
+- **Minimal mounts** — only [`workspace/`](workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
+- **Session scratch** — `AGENT_SESSION_HOME=/root/sessions/{sessionId}`; knowledge via `extract-knowledge` → `~/knowledge/{key}.json` only — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see **Protecting the knowledge store**).
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See **OneCLI setup** below for vault rules.
@@ -254,7 +318,7 @@ Example: `pnpm run orchestrate -- --task-id test --session-id my-debug-session`
 4. Add provider credentials to OneCLI vault with correct host/path patterns
 5. Set `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` in `.env`
 6. Run one orchestrator session to bootstrap shared override files under `runtime/.onecli/`
-7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` as placeholders only. Browser automation uses Stagehand (local Chromium in the agent container); see [docs/stagehand-integration.md](docs/stagehand-integration.md)
+7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` as placeholders only. Browser automation uses Stagehand (local Chromium in the agent container; see [`runtime/orchestrator/SKILLS/stagehand/SKILL.md`](runtime/orchestrator/SKILLS/stagehand/SKILL.md)).
 
 ### Smoke tests
 
@@ -274,7 +338,7 @@ curl -sf http://127.0.0.1:4000/__/health
 # Worker health
 curl -sf http://127.0.0.1:4200/health
 
-# Full stack doctor (host; see docs/doctor.md)
+# Full stack doctor (host)
 pnpm run doctor
 
 # Runtime
@@ -321,7 +385,7 @@ pnpm run orchestrate
 |--------|------|-------------|
 | GET | `/api/fork-sessions/:forkSessionId` | Load fork setup for orchestrator |
 
-**Platform** (Mastermind proposals and worker queue)
+**Platform** (Mastermind proposals, cron jobs, worker queue)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -331,6 +395,11 @@ pnpm run orchestrate
 | POST | `/api/platform/proposals/notifications` | Draft notification proposal |
 | POST | `/api/platform/proposals/settings` | Draft settings proposal |
 | GET | `/api/platform/work/pending` | List pending worker jobs |
+| GET | `/api/platform/cron/jobs` | List cron jobs |
+| POST | `/api/platform/cron/jobs` | Create a cron job |
+| GET | `/api/platform/cron/jobs/:id` | Get a cron job |
+| PATCH | `/api/platform/cron/jobs/:id` | Update a cron job |
+| DELETE | `/api/platform/cron/jobs/:id` | Soft-delete a cron job |
 
 SSE streams expose live run logs (`meta` / `log` / `status`) and session events for the web UI.
 

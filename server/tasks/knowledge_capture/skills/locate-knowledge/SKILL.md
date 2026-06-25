@@ -39,6 +39,11 @@ Assess existing `knowledges/{canonical}/` corpus (including registered alias fol
 - If resolve-topic returned `suggestMerge`, note overlapping folders in gaps until platform tidy merges them.
 - Use `today` from context when framing freshness; do not hardcode repo paths or hostnames.
 
-## Persist
+## Rerun intent override
+
+When `rerun_intent.isRerun` is true, read `~/task-skills/rerun-intent/SKILL.md`:
+
+- `*should_update_scope('clarify'|'studies'|'facts'|'synthesis'|'summary', rerun_intent)` affects downstream stage skip decisions.
+- `corpus_assessment.gaps` still reflects objective corpus state; rerun scope decides whether to act on gaps.
 
 After building `corpus_assessment`, persist via `persist-knowledge` and append returned `{ path }` to `knowledge_paths.persisted`.

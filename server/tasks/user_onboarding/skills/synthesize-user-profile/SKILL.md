@@ -50,3 +50,36 @@ Stage agent passes structured facts from context and session knowledge extracts 
 ## Verify expectations
 
 Both Markdown strings must be non-empty, include all four section areas, and not contradict persisted `knowledges/user-onboarding/` facts.
+
+## Open questions
+
+After synthesis, identify gaps the profile cannot resolve from Q&A, knowledge, or `open_questions_qa` answers.
+
+Emit a separate list (not in Markdown body):
+
+```json
+{ "items": ["question 1", "question 2"] }
+```
+
+Rules:
+
+- Include only genuine unknowns — not fields already captured in profiles.
+- Remove items answered in `open_questions_qa` this run.
+- Carry forward unanswered items from prior `open_questions` extract unless superseded.
+- Persist via stage logic: `/mastermind(persist-knowledge, key: open_questions, value: { items: [...] })`.
+
+When `open_questions_qa` is present, weave answered content into the relevant profile sections before computing remaining open questions.
+
+## Summary-only rerun
+
+When `rerun_intent.proceedMode === summary_only`, rebuild all four sections from extracted knowledge + `open_questions_qa`; prior stage context keys may be loaded from extract rather than in-session Q&A.
+
+## Helper pseudo-ops (stage agent)
+
+### `*load_profile_from_knowledge(knowledge, key, as: TProfile)`
+
+Parse structured profile from extract text for summary-only rerun.
+
+### `*extract_open_questions_from_synthesis(mastermindMd, agentMd, open_questions_qa, pending_open_questions, guideline)`
+
+Return `{ items: string[] }` per Open questions rules above; exclude answered and already-resolved items.

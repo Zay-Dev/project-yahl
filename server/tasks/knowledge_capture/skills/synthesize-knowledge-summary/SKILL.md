@@ -17,6 +17,8 @@ Requirements:
 - Cite sources by URL from `sources` / `facts`.
 - Do not contradict extracted facts.
 - If `userProfile` from user-onboarding is present, note relevance to user goals/preferences where appropriate.
+- When `open_questions_qa` is in facts, promote each answered question into `claims[]` and exclude from `openQuestions[]`.
+- Remaining unresolved gaps go in `openQuestions[]`.
 
 ## Stage 5 — final brief
 
@@ -29,7 +31,7 @@ Executive summary of the entire topic knowledge corpus:
 - What the subject is
 - Key findings (bullets)
 - Source quality note
-- Open questions / gaps
+- Open questions / gaps (list only unresolved; note resolved items from `open_questions_qa` briefly)
 
 ### personalizedBriefMd
 

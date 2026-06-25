@@ -56,7 +56,18 @@ When `sufficient: false`:
 | 4 Communication | tone, detail level, language preference, proactivity |
 | 5 Synthesis | all prior stage bundles present for dual Markdown synthesis |
 
-Rerun: re-assess against knowledge corpus; skip ask_user when knowledge already satisfies the stage.
+Rerun: re-assess against knowledge corpus; skip ask_user when knowledge already satisfies the stage **unless** `rerun_intent` forces update.
+
+## Rerun intent override
+
+When `rerun_intent.isRerun` is true, read `~/task-skills/rerun-intent/SKILL.md`:
+
+- `*should_update_scope(scopeKey, rerun_intent)` returns true → treat as **not sufficient** even when knowledge is complete (force ask-user or rebuild path).
+- Stage scope keys: `identity` (1), `goals` (2), `preferences` (3), `communication` (4).
+- `proceedMode === summary_only` → always sufficient for stages 1–4 (rebuild from knowledge only, no ask-user).
+- `proceedMode === full_refresh` → never sufficient (always gaps path when any field missing).
+
+When `rerun_intent` is absent (first run), smart-skip behaves as before.
 
 ## Profile builders
 
