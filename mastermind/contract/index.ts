@@ -46,6 +46,8 @@ export const skillNames = [
   'extract-info',
   'extract-knowledge',
   'persist-knowledge',
+  'resolve-topic',
+  'tidy-knowledge',
   'media-to-text',
   'plan',
   'design-questions',

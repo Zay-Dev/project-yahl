@@ -15,3 +15,6 @@ See [docs/decision-log/mastermind.md](../docs/decision-log/mastermind.md).
 - Crash analyst uses the same queued prompt (injected via `initCrashReports`); no static `Agent.prompt` bypass.
 - Stage verify runs on **worker** (`POST /v1/verify`, `agent --yolo`, file context under `workspace/sessions/.../verify/`); mastermind has no verify endpoint.
 - Verify infra failures return `unavailable: true` from worker; orchestrator must not treat them as rubric misses for verifyAutoRetry.
+- Canonical knowledges are mastermind-private (`data/mastermind/knowledges/`); agents read session extracts at `~/knowledge/{key}.json` after `extract-knowledge`.
+- Knowledge topic registry under `knowledges/_index/topics.json`; `resolve-topic` skill; persist/extract union alias folders; tidy via `tidy-knowledge` skill / `knowledge_tidy` background task (`POST /api/runs`).
+- Knowledges HTTP: `POST /v1/internal/knowledges/persisted-index` only (orchestrator verify); no public topics/resolve/tidy routes.

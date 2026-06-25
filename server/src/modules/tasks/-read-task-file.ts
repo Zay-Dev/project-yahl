@@ -6,9 +6,10 @@ import { taskYahlAbsolutePath, taskYahlRelativePath } from './-tasks-root';
 export const readTaskFile = async (taskId: string) => {
   const yahlPath = taskYahlAbsolutePath(taskId);
   const yahl = await fs.readFile(yahlPath, 'utf8');
-  const { description, name } = parseTaskMetadata(yahl);
+  const { background, description, name } = parseTaskMetadata(yahl);
 
   return {
+    background,
     description,
     id: taskId,
     name,

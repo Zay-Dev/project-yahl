@@ -1,12 +1,12 @@
 # locate-knowledge
 
-Assess existing `knowledges/{topic}/` corpus before spending tokens on re-fetch.
+Assess existing `knowledges/{canonical}/` corpus (including registered alias folders) before spending tokens on re-fetch.
 
 ## Input
 
-- `knowledge_topic` slug
+- `knowledge_topic` canonical slug from resolve-topic
 - `learning_contract` from clarify stage
-- `extract-knowledge` output for the topic folder
+- `extract-knowledge` session file at `~/knowledge/{key}.json` (read `.extracted` field)
 
 ## Output (`corpus_assessment` via set_context)
 
@@ -33,9 +33,10 @@ Assess existing `knowledges/{topic}/` corpus before spending tokens on re-fetch.
 
 ## Smart skip
 
-- List `existingKeys` from extract-knowledge file basenames (without `.json`).
+- List `existingKeys` from the session extract JSON (parsed from `~/knowledge/` after extract-knowledge).
 - `sufficientFor` = stage goals already met by persisted keys with valid content.
 - `gaps` = what `learning_contract` still needs vs corpus.
+- If resolve-topic returned `suggestMerge`, note overlapping folders in gaps until platform tidy merges them.
 - Use `today` from context when framing freshness; do not hardcode repo paths or hostnames.
 
 ## Persist

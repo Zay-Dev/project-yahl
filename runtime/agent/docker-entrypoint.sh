@@ -21,7 +21,6 @@ fi
 if [ -n "${AGENT_SESSION_HOME:-}" ]; then
   mkdir -p "$AGENT_SESSION_HOME"
   export HOME="$AGENT_SESSION_HOME"
-  ln -sfn /root/knowledges "$AGENT_SESSION_HOME/knowledges"
 fi
 
 if [ "${STAGEHAND_LIVEVIEW:-0}" = "1" ] || [ "${STAGEHAND_LIVEVIEW:-}" = "true" ]; then

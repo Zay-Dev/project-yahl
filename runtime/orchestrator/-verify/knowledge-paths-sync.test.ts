@@ -19,7 +19,7 @@ describe('syncKnowledgePathsPersisted', () => {
     globalThis.fetch = (async (input) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
-      if (url.endsWith('/v1/knowledges/demo-topic/persisted-index')) {
+      if (url.endsWith('/v1/internal/knowledges/persisted-index')) {
         return Response.json({
           ok: true,
           persisted: [

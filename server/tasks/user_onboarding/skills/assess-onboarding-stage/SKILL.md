@@ -8,7 +8,7 @@ Given extracted knowledge and prior stage Q&A, decide whether the current onboar
 
 ## Input (from stage context)
 
-- `extract-knowledge` output for topic `user-onboarding`
+- Session extract `.extracted` content for topic `user-onboarding`
 - Stage-specific keys expected for this stage index
 - `onboarding_qa_<stageIndex>` log if present
 - Stage rubric from SKILL.yahl

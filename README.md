@@ -170,7 +170,7 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/root/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
 | **Mastermind** | `mastermind` container (4100) | `data/mastermind/`, workspace `/root`, Cursor SDK skills | Side effects without approval — proposals go to server first |
-| **Worker** | `worker` container | Approved platform jobs, cron batch runs | Send notifications or apply settings until approval |
+| **Worker** | `worker` container | Cron (via server API), platform approvals, **verify gate** (Cursor CLI) | Does not spawn orchestrator or agent containers |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
 Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir; see [docs/decision-log/mastermind.md](docs/decision-log/mastermind.md)).
@@ -183,14 +183,14 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 
 - **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-onecli.ts`](runtime/orchestrator/-docker/compose-onecli.ts), project `agent-{sessionId}`), then tears it down.
 - **Minimal mounts** — only [`workspace/`](workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No server code, tasks tree, or `.env` in the agent image.
-- **Session scratch** — `AGENT_SESSION_HOME=/root/sessions/{sessionId}`; shared knowledges via symlink only ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh)).
+- **Session scratch** — `AGENT_SESSION_HOME=/root/sessions/{sessionId}`; knowledge reads via `extract-knowledge` → `~/knowledge/{key}.json` only ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh)).
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See **OneCLI setup** below for vault rules.
 - **Mastermind is HTTP** — agent calls `MASTERMIND_API_URL` with named skills; `CURSOR_API_KEY` stays in the mastermind container. Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals`.
 - **VM control flow off-agent** — `CONTEXT` / `IF` blocks run in `isolated-vm` on the orchestrator process, not inside the agent.
 
-`docker.sock` on **server** and **worker** is intentional: trusted control-plane components that spawn runs. It is not mounted into agent containers.
+`docker.sock` on **server** only: the server spawns orchestrator/agent containers per run. It is not mounted into agent or worker containers.
 
 ```mermaid
 flowchart TB

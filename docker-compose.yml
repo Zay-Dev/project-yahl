@@ -139,8 +139,6 @@ services:
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       MASTERMIND_API_URL: http://mastermind:4100
       WORKER_API_URL: http://worker:4200
-      REDIS_URL: redis://redis:6379
-      RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
       SESSION_API_BASE_URL: http://server:4000
       WORKER_BATCH_RUNS_ROOT: /tmp/yahl-batch-runs
       WORKER_HEALTH_PORT: "4200"
@@ -150,11 +148,8 @@ services:
     volumes:
       - ./workspace:/root
       - ./data/mastermind:/data
-      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       mastermind:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       server:
         condition: service_healthy

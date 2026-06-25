@@ -85,8 +85,7 @@ Syntax of "/skill(...args)" is a skill, that means
 Syntax of "~/some-text" means the workspace, it takes the linux's home (~/) syntax sematically, usually means accessing (read/write) the file system, we only access file-system when this syntax presents, and ~/ means our workspace (user's home), use bash command to validate if you have written content correctly if it is a write virtual function
 
 examples:
-- *read(~/knowledges/news-monitor/sources.json) means reading the content of the file at that absolute path
-- *find(~/knowledges/**/*.json) means find all json files recursively under the ~/knowledges folder
+- *read(~/knowledge/my-extract.json) means reading a session extract written by extract-knowledge (use `.extracted` from the JSON payload)
 - *save(~/memory.md, new_memory) means saving new memory to the ~/memory.md file
 
 ### Instructions

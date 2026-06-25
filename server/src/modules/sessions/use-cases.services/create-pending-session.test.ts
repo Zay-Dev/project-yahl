@@ -14,6 +14,7 @@ describe('pendingSessionUpdateDoc', () => {
 
     assert.deepEqual(update, {
       $set: {
+        isBackground: false,
         taskId: 'media_to_text_test',
         taskYahlPath: 'server/tasks/media_to_text_test/SKILL.yahl',
         updatedAt: now,
@@ -23,5 +24,16 @@ describe('pendingSessionUpdateDoc', () => {
       },
     });
     assert.equal('parsedStages' in update.$set, false);
+  });
+
+  it('sets isBackground when task is background', () => {
+    const update = pendingSessionUpdateDoc({
+      isBackground: true,
+      sessionId: 'sess-bg',
+      taskId: 'knowledge_tidy',
+      taskYahlPath: 'server/tasks/knowledge_tidy/SKILL.yahl',
+    });
+
+    assert.equal(update.$set.isBackground, true);
   });
 });

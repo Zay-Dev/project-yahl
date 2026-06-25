@@ -3,10 +3,36 @@ import path from 'path';
 
 import { paths } from '../config.js';
 
-const KNOWLEDGE_EXTENSIONS = new Set(['.json', '.md', '.yaml', '.yml']);
+import {
+  expandTopicSlugs,
+  registerTopic,
+  resolveCanonicalTopic,
+} from './topic-registry.js';
+import { parseUrlSignals, sanitizeSegment, slugifyTopicText } from './topic-slug.js';
 
-const sanitizeSegment = (segment: string) =>
-  segment.trim().replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'default';
+const KNOWLEDGE_EXTENSIONS = new Set(['.json', '.md', '.yaml', '.yml']);
+const RESERVED_KNOWLEDGE_DIRS = new Set(['_index', '_archive']);
+
+export { sanitizeSegment, slugifyTopicText } from './topic-slug.js';
+export {
+  addAlias,
+  expandTopicSlugs,
+  listRegistryTopics,
+  listTopicFolderSummaries,
+  loadRegistry,
+  registerTopic,
+  resolveCanonicalTopic,
+  type TResolveTopicInput,
+  type TResolveTopicResult,
+  type TTopicRegistry,
+  type TTopicRegistryEntry,
+} from './topic-registry.js';
+export {
+  detectDuplicateGroups,
+  runTidyKnowledge,
+  type TTidyDuplicateGroup,
+  type TTidyKnowledgeReport,
+} from './tidy-knowledge.js';
 
 const resolveUnderKnowledges = (relativePath: string): string | null => {
   const normalized = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, '');
@@ -18,6 +44,13 @@ const resolveUnderKnowledges = (relativePath: string): string | null => {
   }
 
   return absolute;
+};
+
+const fileMatchesTopicSlugs = (file: string, topicSlugs: string[]): boolean => {
+  const relative = path.relative(paths.knowledges, file);
+
+  return topicSlugs.some((slug) =>
+    relative.startsWith(`${slug}/`) || relative.startsWith(`${slug}.`));
 };
 
 export const listKnowledgeFiles = async (): Promise<string[]> => {
@@ -33,7 +66,7 @@ export const listKnowledgeFiles = async (): Promise<string[]> => {
     }
 
     for (const entry of entries) {
-      if (entry.name.startsWith('.')) {
+      if (entry.name.startsWith('.') || RESERVED_KNOWLEDGE_DIRS.has(entry.name)) {
         continue;
       }
 
@@ -63,18 +96,45 @@ export const listKnowledgeFiles = async (): Promise<string[]> => {
   return results.sort();
 };
 
+const dedupeFilesByBasename = (files: string[], preferredSlug?: string): string[] => {
+  const byBasename = new Map<string, string>();
+
+  for (const file of files) {
+    const basename = path.basename(file, path.extname(file));
+    const relative = path.relative(paths.knowledges, file);
+    const existing = byBasename.get(basename);
+
+    if (!existing) {
+      byBasename.set(basename, file);
+      continue;
+    }
+
+    const existingRelative = path.relative(paths.knowledges, existing);
+    const existingPreferred = preferredSlug && existingRelative.startsWith(`${preferredSlug}/`);
+    const nextPreferred = preferredSlug && relative.startsWith(`${preferredSlug}/`);
+
+    if (nextPreferred && !existingPreferred) {
+      byBasename.set(basename, file);
+    }
+  }
+
+  return [...byBasename.values()].sort();
+};
+
 export const readKnowledgeCorpus = async (
   maxBytes = 64_000,
   topic?: string,
 ): Promise<string> => {
   const files = await listKnowledgeFiles();
-  const topicSegment = topic ? sanitizeSegment(topic) : '';
-  const prioritized = topicSegment
+  const topicSlugs = topic ? await expandTopicSlugs(topic) : [];
+  const preferredSlug = topicSlugs[0];
+  const scoped = topicSlugs.length
+    ? dedupeFilesByBasename(files.filter((file) => fileMatchesTopicSlugs(file, topicSlugs)), preferredSlug)
+    : files;
+  const prioritized = topicSlugs.length
     ? [
-      ...files.filter((file) => path.relative(paths.knowledges, file).startsWith(`${topicSegment}/`)
-        || path.relative(paths.knowledges, file).startsWith(`${topicSegment}.`)),
-      ...files.filter((file) => !path.relative(paths.knowledges, file).startsWith(`${topicSegment}/`)
-        && !path.relative(paths.knowledges, file).startsWith(`${topicSegment}.`)),
+      ...scoped,
+      ...files.filter((file) => !fileMatchesTopicSlugs(file, topicSlugs)),
     ]
     : files;
 
@@ -114,15 +174,14 @@ export const findKnowledgeFileByBasename = async (
   topic?: string,
 ): Promise<string | null> => {
   const sanitizedKey = sanitizeSegment(key);
-  const topicSegment = topic ? sanitizeSegment(topic) : '';
+  const topicSlugs = topic ? await expandTopicSlugs(topic) : [];
+  const preferredSlug = topicSlugs[0];
   const candidates = await listKnowledgeFiles();
-
-  const scoped = topicSegment
-    ? candidates.filter((file) => {
-      const relative = path.relative(paths.knowledges, file);
-
-      return relative.startsWith(`${topicSegment}/`) || relative.startsWith(`${topicSegment}.`);
-    })
+  const scoped = topicSlugs.length
+    ? dedupeFilesByBasename(
+      candidates.filter((file) => fileMatchesTopicSlugs(file, topicSlugs)),
+      preferredSlug,
+    )
     : candidates;
 
   for (const file of scoped) {
@@ -139,56 +198,26 @@ export const findKnowledgeFileByBasename = async (
 export const findKnowledgeFileForKey = async (
   key: string,
   topic?: string,
-): Promise<string | null> => {
-  const sanitizedKey = sanitizeSegment(key);
-  const topicSegment = topic ? sanitizeSegment(topic) : '';
-  const candidates = await listKnowledgeFiles();
-  const keyPattern = new RegExp(`["']?${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?`, 'i');
-
-  const scoped = topicSegment
-    ? candidates.filter((file) => {
-      const relative = path.relative(paths.knowledges, file);
-
-      return relative.startsWith(`${topicSegment}/`) || relative.startsWith(`${topicSegment}.`);
-    })
-    : candidates;
-
-  for (const file of scoped) {
-    const basename = path.basename(file, path.extname(file));
-
-    if (basename === sanitizedKey || basename === key) {
-      return file;
-    }
-
-    try {
-      const content = await fs.readFile(file, 'utf8');
-
-      if (keyPattern.test(content)) {
-        return file;
-      }
-    } catch {
-      // skip
-    }
-  }
-
-  return null;
-};
+): Promise<string | null> => findKnowledgeFileByBasename(key, topic);
 
 export const resolveKnowledgeWritePath = async (
   key: string,
   topic?: string,
-): Promise<{ absolute: string; relative: string }> => {
-  const existing = await findKnowledgeFileByBasename(key, topic);
+): Promise<{ absolute: string; canonicalTopic: string; relative: string }> => {
+  const resolved = await resolveCanonicalTopic({ slug: topic });
+  const canonicalTopic = resolved.canonical;
+  const existing = await findKnowledgeFileByBasename(key, canonicalTopic);
 
   if (existing) {
     return {
       absolute: existing,
+      canonicalTopic,
       relative: path.relative(paths.knowledges, existing),
     };
   }
 
   const sanitizedKey = sanitizeSegment(key);
-  const topicSegment = topic ? sanitizeSegment(topic) : 'general';
+  const topicSegment = sanitizeSegment(canonicalTopic) || 'general';
   const relative = path.join(topicSegment, `${sanitizedKey}.json`);
   const absolute = resolveUnderKnowledges(relative);
 
@@ -196,7 +225,31 @@ export const resolveKnowledgeWritePath = async (
     throw new Error('invalid knowledge write path');
   }
 
-  return { absolute, relative };
+  return { absolute, canonicalTopic, relative };
+};
+
+export const resolveTopicForPersist = async (args: {
+  seedUrls?: string[];
+  topic?: string;
+  topicText?: string;
+}) => {
+  const resolved = await resolveCanonicalTopic({
+    seedUrls: args.seedUrls,
+    slug: args.topic,
+    topicText: args.topicText,
+  });
+
+  if (resolved.matchedBy === 'new') {
+    const urlSignals = parseUrlSignals(args.seedUrls ?? []);
+
+    await registerTopic(resolved.canonical, {
+      seedUrlHosts: urlSignals.hosts,
+      seedUrlPaths: urlSignals.paths,
+      topicTexts: args.topicText?.trim() ? [args.topicText.trim()] : [],
+    });
+  }
+
+  return resolved;
 };
 
 export const hasPathArgs = (args: Record<string, unknown>) =>
@@ -221,14 +274,18 @@ export type TSourceIndexItem = {
 export const rebuildPersistedPathsFromTopic = async (
   topic: string,
 ): Promise<TKnowledgePersistedIndexItem[]> => {
-  const topicSegment = sanitizeSegment(topic);
+  const topicSlugs = await expandTopicSlugs(topic);
+  const preferredSlug = topicSlugs[0] ?? sanitizeSegment(topic);
   const candidates = await listKnowledgeFiles();
-  const topicFiles = candidates.filter((file) => {
-    const relative = path.relative(paths.knowledges, file);
+  const topicFiles = dedupeFilesByBasename(
+    candidates.filter((file) => {
+      const relative = path.relative(paths.knowledges, file);
 
-    return relative.startsWith(`${topicSegment}/`)
-      && path.extname(file).toLowerCase() === '.json';
-  });
+      return topicSlugs.some((slug) => relative.startsWith(`${slug}/`))
+        && path.extname(file).toLowerCase() === '.json';
+    }),
+    preferredSlug,
+  );
 
   const persisted: TKnowledgePersistedIndexItem[] = [];
 
@@ -249,16 +306,20 @@ export const rebuildPersistedPathsFromTopic = async (
 export const rebuildSourcesIndexFromStudies = async (
   topic: string,
 ): Promise<TSourceIndexItem[]> => {
-  const topicSegment = sanitizeSegment(topic);
+  const topicSlugs = await expandTopicSlugs(topic);
+  const preferredSlug = topicSlugs[0] ?? sanitizeSegment(topic);
   const candidates = await listKnowledgeFiles();
-  const studies = candidates.filter((file) => {
-    const relative = path.relative(paths.knowledges, file);
-    const basename = path.basename(file, path.extname(file));
+  const studies = dedupeFilesByBasename(
+    candidates.filter((file) => {
+      const relative = path.relative(paths.knowledges, file);
+      const basename = path.basename(file, path.extname(file));
 
-    return relative.startsWith(`${topicSegment}/`)
-      && basename.startsWith('study_')
-      && path.extname(file).toLowerCase() === '.json';
-  });
+      return topicSlugs.some((slug) => relative.startsWith(`${slug}/`))
+        && basename.startsWith('study_')
+        && path.extname(file).toLowerCase() === '.json';
+    }),
+    preferredSlug,
+  );
 
   const sources: TSourceIndexItem[] = [];
 

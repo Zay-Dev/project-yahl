@@ -10,10 +10,14 @@ import {
 } from '../../contract/index.js';
 
 import {
+  expandTopicSlugs,
   findKnowledgeFileByBasename,
   hasPathArgs,
   readKnowledgeCorpus,
+  resolveCanonicalTopic,
   resolveKnowledgeWritePath,
+  resolveTopicForPersist,
+  runTidyKnowledge,
 } from '../-knowledge/index.js';
 import { formatShortError, writeAndAnalyzeCrash } from '../-crash-reports/index.js';
 import { config, paths } from '../config.js';
@@ -29,6 +33,12 @@ import {
   markRequestActivitySucceeded,
   registerRequestActivity,
 } from '../-sdk/request-activity.js';
+import {
+  isExtractAbsent,
+  resolveUniqueSessionKnowledgeKey,
+  validateSessionId,
+  writeSessionKnowledgeExtract,
+} from '../-knowledge/session-extract.js';
 import { isVerifyInfraError } from '../-sdk/verify-infra.js';
 
 const PERSIST_KNOWLEDGE_MAX_VALUE_BYTES = 256 * 1024;
@@ -186,12 +196,15 @@ const buildSkillPrompt = async (
       const need = args.need ?? args.lookingFor ?? 'key facts';
       const knowledgeTopic = typeof args.topic === 'string' ? args.topic : undefined;
       const corpus = await readKnowledgeCorpus(64_000, knowledgeTopic);
+      const topicSlugs = knowledgeTopic ? await expandTopicSlugs(knowledgeTopic) : [];
 
       return [
         'You are the YAHL mastermind extract-knowledge helper.',
         'Read only from the knowledge corpus below.',
         `Need: ${JSON.stringify(need)}`,
-        knowledgeTopic ? `Topic filter: ${knowledgeTopic}` : '',
+        knowledgeTopic
+          ? `Topic filter: ${knowledgeTopic}${topicSlugs.length > 1 ? ` (includes aliases: ${topicSlugs.join(', ')})` : ''}`
+          : '',
         corpus ? `Knowledge corpus:\n${corpus}` : 'Knowledge corpus: (empty)',
         'Extract only what was requested. Return plain text or JSON.',
         'If the requested information is not present in the corpus, return exactly: <none>',
@@ -292,6 +305,56 @@ const runProposeNotification = async (
   };
 };
 
+const runTidyKnowledgeSkill = async (
+  args: Record<string, unknown>,
+): Promise<TSkillResponse> => {
+  const dryRun = typeof args.dryRun === 'boolean'
+    ? args.dryRun
+    : process.env.KNOWLEDGE_TIDY_DRY_RUN?.trim() !== 'false';
+
+  try {
+    const report = await runTidyKnowledge({ dryRun });
+
+    return {
+      data: { report },
+      ok: true,
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'tidy-knowledge failed',
+      ok: false,
+    };
+  }
+};
+
+const runResolveTopic = async (
+  args: Record<string, unknown>,
+): Promise<TSkillResponse> => {
+  const topicText = typeof args.topicText === 'string' ? args.topicText.trim() : undefined;
+  const slug = typeof args.slug === 'string' ? args.slug.trim() : undefined;
+  const seedUrls = Array.isArray(args.seedUrls)
+    ? args.seedUrls.filter((url): url is string => typeof url === 'string')
+    : undefined;
+
+  try {
+    const resolved = await resolveCanonicalTopic({
+      seedUrls,
+      slug: slug ?? (typeof args.topic === 'string' ? args.topic : undefined),
+      topicText,
+    });
+
+    return {
+      data: resolved,
+      ok: true,
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'resolve-topic failed',
+      ok: false,
+    };
+  }
+};
+
 const runPersistKnowledge = async (
   args: Record<string, unknown>,
 ): Promise<TSkillResponse> => {
@@ -325,10 +388,16 @@ const runPersistKnowledge = async (
   }
 
   const topic = typeof args.topic === 'string' ? args.topic.trim() : undefined;
+  const topicText = typeof args.topicText === 'string' ? args.topicText.trim() : undefined;
+  const seedUrls = Array.isArray(args.seedUrls)
+    ? args.seedUrls.filter((url): url is string => typeof url === 'string')
+    : undefined;
 
   try {
-    const { absolute, relative } = await resolveKnowledgeWritePath(key, topic);
-    const existing = await findKnowledgeFileByBasename(key, topic);
+    const resolved = await resolveTopicForPersist({ seedUrls, topic, topicText });
+    const canonicalTopic = resolved.canonical;
+    const { absolute, relative } = await resolveKnowledgeWritePath(key, canonicalTopic);
+    const existing = await findKnowledgeFileByBasename(key, canonicalTopic);
     let payload: Record<string, unknown>;
 
     if (existing && path.extname(existing).toLowerCase() === '.json') {
@@ -350,15 +419,149 @@ const runPersistKnowledge = async (
     return {
       data: {
         absolutePath: `~/knowledges/${relative}`,
+        canonicalTopic,
         key,
         path: relative,
         relativePath: relative,
+        ...(topic && topic !== canonicalTopic ? { redirectedFrom: topic } : {}),
       },
       ok: true,
     };
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'persist-knowledge failed',
+      ok: false,
+    };
+  }
+};
+
+const runExtractKnowledge = async (
+  agent: TMastermindAgent,
+  body: TSkillRequest,
+): Promise<TSkillResponse> => {
+  if (hasPathArgs(body.args)) {
+    return { ok: false, error: 'extract-knowledge does not accept file paths' };
+  }
+
+  const sessionId = body.sessionId?.trim() ?? '';
+  const sessionError = validateSessionId(sessionId);
+
+  if (sessionError) {
+    return { ok: false, error: sessionError };
+  }
+
+  const need = String(body.args.need ?? body.args.lookingFor ?? 'key facts').trim();
+
+  if (!need) {
+    return { ok: false, error: 'extract-knowledge requires need' };
+  }
+
+  const topic = typeof body.args.topic === 'string' ? body.args.topic.trim() : undefined;
+
+  if (agent.status !== 'ready') {
+    const activity = resolveRequestActivityRef(body.sessionId, body.requestId, body.invocationId);
+
+    failRequestActivity(activity, {
+      error: 'mastermind unavailable',
+      kind: 'skill',
+      skill: 'extract-knowledge',
+      unavailable: true,
+    });
+
+    return { ok: false, error: 'mastermind unavailable' };
+  }
+
+  const prompt = await buildSkillPrompt('extract-knowledge', body.args, body.sessionId);
+  const mode = 'agent' as const;
+  const startedAt = Date.now();
+  const activity = resolveRequestActivityRef(body.sessionId, body.requestId, body.invocationId);
+
+  console.log(
+    `[mastermind] skill=extract-knowledge start sessionId=${sessionId} caller=${body.caller}`,
+  );
+
+  if (activity) {
+    registerRequestActivity({
+      invocationId: activity.invocationId,
+      kind: 'skill',
+      requestId: activity.requestId,
+      sessionId: activity.sessionId,
+      skill: 'extract-knowledge',
+    });
+  }
+
+  try {
+    const { result } = await promptWithActiveRunRetry(
+      wrapPromptWithRequestActivity(agent, activity),
+      prompt,
+      { mode },
+    );
+    const text = typeof result === 'string' ? result.trim() : '';
+    const absent = isExtractAbsent(text);
+    const key = await resolveUniqueSessionKnowledgeKey(sessionId, need);
+    const written = await writeSessionKnowledgeExtract({
+      absent,
+      extracted: absent ? null : text,
+      key,
+      need,
+      sessionId,
+      topic,
+    });
+    const durationMs = Date.now() - startedAt;
+
+    console.log(
+      `[mastermind] skill=extract-knowledge done ok=true durationMs=${durationMs} key=${written.key} absent=${absent}`,
+    );
+
+    if (activity) {
+      markRequestActivitySucceeded(
+        activity.sessionId,
+        activity.requestId,
+        activity.invocationId,
+        written.key,
+      );
+    }
+
+    return {
+      data: {
+        absent,
+        key: written.key,
+        path: written.agentPath,
+      },
+      ok: true,
+    };
+  } catch (error) {
+    const durationMs = Date.now() - startedAt;
+    const shortError = formatShortError(error);
+
+    console.log(
+      `[mastermind] skill=extract-knowledge done ok=false durationMs=${durationMs} error=${shortError}`,
+    );
+
+    if (activity) {
+      markRequestActivityFailed(
+        activity.sessionId,
+        activity.requestId,
+        shortError,
+        isVerifyInfraError(shortError),
+        activity.invocationId,
+      );
+    }
+
+    void writeAndAnalyzeCrash({
+      args: body.args,
+      caller: body.caller,
+      error,
+      mode,
+      promptPreview: prompt,
+      sessionId: body.sessionId,
+      skill: 'extract-knowledge',
+    }).catch((reportError) => {
+      console.error('[mastermind] crash report failed', reportError);
+    });
+
+    return {
+      error: formatShortError(error),
       ok: false,
     };
   }
@@ -373,12 +576,20 @@ export const runSkill = async (
     return { ok: false, error: 'skills require caller stage-agent' };
   }
 
-  if (name === 'extract-knowledge' && hasPathArgs(body.args)) {
-    return { ok: false, error: 'extract-knowledge does not accept file paths' };
+  if (name === 'extract-knowledge') {
+    return runExtractKnowledge(agent, body);
   }
 
   if (name === 'persist-knowledge') {
     return runPersistKnowledge(body.args);
+  }
+
+  if (name === 'resolve-topic') {
+    return runResolveTopic(body.args);
+  }
+
+  if (name === 'tidy-knowledge') {
+    return runTidyKnowledgeSkill(body.args);
   }
 
   if (name === 'propose-notification') {

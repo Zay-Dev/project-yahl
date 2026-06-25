@@ -1,4 +1,5 @@
 export type TResponseTaskListItem = {
+  background?: boolean;
   description: string;
   id: string;
   name: string;

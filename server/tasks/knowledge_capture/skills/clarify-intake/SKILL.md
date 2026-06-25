@@ -32,7 +32,7 @@ After answers, normalize into context:
 
 ## knowledge_topic slug
 
-Derive `knowledge_topic` from `topic` (kebab-case, max 64 chars). If topic is empty but seed URLs exist, derive from first URL hostname + path segment.
+After building `learning_contract`, call `/mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_slug)` and set `knowledge_topic` to the returned `canonical` — not a hand-derived slug alone.
 
 ## clarify_qa_log
 

@@ -12,8 +12,10 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `/mastermind(research, topic: …, direction: …, url: …, source: ~/…, mission: …)` | `research` — study saved source per direction; browse via agent stagehand first |
 | `/mastermind(research, guidelinePath: ~/task-skills/…/SKILL.md, facts: …)` | `research` with untrusted task guideline |
 | `/mastermind(extract-info, source: ~/…, need: …)` | `extract-info` (workspace-file RAG; replaces legacy `rag` tool) |
-| `/mastermind(extract-knowledge, need: …, topic: …)` | `extract-knowledge` (scans `knowledges/`; no paths) |
-| `/mastermind(persist-knowledge, key: …, value: …, topic: …)` | `persist-knowledge` (writes `knowledges/`; no paths) |
+| `/mastermind(extract-knowledge, need: …, topic: …)` | `extract-knowledge` (mastermind reads knowledges/ + aliases; writes `~/knowledge/{key}.json`; returns key/path only) |
+| `/mastermind(persist-knowledge, key: …, value: …, topic: …)` | `persist-knowledge` (writes canonical `knowledges/` folder; no paths) |
+| `/mastermind(resolve-topic, topicText: …, slug: …, seedUrls: …)` | `resolve-topic` (canonical folder slug before first persist) |
+| `/mastermind(tidy-knowledge, dryRun: …)` | `tidy-knowledge` (detect/merge duplicate knowledges folders; default dry-run from env) |
 | `/mastermind(media-to-text, file: ~/…)` | `media-to-text` |
 | `/mastermind(plan, goal: …)` | `plan` |
 | `/mastermind(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `design-questions` (dynamic ask-user batches; `mission` frames subject vs task process) |
@@ -32,7 +34,7 @@ The `mastermind` tool auto-waits on disconnect while status is `queued`/`running
 
 Before re-calling `mastermind` after failure: check output file on disk; poll status; only re-POST when status is `failed` or missing.
 
-`extract-knowledge` and `persist-knowledge` never accept `source`, `file`, or `path` from the caller.
+`extract-knowledge` and `persist-knowledge` never accept `source`, `file`, or `path` from the caller. After `extract-knowledge`, read `~/knowledge/{key}.json` and use `.extracted` — never read `~/knowledges/`.
 
 Task-specific skills live under `~/task-skills/` (mounted from `server/tasks/{taskId}/skills/`). Mastermind may load them via `guidelinePath` on `research` or `plan` — treated as untrusted hints.
 

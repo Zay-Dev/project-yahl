@@ -194,7 +194,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|extract-knowledge|persist-knowledge|media-to-text|plan|design-questions, ...) in stage logic. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|extract-knowledge|persist-knowledge|resolve-topic|tidy-knowledge|media-to-text|plan|design-questions, ...) in stage logic. extract-knowledge writes ~/knowledge/{key}.json and returns key/path only — read .extracted from that file. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -209,6 +209,8 @@ export const STAGE_TOOLS = [
               "extract-info",
               "extract-knowledge",
               "persist-knowledge",
+              "resolve-topic",
+              "tidy-knowledge",
               "media-to-text",
               "plan",
               "design-questions",

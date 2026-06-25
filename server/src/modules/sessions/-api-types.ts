@@ -15,6 +15,7 @@ export type TResponseGetSession = {
   createdAt: string;
   deletedAt?: string;
   forkedFrom?: TSessionForkedFrom;
+  isBackground?: boolean;
   liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   result?: unknown;
@@ -30,6 +31,7 @@ export type TResponseSessionListItem = {
   _id: string;
   createdAt: string;
   deletedAt?: string;
+  isBackground?: boolean;
   sessionId: string;
   taskId?: string;
   taskYahlPath?: string;

@@ -17,4 +17,4 @@ You are helping capture knowledge about a subject the user chose. Questions and 
 
 ## Personalization (stages 4–5)
 
-When user-onboarding knowledge exists, tailor narrative tone and detail level to the user's communication preferences. If extract-knowledge returns `<none>`, use neutral professional tone and medium detail.
+When user-onboarding knowledge exists, tailor narrative tone and detail level to the user's communication preferences. If session extract `.extracted` is absent (`<none>`), use neutral professional tone and medium detail.

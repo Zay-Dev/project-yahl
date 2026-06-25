@@ -128,20 +128,24 @@ stages:
     verifyMinScore: 0.75
     verifyRubric: |
       Pass when learning_contract has non-empty topic OR at least one seedUrl, valid intent, and depth.
-      Pass when knowledge_topic is a non-empty slug and missionText is non-empty.
-      Fail when topic and seedUrls both empty, intent missing, or depth missing.
+      Pass when knowledge_topic is a non-empty canonical slug from resolve-topic and missionText is non-empty.
+      Fail when topic and seedUrls both empty, intent missing, depth missing, or knowledge_topic differs from resolve-topic canonical.
     logic: |
       const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
       const clarifyAnswers = /ask-user-batch(clarify-intake-fixed);
       const clarify_qa_log = *merge_qa(clarify_qa_log, clarifyAnswers);
       const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
-      const knowledge_topic = *slugify_learning_topic(learning_contract);
+      const proposed_topic = *slugify_learning_topic(learning_contract);
+      const resolvedTopic = /mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
+      const knowledge_topic = resolvedTopic.canonical;
       IF: *clarify_needs_follow_up(learning_contract);
         const batches = /mastermind(design-questions, stage: clarify, mission: missionText, gaps: *clarify_gaps(learning_contract), priorQa: clarify_qa_log, goal: clarify subject and intent);
         const followUp = /ask-user-batch(batches);
         const clarify_qa_log = *merge_qa(clarify_qa_log, followUp);
         const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
-        const knowledge_topic = *slugify_learning_topic(learning_contract);
+        const proposed_topic = *slugify_learning_topic(learning_contract);
+        const resolvedTopic = /mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
+        const knowledge_topic = resolvedTopic.canonical;
       END:
       /mastermind(persist-knowledge, topic: knowledge_topic, key: meta, value: { slug: knowledge_topic, intent: learning_contract.intent, created_at: now_iso });
       /mastermind(persist-knowledge, topic: knowledge_topic, key: learning_contract, value: learning_contract);
@@ -174,7 +178,8 @@ stages:
       Pass when knowledge_paths.persisted includes meta and learning_contract paths after persist.
       Fail when assessment missing or topic mismatch.
     logic: |
-      const knowledge = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys);
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const corpus_assessment = *assess_corpus(knowledge, learning_contract, guideline: ~/task-skills/locate-knowledge/SKILL.md);
       const metaPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: corpus_assessment, value: corpus_assessment);
       EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);
@@ -276,7 +281,8 @@ stages:
         const sources = *rebuild_sources_index(knowledge_topic);
         /mastermind(persist-knowledge, topic: knowledge_topic, key: sources, value: sources);
       END:
-      const knowledge = /mastermind(extract-knowledge, topic: knowledge_topic, need: facts, key_facts_md, study keys);
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: facts, key_facts_md, study keys);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_learning_stage(stage: facts, knowledge, learning_contract, study_plan, sources, source_studies);
       IF: assessment.sufficient;
         const facts = assessment.artifact.facts;
@@ -308,8 +314,10 @@ stages:
       Fail when analysis contradicts facts or ignores intent.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
-      const userProfile = /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
-      const knowledge = /mastermind(extract-knowledge, topic: knowledge_topic, need: analysis, analysis_md);
+      const userProfileExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
+      const userProfile = userProfileExtractRef.absent ? '<none>' : (*read(userProfileExtractRef.path)).extracted;
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: analysis, analysis_md);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_learning_stage(stage: synthesis, knowledge, learning_contract, study_plan, facts, sources);
       IF: assessment.sufficient;
         const analysis = assessment.artifact.analysis;
@@ -340,8 +348,12 @@ stages:
       Fail when either brief missing or knowledgePaths empty.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
-      const corpus = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys in topic folder);
-      const userProfile = userProfile || /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
+      const corpusExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys in topic folder);
+      const corpus = corpusExtractRef.absent ? '<none>' : (*read(corpusExtractRef.path)).extracted;
+      const userProfileExtractRef = userProfile
+        ? { absent: true }
+        : /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
+      const userProfile = userProfile || (userProfileExtractRef.absent ? '<none>' : (*read(userProfileExtractRef.path)).extracted);
       const brief = /mastermind(
         research,
         topic: final knowledge brief and personalized summary,

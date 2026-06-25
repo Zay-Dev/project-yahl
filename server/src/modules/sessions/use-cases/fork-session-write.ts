@@ -148,6 +148,7 @@ export const createForkSession = [
               forkSessionId,
               sourceSessionId: params.sessionId,
             },
+            isBackground: sourceSession.isBackground === true,
             parsedStages: sourceSession.parsedStages,
             taskId: sourceSession.taskId?.trim()
               || deriveTaskIdFromYahlPath(sourceSession.taskYahlPath ?? ''),

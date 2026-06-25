@@ -5,7 +5,7 @@ Generic smart-skip assessment for knowledge_capture stages.
 ## Input
 
 - `stage` name: `facts` | `synthesis` | `locate` | `plan` | `dialogue`
-- `extract-knowledge` output for `knowledge_topic`
+- Session extract `.extracted` content for `knowledge_topic` (from `~/knowledge/` after extract-knowledge)
 - `learning_contract`, `study_plan`, `corpus_assessment` as available
 - Prior context keys for the stage
 

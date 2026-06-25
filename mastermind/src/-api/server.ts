@@ -93,10 +93,14 @@ export const createApiServer = (agent: TMastermindAgent) => {
         return;
       }
 
-      const persistedIndexMatch = pathname.match(/^\/v1\/knowledges\/([^/]+)\/persisted-index$/);
+      if (req.method === 'POST' && pathname === '/v1/internal/knowledges/persisted-index') {
+        if (!isInternalRequest(req)) {
+          sendJson(res, 403, { error: 'forbidden' });
+          return;
+        }
 
-      if (req.method === 'GET' && persistedIndexMatch) {
-        const topic = decodeURIComponent(persistedIndexMatch[1] ?? '').trim();
+        const body = await readJsonBody(req) as { topic?: string };
+        const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
 
         if (!topic) {
           sendJson(res, 400, { error: 'topic required' });

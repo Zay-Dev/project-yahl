@@ -51,7 +51,8 @@ stages:
       On fail when ask-user answer is invalid, set edit_answer with askUserRef.
       On fail when stage output wrong but answers valid, set rerun.
     logic: |
-      const knowledge = /mastermind(extract-knowledge, topic: user-onboarding, need: identity, background_summary);
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: identity, background_summary);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       // Read ~/task-skills/assess-onboarding-stage/SKILL.md — assess stage 1 gaps vs knowledge + onboarding_qa_1
       const assessment = *assess_onboarding_stage(stage: 1, knowledge, priorQa: onboarding_qa_1);
       IF: assessment.sufficient;
@@ -76,7 +77,8 @@ stages:
       Fail when goals are missing or contradict identity_profile or persisted knowledge.
       Use follow_up for incomplete goal data; edit_answer when a specific ask-user answer is wrong; rerun when output mapping failed.
     logic: |
-      const knowledge = /mastermind(extract-knowledge, topic: user-onboarding, need: goals, priorities);
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: goals, priorities);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_onboarding_stage(stage: 2, knowledge, priorQa: onboarding_qa_2, identity_profile);
       IF: assessment.sufficient;
         const goals_profile = assessment.profile;
@@ -101,7 +103,8 @@ stages:
       Fail when preferences are missing or contradict prior stage profiles.
       Use follow_up, edit_answer, or rerun as appropriate.
     logic: |
-      const knowledge = /mastermind(extract-knowledge, topic: user-onboarding, need: preferences, constraints);
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: preferences, constraints);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_onboarding_stage(stage: 3, knowledge, priorQa: onboarding_qa_3);
       IF: assessment.sufficient;
         const preferences_profile = assessment.profile;
@@ -126,7 +129,8 @@ stages:
       Fail when communication style is missing or contradicts prior profiles.
       Use follow_up, edit_answer, or rerun as appropriate.
     logic: |
-      const knowledge = /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style);
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_onboarding_stage(stage: 4, knowledge, priorQa: onboarding_qa_4);
       IF: assessment.sufficient;
         const communication_profile = assessment.profile;
@@ -149,7 +153,8 @@ stages:
       Fail when either field is missing, placeholder, or contradicts persisted knowledges/user-onboarding facts.
       Use follow_up for gap-fill batches before synthesis; rerun when synthesis mapping failed.
     logic: |
-      const knowledge = /mastermind(extract-knowledge, topic: user-onboarding, need: all stage keys and qa logs);
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: all stage keys and qa logs);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       // Read ~/task-skills/synthesize-user-profile/SKILL.md — use ask_user fallbacks when profile keys missing
       const facts = {
         identity_profile,

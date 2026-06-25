@@ -7,6 +7,9 @@ import { AppLayout } from "@/layouts/app-layout";
 import { DashboardPage } from "@/pages/dashboard";
 import { HealthPage } from "@/pages/health";
 import { PlatformApprovalsPage } from "@/pages/platform/approvals";
+import { CronJobsPage } from "@/pages/platform/cron-jobs";
+import { CronJobCreatePage } from "@/pages/platform/cron-jobs/create";
+import { CronJobEditPage } from "@/pages/platform/cron-jobs/edit";
 import { SessionDetailPage } from "@/pages/sessions/detail";
 import { SessionsPage } from "@/pages/sessions";
 import { TaskCreatePage } from "@/pages/tasks/create";
@@ -53,6 +56,9 @@ export function App() {
             <Route path="tasks/new" element={<TaskCreatePage />} />
             <Route path="tasks/:taskId" element={<TaskDetailPage />} />
             <Route path="platform/approvals" element={<PlatformApprovalsPage />} />
+            <Route path="platform/cron-jobs" element={<CronJobsPage />} />
+            <Route path="platform/cron-jobs/new" element={<CronJobCreatePage />} />
+            <Route path="platform/cron-jobs/:jobId" element={<CronJobEditPage />} />
           </Route>
         </Routes>
       </Refine>

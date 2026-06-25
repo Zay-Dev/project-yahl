@@ -45,7 +45,7 @@ Read `~/task-skills/build-onboarding-profiles/SKILL.md` for normalization rules 
 
 ## Mastermind call
 
-Stage agent passes structured facts from context and extract-knowledge. Mastermind loads this file via `guidelinePath` behind an untrusted-content banner.
+Stage agent passes structured facts from context and session knowledge extracts (`~/knowledge/*.json` `.extracted`). Mastermind loads this file via `guidelinePath` behind an untrusted-content banner.
 
 ## Verify expectations
 

@@ -45,6 +45,14 @@
       "import": [
         "./dist/src/modules/tasks/-api-types.js"
       ]
+    },
+    "./modules/platform/-api-types": {
+      "development": [
+        "./src/modules/platform/-api-types.ts"
+      ],
+      "import": [
+        "./dist/src/modules/platform/-api-types.js"
+      ]
     }
   },
   "scripts": {

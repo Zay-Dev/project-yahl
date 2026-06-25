@@ -15,7 +15,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { ActivityIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon } from "lucide-react"
+import { ActivityIcon, ClockIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon } from "lucide-react"
 
 const data = {
   user: {
@@ -98,6 +98,14 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       url: "/platform/approvals",
       icon: (
         <ActivityIcon
+        />
+      ),
+    },
+    {
+      title: "Cron jobs",
+      url: "/platform/cron-jobs",
+      icon: (
+        <ClockIcon
         />
       ),
     },

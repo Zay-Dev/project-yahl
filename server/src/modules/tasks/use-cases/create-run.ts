@@ -7,7 +7,7 @@ import { Repository } from '@/core';
 import { Middlewares } from '@omni-infra/express';
 
 import type { TResponseCreateRun } from '../-api-types';
-import { taskExists } from '../-read-task-file';
+import { readTaskFile, taskExists } from '../-read-task-file';
 import { taskYahlRelativePath } from '../-tasks-root';
 
 export type TRequestCreateRunBody = {
@@ -31,9 +31,11 @@ export const createRun = [
       }
 
       const sessionId = body.sessionId?.trim() || randomUUID();
+      const task = await readTaskFile(body.taskId);
       const taskYahlPath = taskYahlRelativePath(body.taskId);
 
       await Repository.resolve('createPendingSession')({
+        isBackground: task.background === true,
         sessionId,
         taskId: body.taskId,
         taskYahlPath,

@@ -52,6 +52,7 @@ const forkSessionSetupSchema = new Schema({
 const sessionSchema = new Schema<TDbSession>({
   deletedAt: model.d.deletedAt(),
   forkedFrom: forkedFromSchema,
+  isBackground: { default: false, type: Boolean },
   liveViewVncPort: model.d.optionalNumber(),
   parsedStages: [model.d.mixed()],
   result: model.d.mixed(),

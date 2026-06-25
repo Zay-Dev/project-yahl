@@ -23,9 +23,10 @@ export const listTasks = [
 
         try {
           const yahl = await fs.readFile(yahlPath, 'utf8');
-          const { description, name } = parseTaskMetadata(yahl);
+          const { background, description, name } = parseTaskMetadata(yahl);
 
           items.push({
+            background,
             description,
             id: taskId,
             name,
