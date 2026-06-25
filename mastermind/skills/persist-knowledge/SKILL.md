@@ -9,6 +9,17 @@ Use `/mastermind(persist-knowledge, key: …, value: …, topic: …)` in stage 
 
 Mastermind writes under `data/mastermind/knowledges/`. **Do not pass `path`** — rejected for security.
 
+## Format routing (hybrid)
+
+Mastermind picks `.json` or `.md` from the key and value shape:
+
+| Format | Examples |
+|--------|----------|
+| **`.md`** | `*_md`, `*_summary`, `background_summary`; plain strings; `{ content: "…" }`; dual profiles `{ mastermind, agent }` |
+| **`.json`** | `sources`, `facts`, `meta`, `study_*`, profile objects (`identity`, `goals`, …) |
+
+Narrative files are plain markdown (no JSON wrapper). Existing files keep their extension on update.
+
 ## Tool
 
 ```json

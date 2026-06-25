@@ -18,3 +18,4 @@ See [docs/decision-log/mastermind.md](../docs/decision-log/mastermind.md).
 - Canonical knowledges are mastermind-private (`data/mastermind/knowledges/`); agents read session extracts at `~/knowledge/{key}.json` after `extract-knowledge`.
 - Knowledge topic registry under `knowledges/_index/topics.json`; `resolve-topic` skill; persist/extract union alias folders; tidy via `tidy-knowledge` skill / `knowledge_tidy` background task (`POST /api/runs`).
 - Knowledges HTTP: `POST /v1/internal/knowledges/persisted-index` only (orchestrator verify); no public topics/resolve/tidy routes.
+- `persist-knowledge` hybrid format: narrative keys (`*_md`, summaries, string/`{content}`/`{mastermind,agent}` values) → `.md`; structured keys (`sources`, `facts`, `study_*`, profiles) → `.json`.

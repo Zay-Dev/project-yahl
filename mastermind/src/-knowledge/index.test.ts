@@ -39,6 +39,25 @@ describe('resolveKnowledgeWritePath basename-only', () => {
     delete process.env.MASTERMIND_DATA_ROOT;
   });
 
+  it('creates markdown path for narrative keys', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-knowledge-md-'));
+
+    process.env.MASTERMIND_DATA_ROOT = tmp;
+
+    const { resolveKnowledgeWritePath } = await import('./index.js');
+
+    const { extension, relative } = await resolveKnowledgeWritePath(
+      'key_facts_md',
+      'test-topic',
+      { content: '# Facts' },
+    );
+
+    assert.equal(extension, '.md');
+    assert.match(relative, /test-topic\/key_facts_md\.md$/);
+
+    delete process.env.MASTERMIND_DATA_ROOT;
+  });
+
   it('redirects writes to canonical topic when alias is registered', async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-knowledge-canonical-'));
 

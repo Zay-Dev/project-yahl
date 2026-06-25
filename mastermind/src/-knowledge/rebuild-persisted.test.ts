@@ -14,15 +14,17 @@ describe('rebuildPersistedPathsFromTopic', () => {
     await fs.mkdir(topicDir, { recursive: true });
     await fs.writeFile(path.join(topicDir, 'meta.json'), '{}\n', 'utf8');
     await fs.writeFile(path.join(topicDir, 'learning_contract.json'), '{}\n', 'utf8');
+    await fs.writeFile(path.join(topicDir, 'key_facts_md.md'), '# Facts\n', 'utf8');
 
     const { rebuildPersistedPathsFromTopic } = await import('./index.js');
     const persisted = await rebuildPersistedPathsFromTopic('demo-topic');
 
-    assert.equal(persisted.length, 2);
+    assert.equal(persisted.length, 3);
     assert.deepEqual(
       persisted.map((entry) => entry.key).sort(),
-      ['learning_contract', 'meta'],
+      ['key_facts_md', 'learning_contract', 'meta'],
     );
+    assert.equal(persisted.find((entry) => entry.key === 'key_facts_md')?.relativePath.endsWith('.md'), true);
     assert.equal(persisted[0]?.absolutePath.startsWith('~/knowledges/'), true);
 
     delete process.env.MASTERMIND_DATA_ROOT;

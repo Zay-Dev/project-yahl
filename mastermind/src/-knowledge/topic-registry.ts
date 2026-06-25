@@ -161,7 +161,7 @@ export const listTopicFolderSummaries = async (): Promise<TTopicFolderSummary[]>
     try {
       const files = await fs.readdir(topicDir);
 
-      fileCount = files.filter((name) => name.endsWith('.json')).length;
+      fileCount = files.filter((name) => name.endsWith('.json') || name.endsWith('.md')).length;
     } catch {
       // skip
     }

@@ -8,6 +8,10 @@ import {
   registerTopic,
   resolveCanonicalTopic,
 } from './topic-registry.js';
+import {
+  resolveKnowledgeFileExtension,
+  type TKnowledgeFileExtension,
+} from './knowledge-format.js';
 import { parseUrlSignals, sanitizeSegment, slugifyTopicText } from './topic-slug.js';
 
 const KNOWLEDGE_EXTENSIONS = new Set(['.json', '.md', '.yaml', '.yml']);
@@ -33,6 +37,13 @@ export {
   type TTidyDuplicateGroup,
   type TTidyKnowledgeReport,
 } from './tidy-knowledge.js';
+export {
+  measurePersistPayloadBytes,
+  resolveKnowledgeFileExtension,
+  serializeMarkdownBody,
+  shouldPersistAsMarkdown,
+  type TKnowledgeFileExtension,
+} from './knowledge-format.js';
 
 const resolveUnderKnowledges = (relativePath: string): string | null => {
   const normalized = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, '');
@@ -203,29 +214,39 @@ export const findKnowledgeFileForKey = async (
 export const resolveKnowledgeWritePath = async (
   key: string,
   topic?: string,
-): Promise<{ absolute: string; canonicalTopic: string; relative: string }> => {
+  value?: unknown,
+): Promise<{
+  absolute: string;
+  canonicalTopic: string;
+  extension: TKnowledgeFileExtension;
+  relative: string;
+}> => {
   const resolved = await resolveCanonicalTopic({ slug: topic });
   const canonicalTopic = resolved.canonical;
   const existing = await findKnowledgeFileByBasename(key, canonicalTopic);
 
   if (existing) {
+    const existingExtension = path.extname(existing).toLowerCase() as TKnowledgeFileExtension;
+
     return {
       absolute: existing,
       canonicalTopic,
+      extension: existingExtension === '.md' ? '.md' : '.json',
       relative: path.relative(paths.knowledges, existing),
     };
   }
 
   const sanitizedKey = sanitizeSegment(key);
   const topicSegment = sanitizeSegment(canonicalTopic) || 'general';
-  const relative = path.join(topicSegment, `${sanitizedKey}.json`);
+  const extension = resolveKnowledgeFileExtension(key, value);
+  const relative = path.join(topicSegment, `${sanitizedKey}${extension}`);
   const absolute = resolveUnderKnowledges(relative);
 
   if (!absolute) {
     throw new Error('invalid knowledge write path');
   }
 
-  return { absolute, canonicalTopic, relative };
+  return { absolute, canonicalTopic, extension, relative };
 };
 
 export const resolveTopicForPersist = async (args: {
@@ -281,8 +302,10 @@ export const rebuildPersistedPathsFromTopic = async (
     candidates.filter((file) => {
       const relative = path.relative(paths.knowledges, file);
 
+      const ext = path.extname(file).toLowerCase();
+
       return topicSlugs.some((slug) => relative.startsWith(`${slug}/`))
-        && path.extname(file).toLowerCase() === '.json';
+        && (ext === '.json' || ext === '.md');
     }),
     preferredSlug,
   );

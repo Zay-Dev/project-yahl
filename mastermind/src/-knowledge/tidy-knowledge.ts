@@ -12,7 +12,7 @@ import {
 import { normalizeTopicText, parseUrlSignals, urlSignalsOverlap } from './topic-slug.js';
 
 const RESERVED_DIRS = new Set(['_index', '_archive']);
-const KNOWLEDGE_EXTENSIONS = new Set(['.json']);
+const KNOWLEDGE_EXTENSIONS = new Set(['.json', '.md']);
 
 export type TTidyDuplicateGroup = {
   canonical: string;
@@ -31,7 +31,7 @@ export type TTidyKnowledgeReport = {
 
 const nowStamp = () => new Date().toISOString().slice(0, 10);
 
-const listJsonBasenames = async (topicDir: string): Promise<string[]> => {
+const listKnowledgeBasenames = async (topicDir: string): Promise<string[]> => {
   try {
     const entries = await fs.readdir(topicDir, { withFileTypes: true });
 
@@ -120,11 +120,27 @@ const buildDuplicateGroups = (summaries: TTopicFolderSummary[]): TTidyDuplicateG
   return groups;
 };
 
+const findKnowledgeEntryName = async (topicDir: string, basename: string): Promise<string | null> => {
+  for (const ext of KNOWLEDGE_EXTENSIONS) {
+    const name = `${basename}${ext}`;
+
+    try {
+      await fs.stat(path.join(topicDir, name));
+
+      return name;
+    } catch {
+      // try next extension
+    }
+  }
+
+  return null;
+};
+
 const enrichGroupMetadata = async (group: TTidyDuplicateGroup): Promise<TTidyDuplicateGroup> => {
   const keysByMember = new Map<string, string[]>();
 
   for (const member of group.members) {
-    keysByMember.set(member, await listJsonBasenames(path.join(paths.knowledges, member)));
+    keysByMember.set(member, await listKnowledgeBasenames(path.join(paths.knowledges, member)));
   }
 
   const canonicalKeys = new Set(keysByMember.get(group.canonical) ?? []);
@@ -136,12 +152,17 @@ const enrichGroupMetadata = async (group: TTidyDuplicateGroup): Promise<TTidyDup
       continue;
     }
 
+    const memberDir = path.join(paths.knowledges, member);
+
     for (const key of keysByMember.get(member) ?? []) {
       if (canonicalKeys.has(key)) {
         overlappingKeys.add(key);
-      } else {
-        orphanFiles.push(`${member}/${key}.json`);
+        continue;
       }
+
+      const entryName = await findKnowledgeEntryName(memberDir, key);
+
+      orphanFiles.push(entryName ? `${member}/${entryName}` : `${member}/${key}.json`);
     }
   }
 
@@ -171,6 +192,20 @@ const isNonEmptyJson = async (filePath: string): Promise<boolean> => {
   }
 };
 
+const isNonEmptyKnowledgeFile = async (filePath: string): Promise<boolean> => {
+  if (path.extname(filePath).toLowerCase() === '.md') {
+    try {
+      const raw = await fs.readFile(filePath, 'utf8');
+
+      return raw.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  return isNonEmptyJson(filePath);
+};
+
 const mergeGroup = async (
   group: TTidyDuplicateGroup,
   report: TTidyKnowledgeReport,
@@ -188,15 +223,17 @@ const mergeGroup = async (
     const entries = await fs.readdir(memberDir).catch(() => []);
 
     for (const entry of entries) {
-      if (!entry.endsWith('.json')) {
+      const ext = path.extname(entry).toLowerCase();
+
+      if (!KNOWLEDGE_EXTENSIONS.has(ext)) {
         continue;
       }
 
       const sourcePath = path.join(memberDir, entry);
       const targetPath = path.join(canonicalDir, entry);
-      const sourceNonEmpty = await isNonEmptyJson(sourcePath);
+      const sourceNonEmpty = await isNonEmptyKnowledgeFile(sourcePath);
       const targetExists = await fs.stat(targetPath).then(() => true).catch(() => false);
-      const targetNonEmpty = targetExists ? await isNonEmptyJson(targetPath) : false;
+      const targetNonEmpty = targetExists ? await isNonEmptyKnowledgeFile(targetPath) : false;
 
       if (!targetExists) {
         await fs.rename(sourcePath, targetPath);

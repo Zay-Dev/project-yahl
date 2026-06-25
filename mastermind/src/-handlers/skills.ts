@@ -13,11 +13,13 @@ import {
   expandTopicSlugs,
   findKnowledgeFileByBasename,
   hasPathArgs,
+  measurePersistPayloadBytes,
   readKnowledgeCorpus,
   resolveCanonicalTopic,
   resolveKnowledgeWritePath,
   resolveTopicForPersist,
   runTidyKnowledge,
+  serializeMarkdownBody,
 } from '../-knowledge/index.js';
 import { formatShortError, writeAndAnalyzeCrash } from '../-crash-reports/index.js';
 import { config, paths } from '../config.js';
@@ -378,15 +380,6 @@ const runPersistKnowledge = async (
     return { ok: false, error: shapeError };
   }
 
-  const serialized = JSON.stringify(args.value);
-
-  if (serialized.length > PERSIST_KNOWLEDGE_MAX_VALUE_BYTES) {
-    return {
-      error: 'value too large; persist summary chunks under separate keys (e.g. study_{slug}, facts)',
-      ok: false,
-    };
-  }
-
   const topic = typeof args.topic === 'string' ? args.topic.trim() : undefined;
   const topicText = typeof args.topicText === 'string' ? args.topicText.trim() : undefined;
   const seedUrls = Array.isArray(args.seedUrls)
@@ -396,25 +389,39 @@ const runPersistKnowledge = async (
   try {
     const resolved = await resolveTopicForPersist({ seedUrls, topic, topicText });
     const canonicalTopic = resolved.canonical;
-    const { absolute, relative } = await resolveKnowledgeWritePath(key, canonicalTopic);
-    const existing = await findKnowledgeFileByBasename(key, canonicalTopic);
-    let payload: Record<string, unknown>;
+    const { absolute, extension, relative } = await resolveKnowledgeWritePath(key, canonicalTopic, args.value);
+    const payloadBytes = measurePersistPayloadBytes(key, args.value, extension);
 
-    if (existing && path.extname(existing).toLowerCase() === '.json') {
-      try {
-        const raw = await fs.readFile(existing, 'utf8');
-        const parsed = JSON.parse(raw) as Record<string, unknown>;
-
-        payload = { ...parsed, [key]: args.value };
-      } catch {
-        payload = { [key]: args.value };
-      }
-    } else {
-      payload = { [key]: args.value };
+    if (payloadBytes > PERSIST_KNOWLEDGE_MAX_VALUE_BYTES) {
+      return {
+        error: 'value too large; persist summary chunks under separate keys (e.g. study_{slug}, facts)',
+        ok: false,
+      };
     }
 
     await fs.mkdir(path.dirname(absolute), { recursive: true });
-    await fs.writeFile(absolute, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+
+    if (extension === '.md') {
+      await fs.writeFile(absolute, serializeMarkdownBody(args.value), 'utf8');
+    } else {
+      const existing = await findKnowledgeFileByBasename(key, canonicalTopic);
+      let payload: Record<string, unknown>;
+
+      if (existing && path.extname(existing).toLowerCase() === '.json') {
+        try {
+          const raw = await fs.readFile(existing, 'utf8');
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+          payload = { ...parsed, [key]: args.value };
+        } catch {
+          payload = { [key]: args.value };
+        }
+      } else {
+        payload = { [key]: args.value };
+      }
+
+      await fs.writeFile(absolute, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+    }
 
     return {
       data: {
