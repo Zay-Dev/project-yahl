@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import { resolvePrefixVerifyFastForward } from './index';
+
+const agentIndexPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../-agent/index.ts',
+);
 
 const verifyParsed = {
   lines: '{\nlogic;\n}',
@@ -53,5 +61,21 @@ describe('resolvePrefixVerifyFastForward', () => {
       }),
       undefined,
     );
+  });
+});
+
+describe('fork prefix fast-forward runYahl', () => {
+  it('skips parseYahlDocument when yahl is empty and stages are pre-supplied', () => {
+    const src = readFileSync(agentIndexPath, 'utf8');
+    const constructorStart = src.indexOf('constructor(');
+
+    assert.ok(constructorStart >= 0);
+
+    const constructorBody = src.slice(constructorStart, constructorStart + 1200);
+
+    assert.match(constructorBody, /yahl\.trim\(\)/);
+    assert.match(constructorBody, /parseYahlDocument\(yahl\)\.runInput/);
+    assert.match(constructorBody, /options\.stages\?\.length/);
+    assert.match(constructorBody, /runYahl: yahl text or options\.stages is required/);
   });
 });

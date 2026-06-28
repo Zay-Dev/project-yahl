@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "agent": "tsx agent/index.ts",
-    "build": "tsc && tsc-alias",
+    "build": "rm -rf dist && tsc && tsc-alias",
     "dev": "NODE_OPTIONS='--conditions=development' tsx orchestrator/index.ts run --task-id test",
     "orchestrate": "tsx orchestrator/index.ts run",
     "orchestrate:prod": "node dist/orchestrator/index.js run",

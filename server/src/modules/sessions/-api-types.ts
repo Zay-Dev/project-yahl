@@ -75,6 +75,7 @@ export type TResponseStageReplayItem = {
   finishedAt?: string;
   loopMeta?: TStageLoopMeta;
   requestId: string;
+  sourceStartLine?: number;
   stage: TYahlStage;
   stageId: string;
   temperature?: number;

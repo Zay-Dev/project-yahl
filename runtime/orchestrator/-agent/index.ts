@@ -91,14 +91,26 @@ class YahlAgentRunner {
     }: TRunYahlOptions = {},
   ) {
     this.storage = useStorage();
+    const runInputContextKeys = yahl.trim()
+      ? parseYahlDocument(yahl).runInput
+      : undefined;
+
     seedRunInputContext(
       this.storage,
       options.runInput,
-      parseYahlDocument(yahl).runInput,
+      runInputContextKeys,
     );
     this.options = options;
     this.startIndex = options.startFromStageIndex ?? 0;
-    this.stages = options.stages ?? parseYahlFile(yahl);
+
+    if (options.stages?.length) {
+      this.stages = options.stages;
+    } else if (yahl.trim()) {
+      this.stages = parseYahlFile(yahl);
+    } else {
+      throw new Error('runYahl: yahl text or options.stages is required');
+    }
+
     this.sessionId = globalThis.sessionId;
     this.agentName = `agent-${this.sessionId}`;
   }
@@ -412,12 +424,21 @@ class YahlAgentRunner {
 
   private verifyRetryAttempt = 0;
 
+  private isPrefixFastForwardMode() {
+    return Boolean(this.options.verifyFastForward && this.options.contextAfter);
+  }
+
   private async runOneStage() {
     const maxVerifyRetries = verifyAutoRetryMaxIterations();
     const verifyAutoRetry = this.activeStage.spec.verifyAutoRetry === true;
 
     while (true) {
       await this.withPlanMode(async () => {
+        if (this.isPrefixFastForwardMode()) {
+          await this.runStageAttempt();
+          return;
+        }
+
         while (true) {
           await this.runStageAttempt();
 

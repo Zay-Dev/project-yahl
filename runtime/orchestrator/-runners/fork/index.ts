@@ -52,6 +52,12 @@ const _runForkPlan = async (manager: ForkSessionManager) => {
 
       const verifyFastForward = resolvePrefixVerifyFastForward(parsed, step.row.verifyResult);
 
+      console.log(
+        `[fork] prefix fast-forward stageId=${step.row.stageId} `
+        + `verifyFastForward=${verifyFastForward ? 'YES' : 'NO'}`
+        + (verifyFastForward ? ` score=${verifyFastForward.score}` : ''),
+      );
+
       await runYahl('', {
         contextAfter,
         contextAfterRecord: step.row.contextAfter,

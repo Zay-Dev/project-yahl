@@ -26,6 +26,7 @@ export type TReplayStageRow = {
   contextAfter?: Record<string, unknown>;
   loopMeta?: TStageLoopMeta;
   requestId: string;
+  sourceStartLine?: number;
   stage: YahlStage;
   stageId: string;
   temperature?: number;
@@ -100,6 +101,35 @@ const fetchSourceReplay = async (sourceSessionId: string) => {
   return [];
 };
 
+export const replayRowSlotKey = (row: TReplayStageRow) => {
+  const loopIndex = row.loopMeta?.index ?? 'plain';
+
+  if (row.sourceStartLine != null) {
+    return `${row.sourceStartLine}:${loopIndex}`;
+  }
+
+  return `${row.stage.logic ?? ''}:${loopIndex}`;
+};
+
+export const dedupeReplayRowsByStageSlot = (rows: TReplayStageRow[]) => {
+  const seen = new Set<string>();
+  const result: TReplayStageRow[] = [];
+
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index]!;
+    const key = replayRowSlotKey(row);
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.unshift(row);
+  }
+
+  return result;
+};
+
 export class ForkSessionManager {
   constructor(
     readonly forkSession: TForkSessionResponse,
@@ -139,7 +169,7 @@ export class ForkSessionManager {
   }
 
   getPrefixRows() {
-    return this.sourceRows.slice(0, this.getAnchorIndex());
+    return dedupeReplayRowsByStageSlot(this.sourceRows.slice(0, this.getAnchorIndex()));
   }
 
   getSuffixSetups() {
@@ -147,12 +177,10 @@ export class ForkSessionManager {
   }
 
   buildExecutionPlan(): TForkExecutionStep[] {
-    const anchorIndex = this.getAnchorIndex();
+    const prefixRows = this.getPrefixRows();
     const plan: TForkExecutionStep[] = [];
 
-    for (let index = 0; index < anchorIndex; index += 1) {
-      const row = this.sourceRows[index]!;
-
+    for (const row of prefixRows) {
       plan.push({ kind: 'fastForward', row });
     }
 

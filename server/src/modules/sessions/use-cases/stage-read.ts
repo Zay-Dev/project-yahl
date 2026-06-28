@@ -199,6 +199,7 @@ export const resolveSessionStagesReplay = async (sessionId: string) => {
     finishedAt: toIso(stage.finishedAt),
     loopMeta: stage.loopMeta,
     requestId: stage.requestId,
+    sourceStartLine: stage.sourceStartLine,
     stage: stage.stage as TYahlStage,
     stageId: String(stage._id),
     temperature: stage.temperature,
