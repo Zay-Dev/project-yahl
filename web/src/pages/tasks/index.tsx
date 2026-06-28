@@ -19,8 +19,13 @@ export function TasksPage() {
 
   const tasks = result.data ?? [];
 
-  const runTask = async (taskId: string) => {
-    const run = await createRun(taskId);
+  const runTask = async (task: TResponseTaskListItem) => {
+    if (task.runInputKeys?.length) {
+      navigate(`/tasks/${encodeURIComponent(task.taskId)}`);
+      return;
+    }
+
+    const run = await createRun(task.taskId);
 
     navigate(`/sessions/${encodeURIComponent(run.sessionId)}`);
   };
@@ -57,7 +62,7 @@ export function TasksPage() {
                 <td className="p-3">{task.description || "—"}</td>
                 <td className="p-3">
                   <div className="flex gap-2">
-                    <Button onClick={() => void runTask(task.taskId)} size="sm">
+                    <Button onClick={() => void runTask(task)} size="sm">
                       Run
                     </Button>
                     <Button

@@ -108,4 +108,31 @@ describe('handleLoop dotted context paths', () => {
 
     assert.equal(iterationCount, 2);
   });
+
+  it('skips loop body when array is empty', async () => {
+    const storage = createStorage();
+
+    storage.context.set('stale_topics', []);
+
+    const loopStage = compileStage({
+      contextKeys: ['stale_topics'],
+      logic: '/mastermind(dispatch-task-run)',
+      loopSetup: 'for each topic of [stale_topics]',
+      updateContextKeys: ['dispatched'],
+    }, 1);
+
+    let iterationCount = 0;
+
+    const runner: TRunYahl = async () => {
+      iterationCount += 1;
+
+      return { storage: createStorage() };
+    };
+
+    const { handleLoop } = await import('@/orchestrator/-agent/loop');
+
+    await handleLoop(loopStage, storage, runner);
+
+    assert.equal(iterationCount, 0);
+  });
 });

@@ -30,7 +30,23 @@ export {
   type TResolveTopicResult,
   type TTopicRegistry,
   type TTopicRegistryEntry,
+  type TTopicRefreshPolicy,
+  type TTopicRefreshScope,
+  type TRefreshInterval,
+  type TRefreshRunStatus,
 } from './topic-registry.js';
+export {
+  evaluateKnowledgeRefresh,
+  listTopicPolicies,
+  patchTopicPolicy,
+  type TPatchTopicPolicyInput,
+  type TStaleTopic,
+  type TTopicPolicyRow,
+  type TTopicRefreshPolicy,
+  type TTopicRefreshScope,
+  type TRefreshInterval,
+  type TRefreshRunStatus,
+} from './topic-refresh.js';
 export {
   detectDuplicateGroups,
   runTidyKnowledge,

@@ -21,11 +21,27 @@ export type TTopicSignals = {
   topicTexts: string[];
 };
 
+export type TRefreshInterval = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+
+export type TRefreshRunStatus = 'success' | 'failed' | 'skipped';
+
+export type TTopicRefreshScope = 'studies' | 'facts' | 'synthesis' | 'summary';
+
+export type TTopicRefreshPolicy = {
+  enabled: boolean;
+  interval: TRefreshInterval | null;
+  lastRunAt: string | null;
+  lastRunSessionId: string | null;
+  lastRunStatus: TRefreshRunStatus | null;
+  scopes: TTopicRefreshScope[];
+};
+
 export type TTopicRegistryEntry = {
   aliases: string[];
   canonical: string;
   createdAt: string;
   maxAgeDays: number | null;
+  refresh: TTopicRefreshPolicy | null;
   signals: TTopicSignals;
   updatedAt: string;
 };
@@ -447,6 +463,7 @@ export const registerTopic = async (
     canonical: slug,
     createdAt: timestamp,
     maxAgeDays: null,
+    refresh: null,
     signals: normalizedSignals,
     updatedAt: timestamp,
   };
@@ -475,6 +492,7 @@ export const addAlias = async (canonical: string, alias: string): Promise<void> 
       canonical: canonicalSlug,
       createdAt: nowIso(),
       maxAgeDays: null,
+      refresh: null,
       signals: {
         seedUrlHosts: [],
         seedUrlPaths: [],

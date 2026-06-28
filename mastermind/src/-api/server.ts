@@ -14,7 +14,7 @@ import { config } from '../config.js';
 import type { TMastermindAgent } from '../-sdk/agent.js';
 import { buildRequestStatusPayload, getActiveSkillActivity, getRequestActivity } from '../-sdk/request-activity.js';
 import { runSelfCheck } from '../-sdk/self-check.js';
-import { postProposal, runSkill } from '../-handlers/skills.js';
+import { postProposal, runSkill, runListTopicPolicies, runPatchTopicPolicy } from '../-handlers/skills.js';
 import { rebuildPersistedPathsFromTopic } from '../-knowledge/index.js';
 
 const readJsonBody = async (req: http.IncomingMessage): Promise<unknown> => {
@@ -109,6 +109,32 @@ export const createApiServer = (agent: TMastermindAgent) => {
 
         const persisted = await rebuildPersistedPathsFromTopic(topic);
         sendJson(res, 200, { ok: true, persisted });
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/v1/internal/knowledges/topic-policies') {
+        if (!isInternalRequest(req)) {
+          sendJson(res, 403, { error: 'forbidden' });
+          return;
+        }
+
+        const result = await runListTopicPolicies();
+
+        sendJson(res, result.ok ? 200 : 500, result);
+        return;
+      }
+
+      if (req.method === 'PATCH' && pathname.startsWith('/v1/internal/knowledges/topic-policies/')) {
+        if (!isInternalRequest(req)) {
+          sendJson(res, 403, { error: 'forbidden' });
+          return;
+        }
+
+        const slug = decodeURIComponent(pathname.slice('/v1/internal/knowledges/topic-policies/'.length));
+        const body = await readJsonBody(req) as Record<string, unknown>;
+        const result = await runPatchTopicPolicy({ ...body, slug });
+
+        sendJson(res, result.ok ? 200 : 500, result);
         return;
       }
 

@@ -18,3 +18,28 @@ export const seedDefaultContext = (storage: TStorage) => {
     storage.context.set(key, value);
   }
 };
+
+export const seedRunInputContext = (
+  storage: TStorage,
+  runInput: Record<string, unknown> | undefined,
+  runInputContextKeys: string[] | undefined,
+) => {
+  if (
+    !runInputContextKeys?.length ||
+    !runInput ||
+    typeof runInput !== 'object' ||
+    Array.isArray(runInput)
+  ) {
+    return;
+  }
+
+  for (const key of runInputContextKeys) {
+    const value = runInput[key];
+
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    storage.context.set(key, typeof value === 'string' ? value.trim() : value);
+  }
+};

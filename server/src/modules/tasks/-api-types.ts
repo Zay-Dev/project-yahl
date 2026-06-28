@@ -4,6 +4,7 @@ export type TResponseTaskListItem = {
   id: string;
   name: string;
   path: string;
+  runInputKeys?: string[];
   taskId: string;
 };
 

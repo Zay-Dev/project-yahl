@@ -165,6 +165,7 @@ export const parseYahlTask = (text: string) => {
 
   return {
     resultContextKey: document.resultContextKey,
+    runInputContextKeys: document.runInput,
     stages: buildStagesFromDocument(document, text),
   };
 };

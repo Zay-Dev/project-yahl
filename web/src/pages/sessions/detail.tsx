@@ -9,6 +9,7 @@ import { AskUserQuestionDialog } from "@/pages/sessions/components/ask-user-ques
 import { SessionJsonFallback } from "@/pages/sessions/components/session-json-fallback";
 import { SessionOverview } from "@/pages/sessions/components/session-overview";
 import { SessionResult } from "@/pages/sessions/components/session-result";
+import { SessionStuckBanner } from "@/pages/sessions/components/session-stuck-banner";
 import { SessionTimeline } from "@/pages/sessions/components/session-timeline";
 import { useAskUserQuestions } from "@/pages/sessions/hooks/use-ask-user-questions";
 import { useSessionEventsStream } from "@/pages/sessions/hooks/use-session-events-stream";
@@ -99,6 +100,7 @@ export function SessionDetailPage() {
       {session ? (
         <>
           <SessionOverview session={session} />
+          <SessionStuckBanner session={session} />
           <AskUserPendingBanner
             onOpenQuestion={openQuestion}
             questions={pendingQuestions}

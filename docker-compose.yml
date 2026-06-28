@@ -22,6 +22,7 @@ services:
       onecli_postgres:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       DATABASE_URL: postgresql://onecli:onecli@onecli_postgres:5432/onecli
     ports:
       - "10254:10254"
@@ -32,6 +33,7 @@ services:
   onecli_postgres:
     image: postgres:16-alpine
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       POSTGRES_DB: onecli
       POSTGRES_PASSWORD: onecli
       POSTGRES_USER: onecli
@@ -54,8 +56,10 @@ services:
     env_file:
       - .env
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       HOST_REPO_ROOT: ${HOST_REPO_ROOT}
       MASTERMIND_API_URL: http://mastermind:4100
+      MASTERMIND_INTERNAL_TOKEN: ${MASTERMIND_INTERNAL_TOKEN:-}
       WORKER_API_URL: http://worker:4200
       MONGODB_URI: mongodb://mongo:27017/yahl
       OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
@@ -105,6 +109,7 @@ services:
     env_file:
       - .env
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       MASTERMIND_DATA_ROOT: /data
       MASTERMIND_INTERNAL_TOKEN: ${MASTERMIND_INTERNAL_TOKEN:-}
@@ -136,10 +141,12 @@ services:
     env_file:
       - .env
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       MASTERMIND_API_URL: http://mastermind:4100
-      WORKER_API_URL: http://worker:4200
       SESSION_API_BASE_URL: http://server:4000
+      VERIFY_RULES_ROOT: /data
+      WORKER_API_URL: http://worker:4200
       WORKER_BATCH_RUNS_ROOT: /tmp/yahl-batch-runs
       WORKER_HEALTH_PORT: "4200"
       WORKER_POLL_INTERVAL_MS: "5000"
@@ -147,7 +154,7 @@ services:
       - "4200:4200"
     volumes:
       - ./workspace:/root
-      - ./data/mastermind:/data
+      - ./data/mastermind/rules/verify:/data/verify:ro
     depends_on:
       mastermind:
         condition: service_healthy

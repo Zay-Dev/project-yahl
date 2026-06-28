@@ -7,6 +7,7 @@ import * as awilix from 'awilix';
 type TServices = {
   createPendingSession: (input: {
     isBackground?: boolean;
+    runInput?: Record<string, unknown>;
     sessionId: string;
     taskId: string;
     taskYahlPath: string;

@@ -161,7 +161,7 @@ runCommand.action(async options => {
 
     if (options.taskId) {
       const task = await fetchTaskYahl(options.taskId);
-      const { stages, resultContextKey } = parseYahlTask(task.yahl);
+      const { resultContextKey, stages } = parseYahlTask(task.yahl);
 
       await tracker.registerSession(sessionId, {
         parsedStages: stages,
@@ -190,9 +190,15 @@ runCommand.action(async options => {
 
       const systemAppend = await mergeTaskSystemAppend(sessionId, task.taskId);
 
+      const session = await fetchSession(sessionId);
+
       console.log(`[orchestrator] runYahl start sessionId=${sessionId} stageCount=${stages.length}`);
 
-      const { storage } = await runYahl(task.yahl, { stages, systemAppend });
+      const { storage } = await runYahl(task.yahl, {
+        runInput: session.runInput,
+        stages,
+        systemAppend,
+      });
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.forkrunId) {

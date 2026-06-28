@@ -126,6 +126,7 @@ export const fetchSession = async (sessionId: string) => {
     };
     parsedStages?: ParsedStage[];
     resultContextKey?: string;
+    runInput?: Record<string, unknown>;
     sessionId: string;
     taskId?: string;
     taskYahlPath?: string;

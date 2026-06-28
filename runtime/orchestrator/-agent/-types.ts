@@ -28,6 +28,7 @@ export type TRunYahl = (
     produceKeysResumeAttempt?: boolean;
     startFromStageIndex?: number;
     systemAppend?: string;
+    runInput?: Record<string, unknown>;
     temperature?: number;
     useStorage?: () => TStorage;
     verifyFastForward?: TVerifyFastForward;

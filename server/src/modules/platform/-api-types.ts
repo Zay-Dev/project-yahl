@@ -46,3 +46,43 @@ export type TResponseCronJobMutation = {
   id: string;
   ok: true;
 };
+
+export type TTopicRefreshInterval = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+
+export type TTopicRefreshScope = 'studies' | 'facts' | 'synthesis' | 'summary';
+
+export type TTopicRefreshPolicy = {
+  enabled: boolean;
+  interval: TTopicRefreshInterval | null;
+  lastRunAt: string | null;
+  lastRunSessionId: string | null;
+  lastRunStatus: 'success' | 'failed' | 'skipped' | null;
+  scopes: TTopicRefreshScope[];
+};
+
+export type TResponseTopicPolicy = {
+  canonical: string;
+  fileCount: number;
+  learningContractTopic?: string;
+  refresh: TTopicRefreshPolicy | null;
+  seedUrlCount: number;
+  studyKeyCount: number;
+  updatedAt?: string;
+};
+
+export type TResponseTopicPolicies = {
+  items: TResponseTopicPolicy[];
+};
+
+export type TRequestKnowledgePolicyParams = {
+  slug: string;
+};
+
+export type TRequestPatchKnowledgePolicyBody = {
+  enabled?: boolean;
+  interval?: TTopicRefreshInterval | null;
+  lastRunAt?: string | null;
+  lastRunSessionId?: string | null;
+  lastRunStatus?: 'success' | 'failed' | 'skipped' | null;
+  scopes?: TTopicRefreshScope[];
+};

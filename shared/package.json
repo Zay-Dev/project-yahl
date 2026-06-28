@@ -35,6 +35,10 @@
     "./verify/verify-infra": {
       "development": "./verify/verify-infra.ts",
       "import": "./dist/verify/verify-infra.js"
+    },
+    "./yahl/run-input-keys": {
+      "development": "./yahl/run-input-keys.ts",
+      "import": "./dist/yahl/run-input-keys.js"
     }
   },
   "scripts": {
@@ -43,6 +47,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "yaml": "^2.9.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

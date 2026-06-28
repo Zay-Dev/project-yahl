@@ -1,5 +1,6 @@
 export type TCreatePendingSessionInput = {
   isBackground?: boolean;
+  runInput?: Record<string, unknown>;
   sessionId: string;
   taskId: string;
   taskYahlPath: string;
@@ -11,6 +12,7 @@ export const pendingSessionUpdateDoc = (
 ) => ({
   $set: {
     isBackground: input.isBackground === true,
+    ...(input.runInput !== undefined ? { runInput: input.runInput } : {}),
     taskId: input.taskId,
     taskYahlPath: input.taskYahlPath,
     updatedAt: now,

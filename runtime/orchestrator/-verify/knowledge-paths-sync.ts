@@ -1,11 +1,10 @@
 import type { TStorage } from '@/shared/transports/-types';
 
 import type { TKnowledgePersistedIndexItem } from '@/shared/mastermind-client';
-
-type TKnowledgePaths = {
-  persisted?: TKnowledgePersistedIndexItem[];
-  topic?: string;
-};
+import {
+  normalizePersistedIndex,
+  type TKnowledgePaths,
+} from '@/shared/knowledge-paths';
 
 const mergePersistedEntries = (
   existing: TKnowledgePersistedIndexItem[],
@@ -41,7 +40,7 @@ export const syncKnowledgePathsPersisted = async (storage: TStorage): Promise<vo
     return;
   }
 
-  const existing = Array.isArray(paths.persisted) ? paths.persisted : [];
+  const existing = normalizePersistedIndex(Array.isArray(paths.persisted) ? paths.persisted : []);
   const merged = mergePersistedEntries(existing, rebuilt);
 
   storage.context.set('knowledge_paths', {

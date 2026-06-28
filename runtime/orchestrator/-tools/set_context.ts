@@ -1,6 +1,8 @@
 import type { TChatToolCall, TStorage } from '@/shared/transports/-types';
 import type { SetContextToolCallEnvelope } from '@/shared/stage-contract';
 
+import { normalizeKnowledgePathsValue } from '@/shared/knowledge-paths';
+
 import { seedDefaultContext } from '@/orchestrator/-context/default-context';
 
 export const createStorage = () => {
@@ -27,10 +29,14 @@ export const setContext = async (storage: TStorage, toolCall: TChatToolCall) => 
 
   const bucket = scope === 'types' ? storage.types : storage.context;
   const current = bucket.get(key) || {};
+
+  const normalizedValue = key === 'knowledge_paths'
+    ? normalizeKnowledgePathsValue(value)
+    : value;
   
   const nextValue = operation === "extend"
-    ? [current[key], value]
-    : value;
+    ? [current[key], normalizedValue]
+    : normalizedValue;
 
   bucket.set(key, nextValue);
 };

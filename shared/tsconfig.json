@@ -14,7 +14,8 @@
   },
   "include": [
     "request-activity/**/*.ts",
-    "verify/**/*.ts"
+    "verify/**/*.ts",
+    "yahl/**/*.ts"
   ],
   "exclude": ["dist", "node_modules", "**/*.test.ts"],
   "tsc-alias": {

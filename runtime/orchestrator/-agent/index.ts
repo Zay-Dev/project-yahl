@@ -6,8 +6,9 @@ import type { TStorage } from '@/shared/transports/-types';
 
 import { toAgentStage } from '@/shared/yahl-stage';
 
-import { parseYahlFile } from '@/orchestrator/-utils/yahl';
+import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
+import { seedRunInputContext } from '@/orchestrator/-context/default-context';
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
@@ -90,6 +91,11 @@ class YahlAgentRunner {
     }: TRunYahlOptions = {},
   ) {
     this.storage = useStorage();
+    seedRunInputContext(
+      this.storage,
+      options.runInput,
+      parseYahlDocument(yahl).runInput,
+    );
     this.options = options;
     this.startIndex = options.startFromStageIndex ?? 0;
     this.stages = options.stages ?? parseYahlFile(yahl);

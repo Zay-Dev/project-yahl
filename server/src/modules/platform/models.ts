@@ -42,7 +42,10 @@ const cronJobSchema = new Schema<TDbCronJob>({
   timestamps: true,
 });
 
-cronJobSchema.index({ id: 1 }, { unique: true });
+cronJobSchema.index(
+  { id: 1 },
+  { partialFilterExpression: { deletedAt: null }, unique: true },
+);
 
 export const modelPlatformProposal = createModel<TDbPlatformProposal>(
   modelsName.PlatformProposals,

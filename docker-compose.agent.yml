@@ -9,6 +9,7 @@ services:
     env_file:
       - ${COMPOSE_ENV_FILE:-.env}
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
       AGENT_REDIS_URL: redis://redis:6379
       AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}

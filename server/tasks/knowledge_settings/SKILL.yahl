@@ -1,0 +1,47 @@
+name: knowledge-settings
+description: Conversational management of per-topic knowledge refresh policies
+resultContextKey: result
+
+types: |
+  type TPolicyPatch = {
+    canonical: string;
+    enabled: boolean;
+    interval: 'daily' | 'weekly' | 'biweekly' | 'monthly' | null;
+  };
+
+  type TResult = {
+    applied: boolean;
+    policy: TPolicyPatch;
+  };
+
+stages:
+  - produceContextKeys: [missionText, topic_policies, policy_answers, policy_patch]
+    logic: |
+      const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      const topic_policies = /mastermind(list-topic-policies);
+      const pickBatch = *build_topic_pick_batch(topic_policies, guideline: ~/task-skills/policy-intake/SKILL.md);
+      const topicAnswers = /ask-user-batch(pickBatch);
+      const settingsBatch = *build_policy_settings_batch(topicAnswers, topic_policies, guideline: ~/task-skills/policy-intake/SKILL.md);
+      const policyAnswers = /ask-user-batch(settingsBatch);
+      const policy_patch = *parse_policy_patch(topicAnswers, policyAnswers, guideline: ~/task-skills/policy-intake/SKILL.md);
+
+  - contextKeys: [policy_patch]
+    produceContextKeys: [result]
+    logic: |
+      const patched = /mastermind(
+        patch-topic-policy,
+        slug: policy_patch.canonical,
+        enabled: policy_patch.enabled,
+        interval: policy_patch.interval,
+      );
+      const result = {
+        applied: !!patched?.ok,
+        policy: policy_patch,
+      };
+      *echo('Call set_context with key result and the result object before ending this stage');
+
+  - contextMode: true
+    contextKeys: [result]
+    updateContextKeys: [result]
+    logic: |
+      (() => ({ result: context.context.result }))

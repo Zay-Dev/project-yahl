@@ -97,7 +97,11 @@ const _parseLoop = (yahl: string, storage: TStorage) => {
 
   if (!loopSetup) return null;
 
-  const { startAt, endAfter, step } = loopSetup;
+  const { startAt, endAfter, step, array } = loopSetup;
+
+  if (!array.length) {
+    return { array, empty: true, endAfter, indexName, startAt, step };
+  }
 
   if (startAt > endAfter && step > 0) {
     throw new Error(`Invalid range: ${startAt}..${endAfter}, step ${step}`);
@@ -197,7 +201,12 @@ export const handleLoop = async (
     throw new Error("Invalid loop setup occurred in the above stage");
   }
 
+  if ('empty' in loopSetup && loopSetup.empty) {
+    return;
+  }
+
   const { indexName, startAt, endAfter, step, array } = loopSetup;
+
   let i = startAt;
 
   while (step >= 0 ? i <= endAfter : i >= endAfter) {

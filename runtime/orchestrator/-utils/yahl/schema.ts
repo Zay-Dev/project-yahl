@@ -1,3 +1,5 @@
+import { parseRunInputContextKeys } from "@project-yahl/shared/yahl/run-input-keys";
+
 import type { YahlStage } from "@/shared/yahl-stage";
 import { validateYahlStage } from "@/shared/yahl-stage";
 
@@ -7,6 +9,7 @@ export interface YahlDocument {
   description: string;
   name: string;
   resultContextKey?: string;
+  runInput?: string[];
   stages: YahlStage[];
   types?: string;
 }
@@ -46,11 +49,14 @@ export const validateYahlDocument = (raw: unknown): YahlDocument => {
     throw new Error("resultContextKey: must be a non-empty string when present");
   }
 
+  const runInput = parseRunInputContextKeys(doc.runInput);
+
   return {
     description: doc.description.trim(),
     name: doc.name.trim(),
     stages: doc.stages.map((stage, index) => validateYahlStage(stage, index)),
     ...(resultContextKey ? { resultContextKey } : {}),
+    ...(runInput ? { runInput } : {}),
     ...(typeof doc.types === "string" && doc.types.trim()
       ? { types: doc.types.trim() }
       : {}),

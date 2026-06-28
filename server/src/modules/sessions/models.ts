@@ -57,6 +57,7 @@ const sessionSchema = new Schema<TDbSession>({
   parsedStages: [model.d.mixed()],
   result: model.d.mixed(),
   resultContextKey: model.d.optionalString(),
+  runInput: model.d.mixed(),
   sessionId: model.d.requiredString(),
   taskId: model.d.optionalString(),
   taskYahlPath: model.d.optionalString(),

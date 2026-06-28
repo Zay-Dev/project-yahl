@@ -20,12 +20,16 @@ export type TResponseGetSession = {
   parsedStages?: TParsedStage[];
   result?: unknown;
   resultContextKey?: string;
+  runInput?: Record<string, unknown>;
+  runState: TSessionRunState;
   sessionId: string;
   taskId?: string;
   taskYahlPath?: string;
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
+
+export type { TSessionRunState } from './-session-run-state-signals';
 
 export type TResponseSessionListItem = {
   _id: string;

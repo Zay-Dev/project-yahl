@@ -94,6 +94,7 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
+  runInput?: Record<string, unknown>;
   sessionId: string;
   result?: unknown;
   taskId?: string;

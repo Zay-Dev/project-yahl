@@ -49,7 +49,20 @@ export const createCronJob = [
         throw errors.badRequest('cron job id already exists');
       }
 
-      await modelCronJob.create(body);
+      try {
+        await modelCronJob.create(body);
+      } catch (error) {
+        if (
+          error
+          && typeof error === 'object'
+          && 'code' in error
+          && error.code === 11000
+        ) {
+          throw errors.badRequest('cron job id already exists');
+        }
+
+        throw error;
+      }
       express.res.status(201);
       express.respondOne<TResponseCronJobMutation>({ id: body.id, ok: true });
     })
