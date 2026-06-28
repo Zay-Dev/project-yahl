@@ -8,6 +8,7 @@ import {
   resolveForkSuffixFromSetupIndex,
   resolveResumeStartIndex,
 } from './resume';
+import { isLoopStageCheckpoint } from './loop-resume';
 
 const yahlStages: ParsedStage[] = [
   { lines: 'a', sourceStartLine: 1, spec: { logic: 'a' }, type: 'plain' },
@@ -31,6 +32,31 @@ describe('buildResumePipelineStages', () => {
     assert.equal(pipelineStages.length, 2);
     assert.equal(pipelineStages[0]?.lines, 'd-resumed');
     assert.equal(pipelineStages[1]?.lines, 'e');
+  });
+});
+
+describe('loop stage resume detection', () => {
+  it('identifies loop checkpoints at the loop pipeline index', () => {
+    const loopMeta = {
+      arraySnapshot: [1, 2, 3, 4, 5, 6],
+      index: 2,
+      indexName: 'src',
+      value: 3,
+    };
+
+    const stages: ParsedStage[] = [
+      { lines: 'a', sourceStartLine: 1, spec: { logic: 'a' }, type: 'plain' },
+      {
+        lines: 'for each src of [study_plan.sources]',
+        sourceStartLine: 2,
+        spec: { logic: 'body', loopSetup: 'for each src of [study_plan.sources]' },
+        type: 'loop',
+      },
+      { lines: 'facts', sourceStartLine: 3, spec: { logic: 'facts' }, type: 'plain' },
+    ];
+
+    assert.equal(isLoopStageCheckpoint(loopMeta, stages, 1), true);
+    assert.equal(isLoopStageCheckpoint(loopMeta, stages, 0), false);
   });
 });
 

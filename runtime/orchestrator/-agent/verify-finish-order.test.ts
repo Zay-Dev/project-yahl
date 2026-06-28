@@ -48,7 +48,7 @@ describe('verify finish order', () => {
 
     const resetBody = src.slice(resetStart, resetStart + 800);
 
-    assert.match(resetBody, /this\.boundParsedStageIndex = parsedStageIndex/);
+    assert.match(resetBody, /this\.boundParsedStageIndex = this\.options\.parsedStageIndex \?\? parsedStageIndex/);
     assert.match(resetBody, /this\.boundStage = stage/);
     assert.match(resetBody, /this\.boundSourceStartLine = stage\.sourceStartLine/);
   });

@@ -149,7 +149,7 @@ class YahlAgentRunner {
       ? this.options.resumeStage
       : undefined;
 
-    this.boundParsedStageIndex = parsedStageIndex;
+    this.boundParsedStageIndex = this.options.parsedStageIndex ?? parsedStageIndex;
     this.boundStage = stage;
     this.boundSourceStartLine = stage.sourceStartLine;
     this.stageDocSourceStartLine = undefined;

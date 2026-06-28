@@ -24,6 +24,7 @@ export type TRunYahl = (
     loopMeta?: TLoopMeta;
     resumeStage?: TResumeStage;
     stages?: ParsedStage[];
+    parsedStageIndex?: number;
     pipelineStageIndex?: number;
     produceKeysResumeAttempt?: boolean;
     startFromStageIndex?: number;

@@ -20,6 +20,10 @@ import { compileStage } from '@/orchestrator/-utils/yahl';
 import { isStageFinished } from '@/shared/stage-status';
 
 import { runForkSetups } from './fork/setups';
+import {
+  continueAfterLoopIterationResume,
+  isLoopStageCheckpoint,
+} from './loop-resume';
 
 export const resolveForkSuffixFromSetupIndex = (forkSetupIndex?: number) => (
   (forkSetupIndex ?? 0) + 1
@@ -204,21 +208,44 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
       throw new Error(`resume: invalid stageIndex ${startIndex}`);
     }
 
-    const pipelineStages = buildResumePipelineStages(startIndex, yahlStages, resumedStage);
+    const loopMeta = checkpoint.loopMeta as TLoopMeta | undefined;
+    const resumeStageInput = {
+      loopMeta,
+      requestId: checkpoint.requestId,
+      resumeFrom,
+      stage: resumedStage,
+    };
 
-    await runYahl('', {
-      pipelineStageIndex: startIndex,
-      resumeStage: {
-        loopMeta: checkpoint.loopMeta as TLoopMeta | undefined,
-        requestId: checkpoint.requestId,
-        resumeFrom,
-        stage: resumedStage,
-      },
-      stages: pipelineStages,
-      startFromStageIndex: 0,
-      systemAppend,
-      useStorage: () => storage,
-    });
+    if (isLoopStageCheckpoint(loopMeta, yahlStages, startIndex)) {
+      await runYahl('', {
+        parsedStageIndex: startIndex,
+        pipelineStageIndex: startIndex,
+        resumeStage: resumeStageInput,
+        stages: [resumedStage],
+        startFromStageIndex: 0,
+        systemAppend,
+        useStorage: () => storage,
+      });
+
+      await continueAfterLoopIterationResume({
+        loopMeta: loopMeta!,
+        stageIndex: startIndex,
+        storage,
+        systemAppend,
+        yahlStages,
+      });
+    } else {
+      const pipelineStages = buildResumePipelineStages(startIndex, yahlStages, resumedStage);
+
+      await runYahl('', {
+        pipelineStageIndex: startIndex,
+        resumeStage: resumeStageInput,
+        stages: pipelineStages,
+        startFromStageIndex: 0,
+        systemAppend,
+        useStorage: () => storage,
+      });
+    }
   }
 
   console.log(

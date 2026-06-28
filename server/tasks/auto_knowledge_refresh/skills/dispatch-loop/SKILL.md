@@ -1,6 +1,6 @@
 # dispatch-loop
 
-Unattended `task_dispatcher` contract.
+Unattended `auto_knowledge_refresh` contract.
 
 ## After `evaluate-knowledge-refresh`
 

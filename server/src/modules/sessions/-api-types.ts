@@ -1,3 +1,5 @@
+import type { TSessionRunState } from './-session-run-state-signals';
+
 import type {
   TForkSessionStageSetup,
   TModelResponseTag,
@@ -29,7 +31,7 @@ export type TResponseGetSession = {
   updatedAt: string;
 };
 
-export type { TSessionRunState } from './-session-run-state-signals';
+export type { TSessionRunState };
 
 export type TResponseSessionListItem = {
   _id: string;

@@ -120,6 +120,7 @@ export const runLoopIteration = async (
   temperature?: number,
   pipelineStageIndex?: number,
   forkSetupIndex?: number,
+  parsedStageIndex?: number,
 ) => {
   const indexName = resolveLoopIndexName(stage, loopMeta);
 
@@ -162,6 +163,7 @@ export const runLoopIteration = async (
       stages: [toLoopIterationStage(stage, stage.spec.logic)],
       temperature,
       ...(pipelineStageIndex === undefined ? {} : { pipelineStageIndex }),
+      ...(parsedStageIndex === undefined ? {} : { parsedStageIndex }),
       useStorage: () => ({
         context: new Map(Object.entries(stageInput)),
         types: storage.types,
@@ -220,7 +222,65 @@ export const handleLoop = async (
       value: currentValue,
     };
 
-    await runLoopIteration(stage, storage, loopMeta, runner, temperature, pipelineStageIndex);
+    await runLoopIteration(
+      stage,
+      storage,
+      loopMeta,
+      runner,
+      temperature,
+      pipelineStageIndex,
+      undefined,
+      pipelineStageIndex,
+    );
+
+    i += step;
+  }
+};
+
+export const resumeLoopFromCheckpoint = async (
+  stage: ParsedStage,
+  storage: TStorage,
+  completedLoopMeta: TLoopMeta,
+  runner: TRunYahl,
+  temperature?: number,
+  pipelineStageIndex?: number,
+  parsedStageIndex?: number,
+) => {
+  const loopSetup = _parseLoop(stage.lines, storage);
+
+  if (!loopSetup) {
+    console.error(stage.lines);
+    throw new Error('Invalid loop setup occurred in the above stage');
+  }
+
+  if ('empty' in loopSetup && loopSetup.empty) {
+    return;
+  }
+
+  const { indexName, startAt, endAfter, step, array } = loopSetup;
+  let i = completedLoopMeta.index + step;
+
+  while (step >= 0 ? i <= endAfter : i >= endAfter) {
+    const currentValue = array ? array[i] || null : i;
+
+    const loopMeta = {
+      arraySnapshot: array ? JSON.parse(JSON.stringify(array)) : completedLoopMeta.arraySnapshot,
+      index: i,
+      indexName: completedLoopMeta.indexName ?? indexName,
+      temperature: temperature ?? completedLoopMeta.temperature,
+      value: currentValue,
+    };
+
+    await runLoopIteration(
+      stage,
+      storage,
+      loopMeta,
+      runner,
+      temperature,
+      pipelineStageIndex,
+      undefined,
+      parsedStageIndex,
+    );
 
     i += step;
   }
