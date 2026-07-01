@@ -121,6 +121,7 @@ export const runLoopIteration = async (
   pipelineStageIndex?: number,
   forkSetupIndex?: number,
   parsedStageIndex?: number,
+  recoveryStages?: ParsedStage[],
 ) => {
   const indexName = resolveLoopIndexName(stage, loopMeta);
 
@@ -164,6 +165,7 @@ export const runLoopIteration = async (
       temperature,
       ...(pipelineStageIndex === undefined ? {} : { pipelineStageIndex }),
       ...(parsedStageIndex === undefined ? {} : { parsedStageIndex }),
+      ...(recoveryStages === undefined ? {} : { recoveryStages }),
       useStorage: () => ({
         context: new Map(Object.entries(stageInput)),
         types: storage.types,
@@ -195,6 +197,7 @@ export const handleLoop = async (
   runner: TRunYahl,
   temperature?: number,
   pipelineStageIndex?: number,
+  recoveryStages?: ParsedStage[],
 ) => {
   const loopSetup = _parseLoop(stage.lines, storage);
 
@@ -231,6 +234,7 @@ export const handleLoop = async (
       pipelineStageIndex,
       undefined,
       pipelineStageIndex,
+      recoveryStages,
     );
 
     i += step;
@@ -245,6 +249,7 @@ export const resumeLoopFromCheckpoint = async (
   temperature?: number,
   pipelineStageIndex?: number,
   parsedStageIndex?: number,
+  recoveryStages?: ParsedStage[],
 ) => {
   const loopSetup = _parseLoop(stage.lines, storage);
 
@@ -280,6 +285,7 @@ export const resumeLoopFromCheckpoint = async (
       pipelineStageIndex,
       undefined,
       parsedStageIndex,
+      recoveryStages,
     );
 
     i += step;

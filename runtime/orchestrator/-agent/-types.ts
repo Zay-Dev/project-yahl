@@ -23,6 +23,7 @@ export type TRunYahl = (
     forkSetupIndex?: number;
     loopMeta?: TLoopMeta;
     resumeStage?: TResumeStage;
+    recoveryStages?: ParsedStage[];
     stages?: ParsedStage[];
     parsedStageIndex?: number;
     pipelineStageIndex?: number;

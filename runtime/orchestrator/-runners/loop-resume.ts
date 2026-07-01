@@ -1,14 +1,9 @@
 import type { TLoopMeta, TStorage } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
-import { runYahl } from '@/orchestrator/-agent';
-import { resumeLoopFromCheckpoint } from '@/orchestrator/-agent/loop';
+import { runPipelineContinuation } from './pipeline-continuation';
 
-export const isLoopStageCheckpoint = (
-  loopMeta: TLoopMeta | undefined,
-  yahlStages: ParsedStage[],
-  stageIndex: number,
-) => Boolean(loopMeta && yahlStages[stageIndex]?.type === 'loop');
+export { isLoopStageCheckpoint, resolveLoopStageIndex } from './pipeline-continuation';
 
 export const continueAfterLoopIterationResume = async (params: {
   loopMeta: TLoopMeta;
@@ -17,29 +12,19 @@ export const continueAfterLoopIterationResume = async (params: {
   systemAppend?: string;
   yahlStages: ParsedStage[];
 }) => {
-  const loopStage = params.yahlStages[params.stageIndex]!;
-
-  await resumeLoopFromCheckpoint(
-    loopStage,
-    params.storage,
-    params.loopMeta,
-    runYahl,
-    params.loopMeta.temperature,
-    params.stageIndex,
-    params.stageIndex,
-  );
-
-  const suffix = params.yahlStages.slice(params.stageIndex + 1);
-
-  if (!suffix.length) {
-    return;
-  }
-
-  await runYahl('', {
-    pipelineStageIndex: params.stageIndex + 1,
-    stages: suffix,
-    startFromStageIndex: 0,
+  await runPipelineContinuation({
+    loopStageIndex: params.stageIndex,
+    position: {
+      kind: 'loopAfterIteration',
+      loopMeta: params.loopMeta,
+      loopStageIndex: params.stageIndex,
+    },
+    storage: params.storage,
+    suffix: {
+      kind: 'parsedStages',
+      fromStageIndex: params.stageIndex + 1,
+    },
     systemAppend: params.systemAppend,
-    useStorage: () => params.storage,
+    yahlStages: params.yahlStages,
   });
 };

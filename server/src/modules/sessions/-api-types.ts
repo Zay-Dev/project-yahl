@@ -74,6 +74,7 @@ export type TResponseStageReplayItem = {
   contextAfter?: Record<string, unknown>;
   finishedAt?: string;
   loopMeta?: TStageLoopMeta;
+  parsedStageIndex?: number;
   requestId: string;
   sourceStartLine?: number;
   stage: TYahlStage;

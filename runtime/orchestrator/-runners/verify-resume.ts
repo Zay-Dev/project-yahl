@@ -17,9 +17,10 @@ import {
 
 import { loadCheckpointResumeContext } from './checkpoint-resume-load';
 import {
-  continueAfterLoopIterationResume,
   isLoopStageCheckpoint,
-} from './loop-resume';
+  resolveLoopStageIndex,
+  runPipelineContinuation,
+} from './pipeline-continuation';
 
 const hasProducedKeys = (stage: ParsedStage, resultStorage: TStorage) => {
   const keys = stage.spec.produceContextKeys ?? [];
@@ -76,12 +77,21 @@ const runVerifyOnlyUnavailableResume = async (params: {
 
   const systemAppend = await mergeTaskSystemAppend(params.sessionId, params.session.taskId);
   const loopMeta = stageDetail.loopMeta as TLoopMeta | undefined;
+  const loopStageIndex = resolveLoopStageIndex({}, params.yahlStages);
 
   if (isLoopStageCheckpoint(loopMeta, params.yahlStages, params.stageIndex)) {
-    await continueAfterLoopIterationResume({
-      loopMeta: loopMeta!,
-      stageIndex: params.stageIndex,
+    await runPipelineContinuation({
+      loopStageIndex: params.stageIndex,
+      position: {
+        kind: 'loopAfterIteration',
+        loopMeta: loopMeta!,
+        loopStageIndex: params.stageIndex,
+      },
       storage: params.storage,
+      suffix: {
+        kind: 'parsedStages',
+        fromStageIndex: params.stageIndex + 1,
+      },
       systemAppend,
       yahlStages: params.yahlStages,
     });
@@ -89,11 +99,19 @@ const runVerifyOnlyUnavailableResume = async (params: {
     return params.storage;
   }
 
-  const { storage: resultStorage } = await runYahl('', {
-    stages: params.yahlStages,
-    startFromStageIndex: params.stageIndex + 1,
+  const resultStorage = await runPipelineContinuation({
+    loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+    position: {
+      kind: 'fromStageIndex',
+      stageIndex: params.stageIndex + 1,
+    },
+    storage: params.storage,
+    suffix: {
+      kind: 'parsedStages',
+      fromStageIndex: params.stageIndex + 1,
+    },
     systemAppend,
-    useStorage: () => params.storage,
+    yahlStages: params.yahlStages,
   });
 
   return resultStorage;
@@ -128,6 +146,8 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
     yahlStages,
   } = await loadCheckpointResumeContext(sessionId, verifyId);
 
+  const loopStageIndex = resolveLoopStageIndex({}, yahlStages);
+
   if (checkpoint.unavailable) {
     if (hasProducedKeys(activeStage, storage)) {
       const resultStorage = await runVerifyOnlyUnavailableResume({
@@ -150,26 +170,21 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
     const loopMeta = stageDetail.loopMeta as TLoopMeta | undefined;
 
     if (isLoopStageCheckpoint(loopMeta, yahlStages, stageIndex)) {
-      const { storage: resultStorage } = await runYahl('', {
-        parsedStageIndex: stageIndex,
-        pipelineStageIndex: stageIndex,
-        resumeStage: {
+      const resultStorage = await runPipelineContinuation({
+        loopStageIndex: stageIndex,
+        position: {
+          kind: 'resumeStageThenContinue',
           loopMeta,
           requestId: String(checkpoint.requestId),
-          stage: activeStage,
+          resumedStage: activeStage,
+          stageIndex,
         },
-        stages: [activeStage],
-        startFromStageIndex: 0,
-        useStorage: () => storage,
-      });
-
-      const systemAppend = await mergeTaskSystemAppend(sessionId, session.taskId);
-
-      await continueAfterLoopIterationResume({
-        loopMeta: loopMeta!,
-        stageIndex,
-        storage: resultStorage,
-        systemAppend,
+        storage,
+        suffix: {
+          kind: 'parsedStages',
+          fromStageIndex: stageIndex + 1,
+        },
+        systemAppend: await mergeTaskSystemAppend(sessionId, session.taskId),
         yahlStages,
       });
 
@@ -179,14 +194,21 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
       };
     }
 
-    const { storage: resultStorage } = await runYahl('', {
-      resumeStage: {
+    const resultStorage = await runPipelineContinuation({
+      loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+      position: {
+        kind: 'fromStageIndex',
         requestId: String(checkpoint.requestId),
-        stage: activeStage,
+        resumedStage: activeStage,
+        stageIndex,
       },
-      stages: yahlStages,
-      startFromStageIndex: stageIndex,
-      useStorage: () => storage,
+      storage,
+      suffix: {
+        kind: 'parsedStages',
+        fromStageIndex: stageIndex,
+      },
+      systemAppend: await mergeTaskSystemAppend(sessionId, session.taskId),
+      yahlStages,
     });
 
     return {
@@ -240,44 +262,22 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
   const stageDetail = await fetchStageDetail(sessionId, requestId);
   const loopMeta = stageDetail.loopMeta as TLoopMeta | undefined;
 
-  if (isLoopStageCheckpoint(loopMeta, yahlStages, stageIndex)) {
-    const { storage: resultStorage } = await runYahl('', {
-      parsedStageIndex: stageIndex,
-      pipelineStageIndex: stageIndex,
-      resumeStage: {
-        loopMeta,
-        requestId,
-        stage: recoveryStage,
-      },
-      stages: [recoveryStage],
-      startFromStageIndex: 0,
-      systemAppend,
-      useStorage: () => storage,
-    });
-
-    await continueAfterLoopIterationResume({
-      loopMeta: loopMeta!,
-      stageIndex,
-      storage: resultStorage,
-      systemAppend,
-      yahlStages,
-    });
-
-    return {
-      resultContextKey: session.resultContextKey ?? 'result',
-      storage: resultStorage,
-    };
-  }
-
-  const { storage: resultStorage } = await runYahl('', {
-    resumeStage: {
+  const resultStorage = await runPipelineContinuation({
+    loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+    position: {
+      kind: 'resumeStageThenContinue',
+      loopMeta,
       requestId,
-      stage: recoveryStage,
+      resumedStage: recoveryStage,
+      stageIndex,
     },
-    stages: yahlStages,
-    startFromStageIndex: stageIndex,
+    storage,
+    suffix: {
+      kind: 'parsedStages',
+      fromStageIndex: stageIndex + 1,
+    },
     systemAppend,
-    useStorage: () => storage,
+    yahlStages,
   });
 
   return {

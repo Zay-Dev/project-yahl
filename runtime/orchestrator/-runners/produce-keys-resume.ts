@@ -1,6 +1,5 @@
-import { runYahl } from '@/orchestrator/-agent';
-
 import { loadCheckpointResumeContext } from './checkpoint-resume-load';
+import { resolveLoopStageIndex, runPipelineContinuation } from './pipeline-continuation';
 
 export const runProduceKeysResume = async (sessionId: string, verifyId: string) => {
   const {
@@ -20,16 +19,24 @@ export const runProduceKeysResume = async (sessionId: string, verifyId: string) 
     'Use set_context to write every missing produceContextKeys value before finishing.',
   ].join('\n\n');
 
-  const { storage: resultStorage } = await runYahl('', {
-    produceKeysResumeAttempt: true,
-    resumeStage: {
+  const loopStageIndex = resolveLoopStageIndex({}, yahlStages);
+
+  const resultStorage = await runPipelineContinuation({
+    loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+    position: {
+      kind: 'fromStageIndex',
+      produceKeysResumeAttempt: true,
       requestId,
-      stage: activeStage,
+      resumedStage: activeStage,
+      stageIndex,
     },
-    stages: yahlStages,
-    startFromStageIndex: stageIndex,
+    storage,
+    suffix: {
+      kind: 'parsedStages',
+      fromStageIndex: stageIndex,
+    },
     systemAppend,
-    useStorage: () => storage,
+    yahlStages,
   });
 
   return {

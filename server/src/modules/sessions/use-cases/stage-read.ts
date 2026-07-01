@@ -14,7 +14,7 @@ import type {
   TResponseStageStatus,
   TStageListSource,
 } from '../-api-types';
-import type { TModelResponseTag, TYahlStage } from '../-types';
+import type { IStage, TModelResponseTag, TParsedStage, TYahlStage } from '../-types';
 import {
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
@@ -144,6 +144,38 @@ const listStagesBySessionRef = async (sessionRef: Types.ObjectId) =>
     { sort: { createdAt: 1 } },
   ).lean();
 
+export const resolveReplayStageMetadata = (
+  stage: Pick<IStage, 'loopMeta' | 'parsedStageIndex' | 'sourceStartLine'>,
+  parsedStages: TParsedStage[],
+  plainCursor: { value: number },
+  loopStageIndex: number,
+) => {
+  let parsedStageIndex = stage.parsedStageIndex;
+
+  if (parsedStageIndex == null) {
+    if (stage.loopMeta != null && loopStageIndex >= 0) {
+      parsedStageIndex = loopStageIndex;
+    } else {
+      while (
+        plainCursor.value < parsedStages.length
+        && parsedStages[plainCursor.value]?.type === 'loop'
+      ) {
+        plainCursor.value += 1;
+      }
+
+      parsedStageIndex = plainCursor.value < parsedStages.length
+        ? plainCursor.value
+        : undefined;
+      plainCursor.value += 1;
+    }
+  }
+
+  const parsedStage = parsedStageIndex != null ? parsedStages[parsedStageIndex] : undefined;
+  const sourceStartLine = parsedStage?.sourceStartLine ?? stage.sourceStartLine;
+
+  return { parsedStageIndex, sourceStartLine };
+};
+
 const toListItem = (
   stage: TStageListSource & { _id: Types.ObjectId },
   modelCallCount: number,
@@ -190,27 +222,40 @@ export const resolveSessionStagesList = async (sessionId: string) => {
 export const resolveSessionStagesReplay = async (sessionId: string) => {
   const session = await resolveSessionBySessionId(sessionId);
   const sessionRef = session._id;
+  const parsedStages = session.parsedStages ?? [];
 
   const stages = await listStagesBySessionRef(sessionRef);
+  const loopStageIndex = parsedStages.findIndex((stage) => stage.type === 'loop');
+  const plainCursor = { value: 0 };
 
-  return stages.map((stage): TResponseStageReplayItem => ({
-    context: (stage.context ?? {}) as Record<string, unknown>,
-    contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
-    finishedAt: toIso(stage.finishedAt),
-    loopMeta: stage.loopMeta,
-    requestId: stage.requestId,
-    sourceStartLine: stage.sourceStartLine,
-    stage: stage.stage as TYahlStage,
-    stageId: String(stage._id),
-    temperature: stage.temperature,
-    verifyResult: stage.verifyResult
-      ? {
-        feedback: stage.verifyResult.feedback,
-        pass: stage.verifyResult.pass,
-        score: stage.verifyResult.score,
-      }
-      : undefined,
-  }));
+  return stages.map((stage): TResponseStageReplayItem => {
+    const { parsedStageIndex, sourceStartLine } = resolveReplayStageMetadata(
+      stage,
+      parsedStages,
+      plainCursor,
+      loopStageIndex,
+    );
+
+    return {
+      context: (stage.context ?? {}) as Record<string, unknown>,
+      contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
+      finishedAt: toIso(stage.finishedAt),
+      loopMeta: stage.loopMeta,
+      ...(parsedStageIndex === undefined ? {} : { parsedStageIndex }),
+      requestId: stage.requestId,
+      ...(sourceStartLine === undefined ? {} : { sourceStartLine }),
+      stage: stage.stage as TYahlStage,
+      stageId: String(stage._id),
+      temperature: stage.temperature,
+      verifyResult: stage.verifyResult
+        ? {
+          feedback: stage.verifyResult.feedback,
+          pass: stage.verifyResult.pass,
+          score: stage.verifyResult.score,
+        }
+        : undefined,
+    };
+  });
 };
 
 export const getSessionStages = [

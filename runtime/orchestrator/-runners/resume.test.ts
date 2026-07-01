@@ -8,7 +8,7 @@ import {
   resolveForkSuffixFromSetupIndex,
   resolveResumeStartIndex,
 } from './resume';
-import { isLoopStageCheckpoint } from './loop-resume';
+import { isLoopStageCheckpoint, resolveLoopStageIndex } from './pipeline-continuation';
 
 const yahlStages: ParsedStage[] = [
   { lines: 'a', sourceStartLine: 1, spec: { logic: 'a' }, type: 'plain' },
@@ -73,6 +73,37 @@ describe('resolveResumeStartIndex', () => {
         type: 'plain',
       },
     }, yahlStages), 3);
+  });
+});
+
+describe('resolveLoopStageIndex for fork checkpoints', () => {
+  it('resolves loop stage when snapshot sourceStartLine differs from parsedStages', () => {
+    const loopMeta = {
+      arraySnapshot: [1, 2, 3, 4, 5, 6],
+      index: 2,
+      indexName: 'src',
+      value: 3,
+    };
+
+    const stages: ParsedStage[] = [
+      { lines: 'a', sourceStartLine: 10, spec: { logic: 'a' }, type: 'plain' },
+      {
+        lines: 'for each src of [study_plan.sources]',
+        sourceStartLine: 265,
+        spec: { logic: 'body', loopSetup: 'for each src of [study_plan.sources]' },
+        type: 'loop',
+      },
+      { lines: 'facts', sourceStartLine: 322, spec: { logic: 'facts' }, type: 'plain' },
+    ];
+
+    assert.equal(resolveLoopStageIndex({
+      parsedStageSnapshot: {
+        lines: 'for each src of [study_plan.sources]',
+        sourceStartLine: 1,
+        type: 'loop',
+      },
+    }, stages), 1);
+    assert.equal(isLoopStageCheckpoint(loopMeta, stages, 1), true);
   });
 });
 

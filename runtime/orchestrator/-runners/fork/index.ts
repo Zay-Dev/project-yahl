@@ -15,7 +15,23 @@ declare global {
   var forkSessionManager: undefined | ForkSessionManager;
 }
 
-const _parsedStage = (stage: TReplayStageRow['stage']) => compileStage(stage, 1);
+const _parsedStage = (stage: TReplayStageRow['stage'], sourceStartLine = 1) =>
+  compileStage(stage, sourceStartLine);
+
+const _resolveReplaySourceStartLine = (
+  row: TReplayStageRow,
+  parsedStages: ParsedStage[],
+) => {
+  if (row.parsedStageIndex != null) {
+    return parsedStages[row.parsedStageIndex]?.sourceStartLine ?? row.sourceStartLine ?? 1;
+  }
+
+  if (row.sourceStartLine != null) {
+    return row.sourceStartLine;
+  }
+
+  return 1;
+};
 
 export const resolvePrefixVerifyFastForward = (
   parsed: ParsedStage,
@@ -48,7 +64,9 @@ const _runForkPlan = async (manager: ForkSessionManager) => {
         throw new Error(`Missing contextAfter for prefix stage ${step.row.stageId}`);
       }
 
-      const parsed = _parsedStage(step.row.stage);
+      const sourceStartLine = _resolveReplaySourceStartLine(step.row, manager.parsedStages);
+      const parsed = _parsedStage(step.row.stage, sourceStartLine);
+      const parsedStageIndex = step.row.parsedStageIndex;
 
       const verifyFastForward = resolvePrefixVerifyFastForward(parsed, step.row.verifyResult);
 
@@ -62,6 +80,8 @@ const _runForkPlan = async (manager: ForkSessionManager) => {
         contextAfter,
         contextAfterRecord: step.row.contextAfter,
         loopMeta: step.row.loopMeta,
+        ...(parsedStageIndex === undefined ? {} : { parsedStageIndex }),
+        recoveryStages: manager.parsedStages,
         stages: [parsed],
         temperature: resolveEffectiveStageTemperature(parsed, {
           loopMeta: step.row.loopMeta,

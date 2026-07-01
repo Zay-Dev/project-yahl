@@ -25,6 +25,7 @@ export type TReplayStageRow = {
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
   loopMeta?: TStageLoopMeta;
+  parsedStageIndex?: number;
   requestId: string;
   sourceStartLine?: number;
   stage: YahlStage;
@@ -103,6 +104,10 @@ const fetchSourceReplay = async (sourceSessionId: string) => {
 
 export const replayRowSlotKey = (row: TReplayStageRow) => {
   const loopIndex = row.loopMeta?.index ?? 'plain';
+
+  if (row.parsedStageIndex != null) {
+    return `${row.parsedStageIndex}:${loopIndex}`;
+  }
 
   if (row.sourceStartLine != null) {
     return `${row.sourceStartLine}:${loopIndex}`;

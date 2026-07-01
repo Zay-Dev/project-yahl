@@ -6,18 +6,22 @@ import type { TLoopMeta } from '@/shared/transports/-types';
 
 import { compileStage } from '@/orchestrator/-utils/yahl';
 
-import { isLoopStageCheckpoint } from './pipeline-continuation';
+import {
+  hasMoreLoopIterations,
+  isLoopStageCheckpoint,
+  resolveLoopStageIndex,
+} from './pipeline-continuation';
 
 const loopStage = compileStage({
   contextKeys: ['items'],
   logic: '(() => ({ item }))',
   loopSetup: 'for each item of [items]',
   updateContextKeys: ['items'],
-}, 1);
+}, 265);
 
 const plainStage = compileStage({
   logic: '(() => ({}))',
-}, 2);
+}, 322);
 
 const yahlStages: ParsedStage[] = [
   plainStage,
@@ -32,6 +36,35 @@ const loopMeta: TLoopMeta = {
   indexName: 'item',
   value: 3,
 };
+
+describe('resolveLoopStageIndex', () => {
+  it('matches loop parsedStageSnapshot by lines', () => {
+    assert.equal(resolveLoopStageIndex({
+      parsedStageSnapshot: {
+        lines: loopStage.lines,
+        sourceStartLine: 1,
+        type: 'loop',
+      },
+    }, yahlStages), 2);
+  });
+
+  it('falls back to first loop stage in parsedStages', () => {
+    assert.equal(resolveLoopStageIndex({}, yahlStages), 2);
+  });
+});
+
+describe('hasMoreLoopIterations', () => {
+  it('returns true when index is before the last snapshot item', () => {
+    assert.equal(hasMoreLoopIterations(loopMeta), true);
+  });
+
+  it('returns false on the last snapshot item', () => {
+    assert.equal(hasMoreLoopIterations({
+      ...loopMeta,
+      index: 5,
+    }), false);
+  });
+});
 
 describe('isLoopStageCheckpoint', () => {
   it('returns true when loopMeta is present and pipeline stage is a loop', () => {

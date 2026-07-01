@@ -139,6 +139,7 @@ class YahlAgentRunner {
           runYahl,
           this.temperature,
           this.pipelineStageIndex,
+          this.options.recoveryStages ?? this.stages,
         );
         continue;
       }
@@ -508,7 +509,7 @@ class YahlAgentRunner {
         boundStage: this.boundStage,
         checkpointStage: this.activeStage.spec,
         resumeAction,
-        yahlStages: this.stages,
+        yahlStages: this.options.recoveryStages ?? this.stages,
       });
 
       if (shouldRotateRequestIdForBoundStage(this.stageDocSourceStartLine, this.boundSourceStartLine)) {

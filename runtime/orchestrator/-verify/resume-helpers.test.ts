@@ -144,4 +144,63 @@ describe('resolveActiveStageForVerifyRecoveryBound', () => {
     assert.match(recovered.spec.logic, /\/ask-user\(goals\)/);
     assert.equal(recovered.spec.askUser?.[0]?.answer, undefined);
   });
+
+  it('recovers loop stage from full pipeline when bound index exceeds sliced stages', () => {
+    const loopStage: ParsedStage = {
+      lines: 'for each src of [study_plan.sources]',
+      sourceStartLine: 265,
+      spec: {
+        logic: 'loop body',
+        loopSetup: 'for each src of [study_plan.sources]',
+      },
+      type: 'loop',
+    };
+    const yahlStages: ParsedStage[] = [
+      makeStage(10, [], 'types'),
+      makeStage(147, [], 'clarify'),
+      makeStage(200, [], 'paths'),
+      makeStage(224, [], 'corpus'),
+      makeStage(242, [], 'study'),
+      loopStage,
+      makeStage(322, [], 'facts'),
+    ];
+    const boundStage: ParsedStage = {
+      ...loopStage,
+      lines: 'loop body resumed',
+      spec: { ...loopStage.spec, logic: 'loop body resumed' },
+    };
+
+    const recovered = resolveActiveStageForVerifyRecoveryBound({
+      boundParsedStageIndex: 5,
+      boundStage,
+      checkpointStage: loopStage.spec,
+      resumeAction: 'rerun',
+      yahlStages,
+    });
+
+    assert.equal(recovered.sourceStartLine, 265);
+    assert.match(recovered.spec.logic, /loop body/);
+  });
+
+  it('throws when bound loop index exceeds sliced stages without full recovery pipeline', () => {
+    const loopStage: ParsedStage = {
+      lines: 'for each src of [study_plan.sources]',
+      sourceStartLine: 265,
+      spec: {
+        logic: 'loop body',
+        loopSetup: 'for each src of [study_plan.sources]',
+      },
+      type: 'loop',
+    };
+
+    assert.throws(() => {
+      resolveActiveStageForVerifyRecoveryBound({
+        boundParsedStageIndex: 5,
+        boundStage: loopStage,
+        checkpointStage: loopStage.spec,
+        resumeAction: 'rerun',
+        yahlStages: [loopStage],
+      });
+    }, /stageIndex 5 out of bounds for 1 stage\(s\)/);
+  });
 });

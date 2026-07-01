@@ -15,15 +15,14 @@ import {
 } from '@/orchestrator/-ask-user';
 import type { TStageDetailForResume } from '@/orchestrator/-ask-user/session-api';
 import { buildResumeFrom } from '@/orchestrator/-ask-user/resume-from';
-import { initForkSessionManager } from '@/orchestrator/-runners/fork/manager';
 import { compileStage } from '@/orchestrator/-utils/yahl';
 import { isStageFinished } from '@/shared/stage-status';
 
-import { runForkSetups } from './fork/setups';
 import {
-  continueAfterLoopIterationResume,
   isLoopStageCheckpoint,
-} from './loop-resume';
+  resolveLoopStageIndex,
+  runPipelineContinuation,
+} from './pipeline-continuation';
 
 export const resolveForkSuffixFromSetupIndex = (forkSetupIndex?: number) => (
   (forkSetupIndex ?? 0) + 1
@@ -185,6 +184,8 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
   const baseParsed = _resolveBaseParsed(checkpoint, yahlStages);
   const resumedStage = buildResumedStage(baseParsed, patchedStage);
   const systemAppend = await mergeTaskSystemAppend(sessionId, session.taskId);
+  const loopMeta = checkpoint.loopMeta as TLoopMeta | undefined;
+  const loopStageIndex = resolveLoopStageIndex(checkpoint, yahlStages);
 
   if (isFork) {
     await _resumeAnchorStage({
@@ -196,11 +197,37 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
       systemAppend,
     });
 
-    const manager = await initForkSessionManager(forkSessionId);
-
-    await runForkSetups(manager, storage, {
-      fromSetupIndex: resolveForkSuffixFromSetupIndex(checkpoint.forkSetupIndex),
-    });
+    if (loopMeta && loopStageIndex >= 0 && isLoopStageCheckpoint(loopMeta, yahlStages, loopStageIndex)) {
+      await runPipelineContinuation({
+        loopStageIndex,
+        position: {
+          kind: 'loopAfterIteration',
+          loopMeta,
+          loopStageIndex,
+        },
+        storage,
+        suffix: {
+          kind: 'forkSetups',
+          forkSessionId,
+          fromSetupIndex: resolveForkSuffixFromSetupIndex(checkpoint.forkSetupIndex),
+        },
+        systemAppend,
+        yahlStages,
+      });
+    } else {
+      await runPipelineContinuation({
+        loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+        position: { kind: 'none' },
+        storage,
+        suffix: {
+          kind: 'forkSetups',
+          forkSessionId,
+          fromSetupIndex: resolveForkSuffixFromSetupIndex(checkpoint.forkSetupIndex),
+        },
+        systemAppend,
+        yahlStages,
+      });
+    }
   } else {
     const startIndex = resolveResumeStartIndex(checkpoint, yahlStages);
 
@@ -208,44 +235,24 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
       throw new Error(`resume: invalid stageIndex ${startIndex}`);
     }
 
-    const loopMeta = checkpoint.loopMeta as TLoopMeta | undefined;
-    const resumeStageInput = {
-      loopMeta,
-      requestId: checkpoint.requestId,
-      resumeFrom,
-      stage: resumedStage,
-    };
-
-    if (isLoopStageCheckpoint(loopMeta, yahlStages, startIndex)) {
-      await runYahl('', {
-        parsedStageIndex: startIndex,
-        pipelineStageIndex: startIndex,
-        resumeStage: resumeStageInput,
-        stages: [resumedStage],
-        startFromStageIndex: 0,
-        systemAppend,
-        useStorage: () => storage,
-      });
-
-      await continueAfterLoopIterationResume({
-        loopMeta: loopMeta!,
+    await runPipelineContinuation({
+      loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+      position: {
+        kind: 'resumeStageThenContinue',
+        loopMeta,
+        requestId: checkpoint.requestId,
+        resumeFrom,
+        resumedStage,
         stageIndex: startIndex,
-        storage,
-        systemAppend,
-        yahlStages,
-      });
-    } else {
-      const pipelineStages = buildResumePipelineStages(startIndex, yahlStages, resumedStage);
-
-      await runYahl('', {
-        pipelineStageIndex: startIndex,
-        resumeStage: resumeStageInput,
-        stages: pipelineStages,
-        startFromStageIndex: 0,
-        systemAppend,
-        useStorage: () => storage,
-      });
-    }
+      },
+      storage,
+      suffix: {
+        kind: 'parsedStages',
+        fromStageIndex: startIndex + 1,
+      },
+      systemAppend,
+      yahlStages,
+    });
   }
 
   console.log(
