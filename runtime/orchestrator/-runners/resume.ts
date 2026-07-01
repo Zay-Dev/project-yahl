@@ -134,7 +134,11 @@ const _resumeAnchorStage = async (params: {
   });
 };
 
-export const runAskUserResume = async (sessionId: string, questionId: string) => {
+export const runAskUserResume = async (
+  sessionId: string,
+  questionId: string,
+  options?: { systemAppend?: string },
+) => {
   console.log(
     `[yahl-diag] ask-user-resume start questionId=${questionId} sessionId=${sessionId} pid=${process.pid}`,
   );
@@ -152,7 +156,7 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
   }
 
   const session = await fetchSession(sessionId);
-  const yahlStages = session.parsedStages ?? [];
+  const yahlStages = session.parsedStages;
   const forkSessionId = session.forkedFrom?.forkSessionId;
   const isFork = forkSessionId != null;
 
@@ -183,7 +187,8 @@ export const runAskUserResume = async (sessionId: string, questionId: string) =>
   const resumeFrom = buildResumeFrom(checkpoint, stageDetail as TStageDetailForResume);
   const baseParsed = _resolveBaseParsed(checkpoint, yahlStages);
   const resumedStage = buildResumedStage(baseParsed, patchedStage);
-  const systemAppend = await mergeTaskSystemAppend(sessionId, session.taskId);
+  const systemAppend = options?.systemAppend
+    ?? await mergeTaskSystemAppend(sessionId, session.taskId);
   const loopMeta = checkpoint.loopMeta as TLoopMeta | undefined;
   const loopStageIndex = resolveLoopStageIndex(checkpoint, yahlStages);
 

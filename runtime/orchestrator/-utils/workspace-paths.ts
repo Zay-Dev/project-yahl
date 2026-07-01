@@ -1,9 +1,10 @@
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 import path from 'path';
 
 import { promises as fs } from 'fs';
 
 import config from '../config';
-import { repoRoot } from '../-docker/paths';
 
 export const workspaceRoot = () =>
   process.env.WORKSPACE_ROOT?.trim()
@@ -12,38 +13,39 @@ export const workspaceRoot = () =>
 export const sessionWorkspaceRoot = (sessionId: string) =>
   path.join(workspaceRoot(), 'sessions', sessionId);
 
-export const taskSkillsSourceDir = (taskId: string) =>
-  path.join(repoRoot, 'server', 'tasks', taskId, 'skills');
-
-export type TMountTaskSkillsResult = {
-  mounted: boolean;
-  source: string;
+export type TEchoTaskSkillsResult = {
+  echoed: boolean;
+  fileCount: number;
   target: string;
 };
 
-export const mountTaskSkillsToSession = async (
+export const echoTaskSkillsToSession = async (
   sessionId: string,
-  taskId: string,
-): Promise<TMountTaskSkillsResult> => {
-  const source = taskSkillsSourceDir(taskId);
+  files: TTaskSkillFile[],
+): Promise<TEchoTaskSkillsResult> => {
   const target = path.join(sessionWorkspaceRoot(sessionId), 'task-skills');
 
-  try {
-    await fs.access(source);
-  } catch {
+  if (!files.length) {
     console.warn(
-      `[orchestrator] task-skills source missing taskId=${taskId} path=${source}`,
+      `[orchestrator] task-skills echo skipped sessionId=${sessionId} fileCount=0`,
     );
 
-    return { mounted: false, source, target };
+    return { echoed: false, fileCount: 0, target };
   }
 
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.cp(source, target, { recursive: true, force: true });
+  await Promise.all(files.map(async (file) => {
+    const absolute = path.join(target, file.path);
 
-  console.log(`[orchestrator] task-skills mounted sessionId=${sessionId} target=${target}`);
+    await fs.mkdir(path.dirname(absolute), { recursive: true });
+    await fs.writeFile(absolute, file.content, 'utf8');
+  }));
 
-  return { mounted: true, source, target };
+  console.log(
+    `[orchestrator] task-skills echoed sessionId=${sessionId} `
+    + `target=${target} fileCount=${files.length}`,
+  );
+
+  return { echoed: true, fileCount: files.length, target };
 };
 
 export const taskMissionSkillPath = (sessionId: string) =>

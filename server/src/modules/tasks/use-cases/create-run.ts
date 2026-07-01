@@ -10,7 +10,7 @@ import { Middlewares } from '@omni-infra/express';
 
 import type { TResponseCreateRun } from '../-api-types';
 import { readTaskFile, taskExists } from '../-read-task-file';
-import { taskYahlRelativePath } from '../-tasks-root';
+import { readTaskSkillsFromDisk } from '../-read-task-skills';
 
 export type TRequestCreateRunBody = {
   runInput?: Record<string, unknown>;
@@ -42,14 +42,15 @@ export const createRun = [
         throw errors.badRequest(validation.message);
       }
 
-      const taskYahlPath = taskYahlRelativePath(body.taskId);
+      const taskSkills = await readTaskSkillsFromDisk(body.taskId);
 
       await Repository.resolve('createPendingSession')({
         isBackground: task.background === true,
         runInput: body.runInput,
         sessionId,
         taskId: body.taskId,
-        taskYahlPath,
+        taskSkills,
+        taskYahl: task.yahl,
       });
 
       await Repository.resolve('spawnOrchestrate')(sessionId, ['--task-id', body.taskId]);

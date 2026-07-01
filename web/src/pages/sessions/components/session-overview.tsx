@@ -58,10 +58,6 @@ export function SessionOverview({ session }: TSessionOverviewProps) {
       </div>
       <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-muted-foreground">Task path</dt>
-          <dd className="mt-0.5 break-all font-medium">{session.taskYahlPath || "—"}</dd>
-        </div>
-        <div>
           <dt className="text-muted-foreground">Status</dt>
           <dd className="mt-0.5 font-medium">
             {session.deletedAt ? "Deleted" : "Active"}

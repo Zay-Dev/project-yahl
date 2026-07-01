@@ -1,9 +1,12 @@
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 export type TCreatePendingSessionInput = {
   isBackground?: boolean;
   runInput?: Record<string, unknown>;
   sessionId: string;
   taskId: string;
-  taskYahlPath: string;
+  taskSkills?: TTaskSkillFile[];
+  taskYahl: string;
 };
 
 export const pendingSessionUpdateDoc = (
@@ -12,9 +15,10 @@ export const pendingSessionUpdateDoc = (
 ) => ({
   $set: {
     isBackground: input.isBackground === true,
-    ...(input.runInput !== undefined ? { runInput: input.runInput } : {}),
+    runInput: input.runInput ?? {},
     taskId: input.taskId,
-    taskYahlPath: input.taskYahlPath,
+    taskSkills: input.taskSkills ?? [],
+    taskYahl: input.taskYahl,
     updatedAt: now,
   },
   $setOnInsert: {

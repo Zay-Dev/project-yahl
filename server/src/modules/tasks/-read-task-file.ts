@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import { parseRunInputKeysFromYahl } from '@project-yahl/shared/yahl/run-input-keys';
 
 import { parseTaskMetadata } from './-parse-task-metadata';
+import { readTaskSkillsFromDisk } from './-read-task-skills';
 import { taskYahlAbsolutePath, taskYahlRelativePath } from './-tasks-root';
 
 export const readTaskFile = async (taskId: string) => {
@@ -10,6 +11,7 @@ export const readTaskFile = async (taskId: string) => {
   const yahl = await fs.readFile(yahlPath, 'utf8');
   const { background, description, name } = parseTaskMetadata(yahl);
   const runInputKeys = parseRunInputKeysFromYahl(yahl);
+  const taskSkills = await readTaskSkillsFromDisk(taskId);
 
   return {
     background,
@@ -19,6 +21,7 @@ export const readTaskFile = async (taskId: string) => {
     path: taskYahlRelativePath(taskId),
     ...(runInputKeys ? { runInputKeys } : {}),
     taskId,
+    taskSkills,
     yahl,
   };
 };

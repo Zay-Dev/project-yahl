@@ -39,6 +39,10 @@
     "./yahl/run-input-keys": {
       "development": "./yahl/run-input-keys.ts",
       "import": "./dist/yahl/run-input-keys.js"
+    },
+    "./yahl/task-skills": {
+      "development": "./yahl/task-skills.ts",
+      "import": "./dist/yahl/task-skills.js"
     }
   },
   "scripts": {

@@ -1,5 +1,7 @@
 import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 export type TTokenTotals = {
   cacheHitTokens: number;
   cacheMissTokens: number;
@@ -98,7 +100,8 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   sessionId: string;
   result?: unknown;
   taskId?: string;
-  taskYahlPath?: string;
+  taskSkills?: TTaskSkillFile[];
+  taskYahl?: string;
 }
 
 export interface IStage extends TWithTimestamps {

@@ -4,19 +4,21 @@ import { describe, it } from 'node:test';
 import { pendingSessionUpdateDoc } from '../-pending-session-update';
 
 describe('pendingSessionUpdateDoc', () => {
-  it('sets task metadata without parsedStages', () => {
+  it('sets task metadata with default empty taskSkills and runInput', () => {
     const now = new Date('2026-06-21T00:00:00.000Z');
     const update = pendingSessionUpdateDoc({
       sessionId: 'sess-1',
       taskId: 'media_to_text_test',
-      taskYahlPath: 'server/tasks/media_to_text_test/SKILL.yahl',
+      taskYahl: 'name: media\nstages: []',
     }, now);
 
     assert.deepEqual(update, {
       $set: {
         isBackground: false,
+        runInput: {},
         taskId: 'media_to_text_test',
-        taskYahlPath: 'server/tasks/media_to_text_test/SKILL.yahl',
+        taskSkills: [],
+        taskYahl: 'name: media\nstages: []',
         updatedAt: now,
       },
       $setOnInsert: {
@@ -26,12 +28,25 @@ describe('pendingSessionUpdateDoc', () => {
     assert.equal('parsedStages' in update.$set, false);
   });
 
+  it('sets task bundle fields when provided', () => {
+    const now = new Date('2026-06-21T00:00:00.000Z');
+    const update = pendingSessionUpdateDoc({
+      sessionId: 'sess-2',
+      taskId: 'who_am_i',
+      taskSkills: [{ content: '# mission', path: 'task-mission/SKILL.md' }],
+      taskYahl: 'name: who\nstages: []',
+    }, now);
+
+    assert.deepEqual(update.$set.taskYahl, 'name: who\nstages: []');
+    assert.equal(update.$set.taskSkills?.length, 1);
+  });
+
   it('sets isBackground when task is background', () => {
     const update = pendingSessionUpdateDoc({
       isBackground: true,
       sessionId: 'sess-bg',
       taskId: 'knowledge_tidy',
-      taskYahlPath: 'server/tasks/knowledge_tidy/SKILL.yahl',
+      taskYahl: 'name: tidy\nstages: []',
     });
 
     assert.equal(update.$set.isBackground, true);

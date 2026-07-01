@@ -1,5 +1,7 @@
 import type { ChildProcess } from 'child_process';
 
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 import type { TYahlDocument } from './-base-types';
 
 import * as awilix from 'awilix';
@@ -10,7 +12,8 @@ type TServices = {
     runInput?: Record<string, unknown>;
     sessionId: string;
     taskId: string;
-    taskYahlPath: string;
+    taskSkills?: TTaskSkillFile[];
+    taskYahl: string;
   }) => Promise<void>;
   spawnOrchestrate: (sessionId: string, args: string[]) => Promise<ChildProcess>;
   validateSessionById: (sessionId: string) => Promise<TYahlDocument>;

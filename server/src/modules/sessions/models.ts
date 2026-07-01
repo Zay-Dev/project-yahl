@@ -60,7 +60,8 @@ const sessionSchema = new Schema<TDbSession>({
   runInput: model.d.mixed(),
   sessionId: model.d.requiredString(),
   taskId: model.d.optionalString(),
-  taskYahlPath: model.d.optionalString(),
+  taskSkills: [model.d.mixed()],
+  taskYahl: model.d.optionalString(),
 }, {
   collection: modelsName.Sessions,
   timestamps: true,

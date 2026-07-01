@@ -36,10 +36,28 @@ const hasProducedKeys = (stage: ParsedStage, resultStorage: TStorage) => {
   });
 };
 
+const withBaseSystemAppend = async (
+  sessionId: string,
+  taskId: string,
+  baseAppend: string | undefined,
+  extra?: string,
+) => {
+  if (baseAppend && extra) {
+    return `${baseAppend}\n\n${extra}`;
+  }
+
+  if (baseAppend) {
+    return baseAppend;
+  }
+
+  return mergeTaskSystemAppend(sessionId, taskId, extra);
+};
+
 const runVerifyOnlyUnavailableResume = async (params: {
   activeStage: ParsedStage;
+  baseSystemAppend?: string;
   requestId: string;
-  session: { resultContextKey?: string; taskId?: string };
+  session: { resultContextKey?: string; taskId: string };
   sessionId: string;
   stageIndex: number;
   storage: TStorage;
@@ -75,7 +93,11 @@ const runVerifyOnlyUnavailableResume = async (params: {
     return params.storage;
   }
 
-  const systemAppend = await mergeTaskSystemAppend(params.sessionId, params.session.taskId);
+  const systemAppend = await withBaseSystemAppend(
+    params.sessionId,
+    params.session.taskId,
+    params.baseSystemAppend,
+  );
   const loopMeta = stageDetail.loopMeta as TLoopMeta | undefined;
   const loopStageIndex = resolveLoopStageIndex({}, params.yahlStages);
 
@@ -136,7 +158,12 @@ const _resolveResumeAction = (
   return 'rerun' as const;
 };
 
-export const runVerifyResume = async (sessionId: string, verifyId: string) => {
+export const runVerifyResume = async (
+  sessionId: string,
+  verifyId: string,
+  options?: { systemAppend?: string },
+) => {
+  const baseSystemAppend = options?.systemAppend;
   const {
     activeStage,
     checkpoint,
@@ -152,6 +179,7 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
     if (hasProducedKeys(activeStage, storage)) {
       const resultStorage = await runVerifyOnlyUnavailableResume({
         activeStage,
+        baseSystemAppend,
         requestId: String(checkpoint.requestId),
         session,
         sessionId,
@@ -184,7 +212,7 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
           kind: 'parsedStages',
           fromStageIndex: stageIndex + 1,
         },
-        systemAppend: await mergeTaskSystemAppend(sessionId, session.taskId),
+        systemAppend: await withBaseSystemAppend(sessionId, session.taskId, baseSystemAppend),
         yahlStages,
       });
 
@@ -207,7 +235,7 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
         kind: 'parsedStages',
         fromStageIndex: stageIndex,
       },
-      systemAppend: await mergeTaskSystemAppend(sessionId, session.taskId),
+      systemAppend: await withBaseSystemAppend(sessionId, session.taskId, baseSystemAppend),
       yahlStages,
     });
 
@@ -247,9 +275,10 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
 
   stripProduceKeysFromStorage(storage, recoveryStage);
 
-  const systemAppend = await mergeTaskSystemAppend(
+  const systemAppend = await withBaseSystemAppend(
     sessionId,
     session.taskId,
+    baseSystemAppend,
     buildVerifyRecoverySystemAppend({
       feedback,
       produceContextKeys: recoveryStage.produceContextKeys ?? recoveryStage.spec.produceContextKeys,

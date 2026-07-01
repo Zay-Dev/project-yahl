@@ -1,3 +1,5 @@
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 import type { TModelResponse } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
@@ -102,10 +104,11 @@ export const createSessionEventTracker = () => {
     sessionId: string,
     opts: {
       liveViewVncPort?: number;
-      parsedStages?: ParsedStage[];
+      parsedStages: ParsedStage[];
       resultContextKey?: string;
       taskId: string;
-      taskYahlPath: string;
+      taskSkills: TTaskSkillFile[];
+      taskYahl: string;
     },
   ) => {
     if (!baseUrl) return;
@@ -113,9 +116,10 @@ export const createSessionEventTracker = () => {
     const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/register`;
 
     await _post(url, {
-      parsedStages: opts.parsedStages ?? [],
+      parsedStages: opts.parsedStages,
       taskId: opts.taskId,
-      taskYahlPath: opts.taskYahlPath,
+      taskSkills: opts.taskSkills,
+      taskYahl: opts.taskYahl,
       ...(opts.resultContextKey ? { resultContextKey: opts.resultContextKey } : {}),
       ...(opts.liveViewVncPort ? { liveViewVncPort: opts.liveViewVncPort } : {}),
     });

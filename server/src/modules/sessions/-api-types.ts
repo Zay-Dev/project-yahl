@@ -1,3 +1,5 @@
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 import type { TSessionRunState } from './-session-run-state-signals';
 
 import type {
@@ -19,14 +21,15 @@ export type TResponseGetSession = {
   forkedFrom?: TSessionForkedFrom;
   isBackground?: boolean;
   liveViewVncPort?: number | null;
-  parsedStages?: TParsedStage[];
+  parsedStages: TParsedStage[];
   result?: unknown;
   resultContextKey?: string;
-  runInput?: Record<string, unknown>;
+  runInput: Record<string, unknown>;
   runState: TSessionRunState;
   sessionId: string;
-  taskId?: string;
-  taskYahlPath?: string;
+  taskId: string;
+  taskSkills: TTaskSkillFile[];
+  taskYahl: string;
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
@@ -40,7 +43,6 @@ export type TResponseSessionListItem = {
   isBackground?: boolean;
   sessionId: string;
   taskId?: string;
-  taskYahlPath?: string;
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
@@ -209,7 +211,6 @@ export type TResponseGetForkSession = {
   setups: TForkSessionStageSetup[];
   sourceSessionId: string;
   targetSessionId: string;
-  taskYahlPath?: string;
 };
 
 export type TRequestCreateForkSessionBody = {

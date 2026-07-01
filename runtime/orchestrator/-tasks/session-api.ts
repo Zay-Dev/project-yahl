@@ -1,8 +1,11 @@
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 export type TTaskYahl = {
   description: string;
   name: string;
   path: string;
   taskId: string;
+  taskSkills: TTaskSkillFile[];
   yahl: string;
 };
 

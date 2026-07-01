@@ -49,7 +49,6 @@ export type TForkSessionResponse = {
   setups: TForkSessionSetup[];
   sourceSessionId: string;
   targetSessionId: string;
-  taskYahlPath?: string;
 };
 
 export type TForkFastForwardStep = { kind: 'fastForward'; row: TReplayStageRow };
@@ -151,10 +150,6 @@ export class ForkSessionManager {
 
   get resultContextKey() {
     return this.forkSession.resultContextKey;
-  }
-
-  get taskYahlPath() {
-    return this.forkSession.taskYahlPath ?? '';
   }
 
   get parsedStages() {

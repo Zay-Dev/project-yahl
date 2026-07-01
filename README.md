@@ -44,7 +44,7 @@ Stuff that already works (aka things that surprisingly do not explode):
 - **Mastermind stack:** gateway (port 4100) and worker (port 4200, verify gates) in `docker compose`; orchestrator verify calls worker; `/mastermind(...)` in the agent for skills (requires `CURSOR_API_KEY`). Boot fail-fast when the SDK agent is not ready; stack probe via `pnpm run doctor`.
 - **`design-questions`:** platform Mastermind skill for dynamic ask-user batches (pass `mission:` for subject framing).
 - **`verifyAutoRetry`:** orchestrator in-process verify loop on stages with `verify: true` + `verifyAutoRetry: true`.
-- **Task-local skills:** mount from `server/tasks/{taskId}/skills/` to agent `~/task-skills/`; see **Authoring tasks** below.
+- **Task-local skills:** echoed from session snapshot to agent `~/task-skills/`; see **Authoring tasks** below.
 - **Knowledge store:** mastermind-private corpus under `data/mastermind/knowledges/`; agents read session extracts only — see **Protecting the knowledge store** below.
 - **Topic governance:** `resolve-topic` + `knowledge_tidy` background task (`background: true` in `SKILL.yahl`).
 - **Background sessions:** cron/utility runs hidden by default on `/sessions` (toggle to show).
@@ -82,7 +82,7 @@ for each i of [1..5,+2] {
 Syntax reference:
 
 - `~/something` — session scratch workspace (`AGENT_SESSION_HOME`); the agent can read and write here, not the whole repo.
-- `~/task-skills/…` — task-local SKILL files mounted from `server/tasks/{taskId}/skills/` (see **Authoring tasks**).
+- `~/task-skills/…` — task-local SKILL files echoed from the session snapshot (see **Authoring tasks**).
 - `for each i of [0..100]` and `for each x of [array]` — loops, with an optional step like `,+2`.
 - `CONTEXT: ...` — run deterministic context mutation in the VM before the next AI stage.
 - `IF:` / `ELSE IF:` / `ELSE:` / `END:` — stage branching; condition decides which block runs.
@@ -97,11 +97,12 @@ Syntax reference:
 
 ## Authoring tasks
 
-Tasks can ship their own SKILL files — handy when you want assess/synthesize rules without bloating `mastermind/skills/`. The orchestrator copies them into the session workspace at run start; the agent reads them under `~/task-skills/`. (Forget `task-mission/SKILL.md` and the run dies before stage 1 — ask me how I know.)
+Tasks can ship their own SKILL files — handy when you want assess/synthesize rules without bloating `mastermind/skills/`. At run start the server snapshots `taskYahl` + `taskSkills` onto the session; the orchestrator echoes that bundle into the session workspace and the agent reads it under `~/task-skills/`. (Forget `task-mission/SKILL.md` and the run dies before stage 1 — ask me how I know.)
 
 - **Layout:** `server/tasks/{taskId}/SKILL.yahl` + optional `server/tasks/{taskId}/skills/**/*.md`
-- **Mount:** orchestrator copies `skills/` → `workspace/sessions/{sessionId}/task-skills/` (agent `~/task-skills/`)
-- **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at fresh run start; missing file → `task-skills mount incomplete`
+- **Snapshot:** `createRun` / `registerSession` persist `taskYahl` + `taskSkills` on the session document
+- **Echo:** orchestrator writes the session snapshot → `workspace/sessions/{sessionId}/task-skills/` (agent `~/task-skills/`)
+- **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
 - **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` / `plan` (untrusted hints banner)
 - **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_tidy` (see [`mastermind/skills/extract-knowledge/SKILL.md`](mastermind/skills/extract-knowledge/SKILL.md) for the read path)

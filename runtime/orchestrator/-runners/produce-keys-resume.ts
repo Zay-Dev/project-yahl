@@ -1,7 +1,11 @@
 import { loadCheckpointResumeContext } from './checkpoint-resume-load';
 import { resolveLoopStageIndex, runPipelineContinuation } from './pipeline-continuation';
 
-export const runProduceKeysResume = async (sessionId: string, verifyId: string) => {
+export const runProduceKeysResume = async (
+  sessionId: string,
+  verifyId: string,
+  options?: { systemAppend?: string },
+) => {
   const {
     activeStage,
     checkpoint,
@@ -13,11 +17,14 @@ export const runProduceKeysResume = async (sessionId: string, verifyId: string) 
 
   const feedback = String(checkpoint.feedback ?? '');
   const requestId = String(checkpoint.requestId ?? '');
-  const systemAppend = [
+  const produceKeysAppend = [
     'The stage previously failed to produce required context keys.',
     feedback,
     'Use set_context to write every missing produceContextKeys value before finishing.',
   ].join('\n\n');
+  const systemAppend = options?.systemAppend
+    ? `${options.systemAppend}\n\n${produceKeysAppend}`
+    : produceKeysAppend;
 
   const loopStageIndex = resolveLoopStageIndex({}, yahlStages);
 

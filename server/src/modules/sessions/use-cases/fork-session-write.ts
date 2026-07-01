@@ -9,12 +9,12 @@ import type {
   TResponseCreateForkSession,
 } from '../-api-types';
 import type { TForkSessionStageSetup } from '../-types';
-import { deriveTaskIdFromYahlPath } from '../-derive-task-id';
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { modelForkSession, modelSession } from '../models';
 import { yahlStageSchema } from '../stage-schema';
 import { isStageFinished } from '../-stage-status';
 import { mergeForkSessionSetups } from './merge-fork-setups';
+import { validateForkSourceBundle, ForkSourceBundleError } from '../-fork-source-bundle';
 import { resolveSessionStagesReplay } from './stage-read';
 import { spawnOrchestrate } from './spawn-orchestrate';
 
@@ -123,8 +123,16 @@ export const createForkSession = [
 
       const setups = mergeForkSessionSetups(replayRows, anchorIndex, body.setups);
 
-      if (!sourceSession.parsedStages?.length) {
-        throw errors.badRequest('Source session is missing parsedStages; cannot fork');
+      let sourceTaskId: string;
+
+      try {
+        sourceTaskId = validateForkSourceBundle(sourceSession);
+      } catch (error) {
+        if (error instanceof ForkSourceBundleError) {
+          throw errors.badRequest(error.message);
+        }
+
+        throw error;
       }
 
       const forkSessionId = randomUUID();
@@ -150,9 +158,9 @@ export const createForkSession = [
             },
             isBackground: sourceSession.isBackground === true,
             parsedStages: sourceSession.parsedStages,
-            taskId: sourceSession.taskId?.trim()
-              || deriveTaskIdFromYahlPath(sourceSession.taskYahlPath ?? ''),
-            taskYahlPath: sourceSession.taskYahlPath ?? '',
+            taskId: sourceTaskId,
+            taskSkills: sourceSession.taskSkills,
+            taskYahl: sourceSession.taskYahl,
             updatedAt: now,
             ...(sourceSession.resultContextKey
               ? { resultContextKey: sourceSession.resultContextKey }
