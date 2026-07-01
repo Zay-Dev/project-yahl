@@ -7,22 +7,23 @@ import { resolveSessionBySessionId } from '../-resolve-session';
 import { modelAskUserQuestion } from '../models';
 
 export type TResponseAskUserQuestion = {
-  answerIds?: string[];
-  answerLabels?: string[];
-  askUserId: string;
+  batch?: Record<string, unknown>;
+  batchAnswers?: {
+    answerValue: unknown;
+    freeText?: string;
+    optionIds?: string[];
+    questionRef: string;
+  }[];
+  batchId?: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
-  freeText?: string;
   loopMeta?: Record<string, unknown>;
-  options: { id: string; label: string }[];
   parsedStageSnapshot?: {
     lines: string;
     sourceStartLine: number;
     type: 'loop' | 'plain';
   };
-  question: Record<string, unknown>;
   questionId: string;
-  questionRef: string;
   requestId: string;
   stage: Record<string, unknown>;
   stageIndex?: number;
@@ -32,11 +33,13 @@ export type TResponseAskUserQuestion = {
 };
 
 export type TResponseAskUserQuestionListItem = {
-  question: Record<string, unknown>;
+  batch?: Record<string, unknown>;
+  batchId?: string;
+  questionCount?: number;
   questionId: string;
-  questionRef: string;
   requestId: string;
   status: 'answered' | 'pending';
+  title?: string;
 };
 
 const sessionParamsSchema = Joi.object({
@@ -49,53 +52,40 @@ const questionParamsSchema = Joi.object({
 });
 
 const _toCheckpoint = (question: {
-  answerIds?: string[];
-  answerLabels?: string[];
-  askUserId: string;
+  batch?: Record<string, unknown>;
+  batchAnswers?: TResponseAskUserQuestion['batchAnswers'];
+  batchId?: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
-  freeText?: string;
   loopMeta?: Record<string, unknown>;
-  question: Record<string, unknown>;
   parsedStageSnapshot?: {
     lines: string;
     sourceStartLine: number;
     type: 'loop' | 'plain';
   };
   questionId: string;
-  questionRef: string;
   requestId: string;
   stage: Record<string, unknown>;
   stageIndex?: number;
   status: 'answered' | 'pending';
   storageSnapshot: Record<string, unknown>;
   toolCallId: string;
-}): TResponseAskUserQuestion => {
-  const questionArgs = question.question as {
-    options?: { id: string; label: string }[];
-  };
-
-  return {
-    answerIds: question.answerIds,
-    answerLabels: question.answerLabels,
-    askUserId: question.askUserId,
-    contextSnapshot: question.contextSnapshot,
-    forkSetupIndex: question.forkSetupIndex,
-    freeText: question.freeText,
-    loopMeta: question.loopMeta,
-    options: questionArgs.options ?? [],
-    question: question.question,
-    parsedStageSnapshot: question.parsedStageSnapshot,
-    questionId: question.questionId,
-    questionRef: question.questionRef,
-    requestId: question.requestId,
-    stage: question.stage,
-    stageIndex: question.stageIndex,
-    status: question.status,
-    storageSnapshot: question.storageSnapshot,
-    toolCallId: question.toolCallId,
-  };
-};
+}): TResponseAskUserQuestion => ({
+  batch: question.batch,
+  batchAnswers: question.batchAnswers,
+  batchId: question.batchId,
+  contextSnapshot: question.contextSnapshot,
+  forkSetupIndex: question.forkSetupIndex,
+  loopMeta: question.loopMeta,
+  parsedStageSnapshot: question.parsedStageSnapshot,
+  questionId: question.questionId,
+  requestId: question.requestId,
+  stage: question.stage,
+  stageIndex: question.stageIndex,
+  status: question.status,
+  storageSnapshot: question.storageSnapshot,
+  toolCallId: question.toolCallId,
+});
 
 export const listAskUserQuestions = [
   Middlewares.Chainable
@@ -120,13 +110,19 @@ export const listAskUserQuestions = [
       });
 
       express.respondMany<TResponseAskUserQuestionListItem>(
-        questions.map((question) => ({
-          question: question.question,
-          questionId: question.questionId,
-          questionRef: question.questionRef,
-          requestId: question.requestId,
-          status: question.status,
-        })),
+        questions.map((question) => {
+          const batch = question.batch as { questions?: unknown[]; title?: string } | undefined;
+
+          return {
+            batch: question.batch,
+            batchId: question.batchId,
+            questionCount: batch?.questions?.length,
+            questionId: question.questionId,
+            requestId: question.requestId,
+            status: question.status,
+            title: batch?.title,
+          };
+        }),
       );
     })
     .toMiddleware(),

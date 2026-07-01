@@ -27,9 +27,15 @@ type TSessionTimelineProps = {
 const DETAIL_FETCH_CONCURRENCY = 5;
 
 const statusClass = (status: TResponseStageListItem["status"]) => {
-  return status === "finished"
-    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-    : "bg-amber-500/15 text-amber-800 dark:text-amber-200";
+  if (status === "finished") {
+    return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
+  }
+
+  if (status === "verifying") {
+    return "bg-violet-500/15 text-violet-800 dark:text-violet-200";
+  }
+
+  return "bg-amber-500/15 text-amber-800 dark:text-amber-200";
 };
 
 const needsDetailRefresh = (event: TSessionLiveEvent) => {

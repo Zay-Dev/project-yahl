@@ -20,33 +20,46 @@ describe('resolveAskUserEntry', () => {
 });
 
 describe('validateAskUserToolCall', () => {
-  it('accepts matching title and ref', () => {
+  it('accepts valid batch tool call', () => {
     const error = validateAskUserToolCall(stage, {
-      kind: 'multipleChoice',
-      options: [
-        { id: '1', label: 'One' },
-        { id: '2', label: 'Two' },
-      ],
-      questionRef: '1',
-      title: 'Pick a number',
-      version: 'askUser.v1',
+      batchId: 'round1',
+      questions: [{
+        kind: 'multipleChoice',
+        options: [
+          { id: '1', label: 'One' },
+          { id: '2', label: 'Two' },
+        ],
+        questionRef: '1',
+        title: 'Pick a number',
+      }],
+      title: 'Answer required',
+      version: 'askUserBatch.v1',
     });
 
     assert.equal(error, null);
   });
 
-  it('rejects title mismatch', () => {
-    const error = validateAskUserToolCall(stage, {
-      kind: 'multipleChoice',
-      options: [
-        { id: '1', label: 'One' },
-        { id: '2', label: 'Two' },
-      ],
-      questionRef: '1',
-      title: 'Wrong title',
-      version: 'askUser.v1',
+  it('rejects already answered refs', () => {
+    const answeredStage: YahlStage = {
+      askUser: [{ answer: 3, id: '1', question: 'Pick a number' }],
+      logic: 'c += /ask-user(1);',
+    };
+
+    const error = validateAskUserToolCall(answeredStage, {
+      batchId: 'round1',
+      questions: [{
+        kind: 'multipleChoice',
+        options: [
+          { id: '1', label: 'One' },
+          { id: '2', label: 'Two' },
+        ],
+        questionRef: '1',
+        title: 'Pick a number',
+      }],
+      title: 'Answer required',
+      version: 'askUserBatch.v1',
     });
 
-    assert.match(error ?? '', /title must match/);
+    assert.match(error ?? '', /already answered/);
   });
 });

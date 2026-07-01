@@ -82,6 +82,57 @@ stages:
     }, /resultContextKey/);
   });
 
+  it("parses optional runInput context keys", () => {
+    const doc = parseYahlDocument(`
+name: x
+description: y
+runInput:
+  - knowledge_topic
+stages:
+  - logic: "x = 1;"
+`);
+
+    assert.deepEqual(doc.runInput, ["knowledge_topic"]);
+  });
+
+  it("omits runInput when absent", () => {
+    const doc = parseYahlDocument(`
+name: x
+description: y
+stages:
+  - logic: "x = 1;"
+`);
+
+    assert.equal(doc.runInput, undefined);
+  });
+
+  it("rejects empty runInput entries", () => {
+    assert.throws(() => {
+      parseYahlDocument(`
+name: x
+description: y
+runInput:
+  - "   "
+stages:
+  - logic: "x = 1;"
+`);
+    }, /runInput\[0\]/);
+  });
+
+  it("rejects duplicate runInput keys", () => {
+    assert.throws(() => {
+      parseYahlDocument(`
+name: x
+description: y
+runInput:
+  - knowledge_topic
+  - knowledge_topic
+stages:
+  - logic: "x = 1;"
+`);
+    }, /duplicate key/);
+  });
+
   it("rejects conditionMode and loopSetup together", () => {
     assert.throws(() => {
       parseYahlDocument(`
@@ -131,6 +182,19 @@ describe("parseYahlTask", () => {
     assert.equal(resultContextKey, "result");
     assert.equal(stages.length, 7);
     assert.equal(stages[2]?.type, "loop");
+  });
+
+  it("returns runInputContextKeys from task metadata", () => {
+    const { runInputContextKeys } = parseYahlTask(`
+name: x
+description: y
+runInput:
+  - knowledge_topic
+stages:
+  - logic: "x = 1;"
+`);
+
+    assert.deepEqual(runInputContextKeys, ["knowledge_topic"]);
   });
 });
 

@@ -43,7 +43,7 @@ Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, ex
 
 Knowledge read/write: use **`extract-knowledge`** and **`persist-knowledge`** with semantic `need` / `key` / `topic` only — never pass file paths to those skills.
 
-**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container). Shared knowledge lives at **`~/knowledges/`** (symlink to `/root/knowledges/`).
+**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container). After **`extract-knowledge`**, read **`~/knowledge/{key}.json`** — never read `~/knowledges/` (canonical store is mastermind-private).
 
 - Arguments: `{ "mode": "goto|act|extract|observe|agent", "instruction": "<text>", "url"?: "<url>", "schema"?: { ... }, "maxSteps"?: <number> }`.
 - Returns JSON `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.
@@ -55,26 +55,23 @@ Knowledge read/write: use **`extract-knowledge`** and **`persist-knowledge`** wi
 
 Use the **`ask_user`** tool when user choice is required before proceeding.
 
-- Stage YAML may register questions under `askUser[]` with `id` and `question`.
-- Stage logic references them as `/ask-user(<id>)`.
-- Required arguments:
-  - `version: "askUser.v1"`
-  - `kind: "multipleChoice"`
-  - `questionRef: "<id>"` matching the registry entry
-  - `title: "<non-empty>"` must exactly match the registered `question`
-  - `options: [{ "id":"<non-empty>", "label":"<non-empty>" }, ...]` with at least 2 options
-- Optional arguments:
-  - `description`, `allowMultiple`, `minChoices`, `maxChoices`
+- Stage logic references answers as `/ask-user(<ref>)` or via `*answer_of(<ref>)`.
+- Required arguments (`askUserBatch.v1`):
+  - `version: "askUserBatch.v1"`
+  - `batchId`, `title`, non-empty `questions[]`
+  - each question: `questionRef`, `kind` (`text` | `multipleChoice`), `title`
+  - `multipleChoice`: `options` (≥2), optional `allowMultiple`, `minChoices`, `maxChoices`
+- Optional batch fields: `description`
 - Validation constraints:
-  - do not omit `version`, `kind`, or `questionRef`
-  - do not send fewer than 2 options
-  - do not send empty option ids or labels
+  - unique `questionRef` per batch
+  - do not re-ask refs that already have answers
+  - MC: at least 2 options; non-empty ids and labels
 - Runtime behavior:
-  - orchestrator checkpoints context, stops the agent container, and waits for a user answer in the web UI
-  - after answer, a new orchestrator resumes the same stage with prior model responses replayed
-  - continuation replaces `/ask-user(<id>)` with the selected answer value
-  - answer is stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
-  - on resume, re-execute **full** `stage.logic` from the first line (do not treat the stage as finished)
+  - orchestrator upserts refs onto `stage.askUser[]`, checkpoints one batch, stops agent until all answers submitted
+  - web UI scrollable drawer; submit when every question answered
+  - after answer, orchestrator resumes same stage with prior model responses replayed
+  - answers stored as `ask_user_<ref>_answer` and on `askUser[].answer`
+  - on resume, re-execute **full** `stage.logic` from the first line
 
 ### `*answer_of(<id>)` (pseudo-op)
 
@@ -106,3 +103,4 @@ Examples
 7. `records = [...records, ...new_records];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array>`.
 8. `records = [...records, ...new_records, mandatory_record];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array_with_mandatory_record>`.
 9. `value += other_value;` -> compute the updated value first (`value + other_value`), then call `set_context` with `scope="stage"` (or `global`), `key="value"`, `operation="set"`, `value=<updated_value>`.
+10. `EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);` -> after `/mastermind(persist-knowledge, ...)`, call `set_context` with `scope="global"`, `key="knowledge_paths"`, `operation="set"`, `value=<merged knowledge_paths>` where each `persisted[]` item is `{ key, relativePath, absolutePath }` — never bare path strings.

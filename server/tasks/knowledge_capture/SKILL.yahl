@@ -1,0 +1,439 @@
+name: knowledge-capture
+description: |
+  Generic knowledge capture: clarify intent, locate existing corpus, plan study,
+  dialogue-loop per source (mastermind ↔ agent via filesystem), then facts,
+  synthesis, and final brief. Persists under knowledges/{slug}/.
+  Run with task id knowledge_capture.
+resultContextKey: result
+
+types: |
+  type TLearningIntent = 'personal_interest' | 'preserve_for_future_tasks';
+
+  type TLearningContract = {
+    intent: TLearningIntent;
+    topic: string;
+    direction?: string;
+    seedUrls: string[];
+    depth: 'overview' | 'deep_dive';
+    language?: string;
+  };
+
+  type TCorpusAssessment = {
+    topic: string;
+    existingKeys: string[];
+    sufficientFor: string[];
+    gaps: string[];
+    lastUpdated?: string;
+  };
+
+  type TStudyPlanSource = {
+    url: string;
+    title?: string;
+    priority: 'required' | 'optional';
+    rounds: number;
+    rationale: string;
+  };
+
+  type TStudyPlan = {
+    researchQuestions: string[];
+    successCriteria: string[];
+    exclusions: string[];
+    sources: TStudyPlanSource[];
+    reuseExisting: string[];
+    audience?: string;
+  };
+
+  type TKnowledgePersisted = {
+    absolutePath: string;
+    key: string;
+    relativePath: string;
+  };
+
+  type TKnowledgePaths = {
+    topic: string;
+    topicWorkspace: string;
+    studyWorkspace: string;
+    knowledgesPersistDir: string;
+    missionPath: string;
+    taskSkillsDir: string;
+    persisted: TKnowledgePersisted[];
+  };
+
+  type TSourceRoundPaths = {
+    round: number;
+    mastermindMd: string;
+    agentMd: string;
+  };
+
+  type TSourcePaths = {
+    sourceSlug: string;
+    url: string;
+    studyKey: string;
+    workspaceDir: string;
+    rawMd: string;
+    finalMd?: string;
+    rounds: TSourceRoundPaths[];
+    studyPersistPath?: string;
+  };
+
+  type TStudyDialogueState = {
+    sources: TSourcePaths[];
+    activeSourceSlug?: string;
+    activeRound?: number;
+  };
+
+  type TSourceStudy = {
+    url: string;
+    title: string;
+    studyMd: string;
+    studiedAt: string;
+    trustTier: 'high' | 'medium' | 'low';
+  };
+
+  type TSource = {
+    title: string;
+    url: string;
+    fetchedAt: string;
+    trustTier: 'high' | 'medium' | 'low';
+    studyKey: string;
+  };
+
+  type TFacts = {
+    items: {
+      claim: string;
+      sourceUrl: string;
+      confidence: 'high' | 'medium' | 'low';
+    }[];
+  };
+
+  type TAnalysis = {
+    themes: string[];
+    claims: string[];
+    openQuestions: string[];
+    confidence: string;
+    intentAlignment: string;
+  };
+
+  type TResult = {
+    knowledgeTopic: string;
+    knowledgePaths: string[];
+    summaryMd: string;
+    personalizedBriefMd: string;
+  };
+
+  type TRerunIntent = {
+    isRerun: true;
+    proceedMode: 'update_selected' | 'full_refresh' | 'summary_only';
+    updateScope: string[];
+    addressOpenQuestions: boolean;
+  };
+
+  type TOpenQuestionQaItem = {
+    questionRef: string;
+    question: string;
+    answer: string;
+  };
+
+stages:
+  - produceContextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, rerun_intent, pending_open_questions, open_questions_qa]
+    verify: true
+    verifyAutoRetry: true
+    verifyMinScore: 0.75
+    verifyRubric: |
+      Pass when learning_contract has non-empty topic OR at least one seedUrl, valid intent, and depth.
+      Pass when knowledge_topic is a non-empty canonical slug from resolve-topic and missionText is non-empty.
+      Fail when topic and seedUrls both empty, intent missing, depth missing, or knowledge_topic differs from resolve-topic canonical.
+    logic: |
+      const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      const topicAnswers = /ask-user-batch(clarify-topic-minimal);
+      const partial = *build_learning_contract_partial(topicAnswers, guideline: ~/task-skills/clarify-topic-minimal/SKILL.md);
+      const proposed_topic = *slugify_learning_topic(partial);
+      const resolvedTopic = /mastermind(resolve-topic, topicText: partial.topic, seedUrls: partial.seedUrls, slug: proposed_topic);
+      const knowledge_topic = resolvedTopic.canonical;
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys);
+      IF: !knowledgeExtractRef.absent;
+        const knowledge = (*read(knowledgeExtractRef.path)).extracted;
+        const pending_open_questions = *extract_open_questions(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        const rerunBatch = *build_rerun_intent_batch(knowledge, pending_open_questions, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        const rerunAnswers = /ask-user-batch(rerunBatch);
+        const rerun_intent = *parse_rerun_intent(rerunAnswers);
+        IF: rerun_intent.addressOpenQuestions && pending_open_questions.length > 0;
+          const pickBatch = *build_open_questions_pick_batch(pending_open_questions, guideline: ~/task-skills/rerun-intent/SKILL.md);
+          const pickAnswers = /ask-user-batch(pickBatch);
+          const batches = /mastermind(design-questions, stage: open_questions, mission: missionText, gaps: *picked_open_questions(pickAnswers), priorQa: open_questions_qa, goal: resolve pending knowledge gaps);
+          const oqAnswers = /ask-user-batch(batches);
+          const open_questions_qa = *merge_open_questions_qa(open_questions_qa, oqAnswers, guideline: ~/task-skills/answer-open-questions/SKILL.md);
+          /mastermind(persist-knowledge, topic: knowledge_topic, key: open_questions_qa, value: { items: open_questions_qa });
+        END:
+        IF: rerun_intent.proceedMode !== 'full_refresh' && !*should_update_scope('clarify', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+          const learning_contract = *load_learning_contract_from_corpus(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
+          const clarify_qa_log = clarify_qa_log || [];
+        ELSE;
+          const clarifyAnswers = /ask-user-batch(clarify-intake-fixed);
+          const clarify_qa_log = *merge_qa(clarify_qa_log, clarifyAnswers);
+          const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
+        END:
+      ELSE;
+        const clarifyAnswers = /ask-user-batch(clarify-intake-fixed);
+        const clarify_qa_log = *merge_qa(clarify_qa_log, clarifyAnswers);
+        const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
+        const proposed_topic = *slugify_learning_topic(learning_contract);
+        const resolvedTopic = /mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
+        const knowledge_topic = resolvedTopic.canonical;
+      END:
+      IF: *clarify_needs_follow_up(learning_contract);
+        const batches = /mastermind(design-questions, stage: clarify, mission: missionText, gaps: *clarify_gaps(learning_contract), priorQa: clarify_qa_log, goal: clarify subject and intent);
+        const followUp = /ask-user-batch(batches);
+        const clarify_qa_log = *merge_qa(clarify_qa_log, followUp);
+        const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
+        const proposed_topic = *slugify_learning_topic(learning_contract);
+        const resolvedTopic = /mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
+        const knowledge_topic = resolvedTopic.canonical;
+      END:
+      /mastermind(persist-knowledge, topic: knowledge_topic, key: meta, value: { slug: knowledge_topic, intent: learning_contract.intent, created_at: now_iso });
+      /mastermind(persist-knowledge, topic: knowledge_topic, key: learning_contract, value: learning_contract);
+
+  - contextMode: true
+    contextKeys: [knowledge_topic, missionText]
+    produceContextKeys: [knowledge_paths, study_dialogue]
+    logic: |
+      (() => ({
+        knowledge_paths: {
+          topic: context.context.knowledge_topic,
+          topicWorkspace: `~/knowledge/${context.context.knowledge_topic}`,
+          studyWorkspace: `~/knowledge/${context.context.knowledge_topic}/study`,
+          knowledgesPersistDir: `~/knowledges/${context.context.knowledge_topic}`,
+          missionPath: '~/task-skills/task-mission/SKILL.md',
+          taskSkillsDir: '~/task-skills',
+          persisted: [],
+        },
+        study_dialogue: { sources: [] },
+      }))
+
+  - contextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, knowledge_paths, rerun_intent, TCorpusAssessment]
+    produceContextKeys: [corpus_assessment]
+    updateContextKeys: [knowledge_paths]
+    verify: true
+    verifyAutoRetry: true
+    verifyMinScore: 0.75
+    verifyRubric: |
+      Pass when corpus_assessment has topic, existingKeys array, sufficientFor array, and gaps array.
+      Pass when knowledge_paths.persisted includes meta and learning_contract paths after persist.
+      Fail when assessment missing or topic mismatch.
+    logic: |
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
+      const corpus_assessment = *assess_corpus(knowledge, learning_contract, guideline: ~/task-skills/locate-knowledge/SKILL.md);
+      const metaPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: corpus_assessment, value: corpus_assessment);
+      EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);
+
+  - contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText, knowledge_paths, rerun_intent, TStudyPlan]
+    produceContextKeys: [study_plan]
+    updateContextKeys: [knowledge_paths]
+    verify: true
+    verifyAutoRetry: true
+    verifyMinScore: 0.75
+    verifyRubric: |
+      Pass when study_plan has non-empty researchQuestions, successCriteria, and sources array.
+      Pass when each source has url, priority, rounds (1-3), and rationale.
+      Pass when rounds align with depth (overview 1-2, deep_dive 2-3).
+      Fail when plan empty or contradicts learning_contract.
+    logic: |
+      const plan = /mastermind(
+        plan,
+        goal: build study plan for learning_contract,
+        mission: missionText,
+        facts: { learning_contract, corpus_assessment, mission: missionText, today },
+        guidelinePath: ~/task-skills/plan-study/SKILL.md,
+      );
+      const study_plan = *parse_study_plan(plan, depth: learning_contract.depth, corpus_assessment);
+      const planPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: study_plan, value: study_plan);
+      EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, planPersist, key: study_plan);
+
+  - loopSetup: for each src of [study_plan.sources]
+    contextKeys: [learning_contract, knowledge_topic, study_plan, corpus_assessment, missionText, knowledge_paths, study_dialogue, rerun_intent, TSource, TSourceStudy]
+    updateContextKeys: [study_dialogue, sources, source_studies, knowledge_paths]
+    verify: true
+    verifyAutoRetry: true
+    verifyMinScore: 0.75
+    verifyRubric: |
+      Pass when src is skipped via reuseExisting or has persisted study_{slug} with non-empty studyMd.
+      Pass when dialogue artifacts exist on disk for each round (mastermind + agent md) before persist.
+      Pass when study_dialogue.sources includes src with studyPersistPath after persist.
+      Fail when raw.md missing, round files missing, or studyMd empty.
+    logic: |
+      IF: *source_in_reuse_list(src, study_plan.reuseExisting, corpus_assessment) && !*should_update_scope('studies', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        // skip fetch — load from existing knowledges
+      ELSE;
+        const source_slug = *slugify_source(src.url);
+        const studyKey = `study_${source_slug}`;
+        const workspaceDir = `${knowledge_paths.studyWorkspace}/${source_slug}`;
+        const rawMd = `${workspaceDir}/raw.md`;
+        /stagehand(goto, url: src.url) → rawMd;
+        for each round of [1..src.rounds];
+          const priorPath = round === 1 ? rawMd : `${workspaceDir}/round-${round - 1}-agent.md`;
+          const mastermindMd = `${workspaceDir}/round-${round}-mastermind.md`;
+          const agentMd = `${workspaceDir}/round-${round}-agent.md`;
+          /mastermind(
+            research,
+            source: priorPath,
+            topic: study src for learning_contract,
+            mission: missionText,
+            facts: { learning_contract, study_plan, src, round, today, mission: missionText },
+            guidelinePath: ~/task-skills/dialogue-round/SKILL.md,
+          ) → mastermindMd;
+          *agent_analyze_round(
+            mastermindMd,
+            output: agentMd,
+            guideline: ~/task-skills/dialogue-round/SKILL.md,
+            learning_contract,
+            study_plan,
+            src,
+            round,
+          );
+          EXTENDS: study_dialogue = *append_dialogue_round(study_dialogue, src, round, mastermindMd, agentMd, rawMd);
+        END:
+        const finalMd = `${workspaceDir}/final.md`;
+        *merge_dialogue_rounds(workspaceDir, src.rounds, output: finalMd);
+        const studyMd = *read_capped(finalMd, maxBytes: 12000);
+        const studyPersist = /mastermind(
+          persist-knowledge,
+          topic: knowledge_topic,
+          key: studyKey,
+          value: { url: src.url, title: src.title || source_slug, studyMd, studiedAt: now_iso, trustTier: 'high' },
+        );
+        EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, studyPersist, key: studyKey);
+        EXTENDS: study_dialogue = *finalize_source_dialogue(study_dialogue, src, studyPersist);
+        EXTENDS: sources = *append_source_index(sources, src, studyKey, now_iso);
+        EXTENDS: source_studies = *append_source_study(source_studies, src, studyMd, now_iso);
+      END:
+
+  - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, knowledge_paths, rerun_intent, TFacts]
+    produceContextKeys: [facts, key_facts_md]
+    updateContextKeys: [knowledge_paths, sources]
+    verify: true
+    verifyAutoRetry: true
+    verifyMinScore: 0.75
+    verifyRubric: |
+      Pass when facts.items is non-empty array with claim and sourceUrl per item.
+      Pass when sources is a non-empty array with unique studyKey values.
+      Fail when facts uncited or sources not an array.
+    logic: |
+      const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      IF: !sources || !Array.isArray(sources) || sources.length === 0;
+        const sources = *rebuild_sources_index(knowledge_topic);
+        /mastermind(persist-knowledge, topic: knowledge_topic, key: sources, value: sources);
+      END:
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: facts, key_facts_md, study keys);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
+      const assessment = *assess_learning_stage(stage: facts, knowledge, learning_contract, study_plan, sources, source_studies, rerun_intent);
+      IF: assessment.sufficient && !*should_update_scope('facts', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        const facts = assessment.artifact.facts;
+        const key_facts_md = assessment.artifact.key_facts_md;
+      ELSE;
+        const extracted = /mastermind(
+          research,
+          topic: extract structured facts from persisted studies,
+          mission: missionText,
+          facts: { learning_contract, study_plan, sources, source_studies, mission: missionText },
+          guidelinePath: ~/task-skills/study-source/SKILL.md,
+        );
+        const facts = *normalize_facts(extracted, as: TFacts);
+        const key_facts_md = *facts_to_markdown(facts, study_plan);
+      END:
+      const factsPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: facts, value: facts);
+      EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, factsPersist, key: facts);
+      /mastermind(persist-knowledge, topic: knowledge_topic, key: key_facts_md, value: { content: key_facts_md });
+
+  - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, facts, key_facts_md, rerun_intent, open_questions_qa, TAnalysis, userProfile]
+    produceContextKeys: [analysis, analysis_md, userProfile]
+    updateContextKeys: [knowledge_paths]
+    verify: true
+    verifyAutoRetry: true
+    verifyMinScore: 0.75
+    verifyRubric: |
+      Pass when analysis has themes, claims, and intentAlignment.
+      Pass when analysis_md is non-empty Markdown consistent with facts.
+      Fail when analysis contradicts facts or ignores intent.
+    logic: |
+      const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      const userProfileExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
+      const userProfile = userProfileExtractRef.absent ? '<none>' : (*read(userProfileExtractRef.path)).extracted;
+      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: analysis, analysis_md);
+      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
+      const assessment = *assess_learning_stage(stage: synthesis, knowledge, learning_contract, study_plan, facts, sources, rerun_intent);
+      IF: assessment.sufficient && !*should_update_scope('synthesis', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        const synthesis_artifact = assessment.artifact;
+      ELSE;
+        const synthesis = /mastermind(
+          research,
+          topic: cross-source synthesis,
+          mission: missionText,
+          facts: { learning_contract, study_plan, facts, sources, source_studies, userProfile, open_questions_qa, mission: missionText },
+          guidelinePath: ~/task-skills/synthesize-knowledge-summary/SKILL.md,
+        );
+        const synthesis_artifact = *parse_synthesis_artifact(synthesis, as: TAnalysis);
+      END:
+      const analysis = *merge_open_questions_into_analysis(synthesis_artifact.analysis, open_questions_qa, guideline: ~/task-skills/answer-open-questions/SKILL.md);
+      const analysis_md = *refresh_analysis_md_open_questions(synthesis_artifact.analysis_md, analysis, guideline: ~/task-skills/answer-open-questions/SKILL.md);
+      const analysisPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: analysis, value: analysis);
+      EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, analysisPersist, key: analysis);
+      /mastermind(persist-knowledge, topic: knowledge_topic, key: analysis_md, value: { content: analysis_md });
+
+  - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, facts, analysis, analysis_md, userProfile, knowledge_paths, rerun_intent, open_questions_qa, TResult]
+    produceContextKeys: [result]
+    verify: true
+    verifyAutoRetry: true
+    verifyMinScore: 0.75
+    verifyRubric: |
+      Pass when result.summaryMd and result.personalizedBriefMd are non-empty Markdown.
+      Pass when result.knowledgeTopic matches knowledge_topic and knowledgePaths lists persisted relative paths.
+      Fail when either brief missing or knowledgePaths empty.
+    logic: |
+      const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      IF: rerun_intent && rerun_intent.proceedMode === 'update_selected' && !*should_update_scope('summary', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        const corpusExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: summary, analysis, facts);
+        const corpus = corpusExtractRef.absent ? '<none>' : (*read(corpusExtractRef.path)).extracted;
+        const summaryMd = *load_summary_md_from_corpus(corpus);
+        const personalizedBriefMd = *load_personalized_brief_from_corpus(corpus);
+      ELSE;
+      const corpusExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys in topic folder);
+      const corpus = corpusExtractRef.absent ? '<none>' : (*read(corpusExtractRef.path)).extracted;
+      const userProfileExtractRef = userProfile
+        ? { absent: true }
+        : /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
+      const userProfile = userProfile || (userProfileExtractRef.absent ? '<none>' : (*read(userProfileExtractRef.path)).extracted);
+      const brief = /mastermind(
+        research,
+        topic: final knowledge brief and personalized summary,
+        mission: missionText,
+        facts: { learning_contract, study_plan, sources, facts, analysis, analysis_md, userProfile, corpus, open_questions_qa, mission: missionText, today },
+        guidelinePath: ~/task-skills/synthesize-knowledge-summary/SKILL.md,
+      );
+      const summaryMd = *parse_summary_md(brief);
+      const personalizedBriefMd = *parse_personalized_brief_md(brief, userProfile, learning_contract);
+      END:
+      const knowledgePaths = knowledge_paths.persisted.map(p => p.relativePath);
+      const result = { knowledgeTopic: knowledge_topic, knowledgePaths, summaryMd, personalizedBriefMd };
+      *echo('Call set_context with key result and the result object before ending this stage');
+      /mastermind(persist-knowledge, topic: knowledge_topic, key: summary, value: { summaryMd, personalizedBriefMd, completed_at: now_iso });
+      /mastermind(persist-knowledge, topic: knowledge_topic, key: meta, value: { slug: knowledge_topic, intent: learning_contract.intent, updated_at: now_iso });
+
+  - contextMode: true
+    contextKeys: [knowledge_topic, knowledge_paths, result]
+    produceContextKeys: [result]
+    logic: |
+      (() => ({
+        result: context.context.result || {
+          knowledgeTopic: context.context.knowledge_topic,
+          knowledgePaths: (context.context.knowledge_paths?.persisted || []).map((p) => p.relativePath),
+          summaryMd: context.context.summaryMd || '',
+          personalizedBriefMd: context.context.personalizedBriefMd || '',
+        },
+      }))
+
+  - contextMode: true
+    contextKeys: [result]
+    updateContextKeys: [result]
+    logic: |
+      (() => ({ result: context.context.result }))

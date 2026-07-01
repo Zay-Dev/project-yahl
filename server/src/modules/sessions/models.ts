@@ -8,16 +8,22 @@ import type {
   IVerifyCheckpoint,
 } from './-types';
 
-import type { Document } from 'mongoose';
+import type { Document, Types } from 'mongoose';
 
 import { model as createModel, Schema } from 'mongoose';
 
+type TSessionChildDb<T extends { _id: string; session: string }> =
+  Omit<T, '_id' | 'session'> & Document & {
+    _id: Types.ObjectId;
+    session: Types.ObjectId;
+  };
+
 export type TDbSession = ISession & Document;
-export type TDbStage = IStage & Document;
-export type TDbModelResponse = IModelResponse & Document;
-export type TDbToolCall = IToolCall & Document;
-export type TDbAskUserQuestion = IAskUserQuestion & Document;
-export type TDbVerifyCheckpoint = IVerifyCheckpoint & Document;
+export type TDbStage = TSessionChildDb<IStage>;
+export type TDbModelResponse = TSessionChildDb<IModelResponse>;
+export type TDbToolCall = TSessionChildDb<IToolCall>;
+export type TDbAskUserQuestion = TSessionChildDb<IAskUserQuestion>;
+export type TDbVerifyCheckpoint = TSessionChildDb<IVerifyCheckpoint>;
 
 const loopMetaSchema = new Schema({
   arraySnapshot: { type: [Schema.Types.Mixed], required: true },
@@ -46,10 +52,12 @@ const forkSessionSetupSchema = new Schema({
 const sessionSchema = new Schema<TDbSession>({
   deletedAt: model.d.deletedAt(),
   forkedFrom: forkedFromSchema,
+  isBackground: { default: false, type: Boolean },
   liveViewVncPort: model.d.optionalNumber(),
   parsedStages: [model.d.mixed()],
   result: model.d.mixed(),
   resultContextKey: model.d.optionalString(),
+  runInput: model.d.mixed(),
   sessionId: model.d.requiredString(),
   taskId: model.d.optionalString(),
   taskYahlPath: model.d.optionalString(),
@@ -63,12 +71,15 @@ sessionSchema.index({ sessionId: 1 }, { unique: true });
 const stageSchema = new Schema<TDbStage>({
   context: model.d.mixed(),
   contextAfter: model.d.mixed(),
+  parsedStageIndex: model.d.optionalNumber(),
+  sourceStartLine: model.d.optionalNumber(),
   stage: model.d.mixed(),
   finishedAt: model.d.optionalDate(),
   loopMeta: loopMetaSchema,
   requestId: model.d.requiredString(),
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   temperature: model.d.optionalNumber(),
+  verifyingAt: model.d.optionalDate(),
   verifyResult: model.d.mixed(),
 }, {
   collection: modelsName.Stages,
@@ -115,19 +126,22 @@ const forkSessionSchema = new Schema<IForkSession & Document>({
 
 forkSessionSchema.index({ forkSessionId: 1 }, { unique: true });
 
+const askUserBatchAnswerSchema = new Schema({
+  answerValue: model.d.mixed(),
+  freeText: model.d.optionalString(),
+  optionIds: [model.d.optionalString()],
+  questionRef: model.d.requiredString(),
+}, { _id: false });
+
 const askUserQuestionSchema = new Schema<TDbAskUserQuestion>({
-  answerIds: [model.d.optionalString()],
-  answerLabels: [model.d.optionalString()],
-  answeredAt: model.d.optionalDate(),
-  askUserId: model.d.mixed(),
+  batch: model.d.mixed(),
+  batchAnswers: [askUserBatchAnswerSchema],
+  batchId: model.d.optionalString(),
   contextSnapshot: model.d.mixed(),
   forkSetupIndex: model.d.optionalNumber(),
-  freeText: model.d.optionalString(),
   loopMeta: loopMetaSchema,
-  question: model.d.mixed(),
-  questionId: model.d.requiredString(),
   parsedStageSnapshot: model.d.mixed(),
-  questionRef: model.d.requiredString(),
+  questionId: model.d.requiredString(),
   requestId: model.d.requiredString(),
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   stage: model.d.mixed(),
@@ -141,7 +155,7 @@ const askUserQuestionSchema = new Schema<TDbAskUserQuestion>({
 });
 
 askUserQuestionSchema.index({ questionId: 1 }, { unique: true });
-askUserQuestionSchema.index({ requestId: 1, session: 1 });
+askUserQuestionSchema.index({ batchId: 1, session: 1 });
 askUserQuestionSchema.index({ session: 1, status: 1 });
 
 const verifyCheckpointSchema = new Schema<TDbVerifyCheckpoint>({
@@ -163,6 +177,7 @@ const verifyCheckpointSchema = new Schema<TDbVerifyCheckpoint>({
   stageIndex: model.d.optionalNumber(),
   status: model.d.requiredString(),
   storageSnapshot: model.d.mixed(),
+  unavailable: model.d.optionalBoolean(),
   verifyId: model.d.requiredString(),
 }, {
   collection: modelsName.SessionVerifyCheckpoints,

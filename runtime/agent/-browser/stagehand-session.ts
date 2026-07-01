@@ -11,6 +11,8 @@ import { resolveChromiumExecutablePath } from "./chromium-executable";
 
 const DEFAULT_AGENT_MAX_STEPS = 15;
 
+const STAGEHAND_CLOSE_TIMEOUT_MS = 30_000;
+
 const AGENT_TIMEOUT_MS = 300_000;
 const BROWSER_TIMEOUT_MS = 120_000;
 
@@ -114,7 +116,17 @@ export const closeStagehandSession = async () => {
 
   if (!current) return;
 
-  await current.close();
+  try {
+    await withTimeout(
+      current.close(),
+      STAGEHAND_CLOSE_TIMEOUT_MS,
+      'stagehand.close',
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    console.error(`[stagehand] close failed: ${message}\n`);
+  }
 };
 
 export const runBrowserCommand = async (

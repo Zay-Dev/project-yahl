@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { isStageFinished } from '../-stage-status';
-import { toVerifyCheckpointResponse } from './verify-write';
+import { isSessionRunActive, toVerifyCheckpointResponse } from './verify-write';
 
 describe('toVerifyCheckpointResponse', () => {
   it('returns resume fields needed by orchestrator', () => {
@@ -49,11 +49,43 @@ describe('toVerifyCheckpointResponse', () => {
     assert.equal(response.parsedStageSnapshot?.sourceStartLine, 24);
     assert.equal(response.stage.verify, true);
   });
+
+  it('returns unavailable when checkpoint is infra-paused', () => {
+    const response = toVerifyCheckpointResponse({
+      feedback: 'Agent agent-abc already has active run',
+      kind: 'verify',
+      parsedStageSnapshot: {
+        lines: '{}',
+        sourceStartLine: 1,
+        type: 'plain',
+      },
+      requestId: 'req-1',
+      score: 0,
+      stage: { logic: 'const x = 1;', verify: true },
+      status: 'pending',
+      storageSnapshot: { context: {} },
+      unavailable: true,
+      verifyId: 'verify-infra',
+    });
+
+    assert.equal(response.unavailable, true);
+  });
 });
 
 describe('verify resume stage gate', () => {
   it('treats finishedAt as finished until resume reopens the stage', () => {
     assert.equal(isStageFinished({ finishedAt: '2026-06-20T19:35:48.753Z' }), true);
     assert.equal(isStageFinished({ finishedAt: null }), false);
+  });
+});
+
+describe('isSessionRunActive', () => {
+  it('returns true when liveViewVncPort is set', () => {
+    assert.equal(isSessionRunActive({ liveViewVncPort: 5901 }), true);
+  });
+
+  it('returns false when liveViewVncPort is null or absent', () => {
+    assert.equal(isSessionRunActive({ liveViewVncPort: null }), false);
+    assert.equal(isSessionRunActive({}), false);
   });
 });

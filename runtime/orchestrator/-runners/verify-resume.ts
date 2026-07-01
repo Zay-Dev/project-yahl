@@ -1,18 +1,121 @@
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
-import type { YahlStage } from '@/shared/yahl-stage';
+import type { TLoopMeta, TStorage } from '@/shared/transports/-types';
 
 import { runYahl } from '@/orchestrator/-agent';
+import { fetchStageDetail } from '@/orchestrator/-ask-user';
+import { mergeTaskSystemAppend } from '@/orchestrator/-utils/workspace-paths';
+import { isStageFinished } from '@/shared/stage-status';
+import { runVerifyGate } from '@/orchestrator/-verify';
+import { syncKnowledgePathsPersisted } from '@/orchestrator/-verify/knowledge-paths-sync';
 import {
-  applyAskUserAnswerToStage,
-  resetAskUserStageForRerun,
-  stripAskUserAnswersFromContext,
-  toAskUserAnswerValue,
-} from '@/orchestrator/-ask-user';
-import { compileStage } from '@/orchestrator/-utils/yahl';
-import { resolveFreshStageForVerifyResume } from '@/orchestrator/-verify/stage-snapshot';
+  applyVerifyRecoveryToStorage,
+  buildVerifyRecoverySystemAppend,
+  resolveActiveStageForVerifyRecovery,
+  resolveEditedAnswerValue,
+  stripProduceKeysFromStorage,
+} from '@/orchestrator/-verify/resume-helpers';
 
-import { buildResumedStage } from './resume';
 import { loadCheckpointResumeContext } from './checkpoint-resume-load';
+import {
+  isLoopStageCheckpoint,
+  resolveLoopStageIndex,
+  runPipelineContinuation,
+} from './pipeline-continuation';
+
+const hasProducedKeys = (stage: ParsedStage, resultStorage: TStorage) => {
+  const keys = stage.spec.produceContextKeys ?? [];
+
+  if (!keys.length) {
+    return false;
+  }
+
+  return keys.every((key) => {
+    const value = resultStorage.context.get(key);
+
+    return value !== undefined && value !== null;
+  });
+};
+
+const runVerifyOnlyUnavailableResume = async (params: {
+  activeStage: ParsedStage;
+  requestId: string;
+  session: { resultContextKey?: string; taskId?: string };
+  sessionId: string;
+  stageIndex: number;
+  storage: TStorage;
+  yahlStages: ParsedStage[];
+}) => {
+  const agentName = `agent-${params.sessionId}`;
+
+  await syncKnowledgePathsPersisted(params.storage);
+
+  const stageDetail = await fetchStageDetail(params.sessionId, params.requestId);
+  const verifyAlreadyPassed = isStageFinished(stageDetail);
+
+  if (!verifyAlreadyPassed) {
+    await runVerifyGate({
+      agentName,
+      pipelineStageIndex: params.stageIndex,
+      requestId: params.requestId,
+      sessionId: params.sessionId,
+      stage: params.activeStage,
+      storage: params.storage,
+      shutdownOnFail: true,
+      throwOnFail: true,
+    });
+
+    publisher.emitStageFinish({
+      contextAfter: params.storage,
+      requestId: params.requestId,
+    });
+    await globalThis.sessionTracker?.flush?.();
+  }
+
+  if (params.stageIndex + 1 >= params.yahlStages.length) {
+    return params.storage;
+  }
+
+  const systemAppend = await mergeTaskSystemAppend(params.sessionId, params.session.taskId);
+  const loopMeta = stageDetail.loopMeta as TLoopMeta | undefined;
+  const loopStageIndex = resolveLoopStageIndex({}, params.yahlStages);
+
+  if (isLoopStageCheckpoint(loopMeta, params.yahlStages, params.stageIndex)) {
+    await runPipelineContinuation({
+      loopStageIndex: params.stageIndex,
+      position: {
+        kind: 'loopAfterIteration',
+        loopMeta: loopMeta!,
+        loopStageIndex: params.stageIndex,
+      },
+      storage: params.storage,
+      suffix: {
+        kind: 'parsedStages',
+        fromStageIndex: params.stageIndex + 1,
+      },
+      systemAppend,
+      yahlStages: params.yahlStages,
+    });
+
+    return params.storage;
+  }
+
+  const resultStorage = await runPipelineContinuation({
+    loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+    position: {
+      kind: 'fromStageIndex',
+      stageIndex: params.stageIndex + 1,
+    },
+    storage: params.storage,
+    suffix: {
+      kind: 'parsedStages',
+      fromStageIndex: params.stageIndex + 1,
+    },
+    systemAppend,
+    yahlStages: params.yahlStages,
+  });
+
+  return resultStorage;
+};
 
 const _resolveResumeAction = (
   checkpoint: Awaited<ReturnType<typeof loadCheckpointResumeContext>>['checkpoint'],
@@ -23,6 +126,7 @@ const _resolveResumeAction = (
 
   if (
     checkpoint.resumeAction === 'edit_answer'
+    || checkpoint.resumeAction === 'follow_up'
     || checkpoint.resumeAction === 'reask'
     || checkpoint.resumeAction === 'rerun'
   ) {
@@ -32,109 +136,9 @@ const _resolveResumeAction = (
   return 'rerun' as const;
 };
 
-const _resolveEditedAnswerValue = (
-  checkpoint: Awaited<ReturnType<typeof loadCheckpointResumeContext>>['checkpoint'],
-) => {
-  if (checkpoint.editedAnswerFreeText?.trim()) {
-    return checkpoint.editedAnswerFreeText.trim();
-  }
-
-  return toAskUserAnswerValue(checkpoint.editedAnswerOptionIds?.[0]);
-};
-
-const _stripProduceKeys = (
-  storage: Awaited<ReturnType<typeof loadCheckpointResumeContext>>['storage'],
-  stage: ParsedStage,
-) => {
-  for (const key of stage.produceContextKeys ?? stage.spec.produceContextKeys ?? []) {
-    storage.context.delete(key);
-  }
-};
-
-const _buildVerifyResumeSystemAppend = (
-  checkpoint: Awaited<ReturnType<typeof loadCheckpointResumeContext>>['checkpoint'],
-  resumeAction: 'edit_answer' | 'reask' | 'rerun',
-) => {
-  const parts = [
-    `Stage verification failed (score ${checkpoint.score}).`,
-    String(checkpoint.feedback ?? ''),
-  ];
-
-  if (resumeAction === 'rerun') {
-    parts.push(
-      'Re-run this stage and fix the output. Use set_context to write every produceContextKeys value before finishing.',
-    );
-  }
-
-  if (resumeAction === 'reask') {
-    parts.push(
-      'Prior ask-user answers were cleared. Call ask_user again for the required question before producing output.',
-    );
-  }
-
-  if (resumeAction === 'edit_answer') {
-    parts.push(
-      'The user corrected their prior answer. Re-run stage logic using the updated answer already in context.',
-    );
-  }
-
-  return parts.filter(Boolean).join('\n\n');
-};
-
-const _resolveActiveStage = (
-  checkpoint: Awaited<ReturnType<typeof loadCheckpointResumeContext>>['checkpoint'],
-  yahlStages: ParsedStage[],
-  stageIndex: number,
-  resumeAction: 'edit_answer' | 'reask' | 'rerun',
-  answerValue?: number | string,
-): ParsedStage => {
-  const freshStage = resolveFreshStageForVerifyResume(
-    stageIndex,
-    yahlStages,
-    checkpoint.stage as YahlStage,
-  );
-
-  if (resumeAction === 'edit_answer' && answerValue != null) {
-    const askUserRef = String(checkpoint.askUserRef ?? '').trim();
-    const baseStage = freshStage ?? {
-      ...yahlStages[stageIndex]!,
-      spec: checkpoint.stage as YahlStage,
-    };
-    const patchedStage = applyAskUserAnswerToStage(
-      baseStage.spec,
-      askUserRef,
-      answerValue,
-    );
-
-    return buildResumedStage(baseStage, patchedStage, askUserRef, answerValue);
-  }
-
-  if (resumeAction === 'reask' && freshStage) {
-    const resetSpec = resetAskUserStageForRerun(freshStage.spec);
-
-    return compileStage(resetSpec, freshStage.sourceStartLine);
-  }
-
-  if (freshStage) {
-    return freshStage;
-  }
-
-  return yahlStages[stageIndex]!;
-};
-
-const _applyEditedAnswerToStorage = (
-  storage: Awaited<ReturnType<typeof loadCheckpointResumeContext>>['storage'],
-  askUserRef: string,
-  answerValue: number | string,
-) => {
-  const answerKey = `ask_user_${askUserRef}_answer`;
-
-  storage.context.set(answerKey, answerValue);
-  storage.context.set('ask_user_last_answer', answerValue);
-};
-
 export const runVerifyResume = async (sessionId: string, verifyId: string) => {
   const {
+    activeStage,
     checkpoint,
     session,
     stageIndex,
@@ -142,55 +146,138 @@ export const runVerifyResume = async (sessionId: string, verifyId: string) => {
     yahlStages,
   } = await loadCheckpointResumeContext(sessionId, verifyId);
 
+  const loopStageIndex = resolveLoopStageIndex({}, yahlStages);
+
+  if (checkpoint.unavailable) {
+    if (hasProducedKeys(activeStage, storage)) {
+      const resultStorage = await runVerifyOnlyUnavailableResume({
+        activeStage,
+        requestId: String(checkpoint.requestId),
+        session,
+        sessionId,
+        stageIndex,
+        storage,
+        yahlStages,
+      });
+
+      return {
+        resultContextKey: session.resultContextKey ?? 'result',
+        storage: resultStorage,
+      };
+    }
+
+    const stageDetail = await fetchStageDetail(sessionId, String(checkpoint.requestId));
+    const loopMeta = stageDetail.loopMeta as TLoopMeta | undefined;
+
+    if (isLoopStageCheckpoint(loopMeta, yahlStages, stageIndex)) {
+      const resultStorage = await runPipelineContinuation({
+        loopStageIndex: stageIndex,
+        position: {
+          kind: 'resumeStageThenContinue',
+          loopMeta,
+          requestId: String(checkpoint.requestId),
+          resumedStage: activeStage,
+          stageIndex,
+        },
+        storage,
+        suffix: {
+          kind: 'parsedStages',
+          fromStageIndex: stageIndex + 1,
+        },
+        systemAppend: await mergeTaskSystemAppend(sessionId, session.taskId),
+        yahlStages,
+      });
+
+      return {
+        resultContextKey: session.resultContextKey ?? 'result',
+        storage: resultStorage,
+      };
+    }
+
+    const resultStorage = await runPipelineContinuation({
+      loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+      position: {
+        kind: 'fromStageIndex',
+        requestId: String(checkpoint.requestId),
+        resumedStage: activeStage,
+        stageIndex,
+      },
+      storage,
+      suffix: {
+        kind: 'parsedStages',
+        fromStageIndex: stageIndex,
+      },
+      systemAppend: await mergeTaskSystemAppend(sessionId, session.taskId),
+      yahlStages,
+    });
+
+    return {
+      resultContextKey: session.resultContextKey ?? 'result',
+      storage: resultStorage,
+    };
+  }
+
   const resumeAction = _resolveResumeAction(checkpoint);
   const feedback = String(checkpoint.feedback ?? '');
   const requestId = String(checkpoint.requestId ?? '');
   const askUserRef = String(checkpoint.askUserRef ?? '').trim();
   const editedAnswerValue = resumeAction === 'edit_answer'
-    ? _resolveEditedAnswerValue(checkpoint)
+    ? resolveEditedAnswerValue({
+      editedAnswerFreeText: checkpoint.editedAnswerFreeText,
+      editedAnswerOptionIds: checkpoint.editedAnswerOptionIds,
+    })
     : undefined;
 
-  if (resumeAction === 'reask') {
-    const stripped = stripAskUserAnswersFromContext({
-      context: Object.fromEntries(storage.context.entries()),
-      types: Object.fromEntries(storage.types.entries()),
-    }) as { context?: Record<string, unknown>; types?: Record<string, unknown> };
-
-    if (stripped.context) {
-      storage.context.clear();
-      Object.entries(stripped.context).forEach(([key, value]) => {
-        storage.context.set(key, value);
-      });
-    }
-  }
-
-  storage.context.set('verify_feedback', feedback);
-
-  const activeStage = _resolveActiveStage(
-    checkpoint,
-    yahlStages,
-    stageIndex,
-    resumeAction,
+  applyVerifyRecoveryToStorage({
+    askUserRef,
     editedAnswerValue,
+    feedback,
+    resumeAction,
+    storage,
+  });
+
+  const recoveryStage = resolveActiveStageForVerifyRecovery({
+    askUserRef,
+    checkpointStage: checkpoint.stage,
+    editedAnswerValue,
+    resumeAction,
+    stageIndex,
+    yahlStages,
+  });
+
+  stripProduceKeysFromStorage(storage, recoveryStage);
+
+  const systemAppend = await mergeTaskSystemAppend(
+    sessionId,
+    session.taskId,
+    buildVerifyRecoverySystemAppend({
+      feedback,
+      produceContextKeys: recoveryStage.produceContextKeys ?? recoveryStage.spec.produceContextKeys,
+      resumeAction,
+      score: checkpoint.score,
+      updateContextKeys: recoveryStage.updateContextKeys ?? recoveryStage.spec.updateContextKeys,
+    }),
   );
 
-  _stripProduceKeys(storage, activeStage);
+  const stageDetail = await fetchStageDetail(sessionId, requestId);
+  const loopMeta = stageDetail.loopMeta as TLoopMeta | undefined;
 
-  if (resumeAction === 'edit_answer' && editedAnswerValue != null && askUserRef) {
-    _applyEditedAnswerToStorage(storage, askUserRef, editedAnswerValue);
-  }
-
-  const systemAppend = _buildVerifyResumeSystemAppend(checkpoint, resumeAction);
-
-  const { storage: resultStorage } = await runYahl('', {
-    resumeStage: {
+  const resultStorage = await runPipelineContinuation({
+    loopStageIndex: loopStageIndex >= 0 ? loopStageIndex : null,
+    position: {
+      kind: 'resumeStageThenContinue',
+      loopMeta,
       requestId,
-      stage: activeStage,
+      resumedStage: recoveryStage,
+      stageIndex,
     },
-    stages: yahlStages,
-    startFromStageIndex: stageIndex,
+    storage,
+    suffix: {
+      kind: 'parsedStages',
+      fromStageIndex: stageIndex + 1,
+    },
     systemAppend,
-    useStorage: () => storage,
+    yahlStages,
   });
 
   return {

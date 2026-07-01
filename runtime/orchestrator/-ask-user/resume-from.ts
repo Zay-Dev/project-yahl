@@ -34,23 +34,18 @@ export const buildResumeFrom = (
     }
   }
 
-  const answer = checkpoint.freeText?.trim()
-    ? {
-      freeText: checkpoint.freeText.trim(),
-      selectedLabels: [] as string[],
-      selectedOptionIds: [] as string[],
-    }
-    : {
-      selectedLabels: checkpoint.answerLabels ?? [],
-      selectedOptionIds: checkpoint.answerIds ?? [],
-    };
+  const batchAnswers = (checkpoint.batchAnswers ?? []).map((answer) => ({
+    answerValue: answer.answerValue,
+    ...(answer.freeText ? { freeText: answer.freeText } : {}),
+    questionRef: answer.questionRef,
+    ...(answer.optionIds?.length ? { selectedOptionIds: answer.optionIds } : {}),
+  }));
 
   return {
-    answer,
+    batch: checkpoint.batch,
+    batchAnswers,
     modelResponses,
     pendingToolCallId: checkpoint.toolCallId,
-    question: checkpoint.question,
-    questionRef: checkpoint.questionRef,
     toolCalls,
   };
 };

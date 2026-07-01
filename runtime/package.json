@@ -6,11 +6,11 @@
   "type": "module",
   "scripts": {
     "agent": "tsx agent/index.ts",
-    "build": "tsc && tsc-alias",
-    "dev": "tsx orchestrator/index.ts run --task-id test",
+    "build": "rm -rf dist && tsc && tsc-alias",
+    "dev": "NODE_OPTIONS='--conditions=development' tsx orchestrator/index.ts run --task-id test",
     "orchestrate": "tsx orchestrator/index.ts run",
     "orchestrate:prod": "node dist/orchestrator/index.js run",
-    "test": "AGENT_SESSION_ID=test-session tsx --test \"agent/**/*.test.ts\" \"orchestrator/**/*.test.ts\" \"shared/**/*.test.ts\"",
+    "test": "AGENT_SESSION_ID=test-session NODE_OPTIONS='--conditions=development' tsx --test \"agent/**/*.test.ts\" \"orchestrator/**/*.test.ts\" \"shared/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
@@ -25,6 +25,7 @@
   "dependencies": {
     "@browserbasehq/stagehand": "^3.5.0",
     "@onecli-sh/sdk": "^0.3.1",
+    "@project-yahl/shared": "workspace:*",
     "commander": "^14.0.3",
     "dotenv": "^17.4.2",
     "ioredis": "^5.8.2",

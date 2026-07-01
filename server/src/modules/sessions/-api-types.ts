@@ -1,3 +1,5 @@
+import type { TSessionRunState } from './-session-run-state-signals';
+
 import type {
   TForkSessionStageSetup,
   TModelResponseTag,
@@ -15,21 +17,27 @@ export type TResponseGetSession = {
   createdAt: string;
   deletedAt?: string;
   forkedFrom?: TSessionForkedFrom;
+  isBackground?: boolean;
   liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   result?: unknown;
   resultContextKey?: string;
+  runInput?: Record<string, unknown>;
+  runState: TSessionRunState;
   sessionId: string;
   taskId?: string;
   taskYahlPath?: string;
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
+
+export type { TSessionRunState };
 
 export type TResponseSessionListItem = {
   _id: string;
   createdAt: string;
   deletedAt?: string;
+  isBackground?: boolean;
   sessionId: string;
   taskId?: string;
   taskYahlPath?: string;
@@ -37,7 +45,7 @@ export type TResponseSessionListItem = {
   updatedAt: string;
 };
 
-export type TResponseStageStatus = 'finished' | 'running';
+export type TResponseStageStatus = 'finished' | 'running' | 'verifying';
 
 export type TResponseStageListItem = {
   createdAt: string;
@@ -55,15 +63,24 @@ export type TResponseStageListItem = {
   updatedAt: string;
 };
 
+export type TResponseStageReplayVerifyResult = {
+  feedback: string;
+  pass: boolean;
+  score: number;
+};
+
 export type TResponseStageReplayItem = {
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
   finishedAt?: string;
   loopMeta?: TStageLoopMeta;
+  parsedStageIndex?: number;
   requestId: string;
+  sourceStartLine?: number;
   stage: TYahlStage;
   stageId: string;
   temperature?: number;
+  verifyResult?: TResponseStageReplayVerifyResult;
 };
 
 export type TResponseStageModelResponseItem = {
@@ -100,14 +117,38 @@ export type TResponseStageDetail = TResponseStageListItem & {
 };
 
 export type TResponseAskUserQuestionListItem = {
-  question: Record<string, unknown>;
+  batch?: {
+    batchId?: string;
+    description?: string;
+    questions?: {
+      allowMultiple?: boolean;
+      description?: string;
+      kind: 'multipleChoice' | 'text';
+      minChoices?: number;
+      options?: { id: string; label: string }[];
+      placeholder?: string;
+      questionRef: string;
+      title: string;
+    }[];
+    title?: string;
+  };
+  batchId?: string;
+  questionCount?: number;
   questionId: string;
-  questionRef: string;
+  requestId: string;
+  status: 'answered' | 'pending';
+  title?: string;
+};
+
+export type TResponseAskUserQuestionDetail = {
+  batch?: TResponseAskUserQuestionListItem['batch'];
+  batchId?: string;
+  questionId: string;
   requestId: string;
   status: 'answered' | 'pending';
 };
 
-export type TVerifyResumeAction = 'edit_answer' | 'reask' | 'rerun';
+export type TVerifyResumeAction = 'edit_answer' | 'follow_up' | 'reask' | 'rerun';
 
 export type TResponseVerifyCheckpoint = {
   askUserQuestion?: Record<string, unknown>;
@@ -126,8 +167,9 @@ export type TResponseVerifyCheckpoint = {
   score: number;
   stage: TYahlStage;
   stageIndex?: number;
-  status: 'pending' | 'resumed';
+  status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
+  unavailable?: boolean;
   verifyId: string;
 };
 
@@ -137,11 +179,13 @@ export type TSessionLiveEvent =
   | { type: 'session.updated' }
   | { type: 'stage.created'; requestId: string }
   | { type: 'stage.finished'; requestId: string }
+  | { type: 'stage.verifying'; requestId: string }
   | { type: 'stage.model-response'; requestId: string }
   | { type: 'stage.tool-call'; requestId: string }
   | { type: 'produce_keys.failed'; requestId: string; verifyId: string }
   | { type: 'produce_keys.resumed'; requestId: string; verifyId: string }
   | { type: 'verify.failed'; requestId: string; verifyId: string }
+  | { type: 'verify.passed'; requestId: string }
   | { type: 'verify.resumed'; requestId: string; verifyId: string };
 
 export type TStageListSource = {
@@ -154,6 +198,7 @@ export type TStageListSource = {
   stage: TYahlStage;
   temperature?: number;
   updatedAt: Date | string;
+  verifyingAt?: Date | string;
 };
 
 export type TResponseGetForkSession = {

@@ -1,79 +1,83 @@
 # ask-user
 
-Use this skill when the stage requires user decision before continuing.
+Use this skill when the stage requires user input before continuing.
 
 ## Purpose
 
-- pause execution and ask one clear multiple-choice question
-- collect deterministic answer ids for downstream context updates
-- avoid guessing when user preference is required
-
-## Stage registry
-
-Stages may declare questions in YAML:
-
-```yaml
-askUser:
-  - id: 1
-    question: Choose pricing scope
-logic: |
-  scope = /ask-user(1);
-```
-
-- `question` is the required tool `title` and UI heading
-- `/ask-user(<id>)` must match a registry entry
-- server fills `answer` after the user responds
+- pause execution and collect one or more answers in a single batch
+- support free text, radio multiple-choice, and checkbox multiple-choice
+- store deterministic answer values for downstream context updates
 
 ## Required tool
 
-Call `ask_user` with this exact argument shape:
+Always call `ask_user` with **`askUserBatch.v1`** — even for a single question:
 
 ```json
 {
-  "version": "askUser.v1",
-  "kind": "multipleChoice",
-  "questionRef": "1",
-  "title": "Choose pricing scope",
-  "description": "Pick one scope before continuing.",
-  "options": [
-    { "id": "global", "label": "Global" },
-    { "id": "apac", "label": "APAC" }
-  ],
-  "allowMultiple": false
+  "version": "askUserBatch.v1",
+  "batchId": "stage1_round1",
+  "title": "Tell us about yourself",
+  "description": "Answer all questions below",
+  "questions": [
+    {
+      "questionRef": "preferred_name",
+      "kind": "text",
+      "title": "What should we call you?"
+    },
+    {
+      "questionRef": "timezone",
+      "kind": "multipleChoice",
+      "allowMultiple": false,
+      "title": "Your timezone",
+      "options": [
+        { "id": "hkt", "label": "Hong Kong (HKT)" },
+        { "id": "utc", "label": "UTC" }
+      ]
+    },
+    {
+      "questionRef": "languages",
+      "kind": "multipleChoice",
+      "allowMultiple": true,
+      "minChoices": 1,
+      "title": "Languages you use",
+      "options": [
+        { "id": "en", "label": "English" },
+        { "id": "zh", "label": "Chinese" }
+      ]
+    }
+  ]
 }
 ```
 
+## Input modes
+
+| Mode | Tool shape | Answer storage |
+|------|------------|----------------|
+| Free text | `kind: "text"` | `ask_user_<ref>_answer` = string |
+| Radio MC | `kind: "multipleChoice"`, `allowMultiple: false` | one option id **or** free text |
+| Checkbox MC | `kind: "multipleChoice"`, `allowMultiple: true` | `optionIds[]` **or** free text |
+
+Multiple-choice questions always include a free-text counter-option in the web UI. Preset selections and free text are mutually exclusive.
+
 ## Rules
 
-- always include `version`, `kind`, and `questionRef`
-- `title` must exactly match the registered `question` for that ref
-- only `kind: "multipleChoice"` is supported
-- include at least 2 options
+- always include `version`, `batchId`, `title`, and non-empty `questions`
+- each `questionRef` must be unique within the batch
+- do not re-ask a ref that already has an answer on the stage
+- group independent questions in one batch; dependent questions go in a later round
+- `multipleChoice` requires at least 2 options
 - never use empty `id` or `label`
-- ask one question at a time (one registry id per tool call)
-- keep title concise and action oriented
-
-## Optional fields
-
-- `description`
-- `allowMultiple`
-- `minChoices`
-- `maxChoices`
 
 ## Runtime behavior
 
-- orchestrator persists a checkpoint and stops the agent container
-- web UI shows agent options plus a free-text counter-option
-- after the user answers, a new orchestrator resumes the same stage
-- inline `/ask-user(<id>)` is replaced with the selected answer value
-- answer is also stored on `askUser[].answer` and in context as `ask_user_<id>_answer`
-- on resume, the agent user prompt includes the ask-user question and answer (preset option or custom free-text)
-- on resume, re-execute **full** `stage.logic` from the first line — do not end the stage until every `produceContextKeys` entry is written via `set_context`
-- on resume, `context.context["ask_user_<id>_answer"]` is already set; stage logic may use `*answer_of(<id>)` to read it (see YAHL prompt)
+- orchestrator upserts question refs onto `stage.askUser[]` at checkpoint time
+- one checkpoint per batch — agent shuts down until all answers are submitted
+- web UI shows a scrollable drawer; submit is disabled until every question is answered
+- answers are stored as `ask_user_<ref>_answer` in context and on `askUser[].answer`
+- on resume, re-execute **full** `stage.logic` from the first line
+- on resume, do not call `ask_user` again for answered refs
 
 ## `*answer_of(<id>)`
-
-Pseudo-op for resume-aware logic:
 
 ```yahl
 const prior = *answer_of(hk_region);
@@ -86,14 +90,14 @@ END:
 
 - reads `ask_user_<id>_answer` from Input `context.context`
 - empty on first pass; populated after the user answers
-- option ids are scalars — resolve to typed objects with `*matches` when needed
+- checkbox answers are `string[]`; radio preset ids are scalars
 
 ## When to use
 
-- choosing scope, strategy, output format, or trade-off preference
+- collecting user preferences, scope, or profile data
 - resolving ambiguity that materially changes execution path
 
 ## When not to use
 
-- when context already contains clear instruction
+- when context or knowledge already contains clear instruction
 - for trivial decisions that can be inferred safely

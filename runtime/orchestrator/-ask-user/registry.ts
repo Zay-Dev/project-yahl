@@ -1,57 +1,67 @@
-import type { AskUserToolCallEnvelope } from '@/shared/stage-contract';
-import type { YahlAskUserEntry, YahlStage } from '@/shared/yahl-stage';
+import type { AskUserBatchToolArguments } from '@/shared/ask-user-batch';
+import type { YahlStage } from '@/shared/yahl-stage';
 
 export const resolveAskUserEntry = (
   stage: YahlStage,
   questionRef: string,
-): YahlAskUserEntry | null => {
+) => {
   const trimmed = questionRef.trim();
 
-  return stage.askUser?.find((entry) => entry.id === trimmed) ?? null;
+  return stage.askUser?.find((entry) => String(entry.id) === trimmed) ?? null;
 };
 
 export const listAskUserRefs = (stage: YahlStage) =>
   (stage.askUser ?? []).map((entry) => ({
     question: entry.question,
-    questionRef: entry.id,
+    questionRef: String(entry.id),
   }));
 
 export const validateAskUserToolCall = (
   stage: YahlStage,
-  args: AskUserToolCallEnvelope['arguments'],
+  args: AskUserBatchToolArguments,
 ) => {
-  const questionRef = args.questionRef?.trim();
-
-  if (!questionRef) {
-    return 'ask_user: questionRef is required';
+  if (!args.batchId?.trim()) {
+    return 'ask_user: batchId is required';
   }
 
-  const entry = resolveAskUserEntry(stage, questionRef);
-
-  if (!entry) {
-    const known = listAskUserRefs(stage)
-      .map((item) => item.questionRef)
-      .join(', ');
-
-    return known
-      ? `ask_user: unknown questionRef "${questionRef}" (expected one of: ${known})`
-      : `ask_user: stage has no askUser registry (unknown questionRef "${questionRef}")`;
+  if (!args.title?.trim()) {
+    return 'ask_user: title is required';
   }
 
-  if (entry.question !== args.title) {
-    return `ask_user: title must match registered question "${entry.question}"`;
+  if (!Array.isArray(args.questions) || args.questions.length < 1) {
+    return 'ask_user: questions must be a non-empty array';
   }
 
-  if (entry.options?.length) {
-    const presetIds = new Set(entry.options.map((option) => option.id));
-    const argIds = new Set(args.options.map((option) => option.id));
+  for (const question of args.questions) {
+    const entry = resolveAskUserEntry(stage, question.questionRef);
 
-    for (const id of presetIds) {
-      if (!argIds.has(id)) {
-        return `ask_user: missing preset option id "${id}"`;
-      }
+    if (entry?.answer !== undefined) {
+      return `ask_user: question "${question.questionRef}" already answered`;
     }
   }
 
   return null;
+};
+
+export const mergeBatchIntoStage = (
+  stage: YahlStage,
+  args: AskUserBatchToolArguments,
+): YahlStage => {
+  const byId = new Map((stage.askUser ?? []).map((entry) => [String(entry.id), entry]));
+
+  for (const question of args.questions) {
+    byId.set(question.questionRef, {
+      ...(byId.get(question.questionRef) ?? {}),
+      id: question.questionRef,
+      ...(question.kind === 'multipleChoice' && question.options
+        ? { options: question.options }
+        : {}),
+      question: question.title,
+    });
+  }
+
+  return {
+    ...stage,
+    askUser: [...byId.values()],
+  };
 };

@@ -13,7 +13,7 @@ const askUserOptionSchema = Joi.object({
 });
 
 const askUserEntrySchema = Joi.object({
-  answer: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
+  answer: Joi.alternatives().try(Joi.number(), Joi.string(), Joi.array().items(Joi.string())).optional(),
   id: Joi.string().trim().required(),
   options: Joi.array().items(askUserOptionSchema).min(2).optional(),
   question: Joi.string().trim().required(),
@@ -32,6 +32,7 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   temperature: Joi.number().min(0).max(2).optional(),
   updateContextKeys: stringArraySchema.optional(),
   verify: Joi.boolean().optional(),
+  verifyAutoRetry: Joi.boolean().optional(),
   verifyMinScore: Joi.number().min(0).max(1).optional(),
   verifyResume: Joi.boolean().optional(),
   verifyRubric: Joi.string().trim().optional(),

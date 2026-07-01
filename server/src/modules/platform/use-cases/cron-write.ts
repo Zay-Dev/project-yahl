@@ -3,36 +3,104 @@ import Joi from 'joi';
 import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
-import type { TResponseCronJobs } from '../-types';
+import type {
+  TRequestCreateCronJobBody,
+  TRequestCronJobParams,
+  TRequestUpdateCronJobBody,
+  TResponseCronJobMutation,
+} from '../-api-types';
+import { toCronJobResponse } from '../-cron-map';
 import { modelCronJob } from '../models';
 
-export const listCronJobs = [
-  Middlewares.Chainable
-    .next(async (express) => {
-      const items = await Queries.queryBy(modelCronJob, {});
+const paramsSchema = Joi.object<TRequestCronJobParams>({
+  id: Joi.string().trim().required(),
+});
 
-      express.respondOne<TResponseCronJobs>({ items });
-    })
-    .toMiddleware(),
-];
+const createBodySchema = Joi.object<TRequestCreateCronJobBody>({
+  enabled: Joi.boolean().default(true),
+  id: Joi.string().trim().required(),
+  orgId: Joi.string().trim().optional(),
+  orgUnitId: Joi.string().trim().optional(),
+  schedule: Joi.string().trim().required(),
+  taskPath: Joi.string().trim().required(),
+  timezone: Joi.string().trim().optional(),
+  userId: Joi.string().trim().optional(),
+});
+
+const updateBodySchema = Joi.object<TRequestUpdateCronJobBody>({
+  enabled: Joi.boolean().optional(),
+  orgId: Joi.string().trim().optional(),
+  orgUnitId: Joi.string().trim().optional(),
+  schedule: Joi.string().trim().optional(),
+  taskPath: Joi.string().trim().optional(),
+  timezone: Joi.string().trim().optional(),
+  userId: Joi.string().trim().optional(),
+}).min(1);
 
 export const createCronJob = [
   Middlewares.Chainable
     .validate(({ req }) => ({
-      body: joi.getValidatedOrThrow(Joi.object({
-        enabled: Joi.boolean().default(true),
-        id: Joi.string().required(),
-        orgId: Joi.string().optional(),
-        schedule: Joi.string().required(),
-        taskPath: Joi.string().required(),
-        timezone: Joi.string().optional(),
-        userId: Joi.string().optional(),
-      }), req.body),
+      body: joi.getValidatedOrThrow(createBodySchema, req.body),
     }))
     .next(async (express, { body }) => {
-      await modelCronJob.create(body);
+      const existing = await Queries.queryBy(modelCronJob, { id: body.id }).countDocuments();
+
+      if (existing > 0) {
+        throw errors.badRequest('cron job id already exists');
+      }
+
+      try {
+        await modelCronJob.create(body);
+      } catch (error) {
+        if (
+          error
+          && typeof error === 'object'
+          && 'code' in error
+          && error.code === 11000
+        ) {
+          throw errors.badRequest('cron job id already exists');
+        }
+
+        throw error;
+      }
       express.res.status(201);
-      express.respondOne({ id: body.id, ok: true });
+      express.respondOne<TResponseCronJobMutation>({ id: body.id, ok: true });
+    })
+    .toMiddleware(),
+];
+
+export const updateCronJob = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      body: joi.getValidatedOrThrow(updateBodySchema, req.body),
+      params: joi.getValidatedOrThrow(paramsSchema, req.params),
+    }))
+    .next(async (express, { body, params }) => {
+      await Queries.hasExactOne(modelCronJob, { id: params.id });
+
+      await modelCronJob.updateOne({ id: params.id }, { $set: body });
+
+      const doc = await Queries.hasExactOne(modelCronJob, { id: params.id });
+
+      express.respondOne(toCronJobResponse(doc));
+    })
+    .toMiddleware(),
+];
+
+export const deleteCronJob = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      params: joi.getValidatedOrThrow(paramsSchema, req.params),
+    }))
+    .next(async (express, { params }) => {
+      await Queries.hasExactOne(modelCronJob, { id: params.id });
+
+      await modelCronJob.updateOne(
+        { id: params.id },
+        { $set: { deletedAt: new Date() } },
+      );
+
+      express.respondOne<TResponseCronJobMutation>({ id: params.id, ok: true });
     })
     .toMiddleware(),
 ];

@@ -1,5 +1,7 @@
 import fs from 'fs/promises';
 
+import { parseRunInputKeysFromYahl } from '@project-yahl/shared/yahl/run-input-keys';
+
 import { Middlewares } from '@omni-infra/express';
 
 import type { TResponseTaskListItem } from '../-api-types';
@@ -23,13 +25,16 @@ export const listTasks = [
 
         try {
           const yahl = await fs.readFile(yahlPath, 'utf8');
-          const { description, name } = parseTaskMetadata(yahl);
+          const { background, description, name } = parseTaskMetadata(yahl);
+          const runInputKeys = parseRunInputKeysFromYahl(yahl);
 
           items.push({
+            background,
             description,
             id: taskId,
             name,
             path: taskYahlRelativePath(taskId),
+            ...(runInputKeys ? { runInputKeys } : {}),
             taskId,
           });
         } catch {

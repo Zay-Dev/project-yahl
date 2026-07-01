@@ -4,14 +4,16 @@ import type { YahlStage } from '@/shared/yahl-stage';
 
 type TPushRequestEnvelope = {
   context: Record<string, unknown>;
-  stage: YahlStage;
   loopMeta?: {
     arraySnapshot: unknown[];
     index: number;
     temperature?: number;
     value: unknown;
   };
+  parsedStageIndex?: number;
   requestId: string;
+  sourceStartLine?: number;
+  stage: YahlStage;
   temperature?: number;
 };
 
@@ -129,9 +131,11 @@ export const createSessionEventTracker = () => {
 
       await _post(url, {
         context: envelope.context,
-        stage: envelope.stage,
         loopMeta: envelope.loopMeta,
+        parsedStageIndex: envelope.parsedStageIndex,
         requestId: envelope.requestId,
+        sourceStartLine: envelope.sourceStartLine,
+        stage: envelope.stage,
         ...(temperature === undefined ? {} : { temperature }),
       });
     });

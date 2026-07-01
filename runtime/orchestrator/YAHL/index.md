@@ -15,8 +15,8 @@ Per-stage fields:
 | Field | Purpose |
 |-------|---------|
 | `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
-| `contextMode` | VM-only `CONTEXT: { ... }` before the next AI stage |
-| `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` |
+| `contextMode` | VM-only stage; read prior keys via `context.context.{key}`; return `(() => ({ ... }))` to write `produceContextKeys` |
+| `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` (same `context.context.{key}` reads as `contextMode`) |
 | `loopSetup` | Orchestrator-only (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
 | `temperature` | Model temperature for AI stages (0–2) |
 | `contextKeys` | Allowlist of context/stage keys passed into the runner |
@@ -27,6 +27,23 @@ Per-stage fields:
 | `verify` | When true, mastermind scores stage output after finish; failure pauses for resume |
 | `verifyMinScore` | Minimum pass score (0–1, default 0.75) |
 | `verifyRubric` | Rubric name or inline string for verify gate |
+
+### VM stages (`contextMode`, `conditionMode`)
+
+Runs in isolated-vm — **not** the agent. Prior context keys are **not** bare variables; read them as `context.context.{key}`.
+
+```yaml
+# Reference: server/tasks/test/SKILL.yahl
+- contextMode: true
+  contextKeys: [c, i]
+  updateContextKeys: [c]
+  logic: |
+    (() => ({
+      c: context.context.c + context.context.i,
+    }));
+```
+
+AI stages (no `contextMode`) may use bare names listed in `contextKeys` — the agent sees them in Input.
 
 ### Syntaxes
 
@@ -51,7 +68,7 @@ Syntax of "*some_text(...args)" is a virtual function, that means
 6. after analyzing the purpose and args of the virtual function, generate bash command for the user to execute
 
 examples:
-- const decision = *ask_user(a2ui, [multipleChoice], choose_scope) means emit runtime `ask_user` tool arguments with `version:"askUser.v1"` and `kind:"multipleChoice"`
+- const decision = *ask_user(a2ui, [multipleChoice], choose_scope) means emit runtime `ask_user` tool arguments with `version:"askUserBatch.v1"` and a `questions` array
 - const sum = *sum([1,3,5,6,10]) means get the sum of the args (1+3+5+6+10)
 - const filtered = *filter([1,3,2,5,6,3,2,692345,3], even_number) means find the even numbers in the array
 - const filtered = *filter([1,3,2,5,6,3,2,692345,3], even_number, new Set() as Array) means find the even numbers in the array, remove all duplicated numbers ('2' should show only one time in the result)
@@ -68,8 +85,7 @@ Syntax of "/skill(...args)" is a skill, that means
 Syntax of "~/some-text" means the workspace, it takes the linux's home (~/) syntax sematically, usually means accessing (read/write) the file system, we only access file-system when this syntax presents, and ~/ means our workspace (user's home), use bash command to validate if you have written content correctly if it is a write virtual function
 
 examples:
-- *read(~/knowledges/news-monitor/sources.json) means reading the content of the file at that absolute path
-- *find(~/knowledges/**/*.json) means find all json files recursively under the ~/knowledges folder
+- *read(~/knowledge/my-extract.json) means reading a session extract written by extract-knowledge (use `.extracted` from the JSON payload)
 - *save(~/memory.md, new_memory) means saving new memory to the ~/memory.md file
 
 ### Instructions
@@ -98,26 +114,33 @@ When `*ask_user(...)` is selected, generate `ask_user` tool arguments matching:
 
 ```json
 {
-  "version": "askUser.v1",
-  "kind": "multipleChoice",
-  "title": "Choose one option",
-  "description": "Optional context for user.",
-  "options": [
-    { "id": "a", "label": "Option A" },
-    { "id": "b", "label": "Option B" }
-  ],
-  "allowMultiple": false
+  "version": "askUserBatch.v1",
+  "batchId": "round1",
+  "title": "Choose options",
+  "questions": [
+    {
+      "questionRef": "scope",
+      "kind": "multipleChoice",
+      "title": "Choose one option",
+      "description": "Optional context for user.",
+      "options": [
+        { "id": "a", "label": "Option A" },
+        { "id": "b", "label": "Option B" }
+      ],
+      "allowMultiple": false
+    }
+  ]
 }
 ```
 
 Constraints:
-- at least 2 options
-- non-empty `id` and `label`
-- only `multipleChoice` is supported
+- `questions` length ≥ 1; unique `questionRef` per batch
+- MC: at least 2 options; non-empty `id` and `label`
+- `kind`: `text` or `multipleChoice`
 
 Execution semantics:
-- stages may register `askUser[]` entries; logic uses `/ask-user(<id>)`
-- when an ask_user call resolves, runtime resumes the same stage and replaces the inline ref with the selected answer value
+- runtime upserts question refs onto `stage.askUser[]` at checkpoint time
+- when an ask_user batch resolves, runtime resumes the same stage and replaces inline refs with answer values
 - runtime writes the answer onto `askUser[].answer` and into context as `ask_user_<id>_answer`
 - `ask_user_last_answer` is scalar only: numeric option ids become numbers, otherwise string
 - on resume, re-run full `stage.logic` from line 1; use `*answer_of(<id>)` to read `ask_user_<id>_answer` from Input context

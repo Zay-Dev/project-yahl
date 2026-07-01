@@ -107,6 +107,18 @@ export const createForkSession = [
             `Prefix stage ${row?.stageId ?? index} is missing contextAfter; cannot fast-forward`,
           );
         }
+
+        if (!isStageFinished(row)) {
+          throw errors.badRequest(
+            `Prefix stage ${row.stageId} is not finished; cannot fast-forward`,
+          );
+        }
+
+        if (row.stage.verify === true && row.verifyResult?.pass !== true) {
+          throw errors.badRequest(
+            `Prefix stage ${row.stageId} has verify enabled but no passing verify result; cannot fast-forward verify`,
+          );
+        }
       }
 
       const setups = mergeForkSessionSetups(replayRows, anchorIndex, body.setups);
@@ -136,6 +148,7 @@ export const createForkSession = [
               forkSessionId,
               sourceSessionId: params.sessionId,
             },
+            isBackground: sourceSession.isBackground === true,
             parsedStages: sourceSession.parsedStages,
             taskId: sourceSession.taskId?.trim()
               || deriveTaskIdFromYahlPath(sourceSession.taskYahlPath ?? ''),
@@ -153,7 +166,7 @@ export const createForkSession = [
       );
 
       try {
-        spawnOrchestrate(targetSessionId, ['--forkrun-id', forkSessionId]);
+        await spawnOrchestrate(targetSessionId, ['--forkrun-id', forkSessionId]);
       } catch (spawnError) {
         console.error('[createForkSession] spawn failed:', spawnError);
         throw errors.custom('Failed to start orchestrator for fork run', 500);

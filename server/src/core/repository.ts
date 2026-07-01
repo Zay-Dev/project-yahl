@@ -6,11 +6,13 @@ import * as awilix from 'awilix';
 
 type TServices = {
   createPendingSession: (input: {
+    isBackground?: boolean;
+    runInput?: Record<string, unknown>;
     sessionId: string;
     taskId: string;
     taskYahlPath: string;
   }) => Promise<void>;
-  spawnOrchestrate: (sessionId: string, args: string[]) => ChildProcess;
+  spawnOrchestrate: (sessionId: string, args: string[]) => Promise<ChildProcess>;
   validateSessionById: (sessionId: string) => Promise<TYahlDocument>;
 };
 

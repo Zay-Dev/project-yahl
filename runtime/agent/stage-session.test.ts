@@ -51,4 +51,22 @@ describe("runStageSession", () => {
     assert.equal(parsed?.temperature, 0.7);
     assert.equal(parsed?.stage.logic, "x");
   });
+
+  it("returns result envelope when assistant responds without tool calls", async () => {
+    const envelope = await runStageSession(
+      {
+        context: emptyContext(),
+        stage: { logic: "noop" },
+      },
+      [],
+      {
+        chatWithTools: async () => [assistant(JSON.stringify({ output: "done", type: "result" }))],
+        runCommand: async () => "",
+      },
+      { maxTurns: 2 },
+    );
+
+    assert.equal(envelope.type, "result");
+    assert.match(envelope.output, /done/);
+  });
 });

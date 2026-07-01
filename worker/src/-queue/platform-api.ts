@@ -40,3 +40,28 @@ export const applySettingProposal = async (id: string) => {
 
   await fetch(url, { method: 'POST' });
 };
+
+export const postTaskRun = async (taskId: string): Promise<{ sessionId?: string; taskId?: string }> => {
+  const url = `${config.sessionApiBaseUrl}/api/runs`;
+
+  try {
+    const res = await fetch(url, {
+      body: JSON.stringify({ taskId }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    const body = await res.json() as { sessionId?: string; taskId?: string; error?: string };
+
+    if (!res.ok) {
+      console.error('[worker][cron] task run failed', taskId, body.error ?? res.status);
+      return {};
+    }
+
+    console.log(`[worker][cron] task run started taskId=${taskId} sessionId=${body.sessionId ?? '-'}`);
+
+    return body;
+  } catch (error) {
+    console.error('[worker][cron] task run error', taskId, error);
+    return {};
+  }
+};

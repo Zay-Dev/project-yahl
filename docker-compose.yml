@@ -22,6 +22,7 @@ services:
       onecli_postgres:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       DATABASE_URL: postgresql://onecli:onecli@onecli_postgres:5432/onecli
     ports:
       - "10254:10254"
@@ -32,6 +33,7 @@ services:
   onecli_postgres:
     image: postgres:16-alpine
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       POSTGRES_DB: onecli
       POSTGRES_PASSWORD: onecli
       POSTGRES_USER: onecli
@@ -54,7 +56,11 @@ services:
     env_file:
       - .env
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       HOST_REPO_ROOT: ${HOST_REPO_ROOT}
+      MASTERMIND_API_URL: http://mastermind:4100
+      MASTERMIND_INTERNAL_TOKEN: ${MASTERMIND_INTERNAL_TOKEN:-}
+      WORKER_API_URL: http://worker:4200
       MONGODB_URI: mongodb://mongo:27017/yahl
       OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
       OMNIFLEX_BUILD_CONTEXT: /omniflex
@@ -62,12 +68,18 @@ services:
       REDIS_URL: redis://redis:6379
       RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
       RUNTIME_SHARED_NETWORK: ${SHARED_DOCKER_NETWORK:-yahl_shared}
-      SESSION_API_BASE_URL: http://127.0.0.1:4000
+      SESSION_API_BASE_URL: http://server:4000
     ports:
-      - "4000:4000"
+      - "${SERVER_PORT:-4000}:4000"
     depends_on:
       - mongo
       - redis
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:4000/__/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
@@ -81,7 +93,7 @@ services:
       dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/web/Dockerfile
       args:
         OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
-        VITE_API_BASE_URL: http://localhost:4000
+        VITE_API_BASE_URL: http://localhost:${SERVER_PORT:-4000}
     ports:
       - "5173:80"
     depends_on:
@@ -97,8 +109,10 @@ services:
     env_file:
       - .env
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       MASTERMIND_DATA_ROOT: /data
+      MASTERMIND_INTERNAL_TOKEN: ${MASTERMIND_INTERNAL_TOKEN:-}
       MASTERMIND_PORT: "4100"
       SESSION_API_BASE_URL: http://server:4000
       WORKSPACE_ROOT: /root
@@ -109,7 +123,14 @@ services:
       - ./data/mastermind:/data
       - ./mastermind/skills:/opt/mastermind-skills:ro
     depends_on:
-      - server
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
 
   worker:
     build:
@@ -120,21 +141,31 @@ services:
     env_file:
       - .env
     environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       MASTERMIND_API_URL: http://mastermind:4100
-      REDIS_URL: redis://redis:6379
-      RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
       SESSION_API_BASE_URL: http://server:4000
+      VERIFY_RULES_ROOT: /data
+      WORKER_API_URL: http://worker:4200
       WORKER_BATCH_RUNS_ROOT: /tmp/yahl-batch-runs
+      WORKER_HEALTH_PORT: "4200"
       WORKER_POLL_INTERVAL_MS: "5000"
+    ports:
+      - "4200:4200"
     volumes:
       - ./workspace:/root
-      - ./data/mastermind:/data
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/mastermind/rules/verify:/data/verify:ro
     depends_on:
-      - server
-      - redis
-      - mastermind
+      mastermind:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "command -v agent >/dev/null && node -e \"fetch('http://127.0.0.1:4200/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
 networks:
   default:

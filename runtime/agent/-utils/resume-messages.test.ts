@@ -8,19 +8,25 @@ import type { ChatApiMessage } from '@/shared/stage-tools';
 import { buildResumeStageMessages } from './resume-messages';
 
 const checkpoint = (overrides: Partial<TAskUserCheckpoint> = {}): TAskUserCheckpoint => ({
-  answerIds: ['hko'],
-  answerLabels: ['HK Observatory (HKO)'],
-  askUserId: 'hk_region',
-  contextSnapshot: {},
-  question: {
-    kind: 'multipleChoice',
-    options: [{ id: 'hko', label: 'HK Observatory (HKO)' }],
-    questionRef: 'hk_region',
-    title: '你想查詢哪個香港地區的天氣？',
-    version: 'askUser.v1',
+  batch: {
+    batchId: 'round1',
+    questions: [{
+      kind: 'multipleChoice',
+      options: [{ id: 'hko', label: 'HK Observatory (HKO)' }],
+      questionRef: 'hk_region',
+      title: '你想查詢哪個香港地區的天氣？',
+    }],
+    title: 'Region',
+    version: 'askUserBatch.v1',
   },
+  batchAnswers: [{
+    answerValue: 'hko',
+    optionIds: ['hko'],
+    questionRef: 'hk_region',
+  }],
+  batchId: 'round1',
+  contextSnapshot: {},
   questionId: 'q-1',
-  questionRef: 'hk_region',
   requestId: 'req-1',
   stage: {},
   stageIndex: 2,
@@ -55,7 +61,7 @@ const singleTurnStageDetail = (): TStageDetailForResume => ({
   stage: {},
   toolCalls: [{
     tools: [{
-      arguments: { questionRef: 'hk_region' },
+      arguments: { batchId: 'round1' },
       id: 'tool-ask-1',
       name: 'ask_user',
     }],
@@ -126,7 +132,7 @@ const multiTurnStageDetail = (): TStageDetailForResume => ({
   stage: {},
   toolCalls: [{
     tools: [{
-      arguments: { questionRef: 'hk_region' },
+      arguments: { batchId: 'round1' },
       id: 'tool-ask-1',
       name: 'ask_user',
     }],
@@ -160,8 +166,9 @@ describe('buildResumeStageMessages', () => {
     assert.equal(messages[1]?.role, 'tool');
     assert.equal((messages[1] as { tool_call_id: string }).tool_call_id, 'tool-ask-1');
     assert.deepEqual(JSON.parse(messages[1]?.content as string), {
-      selectedLabels: ['HK Observatory (HKO)'],
-      selectedOptionIds: ['hko'],
+      answers: [{ optionIds: ['hko'], questionRef: 'hk_region' }],
+      batchId: 'round1',
+      ok: true,
     });
     assertValidToolCallOrdering(messages);
   });
@@ -182,8 +189,9 @@ describe('buildResumeStageMessages', () => {
     assert.equal(JSON.parse(messages[1]?.content as string).ok, true);
     assert.equal(JSON.parse(messages[3]?.content as string).ok, true);
     assert.deepEqual(JSON.parse(messages[5]?.content as string), {
-      selectedLabels: ['HK Observatory (HKO)'],
-      selectedOptionIds: ['hko'],
+      answers: [{ optionIds: ['hko'], questionRef: 'hk_region' }],
+      batchId: 'round1',
+      ok: true,
     });
     assert.equal((messages[5] as { tool_call_id: string }).tool_call_id, 'tool-ask-1');
     assertValidToolCallOrdering(messages);
@@ -191,12 +199,22 @@ describe('buildResumeStageMessages', () => {
 
   it('uses freeText answer payload for pending tool call', () => {
     const resumeFrom = buildResumeFrom(
-      checkpoint({ answerIds: undefined, answerLabels: undefined, freeText: 'custom region' }),
+      checkpoint({
+        batchAnswers: [{
+          answerValue: 'custom region',
+          freeText: 'custom region',
+          questionRef: 'hk_region',
+        }],
+      }),
       singleTurnStageDetail(),
     );
     const messages = buildResumeStageMessages(resumeFrom);
     const toolMessage = messages.find((message) => message.role === 'tool');
 
-    assert.deepEqual(JSON.parse(toolMessage?.content as string), { freeText: 'custom region' });
+    assert.deepEqual(JSON.parse(toolMessage?.content as string), {
+      answers: [{ freeText: 'custom region', questionRef: 'hk_region' }],
+      batchId: 'round1',
+      ok: true,
+    });
   });
 });

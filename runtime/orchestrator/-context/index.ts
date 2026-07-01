@@ -1,4 +1,9 @@
 export {
+  defaultContextValues,
+  PLATFORM_CONTEXT_KEYS,
+  seedDefaultContext,
+} from './default-context';
+export {
   filterContextByKeys,
   filterContextByReadUsage,
   pickContextUpdates,

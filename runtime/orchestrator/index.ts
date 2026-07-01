@@ -17,9 +17,15 @@ import {
 import { program, resolveSessionId, runCommand } from './-cli';
 
 import { parseYahlTask } from './-utils/yahl';
+import { deriveTaskIdFromYahlPath } from './-utils/yahl/derive-task-id';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
-import { ensureSessionWorkspace } from './-utils/workspace-paths';
+import {
+  ensureSessionWorkspace,
+  mergeTaskSystemAppend,
+  mountTaskSkillsToSession,
+  verifyTaskSkillsMount,
+} from './-utils/workspace-paths';
 
 import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
@@ -30,7 +36,12 @@ import { runAskUserResume } from './-runners/resume';
 import { runVerifyResume } from './-runners/verify-resume';
 import { runProduceKeysResume } from './-runners/produce-keys-resume';
 import { fetchTaskYahl } from './-tasks/session-api';
-import { ProduceKeysFailedError, VerifyFailedError } from './-verify';
+import { fetchSession } from './-ask-user/session-api';
+import { ProduceKeysFailedError, VerifyFailedError, VerifyUnavailableError } from './-verify';
+import {
+  acquireOrchestratorRunLock,
+  releaseOrchestratorRunLock,
+} from './-utils/run-lock';
 
 declare global {
   var sessionId: string;
@@ -41,7 +52,7 @@ declare global {
 }
 
 const redis = new Redis(config.redisUrl, {
-  maxRetriesPerRequest: 2,
+  maxRetriesPerRequest: null,
 });
 
 const _setupPublisher = async (tracker: ReturnType<typeof createSessionEventTracker>, sessionId: string) => {
@@ -116,10 +127,16 @@ runCommand.action(async options => {
 
   console.log(`sessionId=${sessionId}`);
   console.log(`agentName=${agentName}`);
+  console.log(`[yahl-diag] orchestrator start pid=${process.pid} sessionId=${sessionId}`);
 
   globalThis.sessionId = sessionId;
   globalThis.publisher = new RedisPublisher(redis, sessionId);
   globalThis.sessionTracker = tracker;
+
+  let exitCode = 0;
+  let skipFinallyTeardown = false;
+
+  acquireOrchestratorRunLock(sessionId);
 
   try {
     buildAgent();
@@ -128,9 +145,23 @@ runCommand.action(async options => {
     await _composeUp(agentName, sessionId, tracker);
     await _setupPublisher(tracker, sessionId);
 
+    const runMode = options.taskId
+      ? 'task'
+      : options.forkrunId
+        ? 'fork'
+        : options.resumeId
+          ? 'ask-user-resume'
+          : options.verifyResumeId
+            ? 'verify-resume'
+            : options.produceKeysResumeId
+              ? 'produce-keys-resume'
+              : 'unknown';
+
+    console.log(`[orchestrator] mode=${runMode} sessionId=${sessionId}`);
+
     if (options.taskId) {
       const task = await fetchTaskYahl(options.taskId);
-      const { stages, resultContextKey } = parseYahlTask(task.yahl);
+      const { resultContextKey, stages } = parseYahlTask(task.yahl);
 
       await tracker.registerSession(sessionId, {
         parsedStages: stages,
@@ -139,7 +170,35 @@ runCommand.action(async options => {
         taskYahlPath: task.path,
       });
 
-      const { storage } = await runYahl(task.yahl, { stages });
+      const mount = await mountTaskSkillsToSession(sessionId, task.taskId);
+
+      if (task.yahl.includes('~/task-skills/')) {
+        if (!mount.mounted) {
+          throw new Error(
+            `[orchestrator] task references ~/task-skills/ but mount failed taskId=${task.taskId} source=${mount.source}`,
+          );
+        }
+
+        const verified = await verifyTaskSkillsMount(mount.target);
+
+        if (!verified) {
+          throw new Error(
+            `[orchestrator] task-skills mount incomplete sessionId=${sessionId} target=${mount.target}`,
+          );
+        }
+      }
+
+      const systemAppend = await mergeTaskSystemAppend(sessionId, task.taskId);
+
+      const session = await fetchSession(sessionId);
+
+      console.log(`[orchestrator] runYahl start sessionId=${sessionId} stageCount=${stages.length}`);
+
+      const { storage } = await runYahl(task.yahl, {
+        runInput: session.runInput,
+        stages,
+        systemAppend,
+      });
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.forkrunId) {
@@ -152,18 +211,43 @@ runCommand.action(async options => {
         );
       }
 
+      if (forkManager.taskYahlPath) {
+        await mountTaskSkillsToSession(
+          sessionId,
+          deriveTaskIdFromYahlPath(forkManager.taskYahlPath),
+        );
+      }
+
       const { storage } = await runForkSession(options.forkrunId, forkManager);
 
       await publishSessionResult(sessionId, forkManager.resultContextKey, storage);
     } else if (options.resumeId) {
+      const session = await fetchSession(sessionId);
+
+      if (session.taskId) {
+        await mountTaskSkillsToSession(sessionId, session.taskId);
+      }
+
       const { resultContextKey, storage } = await runAskUserResume(sessionId, options.resumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.verifyResumeId) {
+      const session = await fetchSession(sessionId);
+
+      if (session.taskId) {
+        await mountTaskSkillsToSession(sessionId, session.taskId);
+      }
+
       const { resultContextKey, storage } = await runVerifyResume(sessionId, options.verifyResumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);
     } else if (options.produceKeysResumeId) {
+      const session = await fetchSession(sessionId);
+
+      if (session.taskId) {
+        await mountTaskSkillsToSession(sessionId, session.taskId);
+      }
+
       const { resultContextKey, storage } = await runProduceKeysResume(sessionId, options.produceKeysResumeId);
 
       await publishSessionResult(sessionId, resultContextKey, storage);
@@ -171,32 +255,70 @@ runCommand.action(async options => {
       throw new Error('No task id, resume id, verify resume id, produce-keys resume id, or forkrun id provided');
     }
   } catch (error) {
+    const catchKind = error instanceof AskUserPausedError
+      ? 'AskUserPausedError'
+      : error instanceof VerifyFailedError
+        ? 'VerifyFailedError'
+        : error instanceof VerifyUnavailableError
+          ? 'VerifyUnavailableError'
+          : error instanceof ProduceKeysFailedError
+            ? 'ProduceKeysFailedError'
+            : error instanceof Error
+              ? error.name
+              : 'unknown';
+
+    console.log(`[yahl-diag] catch kind=${catchKind} pid=${process.pid} sessionId=${sessionId}`);
+
     if (error instanceof AskUserPausedError) {
+      skipFinallyTeardown = true;
       await tracker.flush();
-      process.exit(0);
-      return;
+      exitCode = 0;
+    } else if (error instanceof VerifyFailedError) {
+      skipFinallyTeardown = true;
+      await tracker.flush();
+      exitCode = 0;
+    } else if (error instanceof VerifyUnavailableError) {
+      skipFinallyTeardown = true;
+      await tracker.flush();
+      exitCode = 0;
+    } else if (error instanceof ProduceKeysFailedError) {
+      skipFinallyTeardown = true;
+      await tracker.flush();
+      exitCode = 0;
+    } else {
+      console.error('[orchestrator] run failed:', error);
+      exitCode = 1;
+    }
+  } finally {
+    console.log(`[yahl-diag] finally enter pid=${process.pid} exitCode=${exitCode} sessionId=${sessionId}`);
+
+    if (!skipFinallyTeardown) {
+      try {
+        await _shutdownAgent(agentName, sessionId);
+        console.log(`[yahl-diag] finally shutdownAgent done pid=${process.pid} sessionId=${sessionId}`);
+      } catch (shutdownError) {
+        console.error('[orchestrator] shutdownAgent failed:', shutdownError);
+      }
+    } else {
+      console.log(
+        `[yahl-diag] finally skip shutdownAgent pid=${process.pid} sessionId=${sessionId}`,
+      );
     }
 
-    if (error instanceof VerifyFailedError) {
-      await tracker.flush();
-      process.exit(0);
-      return;
+    try {
+      await publisher.close();
+      console.log(`[yahl-diag] finally publisher.close done pid=${process.pid} sessionId=${sessionId}`);
+    } catch {
+      // ignore publisher close errors during teardown
     }
 
-    if (error instanceof ProduceKeysFailedError) {
-      await tracker.flush();
-      process.exit(0);
-      return;
-    }
-
-    console.error('[orchestrator] run failed:', error);
-    process.exitCode = 1;
-    throw error;
+    releaseOrchestratorRunLock(sessionId);
   }
 
-  await _shutdownAgent(agentName, sessionId);
-  await publisher.close();
-  process.exit(0);
+  console.log(`[yahl-diag] exit pid=${process.pid} code=${exitCode} sessionId=${sessionId}`);
+  console.log(`[orchestrator] exit code=${exitCode} sessionId=${sessionId}`);
+
+  process.exit(exitCode);
 });
 
 program.parse();

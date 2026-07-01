@@ -4,9 +4,9 @@ import {
   CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
   AskUserToolCallEnvelope,
-  type ContextScope,
   type SetContextToolCallEnvelope,
 } from "./stage-contract";
+import { parseAskUserBatchToolArguments } from "./ask-user-batch";
 
 export type ChatToolCall = {
   function: {
@@ -59,35 +59,49 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Ask user a structured multiple-choice question. Use this when you need a human decision before continuing.",
+        "Ask the user one or more questions in a single batch. All questions must be answered before the stage continues.",
       name: "ask_user",
       parameters: {
         properties: {
-          allowMultiple: { type: "boolean" },
-          description: { type: "string" },
-          kind: { enum: ["multipleChoice"], type: "string" },
-          maxChoices: { type: "number" },
-          minChoices: { type: "number" },
-          options: {
-            items: {
-              properties: {
-                description: { type: "string" },
-                id: { type: "string" },
-                label: { type: "string" },
-              },
-              required: ["id", "label"],
-              type: "object",
-            },
-            type: "array",
-          },
-          questionRef: {
-            description: 'Registry ref matching /ask-user(<id>) in stage logic, e.g. "1".',
+          batchId: {
+            description: 'Unique id for this question batch, e.g. "stage1_round1".',
             type: "string",
           },
+          description: { type: "string" },
+          questions: {
+            items: {
+              properties: {
+                allowMultiple: { type: "boolean" },
+                description: { type: "string" },
+                kind: { enum: ["text", "multipleChoice"], type: "string" },
+                maxChoices: { type: "number" },
+                minChoices: { type: "number" },
+                options: {
+                  items: {
+                    properties: {
+                      description: { type: "string" },
+                      id: { type: "string" },
+                      label: { type: "string" },
+                    },
+                    required: ["id", "label"],
+                    type: "object",
+                  },
+                  type: "array",
+                },
+                placeholder: { type: "string" },
+                questionRef: { type: "string" },
+                title: { type: "string" },
+              },
+              required: ["questionRef", "kind", "title"],
+              type: "object",
+            },
+            minItems: 1,
+            type: "array",
+          },
           title: { type: "string" },
-          version: { enum: ["askUser.v1"], type: "string" },
+          version: { enum: ["askUserBatch.v1"], type: "string" },
         },
-        required: ["version", "kind", "title", "options", "questionRef"],
+        required: ["version", "batchId", "title", "questions"],
         type: "object",
       },
     },
@@ -180,7 +194,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|extract-knowledge|persist-knowledge|media-to-text|plan, ...) in stage logic. Returns JSON { ok, data } or { ok: false, error }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|extract-knowledge|persist-knowledge|resolve-topic|tidy-knowledge|media-to-text|plan|design-questions, ...) in stage logic. extract-knowledge writes ~/knowledge/{key}.json and returns key/path only — read .extracted from that file. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -195,8 +209,11 @@ export const STAGE_TOOLS = [
               "extract-info",
               "extract-knowledge",
               "persist-knowledge",
+              "resolve-topic",
+              "tidy-knowledge",
               "media-to-text",
               "plan",
+              "design-questions",
             ],
             type: "string",
           },
@@ -207,7 +224,48 @@ export const STAGE_TOOLS = [
     },
     type: "function" as const,
   },
+  {
+    function: {
+      description:
+        "Poll mastermind request activity for the current session stage request. Use for debugging long research calls — do not re-POST while status is queued or running. Returns { ok, agent, queueDepth, request: { status, skill, invocationId, startedAt, updatedAt } }.",
+      name: "mastermind_status",
+      parameters: {
+        properties: {
+          invocationId: {
+            description: "Optional invocation id from a prior mastermind tool response.",
+            type: "string",
+          },
+        },
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
 ];
+
+export const parseMastermindStatusToolArguments = (
+  raw: string,
+): { invocationId?: string } => {
+  if (!raw.trim()) {
+    return {};
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return {};
+  }
+
+  if (!isRecord(parsed)) return {};
+
+  const invocationId = typeof parsed.invocationId === 'string' && parsed.invocationId.trim()
+    ? parsed.invocationId.trim()
+    : undefined;
+
+  return invocationId ? { invocationId } : {};
+};
 
 export const parseMastermindToolArguments = (
   raw: string,
@@ -281,36 +339,4 @@ export const parseBrowserToolArguments = (raw: string): BrowserToolArguments | n
 
 export const parseAskUserToolArguments = (
   raw: string,
-): AskUserToolCallEnvelope["arguments"] | null => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch {
-    return null;
-  }
-  if (!isRecord(parsed)) return null;
-  if (parsed.version !== "askUser.v1" || parsed.kind !== "multipleChoice") return null;
-  if (typeof parsed.title !== "string" || !parsed.title.trim()) return null;
-  if (typeof parsed.questionRef !== "string" || !parsed.questionRef.trim()) return null;
-  if (!Array.isArray(parsed.options) || parsed.options.length < 2) return null;
-  const options = parsed.options
-    .filter((option) => isRecord(option))
-    .map((option) => ({
-      description: typeof option.description === "string" ? option.description : undefined,
-      id: typeof option.id === "string" ? option.id.trim() : "",
-      label: typeof option.label === "string" ? option.label.trim() : "",
-    }))
-    .filter((option) => option.id && option.label);
-  if (options.length < 2) return null;
-  return {
-    allowMultiple: Boolean(parsed.allowMultiple),
-    description: typeof parsed.description === "string" ? parsed.description : undefined,
-    kind: "multipleChoice",
-    maxChoices: typeof parsed.maxChoices === "number" ? parsed.maxChoices : undefined,
-    minChoices: typeof parsed.minChoices === "number" ? parsed.minChoices : undefined,
-    options,
-    questionRef: parsed.questionRef.trim(),
-    title: parsed.title.trim(),
-    version: "askUser.v1",
-  };
-};
+): AskUserToolCallEnvelope["arguments"] | null => parseAskUserBatchToolArguments(raw);

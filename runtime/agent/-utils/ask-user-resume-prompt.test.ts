@@ -4,22 +4,27 @@ import { describe, it } from 'node:test';
 import { buildAskUserResumePrompt } from './ask-user-resume-prompt';
 
 const baseResumeFrom = () => ({
-  answer: {
-    selectedLabels: ['HK Observatory (HKO)'],
-    selectedOptionIds: ['hko'],
+  batch: {
+    batchId: 'round1',
+    questions: [{
+      kind: 'multipleChoice' as const,
+      options: [
+        { id: 'hko', label: '香港天文台 (Hong Kong Observatory)' },
+        { id: 'other', label: 'Other' },
+      ],
+      questionRef: 'hk_region',
+      title: '你想查詢哪個香港地區的天氣？',
+    }],
+    title: 'Region',
+    version: 'askUserBatch.v1' as const,
   },
+  batchAnswers: [{
+    answerValue: 'hko',
+    questionRef: 'hk_region',
+    selectedOptionIds: ['hko'],
+  }],
   modelResponses: [],
   pendingToolCallId: 'tool-1',
-  question: {
-    kind: 'multipleChoice' as const,
-    options: [
-      { id: 'hko', label: '香港天文台 (Hong Kong Observatory)' },
-    ],
-    questionRef: 'hk_region',
-    title: '你想查詢哪個香港地區的天氣？',
-    version: 'askUser.v1' as const,
-  },
-  questionRef: 'hk_region',
   toolCalls: [],
 });
 
@@ -32,29 +37,26 @@ describe('buildAskUserResumePrompt', () => {
     assert.match(prompt, /\*answer_of/);
     assert.match(prompt, /produceContextKeys/);
     assert.match(prompt, /persist-knowledge/);
-    assert.match(prompt, /\*matches against context arrays/);
+    assert.match(prompt, /batchId:/);
   });
 
-  it('includes question, options, and option id answer', () => {
+  it('includes question ref and answer', () => {
     const prompt = buildAskUserResumePrompt(baseResumeFrom());
 
-    assert.match(prompt, /questionRef: "hk_region"/);
-    assert.match(prompt, /answer option id: "hko"/);
+    assert.match(prompt, /questionRef hk_region/);
     assert.match(prompt, /ask_user_hk_region_answer/);
   });
 
-  it('includes custom free-text answer without option id wording', () => {
+  it('includes custom free-text answer', () => {
     const prompt = buildAskUserResumePrompt({
       ...baseResumeFrom(),
-      answer: {
+      batchAnswers: [{
+        answerValue: 'maybe later',
         freeText: 'maybe later',
-        selectedLabels: [],
-        selectedOptionIds: [],
-      },
+        questionRef: 'hk_region',
+      }],
     });
 
-    assert.match(prompt, /custom free-text answer: "maybe later"/);
-    assert.match(prompt, /did not pick a preset option/);
-    assert.doesNotMatch(prompt, /answer option id:/);
+    assert.match(prompt, /custom free-text answer/);
   });
 });

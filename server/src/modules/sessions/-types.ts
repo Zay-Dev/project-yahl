@@ -27,7 +27,7 @@ export type TYahlAskUserOption = {
 };
 
 export type TYahlAskUserEntry = {
-  answer?: number | string;
+  answer?: number | string | string[];
   id: string;
   options?: TYahlAskUserOption[];
   question: string;
@@ -46,6 +46,7 @@ export type TYahlStage = {
   temperature?: number;
   updateContextKeys?: string[];
   verify?: boolean;
+  verifyAutoRetry?: boolean;
   verifyMinScore?: number;
   verifyResume?: boolean;
   verifyRubric?: string;
@@ -89,9 +90,11 @@ export interface IForkSession extends TWithTimestamps {
 export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
   forkedFrom?: TSessionForkedFrom;
+  isBackground?: boolean;
   liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
+  runInput?: Record<string, unknown>;
   sessionId: string;
   result?: unknown;
   taskId?: string;
@@ -105,9 +108,12 @@ export interface IStage extends TWithTimestamps {
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
   finishedAt?: Date;
+  parsedStageIndex?: number;
+  sourceStartLine?: number;
   stage: TYahlStage;
   loopMeta?: TStageLoopMeta;
   temperature?: number;
+  verifyingAt?: Date;
   verifyResult?: {
     feedback: string;
     pass: boolean;
@@ -148,20 +154,23 @@ export type TParsedStageSnapshot = {
   type: 'loop' | 'plain';
 };
 
+export type TAskUserBatchAnswerRecord = {
+  answerValue: number | string | string[];
+  freeText?: string;
+  optionIds?: string[];
+  questionRef: string;
+};
+
 export interface IAskUserQuestion extends TWithTimestamps {
   _id: string;
-  answerIds?: string[];
-  answerLabels?: string[];
-  answeredAt?: Date;
-  askUserId: string;
+  batch?: Record<string, unknown>;
+  batchAnswers?: TAskUserBatchAnswerRecord[];
+  batchId?: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
-  freeText?: string;
   loopMeta?: TStageLoopMeta;
-  question: Record<string, unknown>;
-  questionId: string;
   parsedStageSnapshot?: TParsedStageSnapshot;
-  questionRef: string;
+  questionId: string;
   requestId: string;
   session: string;
   stage: TYahlStage;
@@ -173,9 +182,9 @@ export interface IAskUserQuestion extends TWithTimestamps {
 
 export type TVerifyCheckpointKind = 'produce_keys' | 'verify';
 
-export type TVerifyCheckpointStatus = 'pending' | 'resumed';
+export type TVerifyCheckpointStatus = 'pending' | 'resumed' | 'superseded';
 
-export type TVerifyResumeAction = 'edit_answer' | 'reask' | 'rerun';
+export type TVerifyResumeAction = 'edit_answer' | 'follow_up' | 'reask' | 'rerun';
 
 export interface IVerifyCheckpoint extends TWithTimestamps {
   _id: string;
@@ -197,5 +206,6 @@ export interface IVerifyCheckpoint extends TWithTimestamps {
   stageIndex?: number;
   status: TVerifyCheckpointStatus;
   storageSnapshot: Record<string, unknown>;
+  unavailable?: boolean;
   verifyId: string;
 }

@@ -12,7 +12,17 @@ import { mergeContextPayloadToStorage } from '@/orchestrator/-context';
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { compileStage } from '@/orchestrator/-utils/yahl';
 
-const _parsedStage = (stage: YahlStage) => compileStage(stage, 1);
+import {
+  hasMoreLoopIterations,
+  resolveLoopStageIndex,
+  runPipelineContinuation,
+} from '../pipeline-continuation';
+
+const _resolveLoopStageIndex = (manager: ForkSessionManager) =>
+  resolveLoopStageIndex({}, manager.parsedStages);
+
+const _parsedStage = (stage: YahlStage, sourceStartLine = 1) =>
+  compileStage(stage, sourceStartLine);
 
 export const runForkSetups = async (
   manager: ForkSessionManager,
@@ -21,6 +31,8 @@ export const runForkSetups = async (
 ) => {
   const setups = manager.getSuffixSetups();
   const start = options?.fromSetupIndex ?? 0;
+  const loopStageIndex = _resolveLoopStageIndex(manager);
+  const loopStage = loopStageIndex >= 0 ? manager.parsedStages[loopStageIndex] : undefined;
 
   for (let setupIndex = start; setupIndex < setups.length; setupIndex += 1) {
     const setup = setups[setupIndex]!;
@@ -33,7 +45,9 @@ export const runForkSetups = async (
     }
 
     const stageForRun = resetAskUserStageForRerun(setup.stage);
-    const parsed = _parsedStage(stageForRun);
+    const parsed = setup.loopMeta && loopStage
+      ? _parsedStage(stageForRun, loopStage.sourceStartLine)
+      : _parsedStage(stageForRun);
     const temperature = resolveEffectiveStageTemperature(parsed, {
       loopMeta: setup.loopMeta,
     });
@@ -45,9 +59,31 @@ export const runForkSetups = async (
         setup.loopMeta,
         runYahl,
         temperature,
-        undefined,
+        loopStageIndex >= 0 ? loopStageIndex : undefined,
         setupIndex,
+        loopStageIndex >= 0 ? loopStageIndex : undefined,
+        manager.parsedStages,
       );
+
+      if (hasMoreLoopIterations(setup.loopMeta) && loopStageIndex >= 0) {
+        await runPipelineContinuation({
+          loopStageIndex,
+          position: {
+            kind: 'loopAfterIteration',
+            loopMeta: setup.loopMeta,
+            loopStageIndex,
+          },
+          storage,
+          suffix: {
+            kind: 'forkSetups',
+            forkSessionId: manager.forkSession.forkSessionId,
+            fromSetupIndex: setupIndex + 1,
+          },
+          yahlStages: manager.parsedStages,
+        });
+
+        return;
+      }
 
       continue;
     }

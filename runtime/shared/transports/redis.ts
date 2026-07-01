@@ -43,6 +43,9 @@ const _normalizeContextAfter = (contextAfter: TStorage | Record<string, unknown>
   return contextAfter as { context: Record<string, unknown>; types: Record<string, unknown> };
 };
 
+const _isDisposedConnectionError = (disposed: boolean, reason: string) =>
+  disposed && reason === 'Connection is closed.';
+
 class RedisTransport {
   protected readonly connections: Redis[] = [];
 
@@ -157,9 +160,11 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
       contextAfter,
       executionMeta,
       loopMeta,
+      parsedStageIndex,
       persistedStage,
       resumeFrom,
       skipStageCreate,
+      sourceStartLine,
       systemAppend,
       temperature,
     } = {}) => {
@@ -168,7 +173,9 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
           context: _serializeStorage(context)!,
           executionMeta,
           loopMeta,
+          parsedStageIndex,
           requestId,
+          sourceStartLine,
           stage: persistedStage ?? stage,
           temperature,
         });
@@ -186,8 +193,11 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
         })
       );
 
+      const waitHandlers = this._createWaitForReply(requestId);
+
       return {
-        wait: () => this._waitForReply(requestId),
+        disposeWait: waitHandlers.dispose,
+        wait: waitHandlers.wait,
         getWaitForToolCall: (callback) => this._getWaitForToolCall(requestId, callback),
       }
     }
@@ -210,18 +220,70 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     });
   }
 
-  private async _waitForReply(requestId: string) {
+  private _createWaitForReply(requestId: string) {
     const timeoutSeconds = 60 * 60;
-
     const redis = this.redis.duplicate();
     const replyQueue = _getReplyQueue(requestId);
+    let disposed = false;
 
     this.connections.push(redis);
 
-    await this._drainModelResponses(requestId);
-    await this._brpop(redis, replyQueue, timeoutSeconds);
-    await this._drainModelResponses(requestId);
-    await redis.quit();
+    return {
+      dispose: () => {
+        disposed = true;
+        redis.disconnect();
+      },
+
+      wait: async () => {
+        await this._drainModelResponses(requestId);
+
+        console.log(`[yahl-diag] reply wait start requestId=${requestId} pid=${process.pid}`);
+
+        while (true) {
+          try {
+            const raw = await this._brpop(redis, replyQueue, timeoutSeconds);
+
+            if (raw === 'END') {
+              console.log(`[yahl-diag] reply wait end requestId=${requestId} raw=END pid=${process.pid}`);
+              break;
+            }
+
+            if (raw) {
+              try {
+                const parsed = JSON.parse(raw) as { type?: string; output?: { message?: string } };
+
+                if (parsed.type === 'error') {
+                  throw new Error(parsed.output?.message ?? 'agent stage error');
+                }
+              } catch (error) {
+                if (error instanceof SyntaxError) {
+                  continue;
+                }
+
+                throw error;
+              }
+            }
+          } catch (error: unknown) {
+            const reason = error instanceof Error ? error.message : String(error);
+
+            if (_isDisposedConnectionError(disposed, reason)) {
+              console.log(
+                `[yahl-diag] reply wait disposed requestId=${requestId} pid=${process.pid}`,
+              );
+              return;
+            }
+
+            throw error instanceof Error ? error : new Error(reason);
+          }
+        }
+
+        await this._drainModelResponses(requestId);
+
+        if (!disposed) {
+          await redis.quit();
+        }
+      },
+    };
   }
 
   private _getWaitForToolCall(
@@ -230,11 +292,15 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
   ): ReturnType<Awaited<ReturnType<IPublisher['pushRequest']>>['getWaitForToolCall']> {
     const timeoutSeconds = 60 * 60;
     const redis = this.redis.duplicate();
+    let disposed = false;
 
     this.connections.push(redis);
 
     return {
-      dispose: () => { redis.disconnect() },
+      dispose: () => {
+        disposed = true;
+        redis.disconnect();
+      },
 
       wait: async () => {
         while (true) {
@@ -271,7 +337,13 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
             const reason = error instanceof Error ? error.message : String(error);
 
-            return console.debug('waitForToolCall', { requestId, reason });
+            if (_isDisposedConnectionError(disposed, reason)) {
+              return;
+            }
+
+            console.error('waitForToolCall', { requestId, reason });
+
+            throw error instanceof Error ? error : new Error(reason);
           }
         }
       }

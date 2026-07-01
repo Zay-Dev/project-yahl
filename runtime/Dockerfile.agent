@@ -1,6 +1,7 @@
 FROM node:22
 
 ARG OMNIFLEX_APP_DIR=project-yahl
+ARG PLAYWRIGHT_VERSION=1.60.0
 
 WORKDIR /omniflex
 
@@ -8,19 +9,23 @@ RUN corepack enable
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends xvfb x11vnc \
-  && rm -rf /var/lib/apt/lists/* \
-  && npx playwright install-deps chromium \
-  && npx playwright install chromium
+  && rm -rf /var/lib/apt/lists/*
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+
+RUN npx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
+  && npx playwright@${PLAYWRIGHT_VERSION} install chromium
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY ${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/
+COPY ${OMNIFLEX_APP_DIR}/shared/package.json ./${OMNIFLEX_APP_DIR}/shared/
 COPY ${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
 
 RUN pnpm install --frozen-lockfile --filter @project-yahl/runtime...
 
-WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/runtime
+COPY ${OMNIFLEX_APP_DIR}/shared ./${OMNIFLEX_APP_DIR}/shared
 
-ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/runtime
 
 COPY ${OMNIFLEX_APP_DIR}/runtime/agent ./agent
 COPY ${OMNIFLEX_APP_DIR}/runtime/orchestrator ./orchestrator

@@ -5,7 +5,7 @@ export type YahlAskUserOption = {
 };
 
 export type YahlAskUserEntry = {
-  answer?: number | string;
+  answer?: number | string | string[];
   id: string;
   options?: YahlAskUserOption[];
   question: string;
@@ -24,6 +24,7 @@ export interface YahlStage {
   temperature?: number;
   updateContextKeys?: string[];
   verify?: boolean;
+  verifyAutoRetry?: boolean;
   verifyMinScore?: number;
   verifyResume?: boolean;
   verifyRubric?: string;
@@ -38,6 +39,18 @@ const isStringArray = (value: unknown): value is string[] =>
 const isAskUserId = (value: unknown): value is number | string =>
   typeof value === "number" && Number.isFinite(value)
   || typeof value === "string" && value.trim().length > 0;
+
+const isAskUserAnswer = (value: unknown): value is number | string | string[] => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return true;
+  }
+
+  if (typeof value === "string") {
+    return true;
+  }
+
+  return isStringArray(value) && value.length > 0;
+};
 
 const validateAskUserEntry = (
   raw: unknown,
@@ -57,10 +70,8 @@ const validateAskUserEntry = (
     throw new Error(`${label}.question: required non-empty string`);
   }
 
-  if (entry.answer !== undefined
-    && typeof entry.answer !== "number"
-    && typeof entry.answer !== "string") {
-    throw new Error(`${label}.answer: must be a number or string when present`);
+  if (entry.answer !== undefined && !isAskUserAnswer(entry.answer)) {
+    throw new Error(`${label}.answer: must be a number, string, or non-empty string array when present`);
   }
 
   if (entry.options !== undefined) {
@@ -88,7 +99,9 @@ const validateAskUserEntry = (
   return {
     id: String(entry.id).trim(),
     question: entry.question.trim(),
-    ...(entry.answer !== undefined ? { answer: entry.answer } : {}),
+    ...(entry.answer !== undefined
+      ? { answer: entry.answer as number | string | string[] }
+      : {}),
     ...(Array.isArray(entry.options)
       ? {
         options: entry.options.map((option) => {
@@ -200,6 +213,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     ...(isStringArray(stage.produceContextKeys) ? { produceContextKeys: stage.produceContextKeys } : {}),
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
     ...(stage.verify === true ? { verify: true } : {}),
+    ...(stage.verifyAutoRetry === true ? { verifyAutoRetry: true } : {}),
     ...(stage.verifyMinScore !== undefined ? { verifyMinScore: Number(stage.verifyMinScore) } : {}),
     ...(stage.verifyResume === false ? { verifyResume: false } : {}),
     ...(typeof stage.verifyRubric === 'string' ? { verifyRubric: stage.verifyRubric.trim() } : {}),

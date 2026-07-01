@@ -30,8 +30,8 @@ export function TaskCreatePage() {
     <div className="flex flex-col gap-4 rounded-xl bg-muted/50 p-4">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-lg font-semibold">New task</h1>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/tasks">Back to tasks</Link>
+        <Button render={<Link to="/tasks" />} size="sm" variant="outline">
+          Back to tasks
         </Button>
       </div>
 

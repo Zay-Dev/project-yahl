@@ -13,6 +13,7 @@
     "build": "tsc && tsc-alias",
     "dev": "tsx src/index.ts",
     "start": "node dist/src/index.js",
+    "test": "tsx --test \"src/**/*.test.ts\" \"contract/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

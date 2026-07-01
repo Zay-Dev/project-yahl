@@ -10,6 +10,11 @@ export type TResumeStage = {
   stage: ParsedStage;
 };
 
+export type TVerifyFastForward = {
+  feedback: string;
+  score: number;
+};
+
 export type TRunYahl = (
   yahl: string,
   options?: {
@@ -18,13 +23,17 @@ export type TRunYahl = (
     forkSetupIndex?: number;
     loopMeta?: TLoopMeta;
     resumeStage?: TResumeStage;
+    recoveryStages?: ParsedStage[];
     stages?: ParsedStage[];
+    parsedStageIndex?: number;
     pipelineStageIndex?: number;
     produceKeysResumeAttempt?: boolean;
     startFromStageIndex?: number;
     systemAppend?: string;
+    runInput?: Record<string, unknown>;
     temperature?: number;
     useStorage?: () => TStorage;
+    verifyFastForward?: TVerifyFastForward;
   },
 ) => Promise<{
   storage: TStorage;

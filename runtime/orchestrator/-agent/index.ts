@@ -6,12 +6,22 @@ import type { TStorage } from '@/shared/transports/-types';
 
 import { toAgentStage } from '@/shared/yahl-stage';
 
-import { parseYahlFile } from '@/orchestrator/-utils/yahl';
+import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
+import { seedRunInputContext } from '@/orchestrator/-context/default-context';
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
-import { runVerifyGate, VerifyFailedError } from '@/orchestrator/-verify';
+import { runVerifyGate, isVerifyRubricFailure } from '@/orchestrator/-verify';
+import {
+  applyVerifyRecoveryToStorage,
+  buildVerifyRecoverySystemAppend,
+  parsedStagesMatchSlot,
+  resolveActiveStageForVerifyRecoveryBound,
+  shouldRotateRequestIdForBoundStage,
+  stripProduceKeysFromStorage,
+  verifyAutoRetryMaxIterations,
+} from '@/orchestrator/-verify/resume-helpers';
 
 import {
   applySetContextToolCall,
@@ -63,6 +73,14 @@ class YahlAgentRunner {
 
   private pipelineStageIndex = 0;
 
+  private boundParsedStageIndex = 0;
+
+  private boundStage!: ParsedStage;
+
+  private boundSourceStartLine = 0;
+
+  private stageDocSourceStartLine?: number;
+
   private temperature: number | undefined;
 
   constructor(
@@ -73,9 +91,26 @@ class YahlAgentRunner {
     }: TRunYahlOptions = {},
   ) {
     this.storage = useStorage();
+    const runInputContextKeys = yahl.trim()
+      ? parseYahlDocument(yahl).runInput
+      : undefined;
+
+    seedRunInputContext(
+      this.storage,
+      options.runInput,
+      runInputContextKeys,
+    );
     this.options = options;
     this.startIndex = options.startFromStageIndex ?? 0;
-    this.stages = options.stages ?? parseYahlFile(yahl);
+
+    if (options.stages?.length) {
+      this.stages = options.stages;
+    } else if (yahl.trim()) {
+      this.stages = parseYahlFile(yahl);
+    } else {
+      throw new Error('runYahl: yahl text or options.stages is required');
+    }
+
     this.sessionId = globalThis.sessionId;
     this.agentName = `agent-${this.sessionId}`;
   }
@@ -104,11 +139,12 @@ class YahlAgentRunner {
           runYahl,
           this.temperature,
           this.pipelineStageIndex,
+          this.options.recoveryStages ?? this.stages,
         );
         continue;
       }
 
-      this.resetStageContext(stage, isResumingThisStage);
+      this.resetStageContext(stage, stageIndex, isResumingThisStage);
       await this.runOneStage();
     }
 
@@ -117,12 +153,25 @@ class YahlAgentRunner {
     };
   }
 
-  private resetStageContext(stage: ParsedStage, isResumingThisStage: boolean) {
+  private resetStageContext(
+    stage: ParsedStage,
+    parsedStageIndex: number,
+    isResumingThisStage: boolean,
+  ) {
     this.resumeStage = isResumingThisStage
       ? this.options.resumeStage
       : undefined;
 
-    this.activeStage = this.resumeStage?.stage ?? stage;
+    this.boundParsedStageIndex = this.options.parsedStageIndex ?? parsedStageIndex;
+    this.boundStage = stage;
+    this.boundSourceStartLine = stage.sourceStartLine;
+    this.stageDocSourceStartLine = undefined;
+
+    const resumedStage = this.resumeStage?.stage;
+
+    this.activeStage = resumedStage && parsedStagesMatchSlot(resumedStage, this.boundStage)
+      ? resumedStage
+      : this.boundStage;
 
     this.filteredStorage = filterStorageForStage(
       this.storage,
@@ -134,6 +183,7 @@ class YahlAgentRunner {
     this.systemAppendParts = [];
     this.requestId = this.resumeStage?.requestId ?? randomUUID();
     this.produceKeysAttempt = 0;
+    this.verifyRetryAttempt = 0;
 
     if (this.options.systemAppend) {
       this.systemAppendParts.push(this.options.systemAppend);
@@ -235,16 +285,22 @@ class YahlAgentRunner {
     const skipStageCreate = this.produceKeysAttempt > 0 || Boolean(this.resumeStage);
     const systemAppend = this.systemAppendParts.filter(Boolean).join('\n\n') || undefined;
 
-    const { wait, getWaitForToolCall } = await publisher.pushRequest(
+    if (!skipStageCreate) {
+      this.stageDocSourceStartLine = this.activeStage.sourceStartLine;
+    }
+
+    const { disposeWait, wait, getWaitForToolCall } = await publisher.pushRequest(
       this.filteredStorage,
       toAgentStage(stageSpec),
       this.requestId,
       {
         contextAfter: this.options.contextAfter,
         loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
+        parsedStageIndex: this.boundParsedStageIndex,
         persistedStage: stageSpec,
         resumeFrom: this.resumeStage?.resumeFrom,
         skipStageCreate,
+        sourceStartLine: this.boundSourceStartLine,
         systemAppend,
         temperature: this.temperature,
       },
@@ -323,12 +379,29 @@ class YahlAgentRunner {
       }, 50);
     });
 
-    toolCallHandlers.wait();
+    const toolCallPromise = toolCallHandlers.wait();
+    const waitStartedAt = Date.now();
+
+    console.log(`[orchestrator] stage wait start requestId=${this.requestId}`);
+    console.log(
+      `[yahl-diag] race start requestId=${this.requestId} resumeStage=${Boolean(this.options.resumeStage)} pid=${process.pid}`,
+    );
 
     try {
       await Promise.race([wait(), pausePromise]);
     } catch (error) {
+      disposeWait();
       toolCallHandlers.dispose();
+      await toolCallPromise.catch(() => {});
+
+      const errorName = error instanceof Error ? error.name : 'unknown';
+
+      console.log(
+        `[orchestrator] stage wait end requestId=${this.requestId} durationMs=${Date.now() - waitStartedAt} outcome=error`,
+      );
+      console.log(
+        `[yahl-diag] race error requestId=${this.requestId} errorName=${errorName} pid=${process.pid}`,
+      );
 
       if (error instanceof AskUserPausedError) {
         throw error;
@@ -338,44 +411,129 @@ class YahlAgentRunner {
     }
 
     toolCallHandlers.dispose();
+    await toolCallPromise.catch(() => {});
+
+    console.log(
+      `[orchestrator] stage wait end requestId=${this.requestId} durationMs=${Date.now() - waitStartedAt} outcome=ok`,
+    );
+    console.log(`[yahl-diag] race ok requestId=${this.requestId} pid=${process.pid}`);
 
     if (this.options.resumeStage) {
       this.options.resumeStage = undefined;
     }
   }
 
+  private verifyRetryAttempt = 0;
+
+  private isPrefixFastForwardMode() {
+    return Boolean(this.options.verifyFastForward && this.options.contextAfter);
+  }
+
   private async runOneStage() {
-    await this.withPlanMode(async () => {
-      while (true) {
-        await this.runStageAttempt();
+    const maxVerifyRetries = verifyAutoRetryMaxIterations();
+    const verifyAutoRetry = this.activeStage.spec.verifyAutoRetry === true;
 
-        if ((await this.resolveProduceKeysRetry()) === 'break') {
-          break;
+    while (true) {
+      await this.withPlanMode(async () => {
+        if (this.isPrefixFastForwardMode()) {
+          await this.runStageAttempt();
+          return;
         }
-      }
-    });
 
-    const finishContextAfter = this.options.contextAfterRecord ?? this.storage;
+        while (true) {
+          await this.runStageAttempt();
 
-    try {
-      await runVerifyGate({
+          if ((await this.resolveProduceKeysRetry()) === 'break') {
+            break;
+          }
+        }
+      });
+
+      const finishContextAfter = this.options.contextAfterRecord ?? this.storage;
+
+      console.log(
+        `[yahl-diag] verify gate start requestId=${this.requestId} stageIndex=${this.pipelineStageIndex} pid=${process.pid}`,
+      );
+
+      const verifyResult = await runVerifyGate({
         agentName: this.agentName,
         pipelineStageIndex: this.pipelineStageIndex,
         requestId: this.requestId,
         sessionId: this.sessionId,
         stage: this.activeStage,
         storage: this.storage,
+        shutdownOnFail: !verifyAutoRetry || this.verifyRetryAttempt >= maxVerifyRetries,
+        throwOnFail: !verifyAutoRetry || this.verifyRetryAttempt >= maxVerifyRetries,
+        verifyFastForward: this.options.verifyFastForward,
       });
-    } catch (error) {
-      if (error instanceof VerifyFailedError) {
-        throw error;
+
+      if (verifyResult.pass) {
+        if (!parsedStagesMatchSlot(this.activeStage, this.boundStage)) {
+          throw new Error(
+            `stage slot integrity: activeStage sourceStartLine=${this.activeStage.sourceStartLine} ` +
+            `does not match bound stage sourceStartLine=${this.boundSourceStartLine}`,
+          );
+        }
+
+        console.log(`[yahl-diag] stage finish emit requestId=${this.requestId} pid=${process.pid}`);
+
+        publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
+        await globalThis.sessionTracker?.flush?.();
+        return;
       }
 
-      throw error;
-    }
+      if (!verifyAutoRetry || this.verifyRetryAttempt >= maxVerifyRetries) {
+        return;
+      }
 
-    publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
-    await globalThis.sessionTracker?.flush?.();
+      if (!isVerifyRubricFailure(verifyResult)) {
+        return;
+      }
+
+      this.verifyRetryAttempt += 1;
+
+      const resumeAction = verifyResult.resumeAction ?? 'rerun';
+
+      applyVerifyRecoveryToStorage({
+        askUserRef: verifyResult.askUserRef,
+        feedback: verifyResult.feedback,
+        resumeAction,
+        storage: this.storage,
+      });
+
+      stripProduceKeysFromStorage(this.storage, this.activeStage);
+
+      this.activeStage = resolveActiveStageForVerifyRecoveryBound({
+        askUserRef: verifyResult.askUserRef,
+        boundParsedStageIndex: this.boundParsedStageIndex,
+        boundStage: this.boundStage,
+        checkpointStage: this.activeStage.spec,
+        resumeAction,
+        yahlStages: this.options.recoveryStages ?? this.stages,
+      });
+
+      if (shouldRotateRequestIdForBoundStage(this.stageDocSourceStartLine, this.boundSourceStartLine)) {
+        this.requestId = randomUUID();
+        this.stageDocSourceStartLine = undefined;
+      }
+
+      this.filteredStorage = filterStorageForStage(
+        this.storage,
+        this.activeStage.lines,
+        this.activeStage,
+        this.options.loopMeta?.indexName,
+      );
+
+      this.resumeStage = undefined;
+      this.produceKeysAttempt = 0;
+      this.systemAppendParts.push(buildVerifyRecoverySystemAppend({
+        feedback: verifyResult.feedback,
+        produceContextKeys: this.activeStage.produceContextKeys ?? this.activeStage.spec.produceContextKeys,
+        resumeAction,
+        score: verifyResult.score,
+        updateContextKeys: this.activeStage.updateContextKeys ?? this.activeStage.spec.updateContextKeys,
+      }));
+    }
   }
 }
 

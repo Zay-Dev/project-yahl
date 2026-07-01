@@ -16,10 +16,7 @@ stages:
 
       (() => ({draft}))
 
-  - askUser:
-      - id: target_metric
-        question: What numeric target metric (1-100) should this report use?
-    contextKeys: [draft]
+  - contextKeys: [draft]
     produceContextKeys: [draft_with_metric]
     verify: true
     verifyMinScore: 0.75

@@ -69,9 +69,15 @@ export const updateTask = async (taskId: string, yahl: string) => {
   return parseData(json);
 };
 
-export const createRun = async (taskId: string) => {
+export const createRun = async (
+  taskId: string,
+  runInput?: Record<string, string>,
+) => {
   const res = await fetch(runsBase, {
-    body: JSON.stringify({ taskId }),
+    body: JSON.stringify({
+      taskId,
+      ...(runInput && Object.keys(runInput).length > 0 ? { runInput } : {}),
+    }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
   });

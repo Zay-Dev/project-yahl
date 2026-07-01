@@ -19,8 +19,13 @@ export function TasksPage() {
 
   const tasks = result.data ?? [];
 
-  const runTask = async (taskId: string) => {
-    const run = await createRun(taskId);
+  const runTask = async (task: TResponseTaskListItem) => {
+    if (task.runInputKeys?.length) {
+      navigate(`/tasks/${encodeURIComponent(task.taskId)}`);
+      return;
+    }
+
+    const run = await createRun(task.taskId);
 
     navigate(`/sessions/${encodeURIComponent(run.sessionId)}`);
   };
@@ -29,8 +34,8 @@ export function TasksPage() {
     <div className="rounded-xl bg-muted/50 p-4">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">YAHL tasks from server/tasks</p>
-        <Button asChild size="sm">
-          <Link to="/tasks/new">New task</Link>
+        <Button render={<Link to="/tasks/new" />} size="sm">
+          New task
         </Button>
       </div>
       <div className="mt-4 overflow-hidden rounded-lg border">
@@ -57,11 +62,15 @@ export function TasksPage() {
                 <td className="p-3">{task.description || "—"}</td>
                 <td className="p-3">
                   <div className="flex gap-2">
-                    <Button onClick={() => void runTask(task.taskId)} size="sm">
+                    <Button onClick={() => void runTask(task)} size="sm">
                       Run
                     </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link to={`/tasks/${encodeURIComponent(task.taskId)}`}>Edit</Link>
+                    <Button
+                      render={<Link to={`/tasks/${encodeURIComponent(task.taskId)}`} />}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Edit
                     </Button>
                   </div>
                 </td>

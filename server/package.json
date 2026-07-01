@@ -45,6 +45,14 @@
       "import": [
         "./dist/src/modules/tasks/-api-types.js"
       ]
+    },
+    "./modules/platform/-api-types": {
+      "development": [
+        "./src/modules/platform/-api-types.ts"
+      ],
+      "import": [
+        "./dist/src/modules/platform/-api-types.js"
+      ]
     }
   },
   "scripts": {
@@ -80,6 +88,7 @@
     "@omni-infra/express": "workspace:*",
     "@omni-infra/logger-winston": "workspace:*",
     "@omni-infra/mongoose": "workspace:*",
+    "@project-yahl/shared": "workspace:*",
     "awilix": "^13.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

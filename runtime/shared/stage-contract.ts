@@ -1,3 +1,6 @@
+import { parseAskUserBatchToolArguments } from './ask-user-batch';
+
+import type { AskUserBatchToolArguments } from './ask-user-batch';
 import type { YahlStage } from "./yahl-stage";
 
 export const CONTEXT_SCOPES = ["global", "types"] as const;
@@ -42,21 +45,7 @@ export type SetContextToolCallEnvelope = {
 };
 
 export type AskUserToolCallEnvelope = {
-  arguments: {
-    allowMultiple?: boolean;
-    description?: string;
-    kind: "multipleChoice";
-    maxChoices?: number;
-    minChoices?: number;
-    options: {
-      description?: string;
-      id: string;
-      label: string;
-    }[];
-    questionRef: string;
-    title: string;
-    version: "askUser.v1";
-  };
+  arguments: AskUserBatchToolArguments;
   tool: "ask_user";
   type: "tool_call";
 };
@@ -87,35 +76,17 @@ const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
 
   if (
     item.tool === "ask_user" &&
-    typeof parsedArgs.version === "string" &&
-    parsedArgs.version === "askUser.v1" &&
-    parsedArgs.kind === "multipleChoice" &&
+    parsedArgs.version === "askUserBatch.v1" &&
+    typeof parsedArgs.batchId === "string" &&
     typeof parsedArgs.title === "string" &&
-    typeof parsedArgs.questionRef === "string" &&
-    Array.isArray(parsedArgs.options)
+    Array.isArray(parsedArgs.questions)
   ) {
+    const batch = parseAskUserBatchToolArguments(JSON.stringify(parsedArgs));
+
+    if (!batch) return null;
+
     return {
-      arguments: {
-        allowMultiple: Boolean(parsedArgs.allowMultiple),
-        description:
-          typeof parsedArgs.description === "string" ? parsedArgs.description : undefined,
-        kind: "multipleChoice",
-        maxChoices:
-          typeof parsedArgs.maxChoices === "number" ? parsedArgs.maxChoices : undefined,
-        minChoices:
-          typeof parsedArgs.minChoices === "number" ? parsedArgs.minChoices : undefined,
-        options: parsedArgs.options
-          .filter((option) => option && typeof option === "object")
-          .map((option: any) => ({
-            description: typeof option.description === "string" ? option.description : undefined,
-            id: String(option.id || ""),
-            label: String(option.label || ""),
-          }))
-          .filter((option) => option.id && option.label),
-        questionRef: parsedArgs.questionRef.trim(),
-        title: parsedArgs.title,
-        version: "askUser.v1",
-      },
+      arguments: batch,
       tool: "ask_user",
       type: "tool_call",
     };

@@ -5,7 +5,7 @@ import type { TModelResponseTag } from '../model-response-tags.js';
 import { EventEmitter } from 'events';
 
 import type { StageExecutionMeta } from '../transport';
-import type { AskUserToolCallEnvelope } from '../stage-contract';
+import type { AskUserBatchToolArguments } from '../ask-user-batch';
 import type { YahlStage } from '../yahl-stage';
 
 export type TModelResponse = OpenAI.Chat.Completions.ChatCompletion & {
@@ -47,16 +47,19 @@ export type TToolCallResult = {
   newStorage?: TStorage;
 };
 
+export type TAskUserBatchResumeAnswer = {
+  answerValue: number | string | string[];
+  freeText?: string;
+  questionRef: string;
+  selectedLabels?: string[];
+  selectedOptionIds?: string[];
+};
+
 export type TAskUserResumeFrom = {
-  answer: {
-    freeText?: string;
-    selectedLabels: string[];
-    selectedOptionIds: string[];
-  };
+  batch: AskUserBatchToolArguments;
+  batchAnswers: TAskUserBatchResumeAnswer[];
   modelResponses: TModelResponse[];
   pendingToolCallId: string;
-  question: AskUserToolCallEnvelope['arguments'];
-  questionRef: string;
   toolCalls: TChatToolCall[];
 };
 
@@ -76,9 +79,11 @@ interface IPublisherEventMap {
   pushRequest: [envelope: {
     context: TNormalizedStorage;
     executionMeta?: StageExecutionMeta;
-    stage: YahlStage;
-    requestId: string;
     loopMeta?: TLoopMeta;
+    parsedStageIndex?: number;
+    requestId: string;
+    sourceStartLine?: number;
+    stage: YahlStage;
     temperature?: number;
   }];
   stageFinish: [envelope: { contextAfter: TNormalizedStorage; requestId: string }];
@@ -112,18 +117,21 @@ export interface IPublisher extends IBase {
       contextAfter?: TStorage | undefined,
       executionMeta?: StageExecutionMeta,
       loopMeta?: TLoopMeta | undefined,
+      parsedStageIndex?: number,
       persistedStage?: YahlStage,
       resumeFrom?: TAskUserResumeFrom,
       skipStageCreate?: boolean,
+      sourceStartLine?: number,
       systemAppend?: string,
       temperature?: number,
     },
   ) => Promise<{
+    disposeWait: () => void;
     wait: () => Promise<void>,
     getWaitForToolCall: (
       callback: (toolCall: TChatToolCall) => Promise<TToolCallResult>
     ) => {
-      wait: () => unknown;
+      wait: () => Promise<void>;
       dispose: () => void;
     },
   }>;

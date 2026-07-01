@@ -20,7 +20,9 @@ export type TRequestStageParams = TRequestSessionParams & {
 export type TRequestCreateStageBody = {
   context: Record<string, unknown>;
   loopMeta?: TStageLoopMeta;
+  parsedStageIndex?: number;
   requestId: string;
+  sourceStartLine?: number;
   stage: TYahlStage;
   temperature?: number;
 };
@@ -52,7 +54,9 @@ const loopMetaSchema = Joi.object({
 const createStageBodySchema = Joi.object<TRequestCreateStageBody>({
   context: Joi.object().required(),
   loopMeta: loopMetaSchema.optional(),
+  parsedStageIndex: Joi.number().integer().min(0).optional(),
   requestId: Joi.string().trim().required(),
+  sourceStartLine: Joi.number().integer().min(1).optional(),
   stage: yahlStageSchema.required(),
   temperature: Joi.number().optional(),
 });
@@ -98,6 +102,8 @@ export const createStage = [
           $set: {
             context: body.context,
             loopMeta: body.loopMeta,
+            ...(body.parsedStageIndex === undefined ? {} : { parsedStageIndex: body.parsedStageIndex }),
+            ...(body.sourceStartLine === undefined ? {} : { sourceStartLine: body.sourceStartLine }),
             stage: body.stage,
             session: sessionRef,
             ...(temperature === undefined ? {} : { temperature }),
@@ -109,6 +115,7 @@ export const createStage = [
           $unset: {
             contextAfter: '',
             finishedAt: '',
+            verifyingAt: '',
           },
         },
         { upsert: true },
@@ -146,6 +153,9 @@ export const patchStage = [
             contextAfter: body.contextAfter,
             finishedAt: now,
             updatedAt: now,
+          },
+          $unset: {
+            verifyingAt: '',
           },
         },
       );

@@ -13,8 +13,21 @@ stages:
       (() => ({}))`);
 
     assert.deepEqual(metadata, {
+      background: false,
       description: 'Does a thing',
       name: 'Demo task',
     });
+  });
+
+  it('reads background true from yahl front matter', () => {
+    const metadata = parseTaskMetadata(`name: Tidy
+description: Background tidy
+background: true
+
+stages:
+  - logic: |
+      (() => ({}))`);
+
+    assert.equal(metadata.background, true);
   });
 });

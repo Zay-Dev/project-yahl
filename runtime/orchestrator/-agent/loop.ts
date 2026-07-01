@@ -16,6 +16,30 @@ export const resolveLoopIndexName = (
   ?? loopIndexNameFromLines(stage.spec.loopSetup ?? '')
   ?? loopIndexNameFromLines(stage.lines);
 
+const resolveContextPath = (storage: TStorage, path: string): unknown => {
+  const segments = path.split('.');
+  let current: unknown = undefined;
+
+  for (const segment of segments) {
+    if (!segment) {
+      return undefined;
+    }
+
+    if (current === undefined) {
+      current = storage.context.get(segment);
+      continue;
+    }
+
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return undefined;
+    }
+
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return current;
+};
+
 const _parseLoop = (yahl: string, storage: TStorage) => {
   const matchMeta = yahl.match(/^\s*for each (\w+) of (\[.*\])/i);
 
@@ -52,11 +76,11 @@ const _parseLoop = (yahl: string, storage: TStorage) => {
       };
     }
 
-    const matchArray = arrayName.match(/\[(\w+)(,[+-]?(\d+))?\]/);
+    const matchArray = arrayName.match(/\[([\w.]+)(,[+-]?(\d+))?\]/);
 
     if (matchArray) {
       const arrayNameInner = matchArray[1];
-      const array = storage.context.get(arrayNameInner);
+      const array = resolveContextPath(storage, arrayNameInner);
 
       if (!array || !Array.isArray(array)) return null;
 
@@ -73,7 +97,11 @@ const _parseLoop = (yahl: string, storage: TStorage) => {
 
   if (!loopSetup) return null;
 
-  const { startAt, endAfter, step } = loopSetup;
+  const { startAt, endAfter, step, array } = loopSetup;
+
+  if (!array.length) {
+    return { array, empty: true, endAfter, indexName, startAt, step };
+  }
 
   if (startAt > endAfter && step > 0) {
     throw new Error(`Invalid range: ${startAt}..${endAfter}, step ${step}`);
@@ -92,6 +120,8 @@ export const runLoopIteration = async (
   temperature?: number,
   pipelineStageIndex?: number,
   forkSetupIndex?: number,
+  parsedStageIndex?: number,
+  recoveryStages?: ParsedStage[],
 ) => {
   const indexName = resolveLoopIndexName(stage, loopMeta);
 
@@ -134,6 +164,8 @@ export const runLoopIteration = async (
       stages: [toLoopIterationStage(stage, stage.spec.logic)],
       temperature,
       ...(pipelineStageIndex === undefined ? {} : { pipelineStageIndex }),
+      ...(parsedStageIndex === undefined ? {} : { parsedStageIndex }),
+      ...(recoveryStages === undefined ? {} : { recoveryStages }),
       useStorage: () => ({
         context: new Map(Object.entries(stageInput)),
         types: storage.types,
@@ -165,6 +197,7 @@ export const handleLoop = async (
   runner: TRunYahl,
   temperature?: number,
   pipelineStageIndex?: number,
+  recoveryStages?: ParsedStage[],
 ) => {
   const loopSetup = _parseLoop(stage.lines, storage);
 
@@ -173,7 +206,12 @@ export const handleLoop = async (
     throw new Error("Invalid loop setup occurred in the above stage");
   }
 
+  if ('empty' in loopSetup && loopSetup.empty) {
+    return;
+  }
+
   const { indexName, startAt, endAfter, step, array } = loopSetup;
+
   let i = startAt;
 
   while (step >= 0 ? i <= endAfter : i >= endAfter) {
@@ -187,7 +225,68 @@ export const handleLoop = async (
       value: currentValue,
     };
 
-    await runLoopIteration(stage, storage, loopMeta, runner, temperature, pipelineStageIndex);
+    await runLoopIteration(
+      stage,
+      storage,
+      loopMeta,
+      runner,
+      temperature,
+      pipelineStageIndex,
+      undefined,
+      pipelineStageIndex,
+      recoveryStages,
+    );
+
+    i += step;
+  }
+};
+
+export const resumeLoopFromCheckpoint = async (
+  stage: ParsedStage,
+  storage: TStorage,
+  completedLoopMeta: TLoopMeta,
+  runner: TRunYahl,
+  temperature?: number,
+  pipelineStageIndex?: number,
+  parsedStageIndex?: number,
+  recoveryStages?: ParsedStage[],
+) => {
+  const loopSetup = _parseLoop(stage.lines, storage);
+
+  if (!loopSetup) {
+    console.error(stage.lines);
+    throw new Error('Invalid loop setup occurred in the above stage');
+  }
+
+  if ('empty' in loopSetup && loopSetup.empty) {
+    return;
+  }
+
+  const { indexName, startAt, endAfter, step, array } = loopSetup;
+  let i = completedLoopMeta.index + step;
+
+  while (step >= 0 ? i <= endAfter : i >= endAfter) {
+    const currentValue = array ? array[i] || null : i;
+
+    const loopMeta = {
+      arraySnapshot: array ? JSON.parse(JSON.stringify(array)) : completedLoopMeta.arraySnapshot,
+      index: i,
+      indexName: completedLoopMeta.indexName ?? indexName,
+      temperature: temperature ?? completedLoopMeta.temperature,
+      value: currentValue,
+    };
+
+    await runLoopIteration(
+      stage,
+      storage,
+      loopMeta,
+      runner,
+      temperature,
+      pipelineStageIndex,
+      undefined,
+      parsedStageIndex,
+      recoveryStages,
+    );
 
     i += step;
   }

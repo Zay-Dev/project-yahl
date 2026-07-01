@@ -1,5 +1,6 @@
 import type {
   TRequestCreateForkSessionBody,
+  TResponseAskUserQuestionDetail,
   TResponseAskUserQuestionListItem,
   TResponseCreateForkSession,
   TResponseDeleteSession,
@@ -58,15 +59,23 @@ export const fetchPendingAskUserQuestions = async (sessionId: string) => {
   return parseJson<TResponseAskUserQuestionListItem[]>(response);
 };
 
-export const submitAskUserAnswer = async (
+export const fetchAskUserQuestion = async (sessionId: string, questionId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    `/ask-user/questions/${encodeURIComponent(questionId)}`;
+  const response = await fetch(url);
+
+  return parseJson<TResponseAskUserQuestionDetail>(response);
+};
+
+export const submitAskUserBatchAnswer = async (
   sessionId: string,
-  questionId: string,
-  body: { freeText?: string; optionIds?: string[] },
+  batchId: string,
+  answers: { freeText?: string; optionIds?: string[]; questionRef: string }[],
 ) => {
   const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
-    `/ask-user/questions/${encodeURIComponent(questionId)}/answer`;
+    `/ask-user/batches/${encodeURIComponent(batchId)}/answer`;
   const response = await fetch(url, {
-    body: JSON.stringify(body),
+    body: JSON.stringify({ answers }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   });

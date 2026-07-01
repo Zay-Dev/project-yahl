@@ -9,6 +9,7 @@ import { AskUserQuestionDialog } from "@/pages/sessions/components/ask-user-ques
 import { SessionJsonFallback } from "@/pages/sessions/components/session-json-fallback";
 import { SessionOverview } from "@/pages/sessions/components/session-overview";
 import { SessionResult } from "@/pages/sessions/components/session-result";
+import { SessionStuckBanner } from "@/pages/sessions/components/session-stuck-banner";
 import { SessionTimeline } from "@/pages/sessions/components/session-timeline";
 import { useAskUserQuestions } from "@/pages/sessions/hooks/use-ask-user-questions";
 import { useSessionEventsStream } from "@/pages/sessions/hooks/use-session-events-stream";
@@ -64,17 +65,19 @@ export function SessionDetailPage() {
     sessionId: id ?? '',
   });
 
-  const {
-    pendingCheckpoint,
-    refetch: refetchVerifyCheckpoints,
-  } = useVerifyCheckpoints({
-    lastEvent,
-    sessionId: id ?? '',
-  });
-
   const session = result;
   const error = query.error;
   const isLoading = query.isLoading;
+
+  const {
+    bannerState,
+    refetch: refetchVerifyCheckpoints,
+  } = useVerifyCheckpoints({
+    lastEvent,
+    session: session ?? null,
+    sessionId: id ?? '',
+    stages,
+  });
 
   if (!id) {
     return <div className="rounded-xl bg-muted/50 p-4">Missing session id.</div>;
@@ -97,13 +100,16 @@ export function SessionDetailPage() {
       {session ? (
         <>
           <SessionOverview session={session} />
+          <SessionStuckBanner session={session} />
           <AskUserPendingBanner
             onOpenQuestion={openQuestion}
             questions={pendingQuestions}
           />
-          {pendingCheckpoint ? (
+          {bannerState ? (
             <VerifyPendingBanner
-              checkpoint={pendingCheckpoint}
+              autoRetry={bannerState.mode === 'auto_retry'}
+              checkpoint={bannerState.checkpoint}
+              infraBusy={bannerState.mode === 'infra_busy'}
               onDismiss={() => void refetchVerifyCheckpoints()}
               sessionId={session.sessionId}
             />

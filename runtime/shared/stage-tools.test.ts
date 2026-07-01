@@ -20,30 +20,39 @@ describe("parseRunBashToolArguments", () => {
 });
 
 describe("parseAskUserToolArguments", () => {
-  it("parses valid ask_user arguments", () => {
+  it("parses valid ask_user batch arguments", () => {
     const parsed = parseAskUserToolArguments(
       JSON.stringify({
-        kind: "multipleChoice",
-        options: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
-        questionRef: "1",
-        title: "Pick one",
-        version: "askUser.v1",
+        batchId: "round1",
+        questions: [{
+          kind: "multipleChoice",
+          options: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
+          questionRef: "1",
+          title: "Pick one",
+        }],
+        title: "Questions",
+        version: "askUserBatch.v1",
       }),
     );
 
     assert.ok(parsed);
-    assert.equal(parsed!.kind, "multipleChoice");
-    assert.equal(parsed!.questionRef, "1");
-    assert.equal(parsed!.options.length, 2);
+    assert.equal(parsed!.batchId, "round1");
+    assert.equal(parsed!.questions[0]?.questionRef, "1");
+    assert.equal(parsed!.questions[0]?.options?.length, 2);
   });
 
-  it("rejects invalid ask_user arguments", () => {
+  it("rejects invalid ask_user batch arguments", () => {
     const parsed = parseAskUserToolArguments(
       JSON.stringify({
-        kind: "multipleChoice",
-        options: [{ id: "a", label: "A" }],
-        title: "Pick one",
-        version: "askUser.v1",
+        batchId: "round1",
+        questions: [{
+          kind: "multipleChoice",
+          options: [{ id: "a", label: "A" }],
+          questionRef: "1",
+          title: "Pick one",
+        }],
+        title: "Questions",
+        version: "askUserBatch.v1",
       }),
     );
     assert.equal(parsed, null);

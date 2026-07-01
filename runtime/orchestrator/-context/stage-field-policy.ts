@@ -1,6 +1,7 @@
 import type { TChatToolCall, TStorage } from "@/shared/transports/-types";
 import type { SetContextToolCallEnvelope } from "@/shared/stage-contract";
 
+import { PLATFORM_CONTEXT_KEYS } from "./default-context";
 import {
   filterContextByKeys,
   filterContextByReadUsage,
@@ -21,7 +22,10 @@ export const filterStageBucket = (
   stage: ParsedStage,
   loopIndexName?: string,
 ) => {
-  const extraKeys = loopIndexName ? [loopIndexName] : [];
+  const extraKeys = [
+    ...PLATFORM_CONTEXT_KEYS,
+    ...(loopIndexName ? [loopIndexName] : []),
+  ];
 
   return filterContextByKeys(records, stage.contextKeys, extraKeys);
 };
@@ -37,19 +41,25 @@ export const shouldApplySetContext = (
   key: string,
   stage: ParsedStage,
 ) => {
+  const produceAllowed = Boolean(
+    stage.produceContextKeys?.includes(key) ||
+    stage.produceTypeKeys?.includes(key),
+  );
+  const updateAllowed = Boolean(stage.updateContextKeys?.includes(key));
   const hasProduceFilter =
     Boolean(stage.produceContextKeys?.length) ||
     Boolean(stage.produceTypeKeys?.length);
 
   if (hasProduceFilter) {
-    return Boolean(
-      stage.produceContextKeys?.includes(key) ||
-      stage.produceTypeKeys?.includes(key),
-    );
+    if (stage.updateContextKeys?.length) {
+      return produceAllowed || updateAllowed;
+    }
+
+    return produceAllowed;
   }
 
   if (stage.updateContextKeys?.length) {
-    return stage.updateContextKeys.includes(key);
+    return updateAllowed;
   }
 
   return true;

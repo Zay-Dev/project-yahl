@@ -44,6 +44,19 @@ describe("filterStageBucket", () => {
 
     assert.deepEqual(filtered, { c: 1, i: 2 });
   });
+
+  it("always includes platform context keys", () => {
+    const records = { foo: 1, today: "2026-06-22", now_iso: "2026-06-22T00:00:00.000Z" };
+    const filtered = filterStageBucket(
+      "x = foo;",
+      records,
+      plainStage({ contextKeys: ["foo"] }),
+    );
+
+    assert.equal(filtered.foo, 1);
+    assert.equal(filtered.today, "2026-06-22");
+    assert.equal(filtered.now_iso, "2026-06-22T00:00:00.000Z");
+  });
 });
 
 describe("shouldApplySetContext", () => {
@@ -63,6 +76,18 @@ describe("shouldApplySetContext", () => {
 
     assert.equal(shouldApplySetContext("c", stage), true);
     assert.equal(shouldApplySetContext("result", stage), false);
+  });
+
+  it("allows updateContextKeys alongside produceContextKeys", () => {
+    const stage = plainStage({
+      produceContextKeys: ["facts", "key_facts_md"],
+      updateContextKeys: ["knowledge_paths", "sources"],
+    });
+
+    assert.equal(shouldApplySetContext("facts", stage), true);
+    assert.equal(shouldApplySetContext("sources", stage), true);
+    assert.equal(shouldApplySetContext("knowledge_paths", stage), true);
+    assert.equal(shouldApplySetContext("study_plan", stage), false);
   });
 });
 
@@ -115,6 +140,31 @@ describe("applySetContextToolCall", () => {
 
     assert.equal(applied, false);
     assert.equal(storage.context.has("d"), false);
+  });
+
+  it("applies updateContextKeys when produceContextKeys is also set", async () => {
+    const storage = createStorage();
+    const stage = plainStage({
+      produceContextKeys: ["facts", "key_facts_md"],
+      updateContextKeys: ["knowledge_paths", "sources"],
+    });
+
+    const applied = await applySetContextToolCall(storage, {
+      function: {
+        arguments: JSON.stringify({
+          key: "sources",
+          operation: "set",
+          scope: "global",
+          value: [{ studyKey: "study_a" }],
+        }),
+        name: "set_context",
+      },
+      id: "1",
+      type: "function",
+    }, stage);
+
+    assert.equal(applied, true);
+    assert.deepEqual(storage.context.get("sources"), [{ studyKey: "study_a" }]);
   });
 
   it("applies all keys for fast-forward synthetic tool calls", async () => {

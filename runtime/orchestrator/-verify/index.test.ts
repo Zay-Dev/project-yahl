@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import { runVerifyGate } from '@/orchestrator/-verify';
-import { VerifyFailedError } from '@/orchestrator/-verify/errors';
+import { VerifyFailedError, VerifyUnavailableError } from '@/orchestrator/-verify/errors';
 
 const verifyStage = {
   lines: '{\nconst report = { metric: 1 };\n}',
@@ -59,16 +59,29 @@ describe('runVerifyGate', () => {
     });
   });
 
-  it('returns when mastermind verify passes', async () => {
-    process.env.MASTERMIND_API_URL = 'http://mastermind.test';
+  it('returns when worker verify passes', async () => {
+    process.env.WORKER_API_URL = 'http://worker.test';
+    process.env.SESSION_API_BASE_URL = 'http://session.test';
+
+    let verifyPassBody: Record<string, unknown> | undefined;
 
     await withMockFetch(
-      (url) => {
+      (url, init) => {
         if (url.endsWith('/v1/verify')) {
           return Response.json({ feedback: 'ok', pass: true, score: 1 });
         }
 
-        throw new Error(`unexpected fetch: ${url}`);
+        if (url.includes('/verify-start') && init?.method === 'POST') {
+          return Response.json({ data: { ok: true } });
+        }
+
+        if (url.includes('/verify-pass') && init?.method === 'POST') {
+          verifyPassBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+          return Response.json({ data: { ok: true } });
+        }
+
+        throw new Error(`unexpected fetch: ${url} ${init?.method ?? 'GET'}`);
       },
       async () => {
         await runVerifyGate({
@@ -79,32 +92,87 @@ describe('runVerifyGate', () => {
           stage: verifyStage,
           storage,
         });
+
+        assert.deepEqual(verifyPassBody, { feedback: 'ok', score: 1 });
+      },
+    );
+  });
+
+  it('fast-forwards verify without calling worker when verifyFastForward is set', async () => {
+    process.env.SESSION_API_BASE_URL = 'http://session.test';
+
+    let verifyPassBody: Record<string, unknown> | undefined;
+    let verifyStartCalls = 0;
+    let workerCalls = 0;
+
+    await withMockFetch(
+      (url, init) => {
+        if (url.endsWith('/v1/verify')) {
+          workerCalls += 1;
+          throw new Error('worker should not be called');
+        }
+
+        if (url.includes('/verify-start') && init?.method === 'POST') {
+          verifyStartCalls += 1;
+          return Response.json({ data: { ok: true } });
+        }
+
+        if (url.includes('/verify-pass') && init?.method === 'POST') {
+          verifyPassBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+          return Response.json({ data: { ok: true } });
+        }
+
+        throw new Error(`unexpected fetch: ${url} ${init?.method ?? 'GET'}`);
+      },
+      async () => {
+        const result = await runVerifyGate({
+          agentName: 'agent-test',
+          pipelineStageIndex: 0,
+          requestId: 'req-ff',
+          sessionId: 'sess-ff',
+          stage: verifyStage,
+          storage,
+          verifyFastForward: { feedback: 'trusted from source', score: 0.95 },
+        });
+
+        assert.equal(result.pass, true);
+        assert.equal(result.feedback, 'trusted from source');
+        assert.equal(workerCalls, 0);
+        assert.equal(verifyStartCalls, 0);
+        assert.deepEqual(verifyPassBody, { feedback: 'trusted from source', score: 0.95 });
       },
     );
   });
 
   it('throws VerifyFailedError when mastermind verify fails', async () => {
-    process.env.MASTERMIND_API_URL = 'http://mastermind.test';
+    process.env.WORKER_API_URL = 'http://worker.test';
     process.env.SESSION_API_BASE_URL = 'http://session.test';
 
+    let verifyCalls = 0;
     let checkpointBody: Record<string, unknown> | undefined;
 
     await withMockFetch(
       (url, init) => {
         if (url.endsWith('/v1/verify')) {
+          verifyCalls += 1;
+
           return Response.json({
-            askUserRef: 'target_metric',
-            feedback: 'metric missing',
+            feedback: 'Agent agent-abc already has active run',
             pass: false,
-            resumeAction: 'edit_answer',
             score: 0,
+            unavailable: true,
           });
+        }
+
+        if (url.includes('/verify-start') && init?.method === 'POST') {
+          return Response.json({ data: { ok: true } });
         }
 
         if (url.includes('/verify-checkpoints') && init?.method === 'POST') {
           checkpointBody = JSON.parse(String(init.body)) as Record<string, unknown>;
 
-          return Response.json({ data: { verifyId: 'verify-1' } }, { status: 201 });
+          return Response.json({ data: { verifyId: 'verify-unavailable' } }, { status: 201 });
         }
 
         throw new Error(`unexpected fetch: ${url} ${init?.method ?? 'GET'}`);
@@ -114,22 +182,25 @@ describe('runVerifyGate', () => {
           () => runVerifyGate({
             agentName: 'agent-test-no-docker',
             pipelineStageIndex: 2,
-            requestId: 'req-verify-fail',
-            sessionId: 'sess-verify-fail',
+            requestId: 'req-verify-unavailable',
+            sessionId: 'sess-verify-unavailable',
             stage: verifyStage,
             storage,
+            shutdownOnFail: false,
+            throwOnFail: false,
           }),
           (error: unknown) => {
-            assert.ok(error instanceof VerifyFailedError);
-            assert.equal(error.verifyId, 'verify-1');
-            assert.equal(error.score, 0);
+            assert.ok(error instanceof VerifyUnavailableError);
+            assert.match(error.feedback, /already has active run/);
+            assert.equal(error.verifyId, 'verify-unavailable');
 
             return true;
           },
         );
 
-        assert.equal(checkpointBody?.resumeAction, 'edit_answer');
-        assert.equal(checkpointBody?.askUserRef, 'target_metric');
+        assert.equal(verifyCalls, 2);
+        assert.equal(checkpointBody?.unavailable, true);
+        assert.equal(checkpointBody?.score, 0);
       },
     );
   });

@@ -69,7 +69,3 @@ export type TResponsePendingWork = {
     payload: Record<string, unknown>;
   }[];
 };
-
-export type TResponseCronJobs = {
-  items: ICronJob[];
-};

@@ -1,22 +1,26 @@
-import type { AskUserToolCallEnvelope } from '@/shared/stage-contract';
+import type { AskUserBatchAnswerInput, AskUserBatchToolArguments } from '@/shared/ask-user-batch';
 
 import type { TParsedStageSnapshot } from './parsed-stage-snapshot';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 const sessionApiBaseUrl = (process.env.SESSION_API_BASE_URL || 'http://localhost:4000').replace(/\/+$/, '');
 
+export type TAskUserBatchAnswerRecord = {
+  answerValue: number | string | string[];
+  freeText?: string;
+  optionIds?: string[];
+  questionRef: string;
+};
+
 export type TAskUserCheckpoint = {
-  answerIds?: string[];
-  answerLabels?: string[];
-  askUserId: string;
+  batch: AskUserBatchToolArguments;
+  batchAnswers?: TAskUserBatchAnswerRecord[];
+  batchId: string;
   contextSnapshot: Record<string, unknown>;
   forkSetupIndex?: number;
-  freeText?: string;
   loopMeta?: Record<string, unknown>;
-  question: AskUserToolCallEnvelope['arguments'];
   parsedStageSnapshot?: TParsedStageSnapshot;
   questionId: string;
-  questionRef: string;
   requestId: string;
   stage: Record<string, unknown>;
   stageIndex?: number;
@@ -39,16 +43,15 @@ export type TStageDetailForResume = {
   toolCalls: { tools: { arguments: unknown; id: string; name: string }[] }[];
 };
 
-export const postAskUserQuestion = async (
+export const postAskUserBatch = async (
   sessionId: string,
   body: {
-    askUserId: string;
+    batch: AskUserBatchToolArguments;
+    batchId: string;
     contextSnapshot: Record<string, unknown>;
     forkSetupIndex?: number;
     loopMeta?: Record<string, unknown>;
     parsedStageSnapshot: TParsedStageSnapshot;
-    question: AskUserToolCallEnvelope['arguments'];
-    questionRef: string;
     requestId: string;
     stage: Record<string, unknown>;
     stageIndex?: number;
@@ -57,7 +60,7 @@ export const postAskUserQuestion = async (
   },
 ) => {
   const response = await fetch(
-    `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/ask-user/questions`,
+    `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/ask-user/batches`,
     {
       body: JSON.stringify(body),
       headers: { 'content-type': 'application/json' },
@@ -68,7 +71,7 @@ export const postAskUserQuestion = async (
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     throw new Error(
-      `ask_user create failed (${response.status})${detail ? `: ${detail}` : ''}`,
+      `ask_user batch create failed (${response.status})${detail ? `: ${detail}` : ''}`,
     );
   }
 
@@ -123,8 +126,11 @@ export const fetchSession = async (sessionId: string) => {
     };
     parsedStages?: ParsedStage[];
     resultContextKey?: string;
+    runInput?: Record<string, unknown>;
     sessionId: string;
     taskId?: string;
     taskYahlPath?: string;
   }>;
 };
+
+export type { AskUserBatchAnswerInput };

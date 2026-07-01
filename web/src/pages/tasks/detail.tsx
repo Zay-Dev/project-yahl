@@ -12,6 +12,8 @@ export function TaskDetailPage() {
   const [description, setDescription] = useState("");
   const [yahl, setYahl] = useState("");
   const [path, setPath] = useState("");
+  const [runInputKeys, setRunInputKeys] = useState<string[]>([]);
+  const [runInputValues, setRunInputValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,10 @@ export function TaskDetailPage() {
         setDescription(task.description);
         setYahl(task.yahl);
         setPath(task.path);
+        setRunInputKeys(task.runInputKeys ?? []);
+        setRunInputValues(
+          Object.fromEntries((task.runInputKeys ?? []).map((key) => [key, ""])),
+        );
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load task");
       } finally {
@@ -54,7 +60,12 @@ export function TaskDetailPage() {
   };
 
   const run = async () => {
-    const result = await createRun(taskId);
+    const runInput = runInputKeys.length > 0
+      ? Object.fromEntries(
+        runInputKeys.map((key) => [key, runInputValues[key]?.trim() ?? ""]),
+      )
+      : undefined;
+    const result = await createRun(taskId, runInput);
 
     navigate(`/sessions/${encodeURIComponent(result.sessionId)}`);
   };
@@ -79,11 +90,32 @@ export function TaskDetailPage() {
           <Button onClick={() => void run()} size="sm">
             Run
           </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/tasks">Back to tasks</Link>
+          <Button render={<Link to="/tasks" />} size="sm" variant="outline">
+            Back to tasks
           </Button>
         </div>
       </div>
+
+      {runInputKeys.length > 0 ? (
+        <div className="flex flex-col gap-3 rounded-lg border bg-background p-4">
+          <p className="text-sm font-medium">Run input</p>
+          {runInputKeys.map((key) => (
+            <label className="flex flex-col gap-2 text-sm" key={key}>
+              <span className="font-medium">{key}</span>
+              <input
+                className="rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                onChange={(event) => {
+                  setRunInputValues((current) => ({
+                    ...current,
+                    [key]: event.target.value,
+                  }));
+                }}
+                value={runInputValues[key] ?? ""}
+              />
+            </label>
+          ))}
+        </div>
+      ) : null}
 
       <label className="flex flex-col gap-2 text-sm">
         <span className="font-medium">SKILL.yahl</span>

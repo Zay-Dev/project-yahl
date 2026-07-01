@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { ForkSessionManager } from './manager';
+import { dedupeReplayRowsByStageSlot, ForkSessionManager } from './manager';
 
 const row = (
   stageId: string,
@@ -9,12 +9,16 @@ const row = (
   overrides: Partial<{
     contextAfter: Record<string, unknown>;
     loopMeta: { arraySnapshot: unknown[]; index: number; value: unknown };
+    parsedStageIndex: number;
+    sourceStartLine: number;
   }> = {},
 ) => ({
   context: {},
   contextAfter: overrides.contextAfter,
   loopMeta: overrides.loopMeta,
+  parsedStageIndex: overrides.parsedStageIndex,
   requestId: `r-${stageId}`,
+  sourceStartLine: overrides.sourceStartLine,
   stage: { logic },
   stageId,
 });
@@ -179,6 +183,98 @@ describe('ForkSessionManager', () => {
 
     assert.equal(manager.parsedStages.length, 1);
     assert.equal(manager.parsedStages[0]?.spec.logic, 'a');
+  });
+
+  it('dedupeReplayRowsByStageSlot keeps last row per sourceStartLine and loop index', () => {
+    const studyPlanLogic = 'const study_plan = *parse_study_plan(plan);';
+    const rows = [
+      row('first', studyPlanLogic, {
+        contextAfter: { context: { corpus_assessment: {} } },
+        sourceStartLine: 242,
+      }),
+      row('second', studyPlanLogic, {
+        contextAfter: { context: { study_plan: { sources: [] } } },
+        sourceStartLine: 242,
+      }),
+    ];
+
+    const deduped = dedupeReplayRowsByStageSlot(rows);
+
+    assert.equal(deduped.length, 1);
+    assert.equal(deduped[0]?.stageId, 'second');
+  });
+
+  it('getPrefixRows drops duplicate retry rows before anchor', () => {
+    const studyPlanLogic = 'const study_plan = *parse_study_plan(plan);';
+    const sourceRows = [
+      row('types', 'types', { contextAfter: { context: {} }, sourceStartLine: 10 }),
+      row('study-a', studyPlanLogic, {
+        contextAfter: { context: { corpus_assessment: {} } },
+        sourceStartLine: 242,
+      }),
+      row('study-b', studyPlanLogic, {
+        contextAfter: { context: { study_plan: { sources: [] } } },
+        sourceStartLine: 242,
+      }),
+      row('anchor', 'loop body', {
+        contextAfter: { context: {} },
+        loopMeta: { arraySnapshot: [1, 2], index: 2, value: 2 },
+        sourceStartLine: 265,
+      }),
+    ];
+    const forkSession = {
+      anchorStageId: 'anchor',
+      forkSessionId: 'fork-1',
+      setups: [{ stageId: 'anchor', context: {}, stage: { logic: 'loop body' } }],
+      sourceSessionId: 'src',
+      targetSessionId: 'tgt',
+    };
+
+    const manager = new ForkSessionManager(forkSession, sourceRows);
+    const prefixIds = manager.getPrefixRows().map((item) => item.stageId);
+
+    assert.deepEqual(prefixIds, ['types', 'study-b']);
+  });
+
+  it('getPrefixRows keeps distinct plain stages when sourceStartLine collides', () => {
+    const sourceRows = [
+      row('types', 'types', { contextAfter: { context: {} }, parsedStageIndex: 0, sourceStartLine: 1 }),
+      row('clarify', 'clarify', { contextAfter: { context: {} }, parsedStageIndex: 1, sourceStartLine: 1 }),
+      row('paths', 'paths', { contextAfter: { context: {} }, parsedStageIndex: 2, sourceStartLine: 1 }),
+      row('corpus', 'corpus', { contextAfter: { context: {} }, parsedStageIndex: 3, sourceStartLine: 1 }),
+      row('study-plan', 'study_plan', { contextAfter: { context: {} }, parsedStageIndex: 4, sourceStartLine: 1 }),
+      row('loop-0', 'loop body', {
+        contextAfter: { context: {} },
+        loopMeta: { arraySnapshot: [1, 2, 3], index: 0, value: 1 },
+        parsedStageIndex: 5,
+        sourceStartLine: 1,
+      }),
+      row('anchor', 'loop body', {
+        contextAfter: { context: {} },
+        loopMeta: { arraySnapshot: [1, 2, 3], index: 2, value: 2 },
+        parsedStageIndex: 5,
+        sourceStartLine: 265,
+      }),
+    ];
+    const forkSession = {
+      anchorStageId: 'anchor',
+      forkSessionId: 'fork-1',
+      setups: [{ stageId: 'anchor', context: {}, stage: { logic: 'loop body' } }],
+      sourceSessionId: 'src',
+      targetSessionId: 'tgt',
+    };
+
+    const manager = new ForkSessionManager(forkSession, sourceRows);
+    const prefixIds = manager.getPrefixRows().map((item) => item.stageId);
+
+    assert.deepEqual(prefixIds, [
+      'types',
+      'clarify',
+      'paths',
+      'corpus',
+      'study-plan',
+      'loop-0',
+    ]);
   });
 
 });

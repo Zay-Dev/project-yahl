@@ -13,6 +13,8 @@ type TUseSessionEventsStreamParams = {
 const isStageListEvent = (event: TSessionLiveEvent) => {
   return event.type === 'stage.created'
     || event.type === 'stage.finished'
+    || event.type === 'stage.verifying'
+    || event.type === 'verify.passed'
     || event.type === 'stage.model-response'
     || event.type === 'stage.tool-call';
 };

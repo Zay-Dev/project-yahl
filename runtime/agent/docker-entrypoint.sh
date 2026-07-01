@@ -12,9 +12,15 @@ if [ -z "${CHROME_PATH:-}" ]; then
   export CHROME_PATH="$(node ./agent/resolve-chrome-path.cjs)"
 fi
 
+if [ ! -x "${CHROME_PATH}" ]; then
+  echo "[stagehand] FATAL: CHROME_PATH not executable: ${CHROME_PATH}" >&2
+  echo "[stagehand] Hint: rebuild agent image after Dockerfile changes" >&2
+  exit 1
+fi
+
 if [ -n "${AGENT_SESSION_HOME:-}" ]; then
   mkdir -p "$AGENT_SESSION_HOME"
-  ln -sfn /root/knowledges "$AGENT_SESSION_HOME/knowledges"
+  export HOME="$AGENT_SESSION_HOME"
 fi
 
 if [ "${STAGEHAND_LIVEVIEW:-0}" = "1" ] || [ "${STAGEHAND_LIVEVIEW:-}" = "true" ]; then

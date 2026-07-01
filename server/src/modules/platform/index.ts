@@ -1,9 +1,9 @@
 import { exposedRoute } from '@/servers';
 
-import {
-  createCronJob,
-  listCronJobs,
-} from './use-cases/cron-write';
+import { getCronJob, listCronJobs } from './use-cases/cron-read';
+import { createCronJob, deleteCronJob, updateCronJob } from './use-cases/cron-write';
+import { listKnowledgePolicies } from './use-cases/knowledge-policies-read';
+import { patchKnowledgePolicy } from './use-cases/knowledge-policies-write';
 import {
   approveProposal,
   createNotificationProposal,
@@ -41,4 +41,12 @@ exposedRoute('/api/platform/work/setting')
 
 exposedRoute('/api/platform/cron/jobs')
   .get('/', listCronJobs)
-  .post('/', createCronJob);
+  .post('/', createCronJob)
+  .get('/:id', getCronJob)
+  .patch('/:id', updateCronJob)
+  .delete('/:id', deleteCronJob);
+
+exposedRoute('/api/platform/knowledge-policies')
+  .get('/', listKnowledgePolicies)
+  .patch('/:slug', patchKnowledgePolicy);
+

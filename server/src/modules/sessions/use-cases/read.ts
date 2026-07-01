@@ -11,7 +11,8 @@ import type {
 } from '../-api-types';
 import type { ISession, TTokenTotals } from '../-types';
 import { sumModelResponseUsagesBySessionRef, sumModelResponseUsagesForSession } from '../-usage-normalize';
-import { modelSession } from '../models';
+import { resolveSessionRunState } from '../-session-run-state';
+import { modelSession, modelStage } from '../models';
 
 export type {
   TResponseGetSession,
@@ -38,15 +39,19 @@ const toIso = (value: Date | string | undefined | null) => {
 const toResponse = (
   session: ISession & { _id: unknown },
   tokenTotals: TTokenTotals | null,
+  runState: TResponseGetSession['runState'],
 ): TResponseGetSession => ({
   _id: String(session._id),
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
   forkedFrom: session.forkedFrom,
+  isBackground: session.isBackground === true,
   liveViewVncPort: session.liveViewVncPort ?? null,
   parsedStages: session.parsedStages,
   result: session.result,
   resultContextKey: session.resultContextKey,
+  runInput: session.runInput,
+  runState,
   sessionId: session.sessionId,
   taskId: session.taskId,
   taskYahlPath: session.taskYahlPath,
@@ -61,6 +66,7 @@ const toListResponse = (
   _id: String(session._id),
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
+  isBackground: session.isBackground === true,
   sessionId: session.sessionId,
   taskId: session.taskId,
   taskYahlPath: session.taskYahlPath,
@@ -80,6 +86,7 @@ const resolveSessionsList = async () => {
       _id: 1,
       createdAt: 1,
       deletedAt: 1,
+      isBackground: 1,
       sessionId: 1,
       taskId: 1,
       taskYahlPath: 1,
@@ -149,9 +156,20 @@ export const getSession = [
     .validate(({ req }) => joi.getValidatedOrThrow(paramsSchema, req.params))
     .next(async (express, params) => {
       const session = await Queries.hasExactOne(modelSession, { sessionId: params.sessionId });
-      const tokenTotals = await sumModelResponseUsagesForSession(session._id);
+      const [tokenTotals, stages] = await Promise.all([
+        sumModelResponseUsagesForSession(session._id),
+        Queries.queryBy(
+          modelStage,
+          { session: session._id },
+          { sort: { createdAt: 1 } },
+        ).lean(),
+      ]);
+      const runState = resolveSessionRunState({
+        sessionId: params.sessionId,
+        stages,
+      });
 
-      express.respondOne<TResponseGetSession>(toResponse(session, tokenTotals));
+      express.respondOne<TResponseGetSession>(toResponse(session, tokenTotals, runState));
     })
     .toMiddleware(),
 ];

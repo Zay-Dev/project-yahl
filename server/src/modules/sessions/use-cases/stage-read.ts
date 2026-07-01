@@ -1,10 +1,12 @@
 import Joi from 'joi';
 
+import { Types } from 'mongoose';
+
 import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
-import { isStageFinished } from '../-stage-status';
+import { isStageFinished, isStageVerifying } from '../-stage-status';
 import type {
   TResponseStageDetail,
   TResponseStageListItem,
@@ -12,7 +14,7 @@ import type {
   TResponseStageStatus,
   TStageListSource,
 } from '../-api-types';
-import type { IStage, TModelResponseTag, TYahlStage } from '../-types';
+import type { IStage, TModelResponseTag, TParsedStage, TYahlStage } from '../-types';
 import {
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
@@ -68,8 +70,18 @@ const logicPreviewFrom = (logic: string | undefined) => {
 };
 
 export const resolveStageStatus = (
-  stage: Pick<TStageListSource, 'finishedAt'>,
-): TResponseStageStatus => (isStageFinished(stage) ? 'finished' : 'running');
+  stage: Pick<TStageListSource, 'finishedAt' | 'verifyingAt'>,
+): TResponseStageStatus => {
+  if (isStageFinished(stage)) {
+    return 'finished';
+  }
+
+  if (isStageVerifying(stage)) {
+    return 'verifying';
+  }
+
+  return 'running';
+};
 
 const extractContentPreview = (response: Record<string, unknown>) => {
   const choices = response.choices;
@@ -104,7 +116,7 @@ const extractContentPreview = (response: Record<string, unknown>) => {
 
 const countByRequestId = async (
   model: { aggregate: typeof modelModelResponse.aggregate },
-  sessionRef: unknown,
+  sessionRef: Types.ObjectId,
   requestIds: string[],
 ) => {
   const counts = new Map<string, number>();
@@ -125,15 +137,47 @@ const countByRequestId = async (
   return counts;
 };
 
-const listStagesBySessionRef = async (sessionRef: unknown) =>
+const listStagesBySessionRef = async (sessionRef: Types.ObjectId) =>
   Queries.queryBy(
     modelStage,
     { session: sessionRef },
     { sort: { createdAt: 1 } },
   ).lean();
 
+export const resolveReplayStageMetadata = (
+  stage: Pick<IStage, 'loopMeta' | 'parsedStageIndex' | 'sourceStartLine'>,
+  parsedStages: TParsedStage[],
+  plainCursor: { value: number },
+  loopStageIndex: number,
+) => {
+  let parsedStageIndex = stage.parsedStageIndex;
+
+  if (parsedStageIndex == null) {
+    if (stage.loopMeta != null && loopStageIndex >= 0) {
+      parsedStageIndex = loopStageIndex;
+    } else {
+      while (
+        plainCursor.value < parsedStages.length
+        && parsedStages[plainCursor.value]?.type === 'loop'
+      ) {
+        plainCursor.value += 1;
+      }
+
+      parsedStageIndex = plainCursor.value < parsedStages.length
+        ? plainCursor.value
+        : undefined;
+      plainCursor.value += 1;
+    }
+  }
+
+  const parsedStage = parsedStageIndex != null ? parsedStages[parsedStageIndex] : undefined;
+  const sourceStartLine = parsedStage?.sourceStartLine ?? stage.sourceStartLine;
+
+  return { parsedStageIndex, sourceStartLine };
+};
+
 const toListItem = (
-  stage: TStageListSource & { _id: unknown },
+  stage: TStageListSource & { _id: Types.ObjectId },
   modelCallCount: number,
   toolCallCount: number,
   tokenTotals: TResponseStageListItem['tokenTotals'],
@@ -146,7 +190,7 @@ const toListItem = (
   loopValue: stage.loopMeta?.value,
   modelCallCount,
   requestId: stage.requestId,
-  stageId: String(stage._id),
+  stageId: stage._id.toString(),
   status: resolveStageStatus(stage),
   tokenTotals,
   toolCallCount,
@@ -168,7 +212,7 @@ export const resolveSessionStagesList = async (sessionId: string) => {
   ]);
 
   return stages.map((stage) => toListItem(
-    stage as IStage & { _id: unknown },
+    stage,
     modelCounts.get(stage.requestId) ?? 0,
     toolCounts.get(stage.requestId) ?? 0,
     tokenTotalsByRequestId.get(stage.requestId) ?? null,
@@ -178,19 +222,40 @@ export const resolveSessionStagesList = async (sessionId: string) => {
 export const resolveSessionStagesReplay = async (sessionId: string) => {
   const session = await resolveSessionBySessionId(sessionId);
   const sessionRef = session._id;
+  const parsedStages = session.parsedStages ?? [];
 
   const stages = await listStagesBySessionRef(sessionRef);
+  const loopStageIndex = parsedStages.findIndex((stage) => stage.type === 'loop');
+  const plainCursor = { value: 0 };
 
-  return stages.map((stage): TResponseStageReplayItem => ({
-    context: (stage.context ?? {}) as Record<string, unknown>,
-    contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
-    finishedAt: toIso(stage.finishedAt),
-    loopMeta: stage.loopMeta,
-    requestId: stage.requestId,
-    stage: stage.stage as TYahlStage,
-    stageId: String(stage._id),
-    temperature: stage.temperature,
-  }));
+  return stages.map((stage): TResponseStageReplayItem => {
+    const { parsedStageIndex, sourceStartLine } = resolveReplayStageMetadata(
+      stage,
+      parsedStages,
+      plainCursor,
+      loopStageIndex,
+    );
+
+    return {
+      context: (stage.context ?? {}) as Record<string, unknown>,
+      contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
+      finishedAt: toIso(stage.finishedAt),
+      loopMeta: stage.loopMeta,
+      ...(parsedStageIndex === undefined ? {} : { parsedStageIndex }),
+      requestId: stage.requestId,
+      ...(sourceStartLine === undefined ? {} : { sourceStartLine }),
+      stage: stage.stage as TYahlStage,
+      stageId: String(stage._id),
+      temperature: stage.temperature,
+      verifyResult: stage.verifyResult
+        ? {
+          feedback: stage.verifyResult.feedback,
+          pass: stage.verifyResult.pass,
+          score: stage.verifyResult.score,
+        }
+        : undefined,
+    };
+  });
 };
 
 export const getSessionStages = [
@@ -246,18 +311,16 @@ export const getSessionStage = [
       );
 
       const listItem = toListItem(
-        stage as IStage & { _id: unknown },
+        stage,
         modelCallCount,
         toolCallCount,
         tokenTotalsByRequestId.get(params.requestId) ?? null,
       );
 
-      const stageDoc = stage as IStage;
-
       const detail: TResponseStageDetail = {
         ...listItem,
-        context: (stageDoc.context ?? {}) as Record<string, unknown>,
-        contextAfter: stageDoc.contextAfter as Record<string, unknown> | undefined,
+        context: (stage.context ?? {}) as Record<string, unknown>,
+        contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
         loopMeta: stage.loopMeta,
         modelResponses: modelResponses.map((doc) => {
           const response = (doc.response ?? {}) as Record<string, unknown>;

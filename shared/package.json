@@ -1,0 +1,62 @@
+{
+  "name": "@project-yahl/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./request-activity/client": {
+      "development": "./request-activity/client.ts",
+      "import": "./dist/request-activity/client.js"
+    },
+    "./request-activity/types": {
+      "development": "./request-activity/types.ts",
+      "import": "./dist/request-activity/types.js"
+    },
+    "./verify/build-file-prompt": {
+      "development": "./verify/build-file-prompt.ts",
+      "import": "./dist/verify/build-file-prompt.js"
+    },
+    "./verify/load-rubric": {
+      "development": "./verify/load-rubric.ts",
+      "import": "./dist/verify/load-rubric.js"
+    },
+    "./verify/parse-response": {
+      "development": "./verify/parse-response.ts",
+      "import": "./dist/verify/parse-response.js"
+    },
+    "./verify/schemas": {
+      "development": "./verify/schemas.ts",
+      "import": "./dist/verify/schemas.js"
+    },
+    "./verify/types": {
+      "development": "./verify/types.ts",
+      "import": "./dist/verify/types.js"
+    },
+    "./verify/verify-infra": {
+      "development": "./verify/verify-infra.ts",
+      "import": "./dist/verify/verify-infra.js"
+    },
+    "./yahl/run-input-keys": {
+      "development": "./yahl/run-input-keys.ts",
+      "import": "./dist/yahl/run-input-keys.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc && tsc-alias",
+    "test": "NODE_OPTIONS='--conditions=development' tsx --test \"**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsc-alias": "^1.8.11",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
