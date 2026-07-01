@@ -8,10 +8,47 @@ import config from '../config';
 
 export const workspaceRoot = () =>
   process.env.WORKSPACE_ROOT?.trim()
-  || path.resolve(config.__dirname, '../../workspace');
+  || path.resolve(config.__dirname, '../../data/workspace');
 
 export const sessionWorkspaceRoot = (sessionId: string) =>
   path.join(workspaceRoot(), 'sessions', sessionId);
+
+const SESSION_ID_PATTERN = /^[a-zA-Z0-9_.-]+$/;
+
+export type TRemoveSessionWorkspaceResult = {
+  path: string;
+  removed: boolean;
+};
+
+export const removeSessionWorkspace = async (
+  sessionId: string,
+): Promise<TRemoveSessionWorkspaceResult> => {
+  const trimmed = sessionId.trim();
+  const root = sessionWorkspaceRoot(trimmed);
+
+  if (!trimmed || !SESSION_ID_PATTERN.test(trimmed)) {
+    console.warn(
+      `[orchestrator] session workspace cleanup skipped invalid sessionId=${JSON.stringify(sessionId)}`,
+    );
+
+    return { path: root, removed: false };
+  }
+
+  try {
+    await fs.rm(root, { force: true, recursive: true });
+    console.log(
+      `[orchestrator] session workspace removed sessionId=${trimmed} path=${root}`,
+    );
+
+    return { path: root, removed: true };
+  } catch (error) {
+    console.warn(
+      `[orchestrator] session workspace cleanup failed sessionId=${trimmed} path=${root}: ${String(error)}`,
+    );
+
+    return { path: root, removed: false };
+  }
+};
 
 export type TEchoTaskSkillsResult = {
   echoed: boolean;

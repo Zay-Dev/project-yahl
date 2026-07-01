@@ -19,7 +19,7 @@ import { program, resolveSessionId, runCommand } from './-cli';
 import { parseYahlTask } from './-utils/yahl';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
-import { ensureSessionWorkspace } from './-utils/workspace-paths';
+import { ensureSessionWorkspace, removeSessionWorkspace } from './-utils/workspace-paths';
 
 import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
@@ -269,6 +269,14 @@ runCommand.action(async options => {
         console.log(`[yahl-diag] finally shutdownAgent done pid=${process.pid} sessionId=${sessionId}`);
       } catch (shutdownError) {
         console.error('[orchestrator] shutdownAgent failed:', shutdownError);
+      }
+
+      if (exitCode === 0) {
+        try {
+          await removeSessionWorkspace(sessionId);
+        } catch (cleanupError) {
+          console.error('[orchestrator] removeSessionWorkspace failed:', cleanupError);
+        }
       }
     } else {
       console.log(

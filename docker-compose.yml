@@ -69,6 +69,7 @@ services:
       RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
       RUNTIME_SHARED_NETWORK: ${SHARED_DOCKER_NETWORK:-yahl_shared}
       SESSION_API_BASE_URL: http://server:4000
+      WORKSPACE_ROOT: /workspace
     ports:
       - "${SERVER_PORT:-4000}:4000"
     depends_on:
@@ -83,7 +84,7 @@ services:
     volumes:
       - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
-      - ./workspace:${HOST_REPO_ROOT}/workspace
+      - ./data/workspace:/workspace
       - ./server/tasks:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/server/tasks
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -115,11 +116,11 @@ services:
       MASTERMIND_INTERNAL_TOKEN: ${MASTERMIND_INTERNAL_TOKEN:-}
       MASTERMIND_PORT: "4100"
       SESSION_API_BASE_URL: http://server:4000
-      WORKSPACE_ROOT: /root
+      WORKSPACE_ROOT: /workspace
     ports:
       - "4100:4100"
     volumes:
-      - ./workspace:/root
+      - ./data/workspace:/workspace
       - ./data/mastermind:/data
       - ./mastermind/skills:/opt/mastermind-skills:ro
     depends_on:
@@ -150,10 +151,11 @@ services:
       WORKER_BATCH_RUNS_ROOT: /tmp/yahl-batch-runs
       WORKER_HEALTH_PORT: "4200"
       WORKER_POLL_INTERVAL_MS: "5000"
+      WORKSPACE_ROOT: /workspace
     ports:
       - "4200:4200"
     volumes:
-      - ./workspace:/root
+      - ./data/workspace:/workspace
       - ./data/mastermind/rules/verify:/data/verify:ro
     depends_on:
       mastermind:

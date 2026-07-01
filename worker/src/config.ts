@@ -11,5 +11,5 @@ export const config = {
     || process.env.MASTERMIND_DATA_ROOT?.trim()
     || '/data',
   workerApiUrl: (process.env.WORKER_API_URL?.trim() || 'http://worker:4200').replace(/\/+$/, ''),
-  workspaceRoot: process.env.WORKSPACE_ROOT?.trim() || '/root',
+  workspaceRoot: process.env.WORKSPACE_ROOT?.trim() || '/workspace',
 };

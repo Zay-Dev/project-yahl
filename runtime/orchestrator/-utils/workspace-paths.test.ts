@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
-import { echoTaskSkillsToSession } from './workspace-paths';
+import { echoTaskSkillsToSession, removeSessionWorkspace } from './workspace-paths';
 
 describe('echoTaskSkillsToSession', () => {
   let workspaceRoot = '';
@@ -51,5 +51,46 @@ describe('echoTaskSkillsToSession', () => {
 
     assert.equal(result.echoed, false);
     assert.equal(result.fileCount, 0);
+  });
+});
+
+describe('removeSessionWorkspace', () => {
+  let workspaceRoot = '';
+  let previousWorkspaceRoot: string | undefined;
+
+  after(async () => {
+    process.env.WORKSPACE_ROOT = previousWorkspaceRoot;
+
+    if (workspaceRoot) {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('removes the session workspace tree', async () => {
+    previousWorkspaceRoot = process.env.WORKSPACE_ROOT;
+    workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-remove-ws-'));
+    process.env.WORKSPACE_ROOT = workspaceRoot;
+
+    const sessionId = 'sess-remove';
+    const sessionRoot = path.join(workspaceRoot, 'sessions', sessionId);
+
+    await mkdir(path.join(sessionRoot, 'plans'), { recursive: true });
+    await writeFile(path.join(sessionRoot, 'plans', 'req-1.md'), '# plan', 'utf8');
+
+    const result = await removeSessionWorkspace(sessionId);
+
+    assert.equal(result.removed, true);
+    assert.equal(result.path, sessionRoot);
+    await assert.rejects(() => access(sessionRoot));
+  });
+
+  it('rejects unsafe session ids', async () => {
+    previousWorkspaceRoot = process.env.WORKSPACE_ROOT;
+    workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-remove-unsafe-'));
+    process.env.WORKSPACE_ROOT = workspaceRoot;
+
+    const result = await removeSessionWorkspace('../escape');
+
+    assert.equal(result.removed, false);
   });
 });

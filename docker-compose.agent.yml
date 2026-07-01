@@ -23,7 +23,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${HOST_REPO_ROOT:-.}/workspace:/root
+      - ${HOST_REPO_ROOT:-.}/data/workspace:/workspace
       - ${HOST_REPO_ROOT:-.}/runtime/orchestrator/SKILLS:/opt/skills:ro
     command: ["pnpm", "--silent", "--filter", "@project-yahl/runtime", "run", "agent", "--", "--daemon"]
     container_name: ${AGENT_CONTAINER_NAME:-agent}

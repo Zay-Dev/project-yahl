@@ -4,6 +4,7 @@ import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
 import { emitSessionEvent } from '../-session-events';
+import { removeSessionWorkspace } from '../-workspace-paths';
 import { resolveSessionBySessionId } from '../-resolve-session';
 import {
   modelForkSession,
@@ -50,6 +51,8 @@ const hardDeleteSession = async (sessionId: string) => {
   ]);
 
   await modelSession.deleteOne({ _id: sessionRef });
+
+  await removeSessionWorkspace(sessionId);
 };
 
 export const deleteSession = [

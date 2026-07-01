@@ -101,7 +101,7 @@ Tasks can ship their own SKILL files — handy when you want assess/synthesize r
 
 - **Layout:** `server/tasks/{taskId}/SKILL.yahl` + optional `server/tasks/{taskId}/skills/**/*.md`
 - **Snapshot:** `createRun` / `registerSession` persist `taskYahl` + `taskSkills` on the session document
-- **Echo:** orchestrator writes the session snapshot → `workspace/sessions/{sessionId}/task-skills/` (agent `~/task-skills/`)
+- **Echo:** orchestrator writes the session snapshot → `data/workspace/sessions/{sessionId}/task-skills/` (agent `~/task-skills/`)
 - **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
 - **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` / `plan` (untrusted hints banner)
@@ -137,9 +137,9 @@ sequenceDiagram
   MM-->>Agent: relative path only
 ```
 
-- **Container mounts** — agent: [`workspace/`](workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** `data/mastermind/` ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Mastermind: `./data/mastermind:/data` ([`docker-compose.yml`](docker-compose.yml)).
+- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** `data/mastermind/` ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Mastermind: `./data/mastermind:/data` ([`docker-compose.yml`](docker-compose.yml)).
 - **No direct corpus access** — agents must not `cat ~/knowledges/…`; canonical store is mastermind-private only.
-- **Session-scoped reads** — `extract-knowledge` scans knowledges internally, writes `workspace/sessions/{sessionId}/knowledge/{key}.json`, returns `{ key, path: "~/knowledge/…", absent }` only — not the full tree ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts), [`skills.ts`](mastermind/src/-handlers/skills.ts)).
+- **Session-scoped reads** — `extract-knowledge` scans knowledges internally, writes `data/workspace/sessions/{sessionId}/knowledge/{key}.json`, returns `{ key, path: "~/knowledge/…", absent }` only — not the full tree ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts), [`skills.ts`](mastermind/src/-handlers/skills.ts)).
 - **Path injection blocked** — `extract-knowledge` and `persist-knowledge` reject caller `source` / `file` / `path` args ([`hasPathArgs`](mastermind/src/-knowledge/index.ts)).
 - **Controlled writes** — `persist-knowledge` accepts `key`, `value`, `topic` only; Mastermind picks the path via `resolveKnowledgeWritePath` + topic registry — basename-only under the canonical topic folder ([`persist-knowledge` SKILL](mastermind/skills/persist-knowledge/SKILL.md)). Narrative keys persist as `.md`; structured keys stay `.json`.
 - **Key sanitization** — session ids and extract keys sanitized before filesystem writes ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts)).
@@ -218,7 +218,7 @@ Image build context is the **Omniflex monorepo root** (`..` from project-yahl). 
 
 The agent compose file sets `MASTERMIND_API_URL=http://mastermind:4100` for stage agents.
 
-**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind), [`workspace/`](workspace/) (agent files), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
+**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind, workspace session files), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
 
 **Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (built on the host when orchestrator runs).
 
@@ -233,8 +233,8 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Human (web UI)** | Browser | Sessions, tasks, ask-user answers, platform approvals | Spawn agents, read vault keys, bypass approval queue |
 | **Server** | Host (`pnpm run dev:server`) or `server` container (prod) | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic; control plane only |
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
-| **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/root/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
-| **Mastermind** | `mastermind` container (4100) | `data/mastermind/knowledges/` (canonical corpus), workspace `/root`, Cursor SDK skills | Side effects without approval — proposals go to server first |
+| **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
+| **Mastermind** | `mastermind` container (4100) | `data/mastermind/knowledges/` (canonical corpus), workspace `/workspace`, Cursor SDK skills | Side effects without approval — proposals go to server first |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, **verify gate** (Cursor CLI) | Does not spawn orchestrator or agent containers |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
@@ -247,8 +247,8 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 **How the agent container is restricted:**
 
 - **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-onecli.ts`](runtime/orchestrator/-docker/compose-onecli.ts), project `agent-{sessionId}`), then tears it down.
-- **Minimal mounts** — only [`workspace/`](workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
-- **Session scratch** — `AGENT_SESSION_HOME=/root/sessions/{sessionId}`; knowledge via `extract-knowledge` → `~/knowledge/{key}.json` only — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see **Protecting the knowledge store**).
+- **Minimal mounts** — only [`data/workspace/`](data/workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
+- **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge via `extract-knowledge` → `~/knowledge/{key}.json` only — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see **Protecting the knowledge store**).
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See **OneCLI setup** below for vault rules.
