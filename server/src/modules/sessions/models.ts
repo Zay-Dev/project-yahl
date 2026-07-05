@@ -42,6 +42,12 @@ const forkedFromSchema = new Schema({
   sourceSessionId: model.d.requiredString(),
 }, { _id: false });
 
+const runCursorSchema = new Schema({
+  kind: { default: 'pipeline', enum: ['pipeline'], required: true, type: String },
+  loopMeta: loopMetaSchema,
+  stageIndex: model.d.requiredNumber(),
+}, { _id: false });
+
 const forkSessionSetupSchema = new Schema({
   context: model.d.mixed(),
   loopMeta: loopMetaSchema,
@@ -57,8 +63,10 @@ const sessionSchema = new Schema<TDbSession>({
   parsedStages: [model.d.mixed()],
   result: model.d.mixed(),
   resultContextKey: model.d.optionalString(),
+  runCursor: runCursorSchema,
   runInput: model.d.mixed(),
   sessionId: model.d.requiredString(),
+  storageSeed: model.d.mixed(),
   taskId: model.d.optionalString(),
   taskSkills: [model.d.mixed()],
   taskYahl: model.d.optionalString(),
@@ -68,6 +76,7 @@ const sessionSchema = new Schema<TDbSession>({
 });
 
 sessionSchema.index({ sessionId: 1 }, { unique: true });
+sessionSchema.index({ 'forkedFrom.sourceSessionId': 1 });
 
 const stageSchema = new Schema<TDbStage>({
   context: model.d.mixed(),

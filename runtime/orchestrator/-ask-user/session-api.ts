@@ -44,6 +44,12 @@ export type TStageDetailForResume = {
   toolCalls: { tools: { arguments: unknown; id: string; name: string }[] }[];
 };
 
+export type TSessionRunCursor = {
+  kind: 'pipeline';
+  loopMeta?: Record<string, unknown>;
+  stageIndex: number;
+};
+
 export type TSessionFetch = {
   forkedFrom?: {
     anchorStageId: string;
@@ -52,8 +58,10 @@ export type TSessionFetch = {
   };
   parsedStages: ParsedStage[];
   resultContextKey?: string;
+  runCursor?: TSessionRunCursor;
   runInput: Record<string, unknown>;
   sessionId: string;
+  storageSeed?: Record<string, unknown>;
   taskId: string;
   taskSkills: TTaskSkillFile[];
   taskYahl: string;

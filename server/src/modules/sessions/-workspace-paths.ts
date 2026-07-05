@@ -63,6 +63,32 @@ export const resolveWorkspaceRoot = () => {
 export const sessionWorkspaceRoot = (sessionId: string) =>
   path.join(resolveWorkspaceRoot(), 'sessions', sessionId);
 
+export type TCopySessionWorkspaceResult = {
+  copied: boolean;
+  path: string;
+};
+
+export const copySessionWorkspace = async (
+  sourceSessionId: string,
+  targetSessionId: string,
+): Promise<TCopySessionWorkspaceResult> => {
+  const sourceRoot = sessionWorkspaceRoot(sourceSessionId.trim());
+  const targetRoot = sessionWorkspaceRoot(targetSessionId.trim());
+
+  try {
+    await fsPromises.access(sourceRoot);
+  } catch {
+    return { copied: false, path: targetRoot };
+  }
+
+  await fsPromises.cp(sourceRoot, targetRoot, { force: true, recursive: true });
+  console.log(
+    `[sessions] session workspace copied source=${sourceSessionId} target=${targetSessionId} path=${targetRoot}`,
+  );
+
+  return { copied: true, path: targetRoot };
+};
+
 export type TRemoveSessionWorkspaceResult = {
   path: string;
   removed: boolean;

@@ -5,7 +5,6 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import {
   buildResumePipelineStages,
-  resolveForkSuffixFromSetupIndex,
   resolveResumeStartIndex,
 } from './resume';
 import { isLoopStageCheckpoint, resolveLoopStageIndex } from './pipeline-continuation';
@@ -104,16 +103,5 @@ describe('resolveLoopStageIndex for fork checkpoints', () => {
       },
     }, stages), 1);
     assert.equal(isLoopStageCheckpoint(loopMeta, stages, 1), true);
-  });
-});
-
-describe('resolveForkSuffixFromSetupIndex', () => {
-  it('continues fork suffix from the setup after the anchor', () => {
-    assert.equal(resolveForkSuffixFromSetupIndex(0), 1);
-    assert.equal(resolveForkSuffixFromSetupIndex(2), 3);
-  });
-
-  it('defaults missing forkSetupIndex to anchor setup 0', () => {
-    assert.equal(resolveForkSuffixFromSetupIndex(undefined), 1);
   });
 });

@@ -52,7 +52,9 @@ const toResponse = (
   resultContextKey: session.resultContextKey,
   runInput: session.runInput ?? {},
   runState,
+  ...(session.runCursor ? { runCursor: session.runCursor } : {}),
   sessionId: session.sessionId,
+  ...(session.storageSeed ? { storageSeed: session.storageSeed } : {}),
   taskId: session.taskId ?? '',
   taskSkills: session.taskSkills ?? [],
   taskYahl: session.taskYahl ?? '',
@@ -163,8 +165,9 @@ export const getSession = [
           { sort: { createdAt: 1 } },
         ).lean(),
       ]);
-      const runState = resolveSessionRunState({
+      const runState = await resolveSessionRunState({
         sessionId: params.sessionId,
+        sessionRef: String(session._id),
         stages,
       });
 

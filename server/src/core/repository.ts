@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'child_process';
 
 import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+import type { TParsedStage, TSessionRunCursor } from '@project-yahl/shared/yahl/types';
 
 import type { TYahlDocument } from './-base-types';
 
@@ -9,8 +10,12 @@ import * as awilix from 'awilix';
 type TServices = {
   createPendingSession: (input: {
     isBackground?: boolean;
+    parsedStages?: TParsedStage[];
+    resultContextKey?: string;
+    runCursor?: TSessionRunCursor;
     runInput?: Record<string, unknown>;
     sessionId: string;
+    storageSeed?: Record<string, unknown>;
     taskId: string;
     taskSkills?: TTaskSkillFile[];
     taskYahl: string;

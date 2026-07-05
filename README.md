@@ -303,13 +303,14 @@ The server container bind-mounts `./server/tasks` so Tasks UI edits persist on t
 
 | Flag | Purpose |
 |------|---------|
-| `--task-id <id>` | Run a specific task (e.g. `test`) |
-| `--session-id <id>` | Pin session id for debugging |
-| `--resume-source-session-id <sessionId>` | Resume from a prior session |
-| `--resume-source-request-id <requestId>` | Resume from a specific request |
-| `--forkrun-id <forkSessionId>` | Fork-run continuation |
+| `--session-id <id>` | Session to run (required; server prepares task/fork state before spawn) |
+| `--resume-id <questionId>` | Ask-user checkpoint resume |
+| `--verify-resume-id <verifyId>` | Verify checkpoint resume |
+| `--produce-keys-resume-id <verifyId>` | Produce-keys retry resume |
 
-Example: `pnpm run orchestrate -- --task-id test --session-id my-debug-session`
+Create a session via `POST /api/tasks/:taskId/runs` (or fork API), then orchestrate with `--session-id` only. Deprecated: `--task-id`, `--forkrun-id`.
+
+Example: `pnpm run orchestrate -- --session-id my-debug-session`
 
 ### OneCLI setup
 

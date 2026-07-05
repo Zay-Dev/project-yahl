@@ -6,9 +6,15 @@ import { runYahl } from '@/orchestrator/-agent';
 import { resumeLoopFromCheckpoint } from '@/orchestrator/-agent/loop';
 
 export type TPipelinePosition =
-  | { kind: 'fromStageIndex'; produceKeysResumeAttempt?: boolean; requestId?: string; resumedStage?: ParsedStage; stageIndex: number }
-  | { kind: 'loopAfterIteration'; loopMeta: TLoopMeta; loopStageIndex: number }
   | { kind: 'none' }
+  | { kind: 'loopAfterIteration'; loopMeta: TLoopMeta; loopStageIndex: number }
+  | { 
+      kind: 'fromStageIndex';
+      produceKeysResumeAttempt?: boolean;
+      requestId?: string;
+      resumedStage?: ParsedStage;
+      stageIndex: number;
+    }
   | {
     kind: 'resumeStageThenContinue';
     loopMeta?: TLoopMeta;
@@ -19,7 +25,6 @@ export type TPipelinePosition =
   };
 
 export type TPipelineSuffix =
-  | { kind: 'forkSetups'; forkSessionId: string; fromSetupIndex: number }
   | { kind: 'parsedStages'; fromStageIndex: number };
 
 export type TPipelineContinuation = {
@@ -90,31 +95,22 @@ const _continueLoopIterations = async (
 };
 
 const _runSuffix = async (ctx: TPipelineContinuation) => {
-  if (ctx.suffix.kind === 'parsedStages') {
-    const suffix = ctx.yahlStages.slice(ctx.suffix.fromStageIndex);
+  if (ctx.suffix.kind !== 'parsedStages') {
+    throw new Error(`pipeline continuation: unsupported suffix kind ${(ctx.suffix as { kind: string }).kind}`);
+  }
 
-    if (!suffix.length) {
-      return;
-    }
+  const suffix = ctx.yahlStages.slice(ctx.suffix.fromStageIndex);
 
-    await runYahl('', {
-      pipelineStageIndex: ctx.suffix.fromStageIndex,
-      stages: suffix,
-      startFromStageIndex: 0,
-      systemAppend: ctx.systemAppend,
-      useStorage: () => ctx.storage,
-    });
-
+  if (!suffix.length) {
     return;
   }
 
-  const { initForkSessionManager } = await import('./fork/manager');
-  const { runForkSetups } = await import('./fork/setups');
-
-  const manager = await initForkSessionManager(ctx.suffix.forkSessionId);
-
-  await runForkSetups(manager, ctx.storage, {
-    fromSetupIndex: ctx.suffix.fromSetupIndex,
+  await runYahl('', {
+    pipelineStageIndex: ctx.suffix.fromStageIndex,
+    stages: suffix,
+    startFromStageIndex: 0,
+    systemAppend: ctx.systemAppend,
+    useStorage: () => ctx.storage,
   });
 };
 

@@ -1,5 +1,7 @@
 import type { TSessionFetch } from '@/orchestrator/-ask-user/session-api';
 
+import { sessionReferencesTaskSkills } from '@project-yahl/shared/yahl/session-references-task-skills';
+
 import { fetchSession } from '@/orchestrator/-ask-user';
 import {
   echoTaskSkillsToSession,
@@ -12,21 +14,14 @@ export type TSessionForTaskWorkspace = Pick<
   'parsedStages' | 'taskId' | 'taskSkills' | 'taskYahl'
 >;
 
+export { sessionReferencesTaskSkills };
+
 export const assertSessionBundle = (session: TSessionFetch) => {
   if (!session.taskId.trim() || !session.taskYahl.trim()) {
     throw new Error(
       `[orchestrator] session missing task bundle sessionId=${session.sessionId}`,
     );
   }
-};
-
-export const sessionReferencesTaskSkills = (session: TSessionForTaskWorkspace) => {
-  if (session.taskYahl.includes('~/task-skills/')) {
-    return true;
-  }
-
-  return session.parsedStages.some((stage) =>
-    stage.lines.includes('~/task-skills/'));
 };
 
 export const prepareTaskWorkspace = async (sessionId: string) => {

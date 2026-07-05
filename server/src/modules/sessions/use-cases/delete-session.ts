@@ -4,7 +4,6 @@ import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
 import { emitSessionEvent } from '../-session-events';
-import { removeSessionWorkspace } from '../-workspace-paths';
 import { resolveSessionBySessionId } from '../-resolve-session';
 import {
   modelForkSession,
@@ -51,8 +50,6 @@ const hardDeleteSession = async (sessionId: string) => {
   ]);
 
   await modelSession.deleteOne({ _id: sessionRef });
-
-  await removeSessionWorkspace(sessionId);
 };
 
 export const deleteSession = [
@@ -71,6 +68,16 @@ export const deleteSession = [
         );
         emitSessionEvent(params.sessionId, { type: 'session.updated' });
       } else {
+        const forkChild = await Queries.queryBy(modelSession, {
+          'forkedFrom.sourceSessionId': params.sessionId,
+        }).findOne().lean();
+
+        if (forkChild) {
+          throw errors.badRequest(
+            'Cannot hard delete session: another session was forked from it',
+          );
+        }
+
         await hardDeleteSession(params.sessionId);
       }
 

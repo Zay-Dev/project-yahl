@@ -7,6 +7,7 @@ import type {
   TModelResponseTag,
   TParsedStage,
   TSessionForkedFrom,
+  TSessionRunCursor,
   TStageLoopMeta,
   TTokenTotals,
   TYahlStage,
@@ -26,7 +27,9 @@ export type TResponseGetSession = {
   resultContextKey?: string;
   runInput: Record<string, unknown>;
   runState: TSessionRunState;
+  runCursor?: TSessionRunCursor;
   sessionId: string;
+  storageSeed?: Record<string, unknown>;
   taskId: string;
   taskSkills: TTaskSkillFile[];
   taskYahl: string;

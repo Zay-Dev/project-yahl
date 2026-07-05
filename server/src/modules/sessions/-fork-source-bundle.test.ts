@@ -15,6 +15,30 @@ describe('validateForkSourceBundle', () => {
     assert.equal(validateForkSourceBundle(validSource), 'who_am_i');
   });
 
+  it('allows empty taskSkills when task does not reference ~/task-skills/', () => {
+    assert.equal(
+      validateForkSourceBundle({
+        parsedStages: [{ lines: 'const base = { a: 1 };' }],
+        taskId: 'test',
+        taskSkills: [],
+        taskYahl: 'name: test\nstages: []',
+      }),
+      'test',
+    );
+  });
+
+  it('rejects empty taskSkills when task references ~/task-skills/', () => {
+    assert.throws(
+      () =>
+        validateForkSourceBundle({
+          ...validSource,
+          taskSkills: [],
+          taskYahl: 'logic: ~/task-skills/task-mission/SKILL.md',
+        }),
+      /references ~\/task-skills\/ but has no taskSkills snapshot/,
+    );
+  });
+
   it('rejects missing taskYahl', () => {
     assert.throws(
       () =>

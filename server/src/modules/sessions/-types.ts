@@ -73,6 +73,12 @@ export type TSessionForkedFrom = {
   sourceSessionId: string;
 };
 
+export type TSessionRunCursor = {
+  kind: 'pipeline';
+  loopMeta?: TStageLoopMeta;
+  stageIndex: number;
+};
+
 export type TForkSessionStageSetup = {
   context: Record<string, unknown>;
   loopMeta?: TStageLoopMeta;
@@ -96,9 +102,11 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
+  runCursor?: TSessionRunCursor;
   runInput?: Record<string, unknown>;
   sessionId: string;
   result?: unknown;
+  storageSeed?: Record<string, unknown>;
   taskId?: string;
   taskSkills?: TTaskSkillFile[];
   taskYahl?: string;

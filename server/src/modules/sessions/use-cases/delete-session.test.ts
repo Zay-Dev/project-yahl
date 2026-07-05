@@ -24,7 +24,7 @@ describe('deleteSession query', () => {
   });
 });
 
-describe('hard delete session workspace cleanup', () => {
+describe('hard delete session workspace retention', () => {
   let workspaceRoot = '';
   let previousWorkspaceRoot: string | undefined;
 
@@ -36,7 +36,7 @@ describe('hard delete session workspace cleanup', () => {
     }
   });
 
-  it('removeSessionWorkspace deletes the session folder used by hard delete', async () => {
+  it('removeSessionWorkspace helper still deletes folders when invoked directly', async () => {
     previousWorkspaceRoot = process.env.WORKSPACE_ROOT;
     workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-hard-delete-ws-'));
     process.env.WORKSPACE_ROOT = workspaceRoot;
