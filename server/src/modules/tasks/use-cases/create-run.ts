@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 
 import { validateRunInputPayload } from '@project-yahl/shared/yahl/run-input-keys';
+import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
 
 import Joi from 'joi';
 
@@ -10,7 +11,7 @@ import { Middlewares } from '@omni-infra/express';
 
 import type { TResponseCreateRun } from '../-api-types';
 import { readTaskFile, taskExists } from '../-read-task-file';
-import { taskYahlRelativePath } from '../-tasks-root';
+import { readTaskSkillsFromDisk } from '../-read-task-skills';
 
 export type TRequestCreateRunBody = {
   runInput?: Record<string, unknown>;
@@ -42,17 +43,23 @@ export const createRun = [
         throw errors.badRequest(validation.message);
       }
 
-      const taskYahlPath = taskYahlRelativePath(body.taskId);
+      const taskSkills = await readTaskSkillsFromDisk(body.taskId);
+      const { resultContextKey, stages } = parseYahlTask(task.yahl);
 
       await Repository.resolve('createPendingSession')({
         isBackground: task.background === true,
+        parsedStages: stages,
+        resultContextKey,
+        runCursor: { kind: 'pipeline', stageIndex: 0 },
         runInput: body.runInput,
         sessionId,
+        storageSeed: { context: {}, types: {} },
         taskId: body.taskId,
-        taskYahlPath,
+        taskSkills,
+        taskYahl: task.yahl,
       });
 
-      await Repository.resolve('spawnOrchestrate')(sessionId, ['--task-id', body.taskId]);
+      await Repository.resolve('spawnOrchestrate')(sessionId, []);
 
       express.res.status(201);
       express.respondOne<TResponseCreateRun>({ sessionId, taskId: body.taskId });

@@ -34,7 +34,6 @@ export const getForkSession = [
         resultContextKey: targetSession.resultContextKey ?? sourceSession.resultContextKey,
         sourceSessionId: forkSession.sourceSessionId,
         targetSessionId: forkSession.targetSessionId,
-        taskYahlPath: sourceSession.taskYahlPath,
       };
 
       express.respondOne<TResponseGetForkSession>(response);

@@ -8,7 +8,10 @@ export type TResponseTaskListItem = {
   taskId: string;
 };
 
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 export type TResponseTask = TResponseTaskListItem & {
+  taskSkills: TTaskSkillFile[];
   yahl: string;
 };
 

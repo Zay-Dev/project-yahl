@@ -4,6 +4,7 @@ import { reportProcessLevelCrash } from '../-crash-reports/index.js';
 import { config, paths } from '../config.js';
 
 import { createPromptQueue } from './agent-prompt-queue.js';
+import { logRunStreamIfEnabled } from './log-run-stream.js';
 import { probeSdkAuth } from './self-check.js';
 
 export type TMastermindAgentStatus = 'auth_failed' | 'ready' | 'unconfigured';
@@ -77,6 +78,9 @@ export const createMastermindAgent = async (): Promise<TMastermindAgent> => {
   return {
     prompt: (message, options) => enqueuePrompt(async () => {
       const run = await agent.send(message, options?.mode ? { mode: options.mode } : undefined);
+
+      await logRunStreamIfEnabled(run);
+
       const result = await run.wait();
 
       return { result: result.result };

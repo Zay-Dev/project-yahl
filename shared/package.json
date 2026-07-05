@@ -39,6 +39,38 @@
     "./yahl/run-input-keys": {
       "development": "./yahl/run-input-keys.ts",
       "import": "./dist/yahl/run-input-keys.js"
+    },
+    "./yahl/task-skills": {
+      "development": "./yahl/task-skills.ts",
+      "import": "./dist/yahl/task-skills.js"
+    },
+    "./yahl/types": {
+      "development": "./yahl/types.ts",
+      "import": "./dist/yahl/types.js"
+    },
+    "./yahl/replay-dedupe": {
+      "development": "./yahl/replay-dedupe.ts",
+      "import": "./dist/yahl/replay-dedupe.js"
+    },
+    "./yahl/stage-compile": {
+      "development": "./yahl/stage-compile.ts",
+      "import": "./dist/yahl/stage-compile.js"
+    },
+    "./yahl/parse-task": {
+      "development": "./yahl/parse-task.ts",
+      "import": "./dist/yahl/parse-task.js"
+    },
+    "./yahl/ask-user-rerun": {
+      "development": "./yahl/ask-user-rerun.ts",
+      "import": "./dist/yahl/ask-user-rerun.js"
+    },
+    "./yahl/storage-merge": {
+      "development": "./yahl/storage-merge.ts",
+      "import": "./dist/yahl/storage-merge.js"
+    },
+    "./yahl/session-references-task-skills": {
+      "development": "./yahl/session-references-task-skills.ts",
+      "import": "./dist/yahl/session-references-task-skills.js"
     }
   },
   "scripts": {

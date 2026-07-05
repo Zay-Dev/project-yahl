@@ -1,5 +1,7 @@
 import Joi from 'joi';
 
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
@@ -17,7 +19,8 @@ export type TRequestRegisterSessionBody = {
   parsedStages: TParsedStage[];
   resultContextKey?: string;
   taskId: string;
-  taskYahlPath: string;
+  taskSkills?: TTaskSkillFile[];
+  taskYahl: string;
 };
 
 export type TResponseRegisterSession = {
@@ -38,12 +41,18 @@ const patchBodySchema = Joi.object<TRequestPatchSessionBody>({
   result: Joi.any().optional(),
 });
 
+const taskSkillFileSchema = Joi.object<TTaskSkillFile>({
+  content: Joi.string().required(),
+  path: Joi.string().trim().min(1).required(),
+});
+
 const bodySchema = Joi.object<TRequestRegisterSessionBody>({
   liveViewVncPort: Joi.number().integer().min(1).max(65535).optional(),
   parsedStages: Joi.array().items(parsedStageSchema).min(1).required(),
   resultContextKey: Joi.string().trim().optional(),
   taskId: Joi.string().trim().required(),
-  taskYahlPath: Joi.string().trim().required(),
+  taskSkills: Joi.array().items(taskSkillFileSchema).optional(),
+  taskYahl: Joi.string().trim().min(1).required(),
 });
 
 const isLiveViewPortOnlyPatch = (body: TRequestPatchSessionBody) =>
@@ -68,7 +77,8 @@ export const registerSession = [
           $set: {
             parsedStages: body.parsedStages,
             taskId: body.taskId,
-            taskYahlPath: body.taskYahlPath,
+            taskSkills: body.taskSkills ?? [],
+            taskYahl: body.taskYahl,
             updatedAt: now,
             ...(body.resultContextKey ? { resultContextKey: body.resultContextKey } : {}),
             ...(body.liveViewVncPort ? { liveViewVncPort: body.liveViewVncPort } : {}),

@@ -115,6 +115,7 @@ export {
   stripAskUserAnswersFromContext,
 } from './reset-for-rerun';
 export { fetchAskUserCheckpoint, fetchSession, fetchStageDetail } from './session-api';
+export type { TSessionFetch } from './session-api';
 export { parsedStageFromSnapshot, toParsedStageSnapshot } from './parsed-stage-snapshot';
 export type { TParsedStageSnapshot } from './parsed-stage-snapshot';
 export {

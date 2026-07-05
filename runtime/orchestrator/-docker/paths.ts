@@ -79,7 +79,7 @@ export const onecliSharedComposeOverrideFile = path.join(
   "docker-compose.onecli.override.yml",
 );
 
-export const workspacePath = path.join(repoRoot, "workspace");
+export const workspacePath = path.join(repoRoot, "data", "workspace");
 
 export const agentSessionRuntimePath = (sessionId: string) =>
   path.join(runtimeRoot, ".agents", sessionId);

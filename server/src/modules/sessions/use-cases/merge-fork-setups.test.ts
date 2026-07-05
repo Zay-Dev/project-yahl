@@ -60,4 +60,21 @@ describe('mergeForkSessionSetups', () => {
     assert.equal(merged[0]?.stage.logic, '2-new');
     assert.equal(merged[1]?.stage.logic, '3');
   });
+
+  it('preserves later user setup without temperature when anchor is earlier', () => {
+    const replayRows = [
+      row('s1', 'a'),
+      row('s2', 'b'),
+      row('s3', 'c', { context: {} }),
+    ];
+    const userSetups = [
+      { context: {}, stage: { logic: 'b-new' }, stageId: 's2' },
+      { context: {}, stage: { logic: 'c-no-temp' }, stageId: 's3' },
+    ];
+
+    const merged = mergeForkSessionSetups(replayRows, 1, userSetups);
+
+    assert.equal(merged[1]?.stage.logic, 'c-no-temp');
+    assert.equal(merged[1]?.stage.temperature, undefined);
+  });
 });

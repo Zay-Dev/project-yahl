@@ -39,4 +39,19 @@ describe('resolveSessionRunStateFromSignals', () => {
       'stuck',
     );
   });
+
+  it('returns idle when open stage has a pending verify or ask-user checkpoint', () => {
+    assert.equal(
+      resolveSessionRunStateFromSignals({
+        agentActive: false,
+        orchestratorActive: false,
+        pausedRequestIds: new Set(['req-open']),
+        stages: [
+          { finishedAt: '2026-06-28T09:00:00.000Z' },
+          { finishedAt: null, requestId: 'req-open' },
+        ],
+      }),
+      'idle',
+    );
+  });
 });

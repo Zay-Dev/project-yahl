@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { assertSessionRunAllowed } from '../-agent-run-active';
+import { resolveWorkspaceRoot } from '../-workspace-paths';
 import { waitForOrchestratorIdle } from '../-orchestrator-run-lock';
 import { resolveSessionBySessionId } from '../-resolve-session';
 
@@ -157,21 +158,7 @@ export const resolveRepoRoot = () => path.dirname(_resolveRuntimeDir());
 
 export const resolvePnpmWorkspaceRoot = () => _resolveWorkspaceRoot();
 
-export const resolveOrchestratorWorkspaceRoot = () => {
-  const explicit = process.env.WORKSPACE_ROOT?.trim();
-
-  if (explicit) {
-    return explicit;
-  }
-
-  const hostRepoRoot = process.env.HOST_REPO_ROOT?.trim();
-
-  if (hostRepoRoot) {
-    return path.join(path.resolve(hostRepoRoot), 'workspace');
-  }
-
-  return path.join(resolveRepoRoot(), 'workspace');
-};
+export const resolveOrchestratorWorkspaceRoot = () => resolveWorkspaceRoot();
 
 const _loadRootEnv = () => {
   const rootEnvPath = path.join(resolveRepoRoot(), '.env');

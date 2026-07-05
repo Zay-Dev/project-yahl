@@ -42,10 +42,6 @@ export {
   type TPatchTopicPolicyInput,
   type TStaleTopic,
   type TTopicPolicyRow,
-  type TTopicRefreshPolicy,
-  type TTopicRefreshScope,
-  type TRefreshInterval,
-  type TRefreshRunStatus,
 } from './topic-refresh.js';
 export {
   detectDuplicateGroups,

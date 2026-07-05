@@ -21,7 +21,7 @@ stages:
       isBackground: task.background === true,
       sessionId: 'sess-tidy',
       taskId: 'knowledge_tidy',
-      taskYahlPath: 'server/tasks/knowledge_tidy/SKILL.yahl',
+      taskYahl: yahl,
     });
 
     assert.equal(update.$set.isBackground, true);

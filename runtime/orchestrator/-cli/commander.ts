@@ -18,26 +18,17 @@ export const program = new Command();
 export const runCommand = program
   .command("run")
   .description("Run the orchestrator")
-
-  .addOption(
-    new Option('--task-id <id>')
-      .conflicts(['resume-id', 'forkrun-id', 'verify-resume-id', 'produce-keys-resume-id'])
-  )
   .addOption(
     new Option('--resume-id <id>')
-      .conflicts(['task-id', 'forkrun-id', 'verify-resume-id', 'produce-keys-resume-id'])
+      .conflicts(['verify-resume-id', 'produce-keys-resume-id'])
   )
   .addOption(
     new Option('--verify-resume-id <id>')
-      .conflicts(['task-id', 'forkrun-id', 'resume-id', 'produce-keys-resume-id'])
+      .conflicts(['resume-id', 'produce-keys-resume-id'])
   )
   .addOption(
     new Option('--produce-keys-resume-id <id>')
-      .conflicts(['task-id', 'forkrun-id', 'resume-id', 'verify-resume-id'])
-  )
-  .addOption(
-    new Option('--forkrun-id <id>')
-      .conflicts(['task-id', 'resume-id', 'verify-resume-id', 'produce-keys-resume-id'])
+      .conflicts(['resume-id', 'verify-resume-id'])
   )
   .addOption(
     new Option('--session-id <id>')

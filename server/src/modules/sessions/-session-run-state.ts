@@ -2,6 +2,7 @@ import fs from 'fs';
 
 import { isAgentContainerRunning } from './-agent-run-active';
 import { orchestratorRunLockPath } from './-orchestrator-run-lock';
+import { resolvePausedStageRequestIds } from './-paused-stage-request-ids';
 import {
   resolveSessionRunStateFromSignals,
   type TSessionRunState,
@@ -31,15 +32,21 @@ const _isOrchestratorActive = (sessionId: string) => {
   }
 };
 
-export const resolveSessionRunState = (params: {
+export const resolveSessionRunState = async (params: {
   sessionId: string;
+  sessionRef: string;
   stages: Array<{
     finishedAt?: Date | string | null;
+    requestId?: string;
     verifyingAt?: Date | string | null;
   }>;
-}): TSessionRunState =>
-  resolveSessionRunStateFromSignals({
+}): Promise<TSessionRunState> => {
+  const pausedRequestIds = await resolvePausedStageRequestIds(params.sessionRef);
+
+  return resolveSessionRunStateFromSignals({
     agentActive: isAgentContainerRunning(params.sessionId),
     orchestratorActive: _isOrchestratorActive(params.sessionId),
+    pausedRequestIds,
     stages: params.stages,
   });
+};

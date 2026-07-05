@@ -1,5 +1,7 @@
 import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
 export type TTokenTotals = {
   cacheHitTokens: number;
   cacheMissTokens: number;
@@ -71,6 +73,12 @@ export type TSessionForkedFrom = {
   sourceSessionId: string;
 };
 
+export type TSessionRunCursor = {
+  kind: 'pipeline';
+  loopMeta?: TStageLoopMeta;
+  stageIndex: number;
+};
+
 export type TForkSessionStageSetup = {
   context: Record<string, unknown>;
   loopMeta?: TStageLoopMeta;
@@ -94,11 +102,14 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
+  runCursor?: TSessionRunCursor;
   runInput?: Record<string, unknown>;
   sessionId: string;
   result?: unknown;
+  storageSeed?: Record<string, unknown>;
   taskId?: string;
-  taskYahlPath?: string;
+  taskSkills?: TTaskSkillFile[];
+  taskYahl?: string;
 }
 
 export interface IStage extends TWithTimestamps {

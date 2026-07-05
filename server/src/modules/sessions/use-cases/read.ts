@@ -47,14 +47,17 @@ const toResponse = (
   forkedFrom: session.forkedFrom,
   isBackground: session.isBackground === true,
   liveViewVncPort: session.liveViewVncPort ?? null,
-  parsedStages: session.parsedStages,
+  parsedStages: session.parsedStages ?? [],
   result: session.result,
   resultContextKey: session.resultContextKey,
-  runInput: session.runInput,
+  runInput: session.runInput ?? {},
   runState,
+  ...(session.runCursor ? { runCursor: session.runCursor } : {}),
   sessionId: session.sessionId,
-  taskId: session.taskId,
-  taskYahlPath: session.taskYahlPath,
+  ...(session.storageSeed ? { storageSeed: session.storageSeed } : {}),
+  taskId: session.taskId ?? '',
+  taskSkills: session.taskSkills ?? [],
+  taskYahl: session.taskYahl ?? '',
   tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });
@@ -69,7 +72,6 @@ const toListResponse = (
   isBackground: session.isBackground === true,
   sessionId: session.sessionId,
   taskId: session.taskId,
-  taskYahlPath: session.taskYahlPath,
   tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });
@@ -89,7 +91,6 @@ const resolveSessionsList = async () => {
       isBackground: 1,
       sessionId: 1,
       taskId: 1,
-      taskYahlPath: 1,
       updatedAt: 1,
     },
     {
@@ -164,8 +165,9 @@ export const getSession = [
           { sort: { createdAt: 1 } },
         ).lean(),
       ]);
-      const runState = resolveSessionRunState({
+      const runState = await resolveSessionRunState({
         sessionId: params.sessionId,
+        sessionRef: String(session._id),
         stages,
       });
 

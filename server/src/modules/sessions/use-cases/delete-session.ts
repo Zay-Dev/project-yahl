@@ -68,6 +68,16 @@ export const deleteSession = [
         );
         emitSessionEvent(params.sessionId, { type: 'session.updated' });
       } else {
+        const forkChild = await Queries.queryBy(modelSession, {
+          'forkedFrom.sourceSessionId': params.sessionId,
+        }).findOne().lean();
+
+        if (forkChild) {
+          throw errors.badRequest(
+            'Cannot hard delete session: another session was forked from it',
+          );
+        }
+
         await hardDeleteSession(params.sessionId);
       }
 

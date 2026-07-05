@@ -401,7 +401,6 @@ next-env.d.ts
 .DS_Store
 # Docker bind mounts (see docker-compose.yml, docker-compose.agent.yml)
 /data/
-/workspace/
 
 .onecli/
 runtime/.agents/

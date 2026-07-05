@@ -14,29 +14,18 @@ import {
   writeAgentSessionOverride,
   writeSharedOneCliOverride,
 } from './-docker';
-import { program, resolveSessionId, runCommand } from './-cli';
+import { program, resolveOrchestratorRun, resolveSessionId, runCommand } from './-cli';
 
-import { parseYahlTask } from './-utils/yahl';
-import { deriveTaskIdFromYahlPath } from './-utils/yahl/derive-task-id';
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
-import {
-  ensureSessionWorkspace,
-  mergeTaskSystemAppend,
-  mountTaskSkillsToSession,
-  verifyTaskSkillsMount,
-} from './-utils/workspace-paths';
+import { ensureSessionWorkspace } from './-utils/workspace-paths';
 
-import { runYahl } from './-agent';
 import { AskUserPausedError } from './-ask-user';
-import { initForkSessionManager } from './-runners/fork/manager';
 
-import { runForkSession } from './-runners/fork';
-import { runAskUserResume } from './-runners/resume';
-import { runVerifyResume } from './-runners/verify-resume';
-import { runProduceKeysResume } from './-runners/produce-keys-resume';
-import { fetchTaskYahl } from './-tasks/session-api';
-import { fetchSession } from './-ask-user/session-api';
+import { prepareTaskWorkspace } from './-runners/prepare-task-workspace';
+import { resolvePreparedRun } from './-runners/resolve-prepared-run';
+import { runSessionFrom } from './-runners/run-session-from';
+
 import { ProduceKeysFailedError, VerifyFailedError, VerifyUnavailableError } from './-verify';
 import {
   acquireOrchestratorRunLock,
@@ -145,115 +134,26 @@ runCommand.action(async options => {
     await _composeUp(agentName, sessionId, tracker);
     await _setupPublisher(tracker, sessionId);
 
-    const runMode = options.taskId
-      ? 'task'
-      : options.forkrunId
-        ? 'fork'
-        : options.resumeId
-          ? 'ask-user-resume'
-          : options.verifyResumeId
-            ? 'verify-resume'
-            : options.produceKeysResumeId
-              ? 'produce-keys-resume'
-              : 'unknown';
+    const run = resolveOrchestratorRun(options);
 
-    console.log(`[orchestrator] mode=${runMode} sessionId=${sessionId}`);
+    console.log(`[orchestrator] mode=${run.mode} sessionId=${sessionId}`);
 
-    if (options.taskId) {
-      const task = await fetchTaskYahl(options.taskId);
-      const { resultContextKey, stages } = parseYahlTask(task.yahl);
+    const { systemAppend: workspaceAppend } = await prepareTaskWorkspace(sessionId);
+    const prepared = await resolvePreparedRun(sessionId, run);
 
-      await tracker.registerSession(sessionId, {
-        parsedStages: stages,
-        resultContextKey,
-        taskId: task.taskId,
-        taskYahlPath: task.path,
-      });
-
-      const mount = await mountTaskSkillsToSession(sessionId, task.taskId);
-
-      if (task.yahl.includes('~/task-skills/')) {
-        if (!mount.mounted) {
-          throw new Error(
-            `[orchestrator] task references ~/task-skills/ but mount failed taskId=${task.taskId} source=${mount.source}`,
-          );
-        }
-
-        const verified = await verifyTaskSkillsMount(mount.target);
-
-        if (!verified) {
-          throw new Error(
-            `[orchestrator] task-skills mount incomplete sessionId=${sessionId} target=${mount.target}`,
-          );
-        }
-      }
-
-      const systemAppend = await mergeTaskSystemAppend(sessionId, task.taskId);
-
-      const session = await fetchSession(sessionId);
-
-      console.log(`[orchestrator] runYahl start sessionId=${sessionId} stageCount=${stages.length}`);
-
-      const { storage } = await runYahl(task.yahl, {
-        runInput: session.runInput,
-        stages,
-        systemAppend,
-      });
-
-      await publishSessionResult(sessionId, resultContextKey, storage);
-    } else if (options.forkrunId) {
-      const forkManager = await initForkSessionManager(options.forkrunId);
-      globalThis.forkSessionManager = forkManager;
-  
-      if (sessionId !== forkManager.targetSessionId) {
-        throw new Error(
-          `Session id mismatch: CLI ${sessionId} vs fork target ${forkManager.targetSessionId}`,
-        );
-      }
-
-      if (forkManager.taskYahlPath) {
-        await mountTaskSkillsToSession(
-          sessionId,
-          deriveTaskIdFromYahlPath(forkManager.taskYahlPath),
-        );
-      }
-
-      const { storage } = await runForkSession(options.forkrunId, forkManager);
-
-      await publishSessionResult(sessionId, forkManager.resultContextKey, storage);
-    } else if (options.resumeId) {
-      const session = await fetchSession(sessionId);
-
-      if (session.taskId) {
-        await mountTaskSkillsToSession(sessionId, session.taskId);
-      }
-
-      const { resultContextKey, storage } = await runAskUserResume(sessionId, options.resumeId);
-
-      await publishSessionResult(sessionId, resultContextKey, storage);
-    } else if (options.verifyResumeId) {
-      const session = await fetchSession(sessionId);
-
-      if (session.taskId) {
-        await mountTaskSkillsToSession(sessionId, session.taskId);
-      }
-
-      const { resultContextKey, storage } = await runVerifyResume(sessionId, options.verifyResumeId);
-
-      await publishSessionResult(sessionId, resultContextKey, storage);
-    } else if (options.produceKeysResumeId) {
-      const session = await fetchSession(sessionId);
-
-      if (session.taskId) {
-        await mountTaskSkillsToSession(sessionId, session.taskId);
-      }
-
-      const { resultContextKey, storage } = await runProduceKeysResume(sessionId, options.produceKeysResumeId);
-
-      await publishSessionResult(sessionId, resultContextKey, storage);
-    } else {
-      throw new Error('No task id, resume id, verify resume id, produce-keys resume id, or forkrun id provided');
+    if (!prepared.systemAppend && workspaceAppend) {
+      prepared.systemAppend = workspaceAppend;
+    } else if (prepared.systemAppend && workspaceAppend) {
+      prepared.systemAppend = `${workspaceAppend}\n\n${prepared.systemAppend}`;
     }
+
+    console.log(
+      `[orchestrator] runSessionFrom start sessionId=${sessionId} stageIndex=${prepared.cursor.stageIndex} stageCount=${prepared.parsedStages.length}`,
+    );
+
+    const { resultContextKey, storage } = await runSessionFrom(sessionId, prepared);
+
+    await publishSessionResult(sessionId, resultContextKey, storage);
   } catch (error) {
     const catchKind = error instanceof AskUserPausedError
       ? 'AskUserPausedError'
@@ -299,6 +199,7 @@ runCommand.action(async options => {
       } catch (shutdownError) {
         console.error('[orchestrator] shutdownAgent failed:', shutdownError);
       }
+
     } else {
       console.log(
         `[yahl-diag] finally skip shutdownAgent pid=${process.pid} sessionId=${sessionId}`,

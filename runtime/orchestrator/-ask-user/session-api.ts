@@ -1,4 +1,5 @@
 import type { AskUserBatchAnswerInput, AskUserBatchToolArguments } from '@/shared/ask-user-batch';
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
 
 import type { TParsedStageSnapshot } from './parsed-stage-snapshot';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
@@ -41,6 +42,29 @@ export type TStageDetailForResume = {
   }[];
   stage: Record<string, unknown>;
   toolCalls: { tools: { arguments: unknown; id: string; name: string }[] }[];
+};
+
+export type TSessionRunCursor = {
+  kind: 'pipeline';
+  loopMeta?: Record<string, unknown>;
+  stageIndex: number;
+};
+
+export type TSessionFetch = {
+  forkedFrom?: {
+    anchorStageId: string;
+    forkSessionId: string;
+    sourceSessionId: string;
+  };
+  parsedStages: ParsedStage[];
+  resultContextKey?: string;
+  runCursor?: TSessionRunCursor;
+  runInput: Record<string, unknown>;
+  sessionId: string;
+  storageSeed?: Record<string, unknown>;
+  taskId: string;
+  taskSkills: TTaskSkillFile[];
+  taskYahl: string;
 };
 
 export const postAskUserBatch = async (
@@ -118,19 +142,7 @@ export const fetchSession = async (sessionId: string) => {
     throw new Error(`session fetch failed (${response.status})`);
   }
 
-  return response.json() as Promise<{
-    forkedFrom?: {
-      anchorStageId: string;
-      forkSessionId: string;
-      sourceSessionId: string;
-    };
-    parsedStages?: ParsedStage[];
-    resultContextKey?: string;
-    runInput?: Record<string, unknown>;
-    sessionId: string;
-    taskId?: string;
-    taskYahlPath?: string;
-  }>;
+  return response.json() as Promise<TSessionFetch>;
 };
 
 export type { AskUserBatchAnswerInput };

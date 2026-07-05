@@ -10,8 +10,9 @@ export const config = {
   port: Number(process.env.MASTERMIND_PORT?.trim() || '4100'),
   repoRoot: process.env.HOST_REPO_ROOT?.trim()
     || path.resolve(moduleDir, '../..'),
+  sdkStreamLog: process.env.MASTERMIND_SDK_STREAM_LOG?.trim() === '1',
   sessionApiBaseUrl: (process.env.SESSION_API_BASE_URL?.trim() || 'http://server:4000').replace(/\/+$/, ''),
-  workspaceRoot: process.env.WORKSPACE_ROOT?.trim() || '/root',
+  workspaceRoot: process.env.WORKSPACE_ROOT?.trim() || '/workspace',
 };
 
 export const paths = {

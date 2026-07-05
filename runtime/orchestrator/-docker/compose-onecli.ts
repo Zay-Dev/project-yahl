@@ -175,7 +175,7 @@ export type TAgentSessionOverrideOptions = {
 };
 
 export const writeAgentSessionOverride = async (opts: TAgentSessionOverrideOptions) => {
-  const sessionHome = `/root/sessions/${opts.sessionId}`;
+  const sessionHome = `/workspace/sessions/${opts.sessionId}`;
   const lines = [
     "services:",
     "  agent:",
