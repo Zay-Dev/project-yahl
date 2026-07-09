@@ -3,6 +3,8 @@ export const config = {
   batchRunsRoot: process.env.WORKER_BATCH_RUNS_ROOT?.trim() || '/tmp/yahl-batch-runs',
   cronRefreshMs: Number(process.env.WORKER_CRON_REFRESH_MS?.trim() || '60000'),
   healthPort: Number(process.env.WORKER_HEALTH_PORT?.trim() || '4200'),
+  knowledgeQaChecklistRoot: process.env.KNOWLEDGE_QA_CHECKLIST_ROOT?.trim()
+    || '/opt/knowledge-qa-checklist',
   mastermindApiUrl: (process.env.MASTERMIND_API_URL?.trim() || 'http://mastermind:4100').replace(/\/+$/, ''),
   pollIntervalMs: Number(process.env.WORKER_POLL_INTERVAL_MS?.trim() || '5000'),
   sessionApiBaseUrl: (process.env.SESSION_API_BASE_URL?.trim() || 'http://server:4000').replace(/\/+$/, ''),

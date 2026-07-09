@@ -39,11 +39,11 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
 
-Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, extract-knowledge, persist-knowledge, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
+Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, get-knowledge, upsert-knowledge-page, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
 
-Knowledge read/write: use **`extract-knowledge`** and **`persist-knowledge`** with semantic `need` / `key` / `topic` only — never pass file paths to those skills.
+Knowledge read/write: use **`get-knowledge`** and **`upsert-knowledge-page`** with semantic `need` / `key` / `topic` only — never pass file paths to those skills.
 
-**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container). After **`extract-knowledge`**, read **`~/knowledge/{key}.json`** — never read `~/knowledges/` (canonical store is mastermind-private).
+**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container). After **`get-knowledge`**, read **`~/knowledge/{key}.json`** — never read `~/knowledges/` (canonical store is mastermind-private).
 
 - Arguments: `{ "mode": "goto|act|extract|observe|agent", "instruction": "<text>", "url"?: "<url>", "schema"?: { ... }, "maxSteps"?: <number> }`.
 - Returns JSON `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.
@@ -103,4 +103,4 @@ Examples
 7. `records = [...records, ...new_records];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array>`.
 8. `records = [...records, ...new_records, mandatory_record];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array_with_mandatory_record>`.
 9. `value += other_value;` -> compute the updated value first (`value + other_value`), then call `set_context` with `scope="stage"` (or `global`), `key="value"`, `operation="set"`, `value=<updated_value>`.
-10. `EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);` -> after `/mastermind(persist-knowledge, ...)`, call `set_context` with `scope="global"`, `key="knowledge_paths"`, `operation="set"`, `value=<merged knowledge_paths>` where each `persisted[]` item is `{ key, relativePath, absolutePath }` — never bare path strings.
+10. `EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);` -> after `/mastermind(upsert-knowledge-page, ...)`, call `set_context` with `scope="global"`, `key="knowledge_paths"`, `operation="set"`, `value=<merged knowledge_paths>` where each `persisted[]` item is `{ key, relativePath, absolutePath }` — never bare path strings.

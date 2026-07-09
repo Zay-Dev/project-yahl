@@ -11,23 +11,29 @@ import {
 
 import {
   expandTopicSlugs,
-  findKnowledgeFileByBasename,
   hasPathArgs,
   measurePersistPayloadBytes,
-  readKnowledgeCorpus,
   resolveCanonicalTopic,
-  resolveKnowledgeWritePath,
   resolveTopicForPersist,
   runTidyKnowledge,
   evaluateKnowledgeRefresh,
   listTopicPolicies,
   patchTopicPolicy,
-  serializeMarkdownBody,
+  resolveTopicPolicy,
+  shouldPersistAsMarkdown,
   type TPatchTopicPolicyInput,
   type TRefreshInterval,
   type TRefreshRunStatus,
   type TTopicRefreshScope,
 } from '../-knowledge/index.js';
+import {
+  loadKnowledgeCorpusForNeed,
+  listKnowledgeWikiPages,
+  searchKnowledgeWiki,
+  upsertKnowledgeWikiPage,
+  upsertLegacyKnowledgeKey,
+  wikiConfigured,
+} from '../-knowledge/wiki/index.js';
 import { formatShortError, writeAndAnalyzeCrash } from '../-crash-reports/index.js';
 import { config, paths } from '../config.js';
 import type { TMastermindAgent } from '../-sdk/agent.js';
@@ -201,20 +207,31 @@ const buildSkillPrompt = async (
         'Extract only what was requested. Return plain text or JSON.',
       ].filter(Boolean).join('\n\n');
 
+    case 'get-knowledge':
     case 'extract-knowledge': {
       const need = args.need ?? args.lookingFor ?? 'key facts';
       const knowledgeTopic = typeof args.topic === 'string' ? args.topic : undefined;
-      const corpus = await readKnowledgeCorpus(64_000, knowledgeTopic);
       const topicSlugs = knowledgeTopic ? await expandTopicSlugs(knowledgeTopic) : [];
+      let corpus = '';
+      let corpusSource = 'empty';
+
+      if (wikiConfigured()) {
+        const loaded = await loadKnowledgeCorpusForNeed(knowledgeTopic, String(need));
+
+        corpus = loaded.corpus;
+        corpusSource = loaded.source;
+      } else {
+        console.warn('[mastermind] get-knowledge: Wiki.js not configured (WIKI_API_TOKEN required); returning empty corpus');
+      }
 
       return [
-        'You are the YAHL mastermind extract-knowledge helper.',
+        'You are the YAHL mastermind get-knowledge helper.',
         'Read only from the knowledge corpus below.',
         `Need: ${JSON.stringify(need)}`,
         knowledgeTopic
           ? `Topic filter: ${knowledgeTopic}${topicSlugs.length > 1 ? ` (includes aliases: ${topicSlugs.join(', ')})` : ''}`
           : '',
-        corpus ? `Knowledge corpus:\n${corpus}` : 'Knowledge corpus: (empty)',
+        corpus ? `Knowledge corpus (${corpusSource}):\n${corpus}` : 'Knowledge corpus: (empty)',
         'Extract only what was requested. Return plain text or JSON.',
         'If the requested information is not present in the corpus, return exactly: <none>',
       ].filter(Boolean).join('\n\n');
@@ -270,6 +287,7 @@ const buildSkillPrompt = async (
         'You are the YAHL mastermind design-questions helper.',
         'Return JSON only: {"batches":[{"batchId":"...","title":"...","questions":[...]}],"done":boolean}',
         'Each batch must contain only independently answerable questions (unique questionRef per batch).',
+        'Prefer multipleChoice over text when 2–6 discrete answers fit; use text only for open-ended gaps.',
         'Question kinds: "text" or "multipleChoice" (radio when allowMultiple false, checkboxes when true).',
         'multipleChoice requires at least 2 options with non-empty id and label.',
         'Do not include allowFreeText — free-text counter-option is built into the UI.',
@@ -322,7 +340,13 @@ const runTidyKnowledgeSkill = async (
     : process.env.KNOWLEDGE_TIDY_DRY_RUN?.trim() !== 'false';
 
   try {
-    const report = await runTidyKnowledge({ dryRun });
+    const report = await runTidyKnowledge({
+      dryRun,
+      restoreFromArchive: args.restoreFromArchive === true,
+      skipDuplicates: args.skipDuplicates === true,
+      skipWiki: args.skipWiki === true,
+      topic: typeof args.topic === 'string' ? args.topic : undefined,
+    });
 
     return {
       data: { report },
@@ -331,6 +355,66 @@ const runTidyKnowledgeSkill = async (
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'tidy-knowledge failed',
+      ok: false,
+    };
+  }
+};
+
+const runKnowledgeQaReviewSkill = async (
+  args: Record<string, unknown>,
+  body: TSkillRequest,
+): Promise<TSkillResponse> => {
+  const topic = typeof args.topic === 'string' ? args.topic.trim() : '';
+
+  if (!topic) {
+    return { error: 'topic required', ok: false };
+  }
+
+  const sessionId = body.sessionId?.trim();
+  const requestId = body.requestId?.trim();
+
+  if (!sessionId || !requestId) {
+    return { error: 'sessionId and requestId required', ok: false };
+  }
+
+  const need = typeof args.need === 'string'
+    ? args.need
+    : 'overview, brief, facts, sources, raw keys';
+  const auditIssues = Array.isArray(args.auditIssues)
+    ? args.auditIssues.filter((item): item is string => typeof item === 'string')
+    : [];
+
+  try {
+    const loaded = wikiConfigured()
+      ? await loadKnowledgeCorpusForNeed(topic, need)
+      : { corpus: '', source: 'graphql' as const };
+
+    const res = await fetch(`${config.workerApiUrl}/v1/knowledge-qa-review`, {
+      body: JSON.stringify({
+        auditIssues,
+        corpusMd: loaded.corpus,
+        invocationId: body.invocationId,
+        requestId,
+        sessionId,
+        topic,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    if (!res.ok) {
+      return { error: `knowledge-qa-review failed: ${res.status}`, ok: false };
+    }
+
+    const review = await res.json() as Record<string, unknown>;
+
+    return {
+      data: { review },
+      ok: true,
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'knowledge-qa-review failed',
       ok: false,
     };
   }
@@ -410,6 +494,31 @@ export const runListTopicPolicies = async (): Promise<TSkillResponse> => {
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'list-topic-policies failed',
+      ok: false,
+    };
+  }
+};
+
+export const runResolveTopicPolicy = async (
+  args: Record<string, unknown>,
+): Promise<TSkillResponse> => {
+  const topic = typeof args.topic === 'string'
+    ? args.topic.trim()
+    : typeof args.slug === 'string'
+      ? args.slug.trim()
+      : '';
+
+  if (!topic) {
+    return { error: 'resolve-topic-policy requires topic', ok: false };
+  }
+
+  try {
+    const resolved = await resolveTopicPolicy(topic);
+
+    return { data: resolved, ok: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'resolve-topic-policy failed',
       ok: false,
     };
   }
@@ -534,27 +643,11 @@ const runDispatchTaskRun = async (
   }
 };
 
-const runPersistKnowledge = async (
+const runUpsertKnowledgePage = async (
   args: Record<string, unknown>,
 ): Promise<TSkillResponse> => {
   if (hasPathArgs(args)) {
-    return { ok: false, error: 'persist-knowledge does not accept file paths' };
-  }
-
-  const key = typeof args.key === 'string' ? args.key.trim() : '';
-
-  if (!key) {
-    return { ok: false, error: 'persist-knowledge requires key' };
-  }
-
-  if (args.value === undefined) {
-    return { ok: false, error: 'persist-knowledge requires value' };
-  }
-
-  const shapeError = validatePersistKnowledgeValue(key, args.value);
-
-  if (shapeError) {
-    return { ok: false, error: shapeError };
+    return { ok: false, error: 'upsert-knowledge-page does not accept file paths' };
   }
 
   const topic = typeof args.topic === 'string' ? args.topic.trim() : undefined;
@@ -562,69 +655,112 @@ const runPersistKnowledge = async (
   const seedUrls = Array.isArray(args.seedUrls)
     ? args.seedUrls.filter((url): url is string => typeof url === 'string')
     : undefined;
+  const key = typeof args.key === 'string' ? args.key.trim() : '';
+  const page = typeof args.page === 'string' ? args.page.trim() : '';
+  const content = typeof args.content === 'string' ? args.content : undefined;
+  const mode = args.mode === 'append' || args.mode === 'create' || args.mode === 'replace'
+    ? args.mode
+    : undefined;
+
+  if (!wikiConfigured()) {
+    return {
+      error: 'Wiki.js not configured (WIKI_API_TOKEN required)',
+      ok: false,
+    };
+  }
+
+  if (key) {
+    if (args.value === undefined) {
+      return { ok: false, error: 'upsert-knowledge-page requires value when key is set' };
+    }
+
+    const shapeError = validatePersistKnowledgeValue(key, args.value);
+
+    if (shapeError) {
+      return { ok: false, error: shapeError };
+    }
+
+    const payloadBytes = measurePersistPayloadBytes(
+      key,
+      args.value,
+      shouldPersistAsMarkdown(key, args.value) ? '.md' : '.json',
+    );
+
+    if (payloadBytes > PERSIST_KNOWLEDGE_MAX_VALUE_BYTES) {
+      return {
+        error: 'value too large; persist summary chunks under separate pages (e.g. studies/{slug}, facts)',
+        ok: false,
+      };
+    }
+  } else if (!page || (content === undefined && args.value === undefined)) {
+    return { ok: false, error: 'upsert-knowledge-page requires page+content or key+value' };
+  }
 
   try {
     const resolved = await resolveTopicForPersist({ seedUrls, topic, topicText });
     const canonicalTopic = resolved.canonical;
-    const { absolute, extension, relative } = await resolveKnowledgeWritePath(key, canonicalTopic, args.value);
-    const payloadBytes = measurePersistPayloadBytes(key, args.value, extension);
 
-    if (payloadBytes > PERSIST_KNOWLEDGE_MAX_VALUE_BYTES) {
+    if (key) {
+      const written = await upsertLegacyKnowledgeKey({
+        canonical: canonicalTopic,
+        key,
+        value: args.value,
+      });
+
       return {
-        error: 'value too large; persist summary chunks under separate keys (e.g. study_{slug}, facts)',
-        ok: false,
+        data: {
+          absolutePath: written.pagePath,
+          canonicalTopic,
+          key,
+          page: written.page,
+          pagePath: written.pagePath,
+          path: written.pagePath,
+          relativePath: written.pagePath,
+          wikiPath: written.wikiPath,
+          ...(written.rawPath ? { rawPath: written.rawPath } : {}),
+          ...(written.quality ? { quality: written.quality } : {}),
+          ...(topic && topic !== canonicalTopic ? { redirectedFrom: topic } : {}),
+        },
+        ok: true,
       };
     }
 
-    await fs.mkdir(path.dirname(absolute), { recursive: true });
-
-    if (extension === '.md') {
-      await fs.writeFile(absolute, serializeMarkdownBody(args.value), 'utf8');
-    } else {
-      const existing = await findKnowledgeFileByBasename(key, canonicalTopic);
-      let payload: Record<string, unknown>;
-
-      if (existing && path.extname(existing).toLowerCase() === '.json') {
-        try {
-          const raw = await fs.readFile(existing, 'utf8');
-          const parsed = JSON.parse(raw) as Record<string, unknown>;
-
-          payload = { ...parsed, [key]: args.value };
-        } catch {
-          payload = { [key]: args.value };
-        }
-      } else {
-        payload = { [key]: args.value };
-      }
-
-      await fs.writeFile(absolute, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-    }
+    const written = await upsertKnowledgeWikiPage({
+      canonical: canonicalTopic,
+      content: content ?? String(args.value ?? ''),
+      mode,
+      page,
+      title: typeof args.title === 'string' ? args.title : undefined,
+    });
 
     return {
       data: {
-        absolutePath: `~/knowledges/${relative}`,
+        absolutePath: written.pagePath,
         canonicalTopic,
-        key,
-        path: relative,
-        relativePath: relative,
+        page,
+        pagePath: written.pagePath,
+        path: written.pagePath,
+        relativePath: written.pagePath,
+        wikiPath: written.wikiPath,
         ...(topic && topic !== canonicalTopic ? { redirectedFrom: topic } : {}),
       },
       ok: true,
     };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : 'persist-knowledge failed',
+      error: error instanceof Error ? error.message : 'upsert-knowledge-page failed',
       ok: false,
     };
   }
 };
 
-const runExtractKnowledge = async (
+const runGetKnowledge = async (
   agent: TMastermindAgent,
   body: TSkillRequest,
+  skillName: 'extract-knowledge' | 'get-knowledge' = 'get-knowledge',
 ): Promise<TSkillResponse> => {
   if (hasPathArgs(body.args)) {
-    return { ok: false, error: 'extract-knowledge does not accept file paths' };
+    return { ok: false, error: `${skillName} does not accept file paths` };
   }
 
   const sessionId = body.sessionId?.trim() ?? '';
@@ -637,7 +773,7 @@ const runExtractKnowledge = async (
   const need = String(body.args.need ?? body.args.lookingFor ?? 'key facts').trim();
 
   if (!need) {
-    return { ok: false, error: 'extract-knowledge requires need' };
+    return { ok: false, error: `${skillName} requires need` };
   }
 
   const topic = typeof body.args.topic === 'string' ? body.args.topic.trim() : undefined;
@@ -648,20 +784,20 @@ const runExtractKnowledge = async (
     failRequestActivity(activity, {
       error: 'mastermind unavailable',
       kind: 'skill',
-      skill: 'extract-knowledge',
+      skill: skillName,
       unavailable: true,
     });
 
     return { ok: false, error: 'mastermind unavailable' };
   }
 
-  const prompt = await buildSkillPrompt('extract-knowledge', body.args, body.sessionId);
+  const prompt = await buildSkillPrompt(skillName, body.args, body.sessionId);
   const mode = 'agent' as const;
   const startedAt = Date.now();
   const activity = resolveRequestActivityRef(body.sessionId, body.requestId, body.invocationId);
 
   console.log(
-    `[mastermind] skill=extract-knowledge start sessionId=${sessionId} caller=${body.caller}`,
+    `[mastermind] skill=${skillName} start sessionId=${sessionId} caller=${body.caller}`,
   );
 
   if (activity) {
@@ -670,7 +806,7 @@ const runExtractKnowledge = async (
       kind: 'skill',
       requestId: activity.requestId,
       sessionId: activity.sessionId,
-      skill: 'extract-knowledge',
+      skill: skillName,
     });
   }
 
@@ -694,7 +830,7 @@ const runExtractKnowledge = async (
     const durationMs = Date.now() - startedAt;
 
     console.log(
-      `[mastermind] skill=extract-knowledge done ok=true durationMs=${durationMs} key=${written.key} absent=${absent}`,
+      `[mastermind] skill=${skillName} done ok=true durationMs=${durationMs} key=${written.key} absent=${absent}`,
     );
 
     if (activity) {
@@ -719,7 +855,7 @@ const runExtractKnowledge = async (
     const shortError = formatShortError(error);
 
     console.log(
-      `[mastermind] skill=extract-knowledge done ok=false durationMs=${durationMs} error=${shortError}`,
+      `[mastermind] skill=${skillName} done ok=false durationMs=${durationMs} error=${shortError}`,
     );
 
     if (activity) {
@@ -739,7 +875,7 @@ const runExtractKnowledge = async (
       mode,
       promptPreview: prompt,
       sessionId: body.sessionId,
-      skill: 'extract-knowledge',
+      skill: skillName,
     }).catch((reportError) => {
       console.error('[mastermind] crash report failed', reportError);
     });
@@ -751,6 +887,59 @@ const runExtractKnowledge = async (
   }
 };
 
+const runListKnowledgePages = async (
+  args: Record<string, unknown>,
+): Promise<TSkillResponse> => {
+  const topic = typeof args.topic === 'string' ? args.topic.trim() : '';
+
+  if (!topic) {
+    return { ok: false, error: 'list-knowledge-pages requires topic' };
+  }
+
+  try {
+    const pages = await listKnowledgeWikiPages(topic);
+
+    return { data: { pages, topic }, ok: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'list-knowledge-pages failed',
+      ok: false,
+    };
+  }
+};
+
+const runSearchKnowledge = async (
+  args: Record<string, unknown>,
+): Promise<TSkillResponse> => {
+  const query = typeof args.query === 'string'
+    ? args.query.trim()
+    : typeof args.need === 'string'
+      ? args.need.trim()
+      : '';
+
+  if (!query) {
+    return { ok: false, error: 'search-knowledge requires query' };
+  }
+
+  const topic = typeof args.topic === 'string' ? args.topic.trim() : undefined;
+
+  try {
+    const results = await searchKnowledgeWiki(query, topic);
+
+    return { data: { query, results, topic }, ok: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'search-knowledge failed',
+      ok: false,
+    };
+  }
+};
+
+const runExtractKnowledge = async (
+  agent: TMastermindAgent,
+  body: TSkillRequest,
+): Promise<TSkillResponse> => runGetKnowledge(agent, body, 'extract-knowledge');
+
 export const runSkill = async (
   agent: TMastermindAgent,
   name: TSkillName,
@@ -760,12 +949,24 @@ export const runSkill = async (
     return { ok: false, error: 'skills require caller stage-agent' };
   }
 
+  if (name === 'get-knowledge') {
+    return runGetKnowledge(agent, body, 'get-knowledge');
+  }
+
   if (name === 'extract-knowledge') {
     return runExtractKnowledge(agent, body);
   }
 
-  if (name === 'persist-knowledge') {
-    return runPersistKnowledge(body.args);
+  if (name === 'upsert-knowledge-page' || name === 'persist-knowledge') {
+    return runUpsertKnowledgePage(body.args);
+  }
+
+  if (name === 'list-knowledge-pages') {
+    return runListKnowledgePages(body.args);
+  }
+
+  if (name === 'search-knowledge') {
+    return runSearchKnowledge(body.args);
   }
 
   if (name === 'resolve-topic') {
@@ -776,8 +977,16 @@ export const runSkill = async (
     return runTidyKnowledgeSkill(body.args);
   }
 
+  if (name === 'knowledge-qa-review') {
+    return runKnowledgeQaReviewSkill(body.args, body);
+  }
+
   if (name === 'list-topic-policies') {
     return runListTopicPolicies();
+  }
+
+  if (name === 'resolve-topic-policy') {
+    return runResolveTopicPolicy(body.args);
   }
 
   if (name === 'patch-topic-policy') {

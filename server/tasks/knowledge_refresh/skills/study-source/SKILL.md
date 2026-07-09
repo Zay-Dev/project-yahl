@@ -28,7 +28,9 @@ When extracting facts, cite `sources[]` URLs. Rebuild `sources` index from persi
 ## Persist
 
 ```text
-/mastermind(persist-knowledge, topic: knowledge_topic, key: study_{slug}, value: { url, title, studyMd, studiedAt, trustTier })
+/mastermind(upsert-knowledge-page, topic: knowledge_topic, key: study_{slug}, value: { url, title, studyMd, studiedAt, trustTier })
 ```
+
+Mastermind writes `studyMd` to wiki page `studies/{slug}` and metadata to `raw/study_{slug}`.
 
 Immediately append returned `{ path }` to `knowledge_paths.persisted`.

@@ -15,7 +15,9 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { ActivityIcon, ClockIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon, RefreshCwIcon } from "lucide-react"
+import { ActivityIcon, BookOpenIcon, ClockIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon, RefreshCwIcon } from "lucide-react"
+
+import { WIKI_PUBLIC_URL } from "@/providers/constants"
 
 const data = {
   user: {
@@ -80,10 +82,16 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
         <ListIcon
         />
       ),
-      items: sessions.slice(0, 6).map((session) => ({
-        title: session.taskId?.trim() || "Unknown task",
-        url: `/sessions/${encodeURIComponent(session.sessionId)}`,
-      })),
+      items: [
+        {
+          title: "Pending questions",
+          url: "/sessions/pending-questions",
+        },
+        ...sessions.slice(0, 6).map((session) => ({
+          title: session.taskId?.trim() || "Unknown task",
+          url: `/sessions/${encodeURIComponent(session.sessionId)}`,
+        })),
+      ],
     },
     {
       title: "Health",
@@ -106,6 +114,15 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       url: "/platform/cron-jobs",
       icon: (
         <ClockIcon
+        />
+      ),
+    },
+    {
+      title: "Knowledge",
+      external: true,
+      url: `${WIKI_PUBLIC_URL}/`,
+      icon: (
+        <BookOpenIcon
         />
       ),
     },

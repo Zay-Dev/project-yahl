@@ -36,4 +36,4 @@ Use `/mastermind(research, topic: …)` in stage logic. Calls the `mastermind` t
 
 Returns Markdown: Summary, Key points, Quotes/data, Open questions, Source URL.
 
-Write results to stage context via `set_context` after the tool returns. Persist study notes with `persist-knowledge` immediately — cap `studyMd` at 12KB per key.
+Write results to stage context via `set_context` after the tool returns. Persist study notes with `upsert-knowledge-page` immediately — cap `studyMd` at 12KB per key.

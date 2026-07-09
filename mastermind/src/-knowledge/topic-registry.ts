@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-import { paths } from '../config.js';
+import { config, paths } from '../config.js';
 
 import {
   normalizeTopicText,
@@ -10,10 +10,11 @@ import {
   slugifyTopicText,
   urlSignalsOverlap,
 } from './topic-slug.js';
+import { resolveExportTopicsRoot, WIKI_TOPICS_ROOT } from './wiki/wiki-paths.js';
 
-const REGISTRY_DIR = path.join(paths.knowledges, '_index');
-const REGISTRY_PATH = path.join(REGISTRY_DIR, 'topics.json');
-const RESERVED_DIRS = new Set(['_index', '_archive']);
+const REGISTRY_DIR = path.join(config.dataRoot, '_index');
+const REGISTRY_PATH = paths.topicsRegistry;
+const LEGACY_REGISTRY_PATH = path.join(paths.knowledges, '_index', 'topics.json');
 
 export type TTopicSignals = {
   seedUrlHosts: string[];
@@ -76,37 +77,21 @@ const emptyRegistry = (): TTopicRegistry => ({ topics: [] });
 
 const nowIso = () => new Date().toISOString();
 
-const readJsonFile = async (filePath: string): Promise<Record<string, unknown> | null> => {
-  try {
-    const raw = await fs.readFile(filePath, 'utf8');
-
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-};
-
-const unwrapKeyedValue = <T>(parsed: Record<string, unknown>, key: string): T | undefined => {
-  const nested = parsed[key];
-
-  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    return nested as T;
-  }
-
-  return parsed as T;
-};
-
 export const loadRegistry = async (): Promise<TTopicRegistry> => {
-  try {
-    const raw = await fs.readFile(REGISTRY_PATH, 'utf8');
-    const parsed = JSON.parse(raw) as TTopicRegistry;
+  for (const candidate of [REGISTRY_PATH, LEGACY_REGISTRY_PATH]) {
+    try {
+      const raw = await fs.readFile(candidate, 'utf8');
+      const parsed = JSON.parse(raw) as TTopicRegistry;
 
-    return {
-      topics: Array.isArray(parsed.topics) ? parsed.topics : [],
-    };
-  } catch {
-    return emptyRegistry();
+      return {
+        topics: Array.isArray(parsed.topics) ? parsed.topics : [],
+      };
+    } catch {
+      // try next
+    }
   }
+
+  return emptyRegistry();
 };
 
 export const saveRegistry = async (registry: TTopicRegistry): Promise<void> => {
@@ -129,82 +114,92 @@ const findEntryBySlug = (registry: TTopicRegistry, slug: string): TTopicRegistry
   return null;
 };
 
-const collectStudyUrls = async (topicDir: string): Promise<string[]> => {
-  const urls = new Set<string>();
+const summarizeExportTopicDir = async (slug: string, topicDir: string): Promise<TTopicFolderSummary> => {
+  let fileCount = 0;
+  let updatedAt: string | undefined;
 
-  try {
-    const entries = await fs.readdir(topicDir, { withFileTypes: true });
+  const walk = async (dir: string): Promise<void> => {
+    const dirEntries = await fs.readdir(dir, { withFileTypes: true });
 
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.startsWith('study_') || !entry.name.endsWith('.json')) {
+    for (const child of dirEntries) {
+      if (child.name.startsWith('.')) {
         continue;
       }
 
-      const parsed = await readJsonFile(path.join(topicDir, entry.name));
-      const studyKey = path.basename(entry.name, '.json');
-      const study = parsed ? unwrapKeyedValue<{ url?: string }>(parsed, studyKey) : undefined;
+      const childPath = path.join(dir, child.name);
 
-      if (typeof study?.url === 'string' && study.url.trim()) {
-        urls.add(study.url.trim());
+      if (child.isDirectory()) {
+        await walk(childPath);
+        continue;
+      }
+
+      if (child.name.endsWith('.md') || child.name.endsWith('.json')) {
+        fileCount += 1;
+        const stat = await fs.stat(childPath);
+        const mtime = stat.mtime.toISOString();
+
+        if (!updatedAt || mtime > updatedAt) {
+          updatedAt = mtime;
+        }
       }
     }
+  };
+
+  try {
+    await walk(topicDir);
   } catch {
-    // skip unreadable topic dir
+    // skip
   }
 
-  return [...urls];
+  let seedUrls: string[] = [];
+
+  try {
+    const overview = await fs.readFile(path.join(topicDir, 'overview.md'), 'utf8');
+    const matches = overview.matchAll(/https?:\/\/[^\s)]+/g);
+
+    seedUrls = [...new Set([...matches].map((match) => match[0]))];
+  } catch {
+    // optional
+  }
+
+  return {
+    fileCount,
+    seedUrls,
+    slug,
+    studyKeyCount: fileCount,
+    updatedAt,
+  };
 };
 
 export const listTopicFolderSummaries = async (): Promise<TTopicFolderSummary[]> => {
-  const summaries: TTopicFolderSummary[] = [];
+  const summaries = new Map<string, TTopicFolderSummary>();
+  const roots = [
+    path.join(paths.knowledgeExport, resolveExportTopicsRoot()),
+    path.join(paths.knowledgeExport, WIKI_TOPICS_ROOT),
+  ];
 
-  let entries;
-
-  try {
-    entries = await fs.readdir(paths.knowledges, { withFileTypes: true });
-  } catch {
-    return summaries;
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith('.') || RESERVED_DIRS.has(entry.name)) {
-      continue;
-    }
-
-    const topicDir = path.join(paths.knowledges, entry.name);
-    let fileCount = 0;
-
+  for (const topicsRoot of roots) {
     try {
-      const files = await fs.readdir(topicDir);
+      const entries = await fs.readdir(topicsRoot, { withFileTypes: true });
 
-      fileCount = files.filter((name) => name.endsWith('.json') || name.endsWith('.md')).length;
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.')) {
+          continue;
+        }
+
+        if (!summaries.has(entry.name)) {
+          summaries.set(
+            entry.name,
+            await summarizeExportTopicDir(entry.name, path.join(topicsRoot, entry.name)),
+          );
+        }
+      }
     } catch {
-      // skip
+      // optional export mirror
     }
-
-    const learningContract = await readJsonFile(path.join(topicDir, 'learning_contract.json'));
-    const contract = learningContract
-      ? unwrapKeyedValue<{ seedUrls?: string[]; topic?: string }>(learningContract, 'learning_contract')
-      : undefined;
-    const meta = await readJsonFile(path.join(topicDir, 'meta.json'));
-    const metaValue = meta ? unwrapKeyedValue<{ updated_at?: string }>(meta, 'meta') : undefined;
-    const seedUrls = [
-      ...(Array.isArray(contract?.seedUrls) ? contract.seedUrls.filter((url) => typeof url === 'string') : []),
-      ...(await collectStudyUrls(topicDir)),
-    ];
-
-    summaries.push({
-      fileCount,
-      learningContractTopic: typeof contract?.topic === 'string' ? contract.topic : undefined,
-      seedUrls: [...new Set(seedUrls)],
-      slug: entry.name,
-      studyKeyCount: (await fs.readdir(topicDir).catch(() => []))
-        .filter((name) => name.startsWith('study_') && name.endsWith('.json')).length,
-      updatedAt: typeof metaValue?.updated_at === 'string' ? metaValue.updated_at : undefined,
-    });
   }
 
-  return summaries.sort((left, right) => left.slug.localeCompare(right.slug));
+  return [...summaries.values()].sort((left, right) => left.slug.localeCompare(right.slug));
 };
 
 const matchByTopicText = (

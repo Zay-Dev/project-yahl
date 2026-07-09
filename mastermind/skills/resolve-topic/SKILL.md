@@ -5,7 +5,7 @@ description: Resolve a learning topic slug to the canonical knowledges folder �
 
 # resolve-topic
 
-Use `/mastermind(resolve-topic, topicText: …, slug: …, seedUrls: …)` before the first `persist-knowledge` in a knowledge capture run.
+Use `/mastermind(resolve-topic, topicText: …, slug: …, seedUrls: …)` before the first `upsert-knowledge-page` in a knowledge capture run.
 
 Mastermind scans `data/mastermind/knowledges/` and the topic registry internally. **Do not pass `path`.**
 

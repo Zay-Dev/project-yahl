@@ -142,4 +142,42 @@ export const callWorkerVerify = async (body: {
   }
 };
 
+export const callWorkerKnowledgeQaReview = async (body: {
+  auditIssues?: string[];
+  corpusMd: string;
+  invocationId?: string;
+  requestId: string;
+  sessionId: string;
+  topic: string;
+}) => {
+  const baseUrl = workerBaseUrl();
+  const url = `${baseUrl}/v1/knowledge-qa-review`;
+  const startedAt = Date.now();
+
+  console.log(
+    `[worker-client] POST knowledge-qa-review sessionId=${body.sessionId} requestId=${body.requestId} topic=${body.topic}`,
+  );
+
+  const res = await fetch(url, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  if (!res.ok) {
+    console.log(
+      `[worker-client] knowledge-qa-review http=${res.status} durationMs=${Date.now() - startedAt}`,
+    );
+    throw new Error(`worker knowledge-qa-review failed: ${res.status}`);
+  }
+
+  const result = await res.json();
+
+  console.log(
+    `[worker-client] knowledge-qa-review http=${res.status} durationMs=${Date.now() - startedAt}`,
+  );
+
+  return result;
+};
+
 export { ActivityRequestFailedError as WorkerRequestFailedError };

@@ -147,6 +147,45 @@ export const listTopicPolicies = async (): Promise<TTopicPolicyRow[]> => {
   return rows.sort((left, right) => left.canonical.localeCompare(right.canonical));
 };
 
+export const resolveTopicPolicy = async (
+  topic: string,
+): Promise<{ refresh_skipped: boolean; row: TTopicPolicyRow }> => {
+  const canonical = sanitizeSegment(topic);
+
+  if (!canonical) {
+    throw new Error('resolve-topic-policy requires topic');
+  }
+
+  const rows = await listTopicPolicies();
+  const row = rows.find((item) => item.canonical === canonical)
+    ?? rows.find((item) => item.canonical === sanitizeSegment(topic));
+
+  if (!row) {
+    return {
+      refresh_skipped: true,
+      row: {
+        canonical,
+        fileCount: 0,
+        refresh: {
+          enabled: false,
+          interval: null,
+          lastRunAt: null,
+          lastRunSessionId: null,
+          lastRunStatus: null,
+          scopes: DEFAULT_REFRESH_SCOPES,
+        },
+        seedUrlCount: 0,
+        studyKeyCount: 0,
+      },
+    };
+  }
+
+  return {
+    refresh_skipped: row.refresh?.enabled !== true,
+    row,
+  };
+};
+
 export type TPatchTopicPolicyInput = {
   enabled?: boolean;
   interval?: TRefreshInterval | null;

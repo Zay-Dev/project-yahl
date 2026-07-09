@@ -1,8 +1,14 @@
 # rerun-intent
 
-Rerun gate for knowledge_capture when persisted corpus already exists for the resolved topic.
+Rerun gate for **knowledge_capture** and **knowledge_refresh** when persisted corpus already exists for the resolved topic.
 
-Read after `extract-knowledge` returns non-absent for `knowledge_topic`.
+Read after `get-knowledge` returns non-absent for `knowledge_topic`.
+
+## runInput pre-seed (knowledge_refresh)
+
+When `rerun_intent` is declared in `knowledge_refresh` `runInput:` and seeded into context, **skip all ask-user batches** in stage 1. Auto dispatch supplies defaults; manual runs may pre-answer via `POST /api/runs` `runInput`.
+
+Never ask rerun intent during types preamble (stage 0). Stage 1 owns proceed-mode intake.
 
 ## Context types
 
@@ -43,7 +49,7 @@ Write to `pending_open_questions` context key.
 
 ## Batch 2 — open questions pick
 
-Same as user-onboarding: checkbox `open_questions_pick`, then `design-questions` + ask-user for answers.
+Same as user-onboarding: checkbox `open_questions_pick`, then `design-questions` (prefer MC) + ask-user for answers.
 
 Read `~/task-skills/answer-open-questions/SKILL.md` for answer persistence and synthesis handoff.
 
@@ -72,4 +78,4 @@ Reuse patterns from user-onboarding rerun-intent: `*build_rerun_intent_batch`, `
 
 ## Persist
 
-`/mastermind(persist-knowledge, topic: knowledge_topic, key: open_questions_qa, value: { items: [...] })`.
+`/mastermind(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: [...] })`.

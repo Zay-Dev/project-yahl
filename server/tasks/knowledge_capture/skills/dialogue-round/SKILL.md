@@ -46,4 +46,4 @@ If agent marks `sufficient: true` in round agent md, skip remaining rounds for t
 
 ## Persist capture
 
-Every `persist-knowledge` return includes `{ path }` — append to `knowledge_paths.persisted` via set_context (see `context-paths` skill).
+Every `upsert-knowledge-page` return includes `{ path }` — append to `knowledge_paths.persisted` via set_context (see `context-paths` skill).

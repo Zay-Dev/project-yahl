@@ -2,7 +2,7 @@
 
 Rerun gate for user-onboarding when persisted knowledge already exists.
 
-Read before emitting ask-user batches on a rerun (when `extract-knowledge` for topic `user-onboarding` is not absent).
+Read before emitting ask-user batches on a rerun (when `get-knowledge` for topic `user-onboarding` is not absent).
 
 ## Context types
 
@@ -94,4 +94,4 @@ Append `{ questionRef, question, answer }` entries; dedupe by `questionRef`.
 
 ## Persist
 
-After open-question answers: `/mastermind(persist-knowledge, topic: user-onboarding, key: open_questions_qa, value: { items: [...] })`.
+After open-question answers: `/mastermind(upsert-knowledge-page, topic: user-onboarding, key: open_questions_qa, value: { items: [...] })` — stored under `raw/open_questions_qa` only.

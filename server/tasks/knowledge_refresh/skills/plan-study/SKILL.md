@@ -25,6 +25,7 @@ Build `study_plan` from `learning_contract`, `corpus_assessment`, and mission.
 
 ## Rules
 
+0. When `facts.todo_pickup` has `plan_study` items, add their `summary`/`detail` as `researchQuestions` before generic gap questions.
 1. Include every `learning_contract.seedUrls` entry as `priority: required`.
 2. Set `rounds` from depth: `overview` → 1–2, `deep_dive` → 2–3 (max 3 per YAHL loop cap).
 3. Add discovered URLs only when `corpus_assessment.gaps` warrant and depth is `deep_dive`.
@@ -35,5 +36,5 @@ Build `study_plan` from `learning_contract`, `corpus_assessment`, and mission.
 ## After plan
 
 - Parse plan into `study_plan` context key.
-- Persist with `persist-knowledge` key `study_plan`.
+- Persist with `upsert-knowledge-page` key `study_plan`.
 - Append persist `{ path }` to `knowledge_paths.persisted`.

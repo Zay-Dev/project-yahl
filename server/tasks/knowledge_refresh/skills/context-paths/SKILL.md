@@ -6,7 +6,7 @@ Cross-stage path registry for knowledge_capture.
 
 | Key | Role |
 |-----|------|
-| `knowledge_paths` | Topic roots + `persisted[]` index of every persist-knowledge write |
+| `knowledge_paths` | Topic roots + `persisted[]` index of every upsert-knowledge-page write |
 | `study_dialogue` | Per-source workspace dirs and round artifact paths |
 | `missionText` | Loaded once from task-mission; pass as `mission` on every mastermind call |
 
@@ -26,7 +26,7 @@ Cross-stage path registry for knowledge_capture.
 }
 ```
 
-## After every `persist-knowledge`
+## After every `upsert-knowledge-page`
 
 1. Parse tool result `{ path: "slug/file.json" }`.
 2. `set_context` append to `knowledge_paths.persisted`:
@@ -36,7 +36,7 @@ Cross-stage path registry for knowledge_capture.
 
 ### `*append_persisted_path(knowledge_paths, persistResult, key: <key>)`
 
-YAHL stages use this virtual function after `/mastermind(persist-knowledge, ...)`. Implement it by merging a **structured object** into `knowledge_paths.persisted` — never push the raw path string.
+YAHL stages use this virtual function after `/mastermind(upsert-knowledge-page, ...)`. Implement it by merging a **structured object** into `knowledge_paths.persisted` — never push the raw path string.
 
 ```json
 {
@@ -46,7 +46,7 @@ YAHL stages use this virtual function after `/mastermind(persist-knowledge, ...)
 }
 ```
 
-- `persistResult` is the persist-knowledge return (`{ path }`) or the path string.
+- `persistResult` is the upsert-knowledge-page return (`{ path }`) or the path string.
 - Replace any existing entry with the same `key`.
 - Do **not** append bare strings like `"slug/file.json"` to `persisted`.
 

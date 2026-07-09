@@ -4,12 +4,21 @@ import path from 'path';
 import { paths } from '../config.js';
 import { rebuildSourcesIndexFromStudies } from './index.js';
 import {
+  auditTopicWiki,
+  migrateTopicWiki,
+  type TTopicWikiAudit,
+} from './wiki/audit-topic.js';
+import { restoreTopicFromArchive } from './wiki/restore-topic-archive.js';
+import {
   addAlias,
   listTopicFolderSummaries,
   loadRegistry,
   type TTopicFolderSummary,
+  type TTopicRegistryEntry,
 } from './topic-registry.js';
 import { normalizeTopicText, parseUrlSignals, urlSignalsOverlap } from './topic-slug.js';
+
+export type { TTopicWikiAudit, TTopicWikiIssue } from './wiki/audit-topic.js';
 
 const RESERVED_DIRS = new Set(['_index', '_archive']);
 const KNOWLEDGE_EXTENSIONS = new Set(['.json', '.md']);
@@ -27,6 +36,8 @@ export type TTidyKnowledgeReport = {
   dryRun: boolean;
   groups: TTidyDuplicateGroup[];
   mergedKeys: string[];
+  restoredKeys: string[];
+  topics: TTopicWikiAudit[];
 };
 
 const nowStamp = () => new Date().toISOString().slice(0, 10);
@@ -280,38 +291,69 @@ const mergeGroup = async (
   }
 };
 
-export const runTidyKnowledge = async (options?: { dryRun?: boolean }): Promise<TTidyKnowledgeReport> => {
+export const runTidyKnowledge = async (options?: {
+  dryRun?: boolean;
+  restoreFromArchive?: boolean;
+  skipDuplicates?: boolean;
+  skipWiki?: boolean;
+  topic?: string;
+}): Promise<TTidyKnowledgeReport> => {
   const dryRun = options?.dryRun !== false;
+  const skipWiki = options?.skipWiki === true
+    || process.env.KNOWLEDGE_TIDY_SKIP_WIKI?.trim() === 'true';
   const summaries = await listTopicFolderSummaries();
   const registry = await loadRegistry();
-  const groups = await Promise.all(buildDuplicateGroups(summaries).map(enrichGroupMetadata));
+  const groups = options?.skipDuplicates
+    ? []
+    : await Promise.all(buildDuplicateGroups(summaries).map(enrichGroupMetadata));
 
-  for (const entry of registry.topics) {
-    const memberSet = new Set([entry.canonical, ...entry.aliases]);
-    const members = summaries
-      .map((summary) => summary.slug)
-      .filter((slug) => memberSet.has(slug));
+  if (!options?.skipDuplicates) {
+    for (const entry of registry.topics) {
+      const memberSet = new Set([entry.canonical, ...entry.aliases]);
+      const members = summaries
+        .map((summary) => summary.slug)
+        .filter((slug) => memberSet.has(slug));
 
-    if (members.length < 2) {
-      continue;
+      if (members.length < 2) {
+        continue;
+      }
+
+      const canonical = entry.canonical;
+      const existing = groups.find((group) =>
+        group.members.length === members.length
+        && group.members.every((member) => members.includes(member)));
+
+      if (existing) {
+        existing.canonical = canonical;
+        continue;
+      }
+
+      groups.push(await enrichGroupMetadata({
+        canonical,
+        members: [...memberSet].sort(),
+        orphanFiles: [],
+        overlappingKeys: [],
+      }));
     }
+  }
 
-    const canonical = entry.canonical;
-    const existing = groups.find((group) =>
-      group.members.length === members.length
-      && group.members.every((member) => members.includes(member)));
+  let topics: TTopicWikiAudit[] = [];
+  let restoredKeys: string[] = [];
 
-    if (existing) {
-      existing.canonical = canonical;
-      continue;
-    }
+  if (options?.restoreFromArchive && options.topic?.trim()) {
+    const restored = await restoreTopicFromArchive(options.topic.trim(), { dryRun });
 
-    groups.push(await enrichGroupMetadata({
-      canonical,
-      members: [...memberSet].sort(),
-      orphanFiles: [],
-      overlappingKeys: [],
-    }));
+    restoredKeys = restored.restoredKeys;
+  }
+
+  if (!skipWiki) {
+    const slugs = resolveWikiAuditSlugs(summaries, registry.topics, options);
+
+    topics = await Promise.all(slugs.map((slug) => (
+      dryRun
+        ? auditTopicWiki(slug)
+        : migrateTopicWiki(slug, { dryRun: false })
+    )));
   }
 
   const report: TTidyKnowledgeReport = {
@@ -320,14 +362,18 @@ export const runTidyKnowledge = async (options?: { dryRun?: boolean }): Promise<
     dryRun,
     groups: groups.sort((left, right) => left.canonical.localeCompare(right.canonical)),
     mergedKeys: [],
+    restoredKeys,
+    topics,
   };
 
   if (dryRun) {
     return report;
   }
 
-  for (const group of report.groups) {
-    await mergeGroup(group, report);
+  if (!options?.skipDuplicates) {
+    for (const group of report.groups) {
+      await mergeGroup(group, report);
+    }
   }
 
   report.applied = true;
@@ -335,11 +381,28 @@ export const runTidyKnowledge = async (options?: { dryRun?: boolean }): Promise<
   return report;
 };
 
+export const isReservedKnowledgeDir = (name: string): boolean =>
+  name.startsWith('.') || RESERVED_DIRS.has(name);
+
+export const resolveWikiAuditSlugs = (
+  summaries: TTopicFolderSummary[],
+  registryTopics: TTopicRegistryEntry[],
+  options?: { topic?: string },
+): string[] => {
+  if (options?.topic?.trim()) {
+    return [options.topic.trim()];
+  }
+
+  const summarySlugs = summaries.map((summary) => summary.slug);
+  const registrySlugs = registryTopics.map((entry) => entry.canonical);
+
+  return [...new Set([...summarySlugs, ...registrySlugs])].filter(
+    (slug) => !isReservedKnowledgeDir(slug),
+  );
+};
+
 export const detectDuplicateGroups = async (): Promise<TTidyDuplicateGroup[]> => {
   const summaries = await listTopicFolderSummaries();
 
   return Promise.all(buildDuplicateGroups(summaries).map(enrichGroupMetadata));
 };
-
-export const isReservedKnowledgeDir = (name: string): boolean =>
-  name.startsWith('.') || RESERVED_DIRS.has(name);

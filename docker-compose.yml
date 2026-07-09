@@ -95,6 +95,7 @@ services:
       args:
         OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
         VITE_API_BASE_URL: http://localhost:${SERVER_PORT:-4000}
+        VITE_WIKI_PUBLIC_URL: http://127.0.0.1:${WIKI_PORT:-3001}
     ports:
       - "5173:80"
     depends_on:
@@ -116,16 +117,23 @@ services:
       MASTERMIND_INTERNAL_TOKEN: ${MASTERMIND_INTERNAL_TOKEN:-}
       MASTERMIND_PORT: "4100"
       SESSION_API_BASE_URL: http://server:4000
+      WIKI_GRAPHQL_URL: http://wiki:3000/graphql
+      WIKI_API_TOKEN: ${WIKI_API_TOKEN:-}
+      KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
+      WORKER_API_URL: http://worker:4200
       WORKSPACE_ROOT: /workspace
     ports:
       - "4100:4100"
     volumes:
       - ./data/workspace:/workspace
       - ./data/mastermind:/data
+      - ./data/knowledge_export:/data/knowledge_export:ro
       - ./mastermind/skills:/opt/mastermind-skills:ro
     depends_on:
       server:
         condition: service_healthy
+      wiki:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
@@ -147,6 +155,7 @@ services:
       MASTERMIND_API_URL: http://mastermind:4100
       SESSION_API_BASE_URL: http://server:4000
       VERIFY_RULES_ROOT: /data
+      KNOWLEDGE_QA_CHECKLIST_ROOT: /omniflex/project-yahl/knowledge-qa-checklist
       WORKER_API_URL: http://worker:4200
       WORKER_BATCH_RUNS_ROOT: /tmp/yahl-batch-runs
       WORKER_HEALTH_PORT: "4200"
@@ -168,6 +177,40 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  wiki_postgres:
+    image: postgres:16-alpine
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
+      POSTGRES_DB: wiki
+      POSTGRES_PASSWORD: ${WIKI_DB_PASSWORD:-wikijs}
+      POSTGRES_USER: wikijs
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wikijs -d wiki"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - ./data/wiki_postgres:/var/lib/postgresql/data
+
+  wiki:
+    image: ghcr.io/requarks/wiki:2
+    depends_on:
+      wiki_postgres:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
+      DB_TYPE: postgres
+      DB_HOST: wiki_postgres
+      DB_PORT: "5432"
+      DB_USER: wikijs
+      DB_PASS: ${WIKI_DB_PASSWORD:-wikijs}
+      DB_NAME: wiki
+    ports:
+      - "127.0.0.1:${WIKI_PORT:-3001}:3000"
+    volumes:
+      - ./data/wiki:/wiki/data
+      - ./data/knowledge_export:/wiki/data/repo
 
 networks:
   default:

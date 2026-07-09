@@ -12,4 +12,4 @@ Build a personal assistant user profile for future teamwork — questions are ab
 2. Pass the full mission text as the `mission` argument on every `design-questions`, `research`, and `plan` Mastermind call.
 3. Include the same mission string inside `facts.mission` on research/plan calls when using structured facts.
 4. Ask-user questions must clarify the **user's identity, goals, preferences, or communication style** — not the task pipeline.
-5. After each stage profile is built, **immediately** persist with `persist-knowledge` — never hold profile output only in session context.
+5. After each stage profile is built, **immediately** persist with `upsert-knowledge-page` — never hold profile output only in session context. Mastermind writes elaborated markdown to `topics/user-onboarding/overview` (and `brief` on synthesis) plus structured refs under `raw/`.

@@ -19,6 +19,7 @@ import { patchSession, registerSession } from './use-cases/write';
 import {
   getAskUserQuestion,
   listAskUserQuestions,
+  listPendingAskUserQuestions,
 } from './use-cases/ask-user-read';
 import {
   answerAskUserBatch,
@@ -39,6 +40,7 @@ exposedRoute('/api/fork-sessions')
 
 exposedRoute('/api/sessions')
   .get('/', getSessions)
+  .get('/ask-user/pending', listPendingAskUserQuestions)
   .post('/:sessionId/register', registerSession)
   .patch('/:sessionId', patchSession)
   .get('/:sessionId', getSession)

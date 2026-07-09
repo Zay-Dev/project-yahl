@@ -4,6 +4,7 @@ import type {
   TResponseAskUserQuestionListItem,
   TResponseCreateForkSession,
   TResponseDeleteSession,
+  TResponsePendingAskUserQuestion,
   TResponseStageDetail,
   TResponseStageListItem,
   TResponseVerifyCheckpoint,
@@ -57,6 +58,13 @@ export const fetchPendingAskUserQuestions = async (sessionId: string) => {
   const response = await fetch(url);
 
   return parseJson<TResponseAskUserQuestionListItem[]>(response);
+};
+
+export const fetchAllPendingAskUserQuestions = async () => {
+  const url = `${base}/api/sessions/ask-user/pending`;
+  const response = await fetch(url);
+
+  return parseJson<TResponsePendingAskUserQuestion[]>(response);
 };
 
 export const fetchAskUserQuestion = async (sessionId: string, questionId: string) => {

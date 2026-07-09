@@ -54,6 +54,7 @@ Return JSON only:
 
 - Each batch contains only **independently answerable** questions.
 - Unique `questionRef` within each batch.
+- **Prefer `multipleChoice`** when 2–6 discrete answers fit; use `text` for genuinely open-ended gaps.
 - `kind`: `text` or `multipleChoice`.
 - `multipleChoice` requires ≥2 options; radio vs checkbox via `allowMultiple`.
 - Do not emit `allowFreeText` — UI always provides a free-text counter-option on MC.

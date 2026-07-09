@@ -82,6 +82,47 @@ describe('topic refresh', () => {
     );
   });
 
+  it('resolves topic policy without skipping when enabled with null interval', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-resolve-topic-policy-'));
+
+    process.env.MASTERMIND_DATA_ROOT = tmp;
+    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
+
+    await fs.mkdir(path.join(tmp, 'knowledges', '_index'), { recursive: true });
+    await fs.writeFile(
+      path.join(tmp, 'knowledges', '_index', 'topics.json'),
+      `${JSON.stringify({
+        topics: [{
+          aliases: [],
+          canonical: 'lego-story-of-reckless-ben',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          maxAgeDays: null,
+          refresh: {
+            enabled: true,
+            interval: null,
+            lastRunAt: null,
+            lastRunSessionId: null,
+            lastRunStatus: null,
+            scopes: ['summary'],
+          },
+          signals: { seedUrlHosts: [], seedUrlPaths: [], topicTexts: [] },
+          updatedAt: '2020-01-01T00:00:00.000Z',
+        }],
+      }, null, 2)}\n`,
+      'utf8',
+    );
+
+    const { resolveTopicPolicy } = await import('./topic-refresh.js');
+    const resolved = await resolveTopicPolicy('lego-story-of-reckless-ben');
+
+    assert.equal(resolved.refresh_skipped, false);
+    assert.equal(resolved.row.refresh?.enabled, true);
+    assert.equal(resolved.row.refresh?.interval, null);
+
+    delete process.env.MASTERMIND_DATA_ROOT;
+    delete process.env.KNOWLEDGE_EXPORT_ROOT;
+  });
+
   it('patches refresh policy for canonical slug', async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-topic-refresh-patch-'));
 

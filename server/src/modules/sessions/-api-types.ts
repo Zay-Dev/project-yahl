@@ -55,6 +55,7 @@ export type TResponseStageStatus = 'finished' | 'running' | 'verifying';
 export type TResponseStageListItem = {
   createdAt: string;
   finishedAt?: string;
+  isTypesPreamble?: boolean;
   logicPreview: string;
   loopSetup?: string;
   loopIndex?: number;
@@ -143,6 +144,11 @@ export type TResponseAskUserQuestionListItem = {
   requestId: string;
   status: 'answered' | 'pending';
   title?: string;
+};
+
+export type TResponsePendingAskUserQuestion = TResponseAskUserQuestionListItem & {
+  sessionId: string;
+  taskId?: string;
 };
 
 export type TResponseAskUserQuestionDetail = {

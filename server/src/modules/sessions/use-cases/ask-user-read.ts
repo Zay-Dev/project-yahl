@@ -4,7 +4,8 @@ import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
-import { modelAskUserQuestion } from '../models';
+import type { TResponsePendingAskUserQuestion } from '../-api-types';
+import { modelAskUserQuestion, modelSession } from '../models';
 
 export type TResponseAskUserQuestion = {
   batch?: Record<string, unknown>;
@@ -120,6 +121,41 @@ export const listAskUserQuestions = [
             questionId: question.questionId,
             requestId: question.requestId,
             status: question.status,
+            title: batch?.title,
+          };
+        }),
+      );
+    })
+    .toMiddleware(),
+];
+
+export const listPendingAskUserQuestions = [
+  Middlewares.Chainable
+    .next(async (express) => {
+      const questions = await Queries.queryBy(modelAskUserQuestion, { status: 'pending' }, {
+        sort: { createdAt: -1 },
+      });
+
+      const sessionRefs = [...new Set(questions.map((question) => String(question.session)))];
+      const sessions = sessionRefs.length
+        ? await Queries.queryBy(modelSession, { _id: { $in: sessionRefs } })
+        : [];
+      const sessionByRef = new Map(sessions.map((session) => [String(session._id), session]));
+
+      express.respondMany<TResponsePendingAskUserQuestion>(
+        questions.map((question) => {
+          const session = sessionByRef.get(String(question.session));
+          const batch = question.batch as { questions?: unknown[]; title?: string } | undefined;
+
+          return {
+            batch: question.batch,
+            batchId: question.batchId,
+            questionCount: batch?.questions?.length,
+            questionId: question.questionId,
+            requestId: question.requestId,
+            sessionId: session?.sessionId ?? String(question.session),
+            status: question.status,
+            taskId: session?.taskId,
             title: batch?.title,
           };
         }),

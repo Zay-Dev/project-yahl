@@ -6,7 +6,7 @@ Assess existing `knowledges/{canonical}/` corpus (including registered alias fol
 
 - `knowledge_topic` canonical slug from resolve-topic
 - `learning_contract` from clarify stage
-- `extract-knowledge` session file at `~/knowledge/{key}.json` (read `.extracted` field)
+- `get-knowledge` session file at `~/knowledge/{key}.json` (read `.extracted` field)
 
 ## Output (`corpus_assessment` via set_context)
 
@@ -33,7 +33,7 @@ Assess existing `knowledges/{canonical}/` corpus (including registered alias fol
 
 ## Smart skip
 
-- List `existingKeys` from the session extract JSON (parsed from `~/knowledge/` after extract-knowledge).
+- List `existingKeys` from the session extract JSON (parsed from `~/knowledge/` after get-knowledge).
 - `sufficientFor` = stage goals already met by persisted keys with valid content.
 - `gaps` = what `learning_contract` still needs vs corpus.
 - If resolve-topic returned `suggestMerge`, note overlapping folders in gaps until platform tidy merges them.
@@ -46,4 +46,4 @@ When `rerun_intent.isRerun` is true, read `~/task-skills/rerun-intent/SKILL.md`:
 - `*should_update_scope('clarify'|'studies'|'facts'|'synthesis'|'summary', rerun_intent)` affects downstream stage skip decisions.
 - `corpus_assessment.gaps` still reflects objective corpus state; rerun scope decides whether to act on gaps.
 
-After building `corpus_assessment`, persist via `persist-knowledge` and append returned `{ path }` to `knowledge_paths.persisted`.
+After building `corpus_assessment`, persist via `upsert-knowledge-page` and append returned `{ path }` to `knowledge_paths.persisted`.

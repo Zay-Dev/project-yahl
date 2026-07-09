@@ -4,6 +4,26 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./knowledge-qa/build-knowledge-qa-prompt": {
+      "development": "./knowledge-qa/build-knowledge-qa-prompt.ts",
+      "import": "./dist/knowledge-qa/build-knowledge-qa-prompt.js"
+    },
+    "./knowledge-qa/load-checklist": {
+      "development": "./knowledge-qa/load-checklist.ts",
+      "import": "./dist/knowledge-qa/load-checklist.js"
+    },
+    "./knowledge-qa/parse-response": {
+      "development": "./knowledge-qa/parse-response.ts",
+      "import": "./dist/knowledge-qa/parse-response.js"
+    },
+    "./knowledge-qa/schemas": {
+      "development": "./knowledge-qa/schemas.ts",
+      "import": "./dist/knowledge-qa/schemas.js"
+    },
+    "./knowledge-qa/types": {
+      "development": "./knowledge-qa/types.ts",
+      "import": "./dist/knowledge-qa/types.js"
+    },
     "./request-activity/client": {
       "development": "./request-activity/client.ts",
       "import": "./dist/request-activity/client.js"

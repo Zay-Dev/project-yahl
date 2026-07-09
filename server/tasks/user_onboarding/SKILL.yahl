@@ -68,7 +68,7 @@ stages:
       On fail when ask-user answer is invalid, set edit_answer with askUserRef.
       On fail when stage output wrong but answers valid, set rerun.
     logic: |
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: identity, background_summary, goals, preferences, communication_style, open_questions, onboarding_completed_at, user_profile_summary);
+      const knowledgeExtractRef = /mastermind(get-knowledge, topic: user-onboarding, need: identity, background_summary, goals, preferences, communication_style, open_questions, onboarding_completed_at, user_profile_summary);
       const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       IF: !knowledgeExtractRef.absent;
         const pending_open_questions = *extract_open_questions(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
@@ -81,7 +81,7 @@ stages:
           const batches = /mastermind(design-questions, stage: open_questions, mission: Build a personal assistant user profile for future teamwork — questions are about the USER not about onboarding mechanics, gaps: *picked_open_questions(pickAnswers), priorQa: open_questions_qa, goal: resolve pending profile gaps);
           const oqAnswers = /ask-user-batch(batches);
           const open_questions_qa = *merge_open_questions_qa(open_questions_qa, oqAnswers, guideline: ~/task-skills/rerun-intent/SKILL.md);
-          /mastermind(persist-knowledge, topic: user-onboarding, key: open_questions_qa, value: { items: open_questions_qa });
+          /mastermind(upsert-knowledge-page, topic: user-onboarding, key: open_questions_qa, value: { items: open_questions_qa });
         END:
       END:
       // Read ~/task-skills/assess-onboarding-stage/SKILL.md — assess stage 1 gaps vs knowledge + onboarding_qa_1 + rerun_intent
@@ -95,8 +95,8 @@ stages:
         const stage1_qa_log = *merge_qa(onboarding_qa_1, batchAnswers);
         const identity_profile = *build_identity_profile(stage1_qa_log, knowledge);
       END:
-      /mastermind(persist-knowledge, topic: user-onboarding, key: identity, value: identity_profile);
-      /mastermind(persist-knowledge, topic: user-onboarding, key: background_summary, value: identity_profile.background);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: identity, value: identity_profile);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: background_summary, value: identity_profile.background);
 
   - contextKeys: [identity_profile, stage1_qa_log, rerun_intent]
     produceContextKeys: [goals_profile, stage2_qa_log]
@@ -108,7 +108,7 @@ stages:
       Fail when goals are missing or contradict identity_profile or persisted knowledge.
       Use follow_up for incomplete goal data; edit_answer when a specific ask-user answer is wrong; rerun when output mapping failed.
     logic: |
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: goals, priorities);
+      const knowledgeExtractRef = /mastermind(get-knowledge, topic: user-onboarding, need: goals, priorities);
       const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_onboarding_stage(stage: 2, knowledge, priorQa: onboarding_qa_2, identity_profile, rerun_intent);
       IF: assessment.sufficient && !*should_update_scope('goals', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
@@ -121,8 +121,8 @@ stages:
         const goals_profile = *build_goals_profile(stage2_qa_log, knowledge, identity_profile);
       END:
       // Read ~/task-skills/build-onboarding-profiles/SKILL.md — goals_profile must be in context before verify
-      /mastermind(persist-knowledge, topic: user-onboarding, key: goals, value: goals_profile);
-      /mastermind(persist-knowledge, topic: user-onboarding, key: priorities, value: goals_profile.priorities);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: goals, value: goals_profile);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: priorities, value: goals_profile.priorities);
 
   - contextKeys: [identity_profile, goals_profile, stage1_qa_log, stage2_qa_log, rerun_intent]
     produceContextKeys: [preferences_profile, stage3_qa_log]
@@ -134,7 +134,7 @@ stages:
       Fail when preferences are missing or contradict prior stage profiles.
       Use follow_up, edit_answer, or rerun as appropriate.
     logic: |
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: preferences, constraints);
+      const knowledgeExtractRef = /mastermind(get-knowledge, topic: user-onboarding, need: preferences, constraints);
       const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_onboarding_stage(stage: 3, knowledge, priorQa: onboarding_qa_3, rerun_intent);
       IF: assessment.sufficient && !*should_update_scope('preferences', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
@@ -147,8 +147,8 @@ stages:
         const preferences_profile = *build_preferences_profile(stage3_qa_log, knowledge);
       END:
       // Read ~/task-skills/build-onboarding-profiles/SKILL.md — preferences_profile.topics must be string[]
-      /mastermind(persist-knowledge, topic: user-onboarding, key: preferences, value: preferences_profile);
-      /mastermind(persist-knowledge, topic: user-onboarding, key: constraints, value: preferences_profile.boundaries);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: preferences, value: preferences_profile);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: constraints, value: preferences_profile.boundaries);
 
   - contextKeys: [identity_profile, goals_profile, preferences_profile, rerun_intent]
     produceContextKeys: [communication_profile, stage4_qa_log]
@@ -160,7 +160,7 @@ stages:
       Fail when communication style is missing or contradicts prior profiles.
       Use follow_up, edit_answer, or rerun as appropriate.
     logic: |
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style);
+      const knowledgeExtractRef = /mastermind(get-knowledge, topic: user-onboarding, need: communication_style);
       const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_onboarding_stage(stage: 4, knowledge, priorQa: onboarding_qa_4, rerun_intent);
       IF: assessment.sufficient && !*should_update_scope('communication', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
@@ -172,7 +172,7 @@ stages:
         const stage4_qa_log = *merge_qa(onboarding_qa_4, batchAnswers);
         const communication_profile = *build_communication_profile(stage4_qa_log, knowledge);
       END:
-      /mastermind(persist-knowledge, topic: user-onboarding, key: communication_style, value: communication_profile);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: communication_style, value: communication_profile);
 
   - contextKeys: [identity_profile, goals_profile, preferences_profile, communication_profile, stage1_qa_log, stage2_qa_log, stage3_qa_log, stage4_qa_log, rerun_intent, open_questions_qa, pending_open_questions, TResult]
     produceContextKeys: [result, open_questions]
@@ -184,7 +184,7 @@ stages:
       Fail when either field is missing, placeholder, or contradicts persisted knowledges/user-onboarding facts.
       Use follow_up for gap-fill batches before synthesis; rerun when synthesis mapping failed.
     logic: |
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: all stage keys, open_questions, qa logs);
+      const knowledgeExtractRef = /mastermind(get-knowledge, topic: user-onboarding, need: all stage keys, open_questions, qa logs);
       const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       IF: rerun_intent && rerun_intent.proceedMode === 'summary_only';
         const identity_profile = *load_profile_from_knowledge(knowledge, key: identity, as: TIdentityProfile);
@@ -216,9 +216,9 @@ stages:
       const agentMd = *synthesize_user_profile_agent(facts, guideline: ~/task-skills/synthesize-user-profile/SKILL.md);
       const result = { mastermind: mastermindMd, agent: agentMd };
       const open_questions = *extract_open_questions_from_synthesis(mastermindMd, agentMd, open_questions_qa, pending_open_questions, guideline: ~/task-skills/synthesize-user-profile/SKILL.md);
-      /mastermind(persist-knowledge, topic: user-onboarding, key: user_profile_summary, value: result);
-      /mastermind(persist-knowledge, topic: user-onboarding, key: open_questions, value: open_questions);
-      /mastermind(persist-knowledge, topic: user-onboarding, key: onboarding_completed_at, value: *now_iso());
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: user_profile_summary, value: result);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: open_questions, value: open_questions);
+      /mastermind(upsert-knowledge-page, topic: user-onboarding, key: onboarding_completed_at, value: *now_iso());
 
   - contextMode: true
     contextKeys: [result]

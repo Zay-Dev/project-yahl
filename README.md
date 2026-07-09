@@ -20,6 +20,18 @@ I'm not pretending to solve any of these — but the shape of YAHL kind of pushe
 
 This isn't a victory lap. The shape just happens to line up with where the industry has landed in 2026.
 
+## Why knowledge matters (and why we invest here)
+
+Models change; your curated knowledge doesn't. YAHL's value compounds when the assistant remembers *your* subjects, goals, and context — not when it one-shots a clever reply.
+
+**User first.** Knowledge is what you browse, trust, edit, and link. Wiki pages under `topics/{slug}/` are the product surface, not a debug dump of JSON keys. Refresh keeps knowledge current without re-running full capture.
+
+**Agents second (downstream).** Stage agents never read the full corpus; they get session extracts from `get-knowledge`. Better pages → better extracts → better behavior on every task that reads knowledge (`user_onboarding`, `knowledge_capture`, `hk_weather`, future tasks). Garbage summaries → repeated questions and wrong assumptions — that's a knowledge problem, not a model problem.
+
+**Why so much effort.** Flat key-files and 64KB corpus walks produced disposable summaries. We invested in Wiki.js + elaboration rules + capture/refresh pipelines + topic governance because **knowledge quality is the primary lever on product quality** — more than picking a slightly newer model.
+
+**What we built.** Wiki.js canonical store, `./data/knowledge_export` Local FS push export for scale, mastermind hybrid RAG (GraphQL + export mirror), capture/refresh tasks, human browse at **`WIKI_PUBLIC_URL`** (dedicated wiki URL), and a strict trust boundary. Details: [`docs/knowledge.md`](docs/knowledge.md).
+
 ## Status
 
 With the tasks in `server/tasks/`, about 95% of runs follow the same path (as of mid-Jun 2026, I stopped counting this becausing it is too promising) — they'll even fail at the same line for the same reason, which is oddly comforting. I can actually debug this now: watch context move between stages, poke a line like `website = null;`, re-run. Still feels like operating a very smart but very old machine. You watch memory budget, babysit stage boundaries, and count tokens like it's 1998 and you pay per SMS. Still fun though.
@@ -45,7 +57,7 @@ Stuff that already works (aka things that surprisingly do not explode):
 - **`design-questions`:** platform Mastermind skill for dynamic ask-user batches (pass `mission:` for subject framing).
 - **`verifyAutoRetry`:** orchestrator in-process verify loop on stages with `verify: true` + `verifyAutoRetry: true`.
 - **Task-local skills:** echoed from session snapshot to agent `~/task-skills/`; see **Authoring tasks** below.
-- **Knowledge store:** mastermind-private corpus under `data/mastermind/knowledges/`; agents read session extracts only — see **Protecting the knowledge store** below.
+- **Knowledge store:** Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see **Why knowledge matters** and **Protecting the knowledge store** below.
 - **Topic governance:** `resolve-topic` + `knowledge_tidy` background task (`background: true` in `SKILL.yahl`).
 - **Background sessions:** cron/utility runs hidden by default on `/sessions` (toggle to show).
 - **Platform UI:** `/platform/approvals` for notification/settings proposals; `/platform/cron-jobs` for cron job create/edit/delete (worker ticks via `POST /api/runs`).
@@ -105,7 +117,7 @@ Tasks can ship their own SKILL files — handy when you want assess/synthesize r
 - **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
 - **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` / `plan` (untrusted hints banner)
-- **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_tidy` (see [`mastermind/skills/extract-knowledge/SKILL.md`](mastermind/skills/extract-knowledge/SKILL.md) for the read path)
+- **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_tidy` (see [`mastermind/skills/get-knowledge/SKILL.md`](mastermind/skills/get-knowledge/SKILL.md) for the read path)
 
 ```
 server/tasks/my_task/
@@ -117,40 +129,42 @@ server/tasks/my_task/
 
 ## Protecting the knowledge store
 
-Curated knowledge lives in `data/mastermind/knowledges/` on the host. Stage agents do **not** get that folder mounted — they only see what Mastermind extracts into the current session scratch dir. (We removed the old `~/knowledges` symlink for a reason.)
+Curated knowledge lives in **Wiki.js** (Postgres) with a Local FS export at `data/knowledge_export/`. Stage agents do **not** get wiki, export files, or legacy flat keys mounted — they only see what Mastermind extracts into the current session scratch dir.
 
 ```mermaid
 sequenceDiagram
   participant Agent as StageAgent
   participant MM as Mastermind
-  participant Store as data_mastermind_knowledges
+  participant Wiki as Wiki.js GraphQL
+  participant Export as data_knowledge_export
   participant Scratch as workspace_sessions_id
 
-  Agent->>MM: extract-knowledge need topic
-  MM->>Store: read corpus internally
+  Agent->>MM: get-knowledge need topic
+  MM->>Wiki: read page(s) or export mirror for large topics
   MM->>Scratch: write knowledge/key.json
   MM-->>Agent: key path absent only
   Agent->>Scratch: read .extracted field
 
-  Agent->>MM: persist-knowledge key value topic
-  MM->>Store: write basename only via resolveTopic
-  MM-->>Agent: relative path only
+  Agent->>MM: upsert-knowledge-page key value topic
+  MM->>Wiki: GraphQL create/update
+  Wiki->>Export: push on change
+  MM-->>Agent: pagePath only
 ```
 
-- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** `data/mastermind/` ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Mastermind: `./data/mastermind:/data` ([`docker-compose.yml`](docker-compose.yml)).
-- **No direct corpus access** — agents must not `cat ~/knowledges/…`; canonical store is mastermind-private only.
-- **Session-scoped reads** — `extract-knowledge` scans knowledges internally, writes `data/workspace/sessions/{sessionId}/knowledge/{key}.json`, returns `{ key, path: "~/knowledge/…", absent }` only — not the full tree ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts), [`skills.ts`](mastermind/src/-handlers/skills.ts)).
-- **Path injection blocked** — `extract-knowledge` and `persist-knowledge` reject caller `source` / `file` / `path` args ([`hasPathArgs`](mastermind/src/-knowledge/index.ts)).
-- **Controlled writes** — `persist-knowledge` accepts `key`, `value`, `topic` only; Mastermind picks the path via `resolveKnowledgeWritePath` + topic registry — basename-only under the canonical topic folder ([`persist-knowledge` SKILL](mastermind/skills/persist-knowledge/SKILL.md)). Narrative keys persist as `.md`; structured keys stay `.json`.
+- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** wiki/export/knowledges ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Mastermind: `./data/mastermind:/data`, read-only `./data/knowledge_export` ([`docker-compose.yml`](docker-compose.yml)).
+- **No direct corpus access** — agents must not read wiki HTTP, export mirror, or legacy `~/knowledges/`; canonical store is mastermind-private only.
+- **Session-scoped reads** — `get-knowledge` reads wiki corpus internally, writes `data/workspace/sessions/{sessionId}/knowledge/{key}.json`, returns `{ key, path: "~/knowledge/…", absent }` only ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts), [`skills.ts`](mastermind/src/-handlers/skills.ts)).
+- **Path injection blocked** — `get-knowledge` and `upsert-knowledge-page` reject caller `source` / `file` / `path` args ([`hasPathArgs`](mastermind/src/-knowledge/index.ts)).
+- **Controlled writes** — `upsert-knowledge-page` accepts `key`+`value` or `page`+`content` with `topic` only; Mastermind maps legacy keys to wiki paths ([`upsert-knowledge-page` SKILL](mastermind/skills/upsert-knowledge-page/SKILL.md)).
 - **Key sanitization** — session ids and extract keys sanitized before filesystem writes ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts)).
-- **Minimal HTTP surface** — no public knowledges browse API; orchestrator verify uses internal `POST /v1/internal/knowledges/persisted-index` (loopback or `X-Internal-Token`) ([`internal-auth.ts`](mastermind/src/-api/internal-auth.ts)).
+- **Human browse** — Wiki.js at `WIKI_PUBLIC_URL` (dev: `http://127.0.0.1:3001`); web sidebar links there directly; agents never use this route.
 - **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on `research` / `plan` get an explicit untrusted-content banner in the Mastermind prompt ([`UNTRUSTED_GUIDELINE_PREAMBLE`](mastermind/src/-handlers/skills.ts)).
-- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `extract-knowledge` = curated store scan. Different skills, different trust boundary.
+- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `get-knowledge` = curated wiki corpus. Different skills, different trust boundary.
 
 Two-step read in stage logic:
 
 ```text
-const extractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: identity, goals);
+const extractRef = /mastermind(get-knowledge, topic: user-onboarding, need: identity, goals);
 const knowledge = extractRef.absent ? '<none>' : (*read(extractRef.path)).extracted;
 ```
 
@@ -234,7 +248,8 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Server** | Host (`pnpm run dev:server`) or `server` container (prod) | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic; control plane only |
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
-| **Mastermind** | `mastermind` container (4100) | `data/mastermind/knowledges/` (canonical corpus), workspace `/workspace`, Cursor SDK skills | Side effects without approval — proposals go to server first |
+| **Mastermind** | `mastermind` container (4100) | Wiki.js GraphQL + read-only `data/knowledge_export`, workspace `/workspace`, Cursor SDK skills | Side effects without approval — proposals go to server first |
+| **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, **verify gate** (Cursor CLI) | Does not spawn orchestrator or agent containers |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
@@ -248,7 +263,7 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 
 - **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-onecli.ts`](runtime/orchestrator/-docker/compose-onecli.ts), project `agent-{sessionId}`), then tears it down.
 - **Minimal mounts** — only [`data/workspace/`](data/workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
-- **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge via `extract-knowledge` → `~/knowledge/{key}.json` only — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see **Protecting the knowledge store**).
+- **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge via `get-knowledge` → `~/knowledge/{key}.json` only — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see **Protecting the knowledge store**).
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See **OneCLI setup** below for vault rules.

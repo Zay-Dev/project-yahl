@@ -6,6 +6,7 @@ import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
+import { isTypesPreambleStage } from '../-types-preamble';
 import { isStageFinished, isStageVerifying } from '../-stage-status';
 import type {
   TResponseStageDetail,
@@ -184,6 +185,10 @@ const toListItem = (
 ): TResponseStageListItem => ({
   createdAt: toIso(stage.createdAt as Date) ?? '',
   finishedAt: toIso(stage.finishedAt),
+  isTypesPreamble: isTypesPreambleStage({
+    spec: stage.stage,
+    type: stage.stage.loopSetup ? 'loop' : 'plain',
+  }),
   logicPreview: logicPreviewFrom(stage.stage?.logic),
   loopSetup: stage.stage?.loopSetup,
   loopIndex: stage.loopMeta?.index,

@@ -9,7 +9,7 @@ Unattended `auto_knowledge_refresh` contract.
 
 ## Each loop iteration (`dispatch-task-run`)
 
-1. `/mastermind(dispatch-task-run, taskId: knowledge_refresh, runInput: { knowledge_topic: topic.canonical })`
+1. `/mastermind(dispatch-task-run, taskId: knowledge_refresh, runInput: { knowledge_topic: topic.canonical, rerun_intent: { isRerun: true, proceedMode: update_selected, updateScope: topic.scopes, addressOpenQuestions: false } })`
 2. `set_context` scope `global`, key `dispatched`, **operation `extend`**, value:
 
 ```json
@@ -21,5 +21,7 @@ Unattended `auto_knowledge_refresh` contract.
 ```
 
 Initialize `dispatched` as `[]` before the loop if absent.
+
+Pre-seed `rerun_intent` on every dispatch so child `knowledge_refresh` runs skip stage-1 ask-user (`proceed_mode`, `update_scope`). `topic.scopes` comes from `evaluate-knowledge-refresh` stale-topic rows.
 
 Do not use clarify ask-user. Do not read knowledges corpus.

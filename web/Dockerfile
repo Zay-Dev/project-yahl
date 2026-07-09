@@ -13,7 +13,9 @@ COPY ${OMNIFLEX_APP_DIR} ./${OMNIFLEX_APP_DIR}
 RUN pnpm install --frozen-lockfile --filter @project-yahl/web...
 
 ARG VITE_API_BASE_URL=http://localhost:4000
+ARG VITE_WIKI_PUBLIC_URL=http://127.0.0.1:3001
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_WIKI_PUBLIC_URL=$VITE_WIKI_PUBLIC_URL
 
 RUN pnpm --filter @project-yahl/web run build
 

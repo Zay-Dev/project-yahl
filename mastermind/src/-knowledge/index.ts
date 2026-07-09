@@ -39,6 +39,7 @@ export {
   evaluateKnowledgeRefresh,
   listTopicPolicies,
   patchTopicPolicy,
+  resolveTopicPolicy,
   type TPatchTopicPolicyInput,
   type TStaleTopic,
   type TTopicPolicyRow,

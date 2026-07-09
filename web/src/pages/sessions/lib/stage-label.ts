@@ -6,6 +6,11 @@ export const buildStageLabels = (stages: TResponseStageListItem[]): string[] => 
   const labels: string[] = [];
 
   stages.forEach((item) => {
+    if (item.isTypesPreamble) {
+      labels.push("Types");
+      return;
+    }
+
     if (typeof item.loopIndex === "number") {
       const loopKey = item.logicPreview;
 

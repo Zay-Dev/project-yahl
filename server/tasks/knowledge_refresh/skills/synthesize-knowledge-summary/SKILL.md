@@ -20,6 +20,12 @@ Requirements:
 - When `open_questions_qa` is in facts, promote each answered question into `claims[]` and exclude from `openQuestions[]`.
 - Remaining unresolved gaps go in `openQuestions[]`.
 
+Persist via `upsert-knowledge-page`:
+
+- `analysis` + `analysis_md` — narrative to `overview`/`facts`; structured JSON to `raw/analysis`
+- `key_facts_md` — narrative bullets on `facts` page
+- `facts` — narrative fallback on `facts`; `TFacts` JSON to `raw/facts`
+
 ## Stage 5 — final brief
 
 Produce two Markdown documents:
@@ -44,7 +50,7 @@ Same substance reframed for **this user**:
 
 ## Persist
 
-Write to `summary` key:
+Upsert key `summary` → wiki page `brief` (+ `raw/summary` JSON mirror).
 
 ```json
 {
@@ -59,7 +65,7 @@ Write to `summary` key:
 ```json
 {
   "knowledgeTopic": "slug",
-  "knowledgePaths": ["slug/meta.json", "..."],
+  "knowledgePaths": ["topics/slug/overview", "..."],
   "summaryMd": "...",
   "personalizedBriefMd": "..."
 }

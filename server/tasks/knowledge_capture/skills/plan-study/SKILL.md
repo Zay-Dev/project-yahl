@@ -35,5 +35,5 @@ Build `study_plan` from `learning_contract`, `corpus_assessment`, and mission.
 ## After plan
 
 - Parse plan into `study_plan` context key.
-- Persist with `persist-knowledge` key `study_plan`.
+- Persist with `upsert-knowledge-page` key `study_plan`.
 - Append persist `{ path }` to `knowledge_paths.persisted`.

@@ -31,6 +31,18 @@ const _seedFreshTaskStorage = (
   seedDefaultContext(storage);
 };
 
+export const buildFreshRunStorage = (
+  session: Pick<{ runInput?: Record<string, unknown>; storageSeed?: Record<string, unknown>; taskYahl: string }, 'runInput' | 'storageSeed' | 'taskYahl'>,
+): TStorage => {
+  const storage = session.storageSeed
+    ? deserializeCheckpointStorage(session.storageSeed)
+    : _emptyStorage();
+
+  _seedFreshTaskStorage(storage, session.runInput, session.taskYahl);
+
+  return storage;
+};
+
 export const resolvePreparedRun = async (
   sessionId: string,
   run: TOrchestratorRun,
@@ -54,15 +66,7 @@ export const resolvePreparedRun = async (
   }
 
   const stageIndex = session.runCursor?.stageIndex ?? 0;
-  const storage = session.storageSeed
-    ? deserializeCheckpointStorage(session.storageSeed)
-    : _emptyStorage();
-
-  if (!session.storageSeed) {
-    _seedFreshTaskStorage(storage, session.runInput, session.taskYahl);
-  } else {
-    seedDefaultContext(storage);
-  }
+  const storage = buildFreshRunStorage(session);
 
   return {
     cursor: {
@@ -72,7 +76,6 @@ export const resolvePreparedRun = async (
     },
     parsedStages: session.parsedStages,
     resultContextKey: session.resultContextKey ?? 'result',
-    runInput: session.runInput,
     storage,
     taskYahl: session.taskYahl,
   };

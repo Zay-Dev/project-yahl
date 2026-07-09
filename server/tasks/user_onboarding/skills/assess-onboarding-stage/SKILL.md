@@ -8,7 +8,7 @@ Given extracted knowledge and prior stage Q&A, decide whether the current onboar
 
 ## Input (from stage context)
 
-- Session extract `.extracted` content for topic `user-onboarding`
+- Session extract `.extracted` content for topic `user-onboarding` (mastermind reads `overview`, `brief`, and `raw/` as needed from `need`)
 - Stage-specific keys expected for this stage index
 - `onboarding_qa_<stageIndex>` log if present
 - Stage rubric from SKILL.yahl
@@ -36,7 +36,7 @@ Write an assessment object:
 When `sufficient: true`:
 
 1. Build stage `produceContextKeys` from extracted knowledge (no ask_user).
-2. Call `persist-knowledge` for stage keys.
+2. Call `upsert-knowledge-page` for stage keys (dual-write: overview sections + `raw/`).
 3. Proceed to verify.
 
 When `sufficient: false`:

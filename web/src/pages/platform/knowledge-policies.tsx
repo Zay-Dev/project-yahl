@@ -2,6 +2,7 @@ import type { TRequestPatchKnowledgePolicyBody, TResponseTopicPolicy } from "@pr
 
 import { useEffect, useState } from "react";
 
+import { WIKI_PUBLIC_URL } from "@/providers/constants";
 import { Button } from "@/components/ui/button";
 import {
   listKnowledgePolicies,
@@ -95,6 +96,7 @@ export function KnowledgePoliciesPage() {
             <thead className="bg-muted/50">
               <tr>
                 <th className="p-3 text-left font-medium">Topic</th>
+                <th className="p-3 text-left font-medium">Wiki</th>
                 <th className="p-3 text-left font-medium">Enabled</th>
                 <th className="p-3 text-left font-medium">Interval</th>
                 <th className="p-3 text-left font-medium">Last run</th>
@@ -106,6 +108,16 @@ export function KnowledgePoliciesPage() {
               {items.map((item) => (
                 <tr className="border-t" key={item.canonical}>
                   <td className="p-3 font-medium">{item.canonical}</td>
+                  <td className="p-3">
+                    <a
+                      className="text-primary underline-offset-4 hover:underline"
+                      href={`${WIKI_PUBLIC_URL}/en/topics/${encodeURIComponent(item.canonical)}/overview`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Browse
+                    </a>
+                  </td>
                   <td className="p-3">
                     <Button
                       disabled={savingSlug === item.canonical}
