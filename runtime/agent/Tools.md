@@ -1,24 +1,3 @@
-- You have API tools run_bash, browser, set_context, ask_user, and mastermind. Use run_bash for shell inside this container (e.g. ls /opt/skills). Never use run_bash to echo JSON as a substitute for other API tools. Never use curl for web search or HTML scraping — use browser for /stagehand(...). Exception: when stage logic references a documented HTTP API workspace file (e.g. ~/hk_observatory_api.md), use run_bash + curl for JSON/API data.
-- Use browser for web search, page fetch, and structured extract per /opt/skills/stagehand/SKILL.md. Arguments: mode (goto|act|extract|observe|agent), instruction, optional url, schema, maxSteps. Returns { ok, data } or { ok: false, error }.
-- Use mastermind for /mastermind(...) per /opt/skills/mastermind/SKILL.md. Skills: research, extract-info (workspace-file RAG: source + need), extract-knowledge (mastermind reads knowledges/; writes ~/knowledge/{key}.json; returns key/path only), persist-knowledge (writes canonical knowledges/; key/value/topic only), media-to-text, plan, design-questions, propose-notification (draft outbound; does not send). After extract-knowledge, read ~/knowledge/{key}.json and use .extracted — never read ~/knowledges/. Never pass source/file/path to extract-knowledge or persist-knowledge. Returns { ok, data } or { ok: false, error }.
-- Use set_context to persist values for the orchestrator (scope global, stage, or types; non-empty key; JSON value; optional operation set or extend).
-  - when *extend, you MUST use extend regardless if the original context/var value, 'extend' is mandantory when *extend
-  - do not try to validate persisted writeback in the same sandbox run; orchestrator applies context mutation outside the sandbox boundary
-- Use ask_user to pause for user input with askUserBatch.v1:
-  - `version: "askUserBatch.v1"`
-  - `batchId`, `title`, non-empty `questions[]`
-  - each question: `questionRef`, `kind` (`text` | `multipleChoice`), `title`; MC needs `options` (≥2) and optional `allowMultiple`, `minChoices`, `maxChoices`
-- ask_user example:
-  - `{"version":"askUserBatch.v1","batchId":"round1","title":"Pick region","questions":[{"questionRef":"region","kind":"multipleChoice","title":"Pick target region","options":[{"id":"apac","label":"APAC"},{"id":"eu","label":"EU"}],"allowMultiple":false}]}`
-- ask_user validation rules:
-  - never omit `version`, `batchId`, `title`, or `questions`
-  - never send fewer than 2 MC options
-  - never send empty `id` or `label`
-  - never re-ask a questionRef that already has an answer
-- You will receive a `knowledge` context bucket: `{ issues, notes }`.
-- Always read `knowledge` before retrying a known problem.
-- If the same issue appears again, call `set_context` with scope `stage`, key `knowledge_update`, value `{"issue":"<non-empty issue text>","solved":false,"solution":"<optional better fix>","note":"<optional short note>"}`.
-- If the issue is resolved, call `set_context` with scope `stage`, key `knowledge_update`, value `{"issue":"<same issue text>","solved":true,"solution":"<what fixed it>","note":"<optional short note>"}`.
-- Keep `issue` text stable across retries so orchestrator can count attempts and stop after 3 unresolved loops.
-- If the stage outcome is only context updates, call set_context as needed; your last message may omit extra prose — the last successful set_context tool will be used if your final content is not a valid envelope.
-- operation defaults to set when omitted; use extend to write `[oldValue, newValue]` to the target key.
+# Agent tools
+
+- Use mastermind for /mastermind(...) per /opt/skills/mastermind/SKILL.md. Skills: research, extract-info (workspace-file RAG: source + need), get-knowledge (mastermind reads wiki corpus; writes ~/knowledge/{key}.json; returns key/path only), upsert-knowledge-page (writes wiki via key/value or page/content), media-to-text, plan, design-questions, propose-notification (draft outbound; does not send). After get-knowledge, read ~/knowledge/{key}.json and use .extracted. Never pass source/file/path to get-knowledge or upsert-knowledge-page. Returns { ok, data } or { ok: false, error }.

@@ -45,7 +45,7 @@ describe('pendingSessionUpdateDoc', () => {
     const update = pendingSessionUpdateDoc({
       isBackground: true,
       sessionId: 'sess-bg',
-      taskId: 'knowledge_tidy',
+      taskId: 'auto_knowledge_refresh',
       taskYahl: 'name: tidy\nstages: []',
     });
 

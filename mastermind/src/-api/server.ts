@@ -15,7 +15,6 @@ import type { TMastermindAgent } from '../-sdk/agent.js';
 import { buildRequestStatusPayload, getActiveSkillActivity, getRequestActivity } from '../-sdk/request-activity.js';
 import { runSelfCheck } from '../-sdk/self-check.js';
 import { postProposal, runSkill, runListTopicPolicies, runPatchTopicPolicy } from '../-handlers/skills.js';
-import { rebuildPersistedPathsFromTopic } from '../-knowledge/index.js';
 
 const readJsonBody = async (req: http.IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = [];
@@ -90,25 +89,6 @@ export const createApiServer = (agent: TMastermindAgent) => {
         });
 
         sendJson(res, 200, payload);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/v1/internal/knowledges/persisted-index') {
-        if (!isInternalRequest(req)) {
-          sendJson(res, 403, { error: 'forbidden' });
-          return;
-        }
-
-        const body = await readJsonBody(req) as { topic?: string };
-        const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
-
-        if (!topic) {
-          sendJson(res, 400, { error: 'topic required' });
-          return;
-        }
-
-        const persisted = await rebuildPersistedPathsFromTopic(topic);
-        sendJson(res, 200, { ok: true, persisted });
         return;
       }
 

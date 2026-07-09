@@ -61,5 +61,3 @@ Unknown keys error — no orphan `topics/{slug}/{key}` pages.
 ```
 
 Returns `{ path, pagePath, wikiPath, rawPath?, quality?, canonicalTopic }` on success.
-
-Legacy alias: `persist-knowledge` (deprecated).

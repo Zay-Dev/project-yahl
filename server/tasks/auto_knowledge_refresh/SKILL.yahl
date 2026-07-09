@@ -48,7 +48,7 @@ stages:
     produceContextKeys: [result]
     logic: |
       (() => {
-        const evalData = context.context.refresh_eval?.data ?? context.context.refresh_eval;
+        const evalData = context.context.refresh_eval?.data;
         const items = context.context.dispatched ?? [];
         return {
           result: {

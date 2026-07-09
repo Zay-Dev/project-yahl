@@ -43,9 +43,9 @@ export const postVerifyCheckpoint = async (
     throw new Error(`verify checkpoint failed: ${res.status} ${text}`);
   }
 
-  const json = await res.json() as { data?: { verifyId: string }; verifyId?: string };
+  const json = await res.json() as { data: { verifyId: string } };
 
-  return json.data ?? json as { verifyId: string };
+  return json.data;
 };
 
 export const postVerifyPass = async (
@@ -100,7 +100,7 @@ export const fetchVerifyCheckpoint = async (
     throw new Error(`verify checkpoint not found: ${verifyId}`);
   }
 
-  const json = await res.json() as TVerifyCheckpoint & { data?: TVerifyCheckpoint };
+  const json = await res.json() as { data: TVerifyCheckpoint };
 
-  return json.data ?? json;
+  return json.data;
 };

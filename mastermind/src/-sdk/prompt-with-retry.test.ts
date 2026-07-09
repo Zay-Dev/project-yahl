@@ -36,7 +36,7 @@ describe('promptWithActiveRunRetry', () => {
       return { result: 'ok' };
     };
 
-    const result = await promptWithActiveRunRetry(prompt, 'extract-knowledge');
+    const result = await promptWithActiveRunRetry(prompt, 'get-knowledge');
 
     assert.equal(result.result, 'ok');
     assert.equal(attempts, 2);

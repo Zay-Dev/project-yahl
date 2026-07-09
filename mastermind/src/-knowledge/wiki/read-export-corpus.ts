@@ -167,6 +167,36 @@ export const readExportTopicCorpus = async (
   return parts.join('\n\n');
 };
 
+export const readExportPageByPath = async (pagePath: string): Promise<string | null> => {
+  const normalized = pagePath.replace(/^\/+/, '').trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const candidates = normalized.endsWith('.md')
+    ? [normalized]
+    : [`${normalized}.md`, normalized];
+
+  for (const candidate of candidates) {
+    const absolute = resolveUnderExportRoot(candidate);
+
+    if (!absolute) {
+      continue;
+    }
+
+    try {
+      const content = await fs.readFile(absolute, 'utf8');
+
+      return stripYamlFrontmatter(content);
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return null;
+};
+
 export const shouldUseExportCorpus = (
   stats: TExportCorpusStats,
   pageCountThreshold = config.wikiExportPageThreshold,

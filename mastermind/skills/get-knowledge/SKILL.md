@@ -40,5 +40,3 @@ Session file shape: `{ need, topic?, extracted, absent, extractedAt }`.
 Never read wiki HTTP, export files, or legacy `~/knowledges/` directly — canonical store is mastermind-private.
 
 For workspace-file RAG, use **`extract-info`** instead.
-
-Legacy alias: `extract-knowledge` (deprecated).

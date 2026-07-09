@@ -16,7 +16,7 @@ export const listKnowledgePolicies = [
         '/v1/internal/knowledges/topic-policies',
       );
 
-      const items = result.data?.items ?? result.items ?? [];
+      const items = result.data?.items ?? [];
 
       express.respondOne<TResponseTopicPolicies>({ items });
     })

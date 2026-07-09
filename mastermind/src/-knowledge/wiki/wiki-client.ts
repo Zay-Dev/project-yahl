@@ -1,5 +1,6 @@
 import { config } from '../../config.js';
 
+import { readExportPageByPath } from './read-export-corpus.js';
 import { pageTitleFromPath, WIKI_LOCALE } from './wiki-paths.js';
 
 type TGraphqlResponse<T> = {
@@ -127,6 +128,21 @@ const isWikiPageNotFoundError = (error: unknown): boolean =>
   error instanceof Error && error.message.includes('This page does not exist');
 
 export const getWikiPageByPath = async (pagePath: string): Promise<TPageRecord | null> => {
+  if (!wikiConfigured()) {
+    const content = await readExportPageByPath(pagePath);
+
+    if (content === null) {
+      return null;
+    }
+
+    return {
+      content,
+      id: 0,
+      path: pagePath,
+      title: pageTitleFromPath(pagePath),
+    };
+  }
+
   try {
     const data = await wikiGraphql<{
       pages: {

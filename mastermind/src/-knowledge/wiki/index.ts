@@ -1,6 +1,6 @@
 import { expandTopicSlugs, listTopicFolderSummaries, resolveCanonicalTopic } from '../topic-registry.js';
 
-import { mapLegacyKeyToPage } from './legacy-key-map.js';
+import { mapKnowledgeKeyToPage } from './knowledge-key-map.js';
 import { rawReferenceToMarkdown } from './raw-reference.js';
 import {
   getExportTopicStats,
@@ -21,6 +21,7 @@ import {
   listWikiPagesUnderPrefix,
   searchWikiPages,
   upsertWikiPage,
+  wikiConfigured,
   type TUpsertWikiMode,
 } from './wiki-client.js';
 import {
@@ -289,7 +290,7 @@ export const upsertKnowledgeWikiPage = async (input: {
   };
 };
 
-export const upsertLegacyKnowledgeKey = async (input: {
+export const upsertKnowledgeKey = async (input: {
   canonical: string;
   key: string;
   value: unknown;
@@ -301,7 +302,7 @@ export const upsertLegacyKnowledgeKey = async (input: {
   rawPath?: string;
   wikiPath: string;
 }> => {
-  const mapping = mapLegacyKeyToPage(input.key);
+  const mapping = mapKnowledgeKeyToPage(input.key);
   let pagePath = '';
   let wikiPath = '';
   let quality: string | undefined;
@@ -375,7 +376,7 @@ export const listKnowledgeWikiPages = async (topic: string): Promise<Array<{
 
   const stats = await getExportTopicStats(canonical);
 
-  if (shouldUseExportCorpus(stats) && stats.fileCount > 0) {
+  if (stats.fileCount > 0 && (shouldUseExportCorpus(stats) || !wikiConfigured())) {
     const wikiPrefix = resolveTopicWikiPrefix(canonical);
 
     return (await listExportTopicFiles(canonical)).map((file) => {

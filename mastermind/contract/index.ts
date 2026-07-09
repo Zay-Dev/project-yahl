@@ -48,8 +48,6 @@ export const skillNames = [
   'upsert-knowledge-page',
   'list-knowledge-pages',
   'search-knowledge',
-  'extract-knowledge',
-  'persist-knowledge',
   'resolve-topic',
   'tidy-knowledge',
   'list-topic-policies',

@@ -1,6 +1,6 @@
 # context-paths
 
-Cross-stage path registry for knowledge_capture.
+Cross-stage path registry for knowledge_refresh.
 
 ## Context keys
 
@@ -17,11 +17,10 @@ Cross-stage path registry for knowledge_capture.
   "topic": "slug",
   "topicWorkspace": "~/knowledge/slug",
   "studyWorkspace": "~/knowledge/slug/study",
-  "knowledgesPersistDir": "~/knowledges/slug",
   "missionPath": "~/task-skills/task-mission/SKILL.md",
   "taskSkillsDir": "~/task-skills",
   "persisted": [
-    { "key": "study_plan", "relativePath": "slug/study_plan.json", "absolutePath": "~/knowledges/slug/study_plan.json" }
+    { "key": "study_plan", "relativePath": "slug/study_plan.json", "absolutePath": "~/knowledge/slug/study_plan.json" }
   ]
 }
 ```
@@ -32,7 +31,7 @@ Cross-stage path registry for knowledge_capture.
 2. `set_context` append to `knowledge_paths.persisted`:
    - `key` = persist key argument
    - `relativePath` = returned path
-   - `absolutePath` = `~/knowledges/{relativePath}`
+   - `absolutePath` = `~/knowledge/{relativePath}`
 
 ### `*append_persisted_path(knowledge_paths, persistResult, key: <key>)`
 
@@ -42,7 +41,7 @@ YAHL stages use this virtual function after `/mastermind(upsert-knowledge-page, 
 {
   "key": "study_plan",
   "relativePath": "slug/study_plan.json",
-  "absolutePath": "~/knowledges/slug/study_plan.json"
+  "absolutePath": "~/knowledge/slug/study_plan.json"
 }
 ```
 

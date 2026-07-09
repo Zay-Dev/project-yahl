@@ -53,7 +53,6 @@ types: |
     topic: string;
     topicWorkspace: string;
     studyWorkspace: string;
-    knowledgesPersistDir: string;
     missionPath: string;
     taskSkillsDir: string;
     persisted: TKnowledgePersisted[];
@@ -202,7 +201,6 @@ stages:
           topic: context.context.knowledge_topic,
           topicWorkspace: `~/knowledge/${context.context.knowledge_topic}`,
           studyWorkspace: `~/knowledge/${context.context.knowledge_topic}/study`,
-          knowledgesPersistDir: `~/knowledges/${context.context.knowledge_topic}`,
           missionPath: '~/task-skills/task-mission/SKILL.md',
           taskSkillsDir: '~/task-skills',
           persisted: [],

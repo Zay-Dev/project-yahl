@@ -23,7 +23,7 @@ export const fetchTaskYahl = async (taskId: string): Promise<TTaskYahl> => {
     throw new Error(`task fetch failed: ${res.status} ${text}`);
   }
 
-  const json = await res.json() as TTaskYahl & { data?: TTaskYahl };
+  const json = await res.json() as { data: TTaskYahl };
 
-  return json.data ?? json;
+  return json.data;
 };

@@ -1,6 +1,6 @@
 # locate-knowledge
 
-Assess existing `knowledges/{canonical}/` corpus (including registered alias folders) before spending tokens on re-fetch.
+Assess existing wiki corpus for the topic before spending tokens on re-fetch.
 
 ## Input
 
@@ -36,7 +36,6 @@ Assess existing `knowledges/{canonical}/` corpus (including registered alias fol
 - List `existingKeys` from the session extract JSON (parsed from `~/knowledge/` after get-knowledge).
 - `sufficientFor` = stage goals already met by persisted keys with valid content.
 - `gaps` = what `learning_contract` still needs vs corpus.
-- If resolve-topic returned `suggestMerge`, note overlapping folders in gaps until platform tidy merges them.
 - Use `today` from context when framing freshness; do not hardcode repo paths or hostnames.
 
 ## Rerun intent override

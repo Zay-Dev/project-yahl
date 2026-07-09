@@ -9,18 +9,14 @@ describe('topic refresh', () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-topic-refresh-'));
 
     process.env.MASTERMIND_DATA_ROOT = tmp;
+    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
 
-    const topicDir = path.join(tmp, 'knowledges', 'dogfood-topic');
+    const topicDir = path.join(tmp, 'knowledge_export', 'en', 'topics', 'dogfood-topic');
 
     await fs.mkdir(topicDir, { recursive: true });
-    await fs.mkdir(path.join(tmp, 'knowledges', '_index'), { recursive: true });
+    await fs.writeFile(path.join(topicDir, 'overview.md'), '# Dogfood\n', 'utf8');
     await fs.writeFile(
-      path.join(topicDir, 'meta.json'),
-      `${JSON.stringify({ meta: { slug: 'dogfood-topic', updated_at: '2020-01-01T00:00:00.000Z' } }, null, 2)}\n`,
-      'utf8',
-    );
-    await fs.writeFile(
-      path.join(tmp, 'knowledges', '_index', 'topics.json'),
+      path.join(tmp, 'topics.json'),
       `${JSON.stringify({
         topics: [{
           aliases: [],
@@ -50,6 +46,7 @@ describe('topic refresh', () => {
     assert.deepEqual(report.staleTopics[0]?.scopes, ['facts', 'summary']);
 
     delete process.env.MASTERMIND_DATA_ROOT;
+    delete process.env.KNOWLEDGE_EXPORT_ROOT;
   });
 
   it('skips topics with refresh disabled or null interval', async () => {
@@ -88,9 +85,12 @@ describe('topic refresh', () => {
     process.env.MASTERMIND_DATA_ROOT = tmp;
     process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
 
-    await fs.mkdir(path.join(tmp, 'knowledges', '_index'), { recursive: true });
+    const exportDir = path.join(tmp, 'knowledge_export', 'en', 'topics', 'lego-story-of-reckless-ben');
+
+    await fs.mkdir(exportDir, { recursive: true });
+    await fs.writeFile(path.join(exportDir, 'overview.md'), '# Lego\n', 'utf8');
     await fs.writeFile(
-      path.join(tmp, 'knowledges', '_index', 'topics.json'),
+      path.join(tmp, 'topics.json'),
       `${JSON.stringify({
         topics: [{
           aliases: [],
@@ -128,9 +128,8 @@ describe('topic refresh', () => {
 
     process.env.MASTERMIND_DATA_ROOT = tmp;
 
-    await fs.mkdir(path.join(tmp, 'knowledges', '_index'), { recursive: true });
     await fs.writeFile(
-      path.join(tmp, 'knowledges', '_index', 'topics.json'),
+      path.join(tmp, 'topics.json'),
       `${JSON.stringify({ topics: [] }, null, 2)}\n`,
       'utf8',
     );

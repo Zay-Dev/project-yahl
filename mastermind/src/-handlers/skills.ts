@@ -31,7 +31,7 @@ import {
   listKnowledgeWikiPages,
   searchKnowledgeWiki,
   upsertKnowledgeWikiPage,
-  upsertLegacyKnowledgeKey,
+  upsertKnowledgeKey,
   wikiConfigured,
 } from '../-knowledge/wiki/index.js';
 import { formatShortError, writeAndAnalyzeCrash } from '../-crash-reports/index.js';
@@ -61,24 +61,24 @@ const PERSIST_KNOWLEDGE_MAX_VALUE_BYTES = 256 * 1024;
 const validatePersistKnowledgeValue = (key: string, value: unknown): string | null => {
   if (key === 'sources') {
     if (!Array.isArray(value)) {
-      return 'persist-knowledge sources must be an array';
+      return 'upsert-knowledge-page sources must be an array';
     }
 
     const studyKeys = new Set<string>();
 
     for (const item of value) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return 'persist-knowledge sources items must be objects';
+        return 'upsert-knowledge-page sources items must be objects';
       }
 
       const studyKey = (item as { studyKey?: string }).studyKey?.trim();
 
       if (!studyKey) {
-        return 'persist-knowledge sources items require studyKey';
+        return 'upsert-knowledge-page sources items require studyKey';
       }
 
       if (studyKeys.has(studyKey)) {
-        return `persist-knowledge duplicate studyKey: ${studyKey}`;
+        return `upsert-knowledge-page duplicate studyKey: ${studyKey}`;
       }
 
       studyKeys.add(studyKey);
@@ -94,7 +94,7 @@ const validatePersistKnowledgeValue = (key: string, value: unknown): string | nu
       : null;
 
     if (!items) {
-      return 'persist-knowledge facts must be an object with items array';
+      return 'upsert-knowledge-page facts must be an object with items array';
     }
   }
 
@@ -112,7 +112,6 @@ const readKnowledgeSnippet = async (source?: string, sessionId?: string): Promis
     ...(sessionId
       ? [resolveWorkspacePath(source)]
       : []),
-    path.join(paths.knowledges, source.replace(/^~\//, '')),
     path.join(paths.docs, source.replace(/^~\//, '')),
   ];
 
@@ -207,8 +206,7 @@ const buildSkillPrompt = async (
         'Extract only what was requested. Return plain text or JSON.',
       ].filter(Boolean).join('\n\n');
 
-    case 'get-knowledge':
-    case 'extract-knowledge': {
+    case 'get-knowledge': {
       const need = args.need ?? args.lookingFor ?? 'key facts';
       const knowledgeTopic = typeof args.topic === 'string' ? args.topic : undefined;
       const topicSlugs = knowledgeTopic ? await expandTopicSlugs(knowledgeTopic) : [];
@@ -342,9 +340,6 @@ const runTidyKnowledgeSkill = async (
   try {
     const report = await runTidyKnowledge({
       dryRun,
-      restoreFromArchive: args.restoreFromArchive === true,
-      skipDuplicates: args.skipDuplicates === true,
-      skipWiki: args.skipWiki === true,
       topic: typeof args.topic === 'string' ? args.topic : undefined,
     });
 
@@ -701,7 +696,7 @@ const runUpsertKnowledgePage = async (
     const canonicalTopic = resolved.canonical;
 
     if (key) {
-      const written = await upsertLegacyKnowledgeKey({
+      const written = await upsertKnowledgeKey({
         canonical: canonicalTopic,
         key,
         value: args.value,
@@ -757,8 +752,8 @@ const runUpsertKnowledgePage = async (
 const runGetKnowledge = async (
   agent: TMastermindAgent,
   body: TSkillRequest,
-  skillName: 'extract-knowledge' | 'get-knowledge' = 'get-knowledge',
 ): Promise<TSkillResponse> => {
+  const skillName = 'get-knowledge';
   if (hasPathArgs(body.args)) {
     return { ok: false, error: `${skillName} does not accept file paths` };
   }
@@ -935,11 +930,6 @@ const runSearchKnowledge = async (
   }
 };
 
-const runExtractKnowledge = async (
-  agent: TMastermindAgent,
-  body: TSkillRequest,
-): Promise<TSkillResponse> => runGetKnowledge(agent, body, 'extract-knowledge');
-
 export const runSkill = async (
   agent: TMastermindAgent,
   name: TSkillName,
@@ -950,14 +940,10 @@ export const runSkill = async (
   }
 
   if (name === 'get-knowledge') {
-    return runGetKnowledge(agent, body, 'get-knowledge');
+    return runGetKnowledge(agent, body);
   }
 
-  if (name === 'extract-knowledge') {
-    return runExtractKnowledge(agent, body);
-  }
-
-  if (name === 'upsert-knowledge-page' || name === 'persist-knowledge') {
+  if (name === 'upsert-knowledge-page') {
     return runUpsertKnowledgePage(body.args);
   }
 

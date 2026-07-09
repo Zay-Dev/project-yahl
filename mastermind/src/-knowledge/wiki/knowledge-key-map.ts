@@ -1,11 +1,9 @@
-import { serializeMarkdownBody, shouldPersistAsMarkdown } from '../knowledge-format.js';
-
 import { slugifyPageSegment } from './wiki-paths.js';
 
 const studySlugFromKey = (key: string): string =>
   slugifyPageSegment(key.slice('study_'.length));
 
-export type TLegacyKeyMapping = {
+export type TKnowledgeKeyMapping = {
   mode: 'append' | 'replace';
   narrative: boolean;
   page: string;
@@ -16,14 +14,14 @@ export type TLegacyKeyMapping = {
 const wikiOnly = (
   page: string,
   mode: 'append' | 'replace' = 'replace',
-): TLegacyKeyMapping => ({
+): TKnowledgeKeyMapping => ({
   mode,
   narrative: true,
   page,
   raw: false,
 });
 
-const rawOnly = (key: string): TLegacyKeyMapping => ({
+const rawOnly = (key: string): TKnowledgeKeyMapping => ({
   mode: 'replace',
   narrative: false,
   page: `raw/${slugifyPageSegment(key)}`,
@@ -34,7 +32,7 @@ const dualWrite = (
   page: string,
   section: string,
   mode: 'append' | 'replace' = 'replace',
-): TLegacyKeyMapping => ({
+): TKnowledgeKeyMapping => ({
   mode,
   narrative: true,
   page,
@@ -42,7 +40,7 @@ const dualWrite = (
   section,
 });
 
-const STATIC_KEY_MAP: Record<string, TLegacyKeyMapping> = {
+const STATIC_KEY_MAP: Record<string, TKnowledgeKeyMapping> = {
   analysis: dualWrite('facts', 'Analysis'),
   background_summary: wikiOnly('overview', 'append'),
   communication_style: dualWrite('overview', 'Communication style'),
@@ -65,7 +63,7 @@ const STATIC_KEY_MAP: Record<string, TLegacyKeyMapping> = {
   user_profile_summary: { mode: 'replace', narrative: true, page: 'brief', raw: true },
 };
 
-export const mapLegacyKeyToPage = (key: string): TLegacyKeyMapping => {
+export const mapKnowledgeKeyToPage = (key: string): TKnowledgeKeyMapping => {
   const staticMapping = STATIC_KEY_MAP[key];
 
   if (staticMapping) {
@@ -99,19 +97,11 @@ export const mapLegacyKeyToPage = (key: string): TLegacyKeyMapping => {
     return wikiOnly(slugifyPageSegment(key.replace(/_md$/, '')));
   }
 
-  throw new Error(`upsert-knowledge-page: unknown key "${key}" — add mapping in legacy-key-map.ts`);
-};
-
-export const legacyValueToMarkdown = (key: string, value: unknown): string => {
-  if (shouldPersistAsMarkdown(key, value)) {
-    return serializeMarkdownBody(value);
-  }
-
-  throw new Error(`legacyValueToMarkdown is deprecated for structured key "${key}" — use structuredKeyToWikiMarkdown`);
+  throw new Error(`upsert-knowledge-page: unknown key "${key}" — add mapping in knowledge-key-map.ts`);
 };
 
 export const resolveReadPathsForKey = (key: string, canonical: string): string[] => {
-  const mapping = mapLegacyKeyToPage(key);
+  const mapping = mapKnowledgeKeyToPage(key);
   const topicPrefix = `topics/${canonical}`;
   const paths: string[] = [];
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { mapLegacyKeyToPage, resolveReadPathsForKey } from './legacy-key-map.js';
+import { mapKnowledgeKeyToPage, resolveReadPathsForKey } from './knowledge-key-map.js';
 import { resolvePagesForNeed } from './resolve-pages-for-need.js';
 import { mergeWikiSection } from './section-merge.js';
 import {
@@ -35,9 +35,9 @@ describe('structured-to-markdown', () => {
   });
 });
 
-describe('legacy-key-map', () => {
+describe('knowledge-key-map', () => {
   it('maps identity to overview section with raw reference', () => {
-    const mapping = mapLegacyKeyToPage('identity');
+    const mapping = mapKnowledgeKeyToPage('identity');
 
     assert.equal(mapping.page, 'overview');
     assert.equal(mapping.section, 'Identity & background');
@@ -45,14 +45,14 @@ describe('legacy-key-map', () => {
   });
 
   it('maps open_questions_qa to raw only', () => {
-    const mapping = mapLegacyKeyToPage('open_questions_qa');
+    const mapping = mapKnowledgeKeyToPage('open_questions_qa');
 
     assert.equal(mapping.narrative, false);
     assert.equal(mapping.raw, true);
   });
 
   it('throws for unknown keys', () => {
-    assert.throws(() => mapLegacyKeyToPage('orphan_key'), /unknown key/);
+    assert.throws(() => mapKnowledgeKeyToPage('orphan_key'), /unknown key/);
   });
 
   it('resolveReadPathsForKey includes wiki and raw paths', () => {

@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-import { config, paths } from '../config.js';
+import { paths } from '../config.js';
 
 import {
   normalizeTopicText,
@@ -12,9 +12,9 @@ import {
 } from './topic-slug.js';
 import { resolveExportTopicsRoot, WIKI_TOPICS_ROOT } from './wiki/wiki-paths.js';
 
-const REGISTRY_DIR = path.join(config.dataRoot, '_index');
-const REGISTRY_PATH = paths.topicsRegistry;
-const LEGACY_REGISTRY_PATH = path.join(paths.knowledges, '_index', 'topics.json');
+const resolveRegistryPath = () => paths.topicsRegistry;
+
+const resolveRegistryDir = () => path.dirname(resolveRegistryPath());
 
 export type TTopicSignals = {
   seedUrlHosts: string[];
@@ -78,28 +78,25 @@ const emptyRegistry = (): TTopicRegistry => ({ topics: [] });
 const nowIso = () => new Date().toISOString();
 
 export const loadRegistry = async (): Promise<TTopicRegistry> => {
-  for (const candidate of [REGISTRY_PATH, LEGACY_REGISTRY_PATH]) {
-    try {
-      const raw = await fs.readFile(candidate, 'utf8');
-      const parsed = JSON.parse(raw) as TTopicRegistry;
+  try {
+    const raw = await fs.readFile(resolveRegistryPath(), 'utf8');
+    const parsed = JSON.parse(raw) as TTopicRegistry;
 
-      return {
-        topics: Array.isArray(parsed.topics) ? parsed.topics : [],
-      };
-    } catch {
-      // try next
-    }
+    return {
+      topics: Array.isArray(parsed.topics) ? parsed.topics : [],
+    };
+  } catch {
+    return emptyRegistry();
   }
-
-  return emptyRegistry();
 };
 
 export const saveRegistry = async (registry: TTopicRegistry): Promise<void> => {
-  await fs.mkdir(REGISTRY_DIR, { recursive: true });
-  const tempPath = `${REGISTRY_PATH}.${process.pid}.${Date.now()}.tmp`;
+  await fs.mkdir(resolveRegistryDir(), { recursive: true });
+  const registryPath = resolveRegistryPath();
+  const tempPath = `${registryPath}.${process.pid}.${Date.now()}.tmp`;
 
   await fs.writeFile(tempPath, `${JSON.stringify(registry, null, 2)}\n`, 'utf8');
-  await fs.rename(tempPath, REGISTRY_PATH);
+  await fs.rename(tempPath, registryPath);
 };
 
 const findEntryBySlug = (registry: TTopicRegistry, slug: string): TTopicRegistryEntry | null => {

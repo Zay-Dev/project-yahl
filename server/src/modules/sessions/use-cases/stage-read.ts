@@ -146,31 +146,10 @@ const listStagesBySessionRef = async (sessionRef: Types.ObjectId) =>
   ).lean();
 
 export const resolveReplayStageMetadata = (
-  stage: Pick<IStage, 'loopMeta' | 'parsedStageIndex' | 'sourceStartLine'>,
+  stage: Pick<IStage, 'parsedStageIndex' | 'sourceStartLine'>,
   parsedStages: TParsedStage[],
-  plainCursor: { value: number },
-  loopStageIndex: number,
 ) => {
-  let parsedStageIndex = stage.parsedStageIndex;
-
-  if (parsedStageIndex == null) {
-    if (stage.loopMeta != null && loopStageIndex >= 0) {
-      parsedStageIndex = loopStageIndex;
-    } else {
-      while (
-        plainCursor.value < parsedStages.length
-        && parsedStages[plainCursor.value]?.type === 'loop'
-      ) {
-        plainCursor.value += 1;
-      }
-
-      parsedStageIndex = plainCursor.value < parsedStages.length
-        ? plainCursor.value
-        : undefined;
-      plainCursor.value += 1;
-    }
-  }
-
+  const parsedStageIndex = stage.parsedStageIndex;
   const parsedStage = parsedStageIndex != null ? parsedStages[parsedStageIndex] : undefined;
   const sourceStartLine = parsedStage?.sourceStartLine ?? stage.sourceStartLine;
 
@@ -230,15 +209,11 @@ export const resolveSessionStagesReplay = async (sessionId: string) => {
   const parsedStages = session.parsedStages ?? [];
 
   const stages = await listStagesBySessionRef(sessionRef);
-  const loopStageIndex = parsedStages.findIndex((stage) => stage.type === 'loop');
-  const plainCursor = { value: 0 };
 
   return stages.map((stage): TResponseStageReplayItem => {
     const { parsedStageIndex, sourceStartLine } = resolveReplayStageMetadata(
       stage,
       parsedStages,
-      plainCursor,
-      loopStageIndex,
     );
 
     return {

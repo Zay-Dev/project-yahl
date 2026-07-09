@@ -1,5 +1,5 @@
 import { WIKI_RAW_PREFIX } from './content-model.js';
-import { resolveReadPathsForKey } from './legacy-key-map.js';
+import { resolveReadPathsForKey } from './knowledge-key-map.js';
 import { resolveTopicWikiPrefix } from './wiki-paths.js';
 
 const BROAD_NEED_PATTERNS = [

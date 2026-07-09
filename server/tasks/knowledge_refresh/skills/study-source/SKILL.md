@@ -19,7 +19,7 @@ Follow [`dialogue-round/SKILL.md`](dialogue-round/SKILL.md):
 
 ## Facts stage
 
-When extracting facts, cite `sources[]` URLs. Rebuild `sources` index from persisted `study_*.json` if array is missing or corrupt:
+When extracting facts, cite `sources[]` URLs. Load `sources` via `get-knowledge` need `sources` if missing or corrupt:
 
 - Each item: `title`, `url`, `fetchedAt`, `trustTier`, `studyKey`
 - `sources` must be an **array**, not a single object

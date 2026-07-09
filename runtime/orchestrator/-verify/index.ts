@@ -4,7 +4,6 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import { shutdownAgent } from '@/orchestrator/-docker';
 
 import { VerifyFailedError, VerifyUnavailableError } from './errors';
-import { syncKnowledgePathsPersisted } from './knowledge-paths-sync';
 import { postVerifyCheckpoint, postVerifyPass, postVerifyStart } from './session-api';
 import { resolveVerifyResumeEnabled, toVerifyStageSnapshot } from './stage-snapshot';
 import { toParsedStageSnapshot } from '@/orchestrator/-ask-user/parsed-stage-snapshot';
@@ -74,8 +73,6 @@ export const runVerifyGate = async (params: {
   console.log(
     `[agent] verify start sessionId=${params.sessionId} requestId=${params.requestId} stageIndex=${params.pipelineStageIndex}`,
   );
-
-  await syncKnowledgePathsPersisted(params.storage);
 
   if (params.verifyFastForward) {
     await globalThis.sessionTracker?.flush?.();
