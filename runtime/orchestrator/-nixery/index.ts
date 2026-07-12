@@ -1,8 +1,4 @@
 export {
-  isNixeryReadStage,
-  runNixeryReadStage,
-} from './run-read-stage';
-export {
   confirmNixeryContainerStopped,
   isContainerRunning,
   resolveNixeryContainerName,
@@ -15,6 +11,10 @@ export {
   resolveNixeryStageInput,
   parseNixeryRunInputJson,
 } from './resolve-input';
+export {
+  runNixeryInlineTool,
+  resolveNixeryToolOutputHint,
+} from './inline-tool';
 export {
   runNixeryDef,
   runNixeryStage,

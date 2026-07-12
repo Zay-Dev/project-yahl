@@ -1,7 +1,5 @@
-import { expandTopicSlugs, listTopicFolderSummaries, resolveCanonicalTopic } from '../topic-registry.js';
+import { listTopicFolderSummaries, resolveCanonicalTopic } from '../topic-registry.js';
 
-import { mapKnowledgeKeyToPage } from './knowledge-key-map.js';
-import { rawReferenceToMarkdown } from './raw-reference.js';
 import {
   getExportTopicStats,
   listExportTopicFiles,
@@ -9,26 +7,15 @@ import {
   shouldUseExportCorpus,
 } from './read-export-corpus.js';
 import { resolvePagesForNeed } from './resolve-pages-for-need.js';
-import { isJsonFenceOnlyContent, mergeWikiSection, parseWikiPageRef } from './section-merge.js';
-import {
-  shouldWriteRawReference,
-  structuredKeyToRawValue,
-  structuredKeyToWikiMarkdown,
-  wikiSectionTitleForKey,
-} from './structured-to-markdown.js';
 import {
   getWikiPageByPath,
   listWikiPagesUnderPrefix,
-  searchWikiPages,
-  upsertWikiPage,
   wikiConfigured,
-  type TUpsertWikiMode,
 } from './wiki-client.js';
 import {
   resolveTopicExportPrefix,
   resolveTopicWikiPrefix,
   resolveWikiPagePath,
-  slugifyPageSegment,
   WIKI_LOCALE,
 } from './wiki-paths.js';
 
@@ -207,162 +194,6 @@ export const loadTopicCorpus = async (
   return loadPrefixCorpus(prefix, maxBytes);
 };
 
-export const loadWikiPageContent = async (
-  canonical: string,
-  page: string,
-): Promise<string | null> => {
-  const pagePath = resolveWikiPagePath(canonical, page);
-  const graphqlPage = await getWikiPageByPath(pagePath);
-
-  if (graphqlPage?.content) {
-    return graphqlPage.content;
-  }
-
-  const stats = await getExportTopicStats(canonical);
-
-  if (shouldUseExportCorpus(stats)) {
-    const exportFiles = await listExportTopicFiles(canonical);
-    const exportPrefix = resolveTopicExportPrefix(canonical);
-    const wikiPrefix = resolveTopicWikiPrefix(canonical);
-    const suffix = page.replace(/^\/+/, '');
-    const match = exportFiles.find((file) => {
-      const rel = file.relativePath.replace(/\.md$/i, '');
-
-      return rel.endsWith(`/${suffix}`)
-        || rel === `${exportPrefix}/${suffix}`
-        || rel === `${wikiPrefix}/${suffix}`
-        || rel.endsWith(`/${wikiPrefix}/${suffix}`);
-    });
-
-    return match?.content ?? null;
-  }
-
-  return null;
-};
-
-const upsertWikiPageWithSection = async (input: {
-  canonical: string;
-  content: string;
-  mode?: TUpsertWikiMode;
-  page: string;
-  section?: string;
-  title?: string;
-}): Promise<{ pagePath: string; wikiPath: string }> => {
-  const { page, section } = parseWikiPageRef(input.page);
-  let content = input.content;
-  let mode = input.mode ?? 'replace';
-
-  if (section) {
-    const existing = await loadWikiPageContent(input.canonical, page);
-    const sectionTitle = input.section ?? section;
-
-    content = mergeWikiSection(existing ?? '', sectionTitle, content);
-    mode = 'replace';
-  }
-
-  return upsertKnowledgeWikiPage({
-    canonical: input.canonical,
-    content,
-    mode,
-    page,
-    title: input.title,
-  });
-};
-
-export const upsertKnowledgeWikiPage = async (input: {
-  canonical: string;
-  content: string;
-  mode?: TUpsertWikiMode;
-  page: string;
-  title?: string;
-}): Promise<{ pagePath: string; wikiPath: string }> => {
-  const pagePath = resolveWikiPagePath(input.canonical, input.page);
-  const page = await upsertWikiPage({
-    content: input.content,
-    mode: input.mode,
-    pagePath,
-    title: input.title,
-  });
-
-  return {
-    pagePath,
-    wikiPath: page.path,
-  };
-};
-
-export const upsertKnowledgeKey = async (input: {
-  canonical: string;
-  key: string;
-  value: unknown;
-}): Promise<{
-  key: string;
-  page: string;
-  pagePath: string;
-  quality?: string;
-  rawPath?: string;
-  wikiPath: string;
-}> => {
-  const mapping = mapKnowledgeKeyToPage(input.key);
-  let pagePath = '';
-  let wikiPath = '';
-  let quality: string | undefined;
-  let rawPath: string | undefined;
-
-  if (mapping.narrative) {
-    const narrative = structuredKeyToWikiMarkdown(input.key, input.value, input.canonical);
-
-    if (narrative) {
-      const sectionTitle = mapping.section ?? wikiSectionTitleForKey(input.key);
-      const result = await upsertWikiPageWithSection({
-        canonical: input.canonical,
-        content: narrative,
-        mode: mapping.mode,
-        page: mapping.section ? `${mapping.page}#${sectionTitle}` : mapping.page,
-        section: mapping.section ? sectionTitle : undefined,
-      });
-
-      pagePath = result.pagePath;
-      wikiPath = result.wikiPath;
-
-      if (isJsonFenceOnlyContent(narrative)) {
-        quality = 'json_only';
-      }
-    }
-  }
-
-  if (mapping.raw && shouldWriteRawReference(input.key, input.value)) {
-    const rawValue = structuredKeyToRawValue(input.key, input.value);
-    const rawContent = rawReferenceToMarkdown(input.key, rawValue);
-    const rawPage = `raw/${slugifyPageSegment(input.key)}`;
-    const rawResult = await upsertKnowledgeWikiPage({
-      canonical: input.canonical,
-      content: rawContent,
-      mode: 'replace',
-      page: rawPage,
-    });
-
-    rawPath = rawResult.pagePath;
-
-    if (!pagePath) {
-      pagePath = rawResult.pagePath;
-      wikiPath = rawResult.wikiPath;
-    }
-  }
-
-  if (!pagePath) {
-    throw new Error(`upsert-knowledge-page: nothing written for key "${input.key}"`);
-  }
-
-  return {
-    key: input.key,
-    page: mapping.page.split('#')[0] ?? mapping.page,
-    pagePath,
-    quality,
-    rawPath,
-    wikiPath,
-  };
-};
-
 export const listKnowledgeWikiPages = async (topic: string): Promise<Array<{
   page: string;
   pagePath: string;
@@ -401,18 +232,4 @@ export const listKnowledgeWikiPages = async (topic: string): Promise<Array<{
     pagePath: page.path,
     source: 'graphql' as const,
   }));
-};
-
-export const searchKnowledgeWiki = async (query: string, topic?: string) => {
-  const pages = await searchWikiPages(query);
-  const topicSlugs = topic ? await expandTopicSlugs(topic) : [];
-  const prefix = topicSlugs[0] ? resolveTopicWikiPrefix(topicSlugs[0]) : null;
-
-  return pages
-    .filter((page) => !prefix || page.path.startsWith(`${prefix}/`) || page.path === prefix)
-    .map((page) => ({
-      pagePath: page.path,
-      title: page.title,
-      updatedAt: page.updatedAt,
-    }));
 };

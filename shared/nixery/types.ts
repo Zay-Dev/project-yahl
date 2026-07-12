@@ -1,3 +1,9 @@
+export type TNixeryOutputSpec = {
+  default?: string;
+  inlineTool?: boolean;
+  validate?: string;
+};
+
 export type TNixeryPolicyMode = 'true' | 'propose' | 'deny';
 
 type TNixeryPolicy = {
@@ -29,6 +35,7 @@ export type TNixeryDef = {
   input?: Record<string, TNixeryInputField>;
   mount?: Record<string, TNixeryMountSpec>;
   nixery?: TNixeryDefBlock;
+  output?: TNixeryOutputSpec;
   packages: string[];
   run?: {
     entry: string[];

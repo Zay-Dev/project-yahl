@@ -1,6 +1,6 @@
 ---
 name: mastermind
-description: Gateway helper skills — research, extract-info, upsert-knowledge-page, media-to-text, plan, design-questions, propose-notification via the mastermind tool.
+description: Gateway helper skills — research, extract-info, media-to-text, plan, design-questions, propose-notification via the mastermind tool.
 ---
 
 # mastermind (stage agent)
@@ -12,7 +12,6 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `/mastermind(research, topic: …, direction: …, url: …, source: ~/…, mission: …)` | `research` — study saved source per direction; browse via agent stagehand first |
 | `/mastermind(research, guidelinePath: ~/task-skills/…/SKILL.md, facts: …)` | `research` with untrusted task guideline |
 | `/mastermind(extract-info, source: ~/…, need: …)` | `extract-info` (workspace-file RAG; replaces legacy `rag` tool) |
-| `/mastermind(upsert-knowledge-page, key: …, value: …, topic: …)` | `upsert-knowledge-page` (writes canonical wiki topic; no paths) |
 | `/mastermind(resolve-topic, topicText: …, slug: …, seedUrls: …)` | `resolve-topic` (canonical folder slug before first persist) |
 | `/mastermind(resolve-topic-policy, topic: …)` | `resolve-topic-policy` (registry refresh row + `refresh_skipped`; no LLM) |
 | `/mastermind(tidy-knowledge, dryRun: …)` | `tidy-knowledge` (detect/merge duplicate knowledges folders; wiki audit/migrate) |
@@ -21,6 +20,13 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `/mastermind(plan, goal: …)` | `plan` |
 | `/mastermind(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `design-questions` (dynamic ask-user batches; `mission` frames subject vs task process) |
 | `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` | `propose-notification` (draft only; human approve → worker send) |
+
+**Knowledge writes** use the **`nixery`** tool — see `/opt/skills/nixery/SKILL.md`:
+
+| Invocation | Def |
+|------------|-----|
+| `/nixery(upsert-knowledge-page, key: …, value: …, topic: …)` | deterministic GraphQL upsert |
+| `/nixery(dedup-knowledge, topic: …, purpose: …)` | opt-in 3-phase dedup |
 
 **Knowledge reads** use orchestrator `nixeryRun` — not mastermind:
 
@@ -41,6 +47,7 @@ The `mastermind` tool auto-waits on disconnect while status is `queued`/`running
 | Tool | Use |
 |------|-----|
 | `mastermind` | Invoke helper skills; returns `{ ok, data }` or structured error with `retryable`, `requestStatus`, `invocationId` |
+| `nixery` | Inline nixery defs (upsert, dedup); returns `{ ok, data }` |
 | `mastermind_status` | Debug poll — `{ ok, agent, queueDepth, request }` for current session request |
 
 Before re-calling `mastermind` after failure: check output file on disk; poll status; only re-POST when status is `failed` or missing.

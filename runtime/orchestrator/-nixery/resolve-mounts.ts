@@ -6,14 +6,34 @@ import {
   resolveDockerHostRepoRoot,
   resolveDockerHostWorkspacePath,
 } from '@/orchestrator/-docker/paths';
+import { workspaceRoot } from '@/orchestrator/-utils/workspace-paths';
 
-const resolveDockerHostSessionNixeryDir = (sessionId: string, defId: string) =>
+export const resolveDockerHostSessionNixeryDir = (sessionId: string, defId: string) =>
   path.join(resolveDockerHostWorkspacePath(), 'sessions', sessionId, 'nixery', defId);
+
+export const resolveDockerHostSessionDir = (sessionDir: string) => {
+  const orchestratorWorkspace = path.resolve(workspaceRoot());
+  const resolved = path.resolve(sessionDir);
+
+  if (
+    resolved === orchestratorWorkspace
+    || resolved.startsWith(`${orchestratorWorkspace}${path.sep}`)
+  ) {
+    const relative = path.relative(orchestratorWorkspace, resolved);
+
+    return path.join(resolveDockerHostWorkspacePath(), relative);
+  }
+
+  return resolved;
+};
 
 const allowedDockerHostPrefixes = () => [
   resolveDockerHostWorkspacePath(),
   path.join(resolveDockerHostRepoRoot(), 'data', 'knowledge_export'),
+  path.join(resolveDockerHostRepoRoot(), 'data', 'mastermind'),
   path.join(resolveDockerHostRepoRoot(), 'server', 'nixery'),
+  path.join(resolveDockerHostRepoRoot(), 'server', 'nixery', '_lib'),
+  path.join(resolveDockerHostRepoRoot(), 'shared', 'dist'),
 ];
 
 const isAllowedPath = (resolved: string, prefixes: string[]) =>
@@ -37,6 +57,18 @@ const resolveMountHost = (params: {
 
   if (token.startsWith('data/')) {
     return path.join(resolveDockerHostRepoRoot(), token);
+  }
+
+  if (token.startsWith('shared/')) {
+    const pkg = token.slice('shared/'.length);
+
+    return path.join(resolveDockerHostRepoRoot(), 'shared', 'dist', pkg);
+  }
+
+  if (token.startsWith('lib/')) {
+    const libName = token.slice('lib/'.length);
+
+    return path.join(resolveDockerHostRepoRoot(), 'server', 'nixery', '_lib', libName, 'dist');
   }
 
   throw new Error(`[nixery] unsupported mount host token: ${params.host}`);

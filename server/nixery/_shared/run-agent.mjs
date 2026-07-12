@@ -16,3 +16,42 @@ export const callChatWithLog = async (defId, round, fetchFn) => {
 
   return result;
 };
+
+const PLACEHOLDER_KEYS = new Set(['', 'placeholder', 'sk-no-auth-required']);
+
+export const hasRealApiKey = (apiKey) => {
+  const trimmed = apiKey.trim().toLowerCase();
+
+  return trimmed.length > 0 && !PLACEHOLDER_KEYS.has(trimmed);
+};
+
+export const callChat = async (params) => {
+  const base = params.baseUrl.replace(/\/+$/, '');
+  const url = `${base}/chat/completions`;
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (hasRealApiKey(params.apiKey)) {
+    headers.Authorization = `Bearer ${params.apiKey}`;
+  }
+
+  const response = await fetch(url, {
+    body: JSON.stringify({
+      max_tokens: params.maxTokens,
+      messages: params.messages,
+      model: params.model,
+      temperature: params.temperature ?? 0.2,
+      tools: params.tools,
+    }),
+    headers,
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`openai chat failed: ${response.status} ${body.slice(0, 500)}`);
+  }
+
+  return response.json();
+};

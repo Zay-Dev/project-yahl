@@ -3,20 +3,23 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { callChatWithLog, logProgress, resolveDefId } from '/opt/nixery/_shared/run-agent.mjs';
+import {
+  callChat,
+  callChatWithLog,
+  hasRealApiKey,
+  logProgress,
+  resolveDefId,
+} from '../_shared/run-agent.mjs';
+import {
+  handleWriteWorkspaceFileCall,
+  writeWorkspaceFileTool,
+} from '../_shared/workspace-write.mjs';
 
 const execFileAsync = promisify(execFile);
 
-const PLACEHOLDER_KEYS = new Set(['', 'placeholder', 'sk-no-auth-required']);
 const ALLOWED_COMMANDS = new Set(['ls', 'cat', 'grep', 'echo']);
 const MAX_TOOL_ROUNDS = 24;
 const MAX_OUTPUT_CHARS = 12_000;
-
-const hasRealApiKey = (apiKey) => {
-  const trimmed = apiKey.trim().toLowerCase();
-
-  return trimmed.length > 0 && !PLACEHOLDER_KEYS.has(trimmed);
-};
 
 const readText = async (filePath) => {
   try {
@@ -148,37 +151,6 @@ const runShell = async (command) => {
   }
 };
 
-const callChat = async (params) => {
-  const base = params.baseUrl.replace(/\/+$/, '');
-  const url = `${base}/chat/completions`;
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-
-  if (hasRealApiKey(params.apiKey)) {
-    headers.Authorization = `Bearer ${params.apiKey}`;
-  }
-
-  const response = await fetch(url, {
-    body: JSON.stringify({
-      max_tokens: params.maxTokens,
-      messages: params.messages,
-      model: params.model,
-      temperature: params.temperature ?? 0.2,
-      tools: params.tools,
-    }),
-    headers,
-    method: 'POST',
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`openai chat failed: ${response.status} ${body.slice(0, 500)}`);
-  }
-
-  return response.json();
-};
-
 const shellTool = {
   function: {
     description: 'Run an allowlisted shell command: ls, cat, grep, echo. Use absolute paths under /data/knowledge_export or /workspace.',
@@ -197,6 +169,39 @@ const shellTool = {
   type: 'function',
 };
 
+const handleToolCall = async (toolCall, round, defId) => {
+  const name = toolCall.function?.name ?? '';
+  let args = {};
+
+  try {
+    args = JSON.parse(toolCall.function.arguments || '{}');
+  } catch {
+    args = {};
+  }
+
+  if (name === 'write_workspace_file') {
+    logProgress(defId, `tool round=${round} write_workspace_file path=${String(args.path ?? '').slice(0, 120)}`);
+    const output = await handleWriteWorkspaceFileCall(args);
+
+    logProgress(defId, `tool round=${round} result_chars=${output.length}`);
+
+    return output;
+  }
+
+  if (name !== 'shell') {
+    return `unsupported tool: ${name}`;
+  }
+
+  const command = String(args.command ?? '');
+
+  logProgress(defId, `tool round=${round} command=${command.slice(0, 240)}`);
+  const output = await runShell(command);
+
+  logProgress(defId, `tool round=${round} result_chars=${output.length}`);
+
+  return output;
+};
+
 const main = async () => {
   const workspace = '/workspace';
   const defRoot = '/opt/nixery/def';
@@ -206,6 +211,8 @@ const main = async () => {
   const inputValues = Object.fromEntries(
     Object.entries(input).map(([key, value]) => [key, String(value ?? '').trim()]),
   );
+  const outputName = inputValues.output?.trim() || 'pages.md';
+  const outputPath = path.join(workspace, outputName);
   const userPrompt = renderTemplate(template, inputValues);
   const apiKey = process.env.OPENAI_API_KEY?.trim() ?? '';
   const baseUrl = process.env.OPENAI_BASE_URL?.trim() ?? 'https://api.openai.com/v1';
@@ -225,7 +232,7 @@ const main = async () => {
 
   logProgress(
     defId,
-    `start topic=${inputValues.topic ?? ''} output=${inputValues.output ?? ''} `
+    `start topic=${inputValues.topic ?? ''} output=${outputName} `
     + `purpose=${(inputValues.purpose ?? '').slice(0, 120)}`,
   );
 
@@ -235,7 +242,8 @@ const main = async () => {
         'You are a knowledge extraction agent inside a one-time nixery container.',
         'Explore /data/knowledge_export with ls, cat, grep before concluding absent.',
         'When absent:true, absentReason must list exploration steps tried (paths, grep patterns, files read) then why purpose is unmet.',
-        'Write workflow artifacts under /workspace/ with echo and shell redirects.',
+        'Write the primary markdown artifact with write_workspace_file — YAML frontmatter plus body.',
+        'Use shell only for exploration and notes — not for the primary artifact.',
         'Stop when the task is complete.',
       ].join(' '),
       role: 'system',
@@ -254,7 +262,7 @@ const main = async () => {
       messages,
       model,
       temperature: Number.isFinite(temperature) ? temperature : 0.2,
-      tools: [shellTool],
+      tools: [shellTool, writeWorkspaceFileTool],
     }));
 
     const choice = json.choices?.[0]?.message;
@@ -272,31 +280,10 @@ const main = async () => {
     }
 
     for (const toolCall of toolCalls) {
-      if (toolCall.function?.name !== 'shell') {
-        messages.push({
-          content: `unsupported tool: ${toolCall.function?.name ?? 'unknown'}`,
-          role: 'tool',
-          tool_call_id: toolCall.id,
-        });
-        continue;
-      }
-
-      let args = {};
-
-      try {
-        args = JSON.parse(toolCall.function.arguments || '{}');
-      } catch {
-        args = {};
-      }
-
       let output = '<error>';
 
       try {
-        const command = String(args.command ?? '');
-
-        logProgress(defId, `tool round=${round} command=${command.slice(0, 240)}`);
-        output = await runShell(command);
-        logProgress(defId, `tool round=${round} result_chars=${output.length}`);
+        output = await handleToolCall(toolCall, round, defId);
       } catch (error) {
         output = error instanceof Error ? error.message : 'command failed';
       }
@@ -309,19 +296,9 @@ const main = async () => {
     }
   }
 
-  if (inputValues.output?.trim()) {
-    const outputPath = path.join(workspace, inputValues.output.trim());
+  const stat = await fs.stat(outputPath);
 
-    try {
-      const stat = await fs.stat(outputPath);
-
-      logProgress(defId, `complete output=${outputPath} bytes=${stat.size}`);
-    } catch {
-      logProgress(defId, `complete output_missing path=${outputPath}`);
-    }
-  } else {
-    logProgress(defId, 'complete no output hint');
-  }
+  logProgress(defId, `complete output=${outputPath} bytes=${stat.size}`);
 };
 
 main().catch((error) => {

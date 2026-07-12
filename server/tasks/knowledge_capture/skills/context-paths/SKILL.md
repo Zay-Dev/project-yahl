@@ -35,7 +35,7 @@ Cross-stage path registry for knowledge_capture.
 
 ### `*append_persisted_path(knowledge_paths, persistResult, key: <key>)`
 
-YAHL stages use this virtual function after `/mastermind(upsert-knowledge-page, ...)`. Implement it by merging a **structured object** into `knowledge_paths.persisted` — never push the raw path string.
+YAHL stages use this virtual function after `/nixery(upsert-knowledge-page, ...)`. Implement it by merging a **structured object** into `knowledge_paths.persisted` — never push the raw path string.
 
 ```json
 {

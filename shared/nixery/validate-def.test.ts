@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import test from 'node:test';
 
+import { listNixeryDefIds } from './list-defs';
+import { loadNixeryDefFromFile } from './load-def';
 import { resolveNixeryPolicy } from './resolve-policy';
 import { validateNixeryArgv } from './validate-argv';
 import { validateNixeryDef } from './validate-def';
 
-test('validateNixeryDef accepts get-knowledge shape', () => {
+test('validateNixeryDef accepts read-def shape', () => {
   const def = validateNixeryDef({
-    id: 'get-knowledge',
+    id: 'read-def-fixture',
     packages: ['nodejs', 'curl', 'jq'],
     env: {
       OPENAI_BASE_URL: '',
@@ -25,12 +28,12 @@ test('validateNixeryDef accepts get-knowledge shape', () => {
     },
   });
 
-  assert.equal(def.id, 'get-knowledge');
+  assert.equal(def.id, 'read-def-fixture');
 });
 
 test('validateNixeryDef coerces YAML boolean policy modes', () => {
   const def = validateNixeryDef({
-    id: 'get-knowledge',
+    id: 'policy-fixture',
     packages: ['bash'],
     nixery: {
       default: true,
@@ -42,16 +45,17 @@ test('validateNixeryDef coerces YAML boolean policy modes', () => {
   assert.equal(def.nixery?.policies?.[0]?.mode, 'true');
 });
 
-test('validateNixeryDef accepts list-knowledge-pages shape', () => {
+test('validateNixeryDef accepts write-def shape with lib mount', () => {
   const def = validateNixeryDef({
-    id: 'list-knowledge-pages',
-    packages: ['shell', 'gnugrep', 'nodejs'],
+    id: 'write-def-fixture',
+    packages: ['nodejs'],
     input: {
-      topic: { type: 'string', required: true },
-      output: { type: 'string', required: false },
+      topic: { type: 'string', required: false },
+      key: { type: 'string', required: false },
+      value: { type: 'string', required: false },
     },
     mount: {
-      '/data/knowledge_export': { host: 'data/knowledge_export', mode: 'ro' },
+      '/opt/nixery/knowledge-wiki': { host: 'lib/knowledge-wiki', mode: 'ro' },
       '/workspace': { host: 'session', mode: 'rw' },
     },
     run: {
@@ -59,27 +63,51 @@ test('validateNixeryDef accepts list-knowledge-pages shape', () => {
     },
   });
 
-  assert.equal(def.id, 'list-knowledge-pages');
+  assert.equal(def.id, 'write-def-fixture');
 });
 
-test('validateNixeryDef accepts search-knowledge shape', () => {
+test('validateNixeryDef accepts output block', () => {
   const def = validateNixeryDef({
-    id: 'search-knowledge',
-    packages: ['shell', 'gnugrep', 'nodejs'],
-    input: {
-      query: { type: 'string', required: true },
-      topic: { type: 'string', required: false },
-    },
-    mount: {
-      '/data/knowledge_export': { host: 'data/knowledge_export', mode: 'ro' },
-      '/workspace': { host: 'session', mode: 'rw' },
+    id: 'inline-tool-fixture',
+    packages: ['nodejs'],
+    output: {
+      default: 'result.json',
+      inlineTool: true,
+      validate: 'validation.mjs',
     },
     run: {
       entry: ['node', '/opt/nixery/def/run.mjs'],
     },
   });
 
-  assert.equal(def.id, 'search-knowledge');
+  assert.equal(def.output?.default, 'result.json');
+  assert.equal(def.output?.inlineTool, true);
+  assert.equal(def.output?.validate, 'validation.mjs');
+});
+
+test('validateNixeryDef rejects invalid output.validate filename', () => {
+  assert.throws(() => validateNixeryDef({
+    id: 'bad-def',
+    packages: ['nodejs'],
+    output: {
+      validate: 'validation.ts',
+    },
+  }));
+});
+
+test('validateNixeryDef parses all live index.yml files', async () => {
+  const nixeryRoot = path.join(import.meta.dirname, '..', '..', 'server', 'nixery');
+  const defIds = await listNixeryDefIds(nixeryRoot);
+
+  assert.ok(defIds.length >= 1);
+
+  for (const defId of defIds) {
+    const def = await loadNixeryDefFromFile(path.join(nixeryRoot, defId, 'index.yml'));
+
+    assert.equal(def.id, defId);
+    assert.equal(def.output?.validate, 'validation.mjs');
+    assert.ok(def.output?.default);
+  }
 });
 
 test('validateNixeryArgv rejects docker flags', () => {

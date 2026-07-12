@@ -66,7 +66,7 @@ Rules:
 - Include only genuine unknowns — not fields already captured in profiles.
 - Remove items answered in `open_questions_qa` this run.
 - Carry forward unanswered items from prior `open_questions` extract unless superseded.
-- Persist via stage logic: `/mastermind(upsert-knowledge-page, key: open_questions, value: { items: [...] })` — overview summary + `raw/open_questions`.
+- Persist via stage logic: `/nixery(upsert-knowledge-page, key: open_questions, value: { items: [...] })` — overview summary + `raw/open_questions`.
 
 When `open_questions_qa` is present, weave answered content into the relevant profile sections before computing remaining open questions.
 

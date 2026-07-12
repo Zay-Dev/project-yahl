@@ -8,32 +8,21 @@ List wiki pages under a topic via orchestrator-direct `nixeryRun: list-knowledge
 - nixeryRun: list-knowledge-pages
   nixeryInput:
     topic: knowledge_topic
-    output: pages.json
+    output: pages.md
   contextKeys: [knowledge_topic]
   logic: "(nixery)"
 ```
 
 ## Output location
 
-`~/nixery/list-knowledge-pages/` — primary artifact e.g. `pages.json`.
+`~/nixery/list-knowledge-pages/` — primary artifact e.g. `pages.md`.
 
 ## Read pattern
 
-```javascript
-const pagesPath = '~/nixery/list-knowledge-pages/pages.json';
-const pagesFile = (*read(pagesPath));
-const pagesRef = { absent: pagesFile.absent ?? !pagesFile.extracted, path: pagesPath };
-const pages = pagesRef.absent ? [] : pagesFile.extracted;
+```text
+Read ~/nixery/list-knowledge-pages/pages.md from the session workspace.
+If missing or empty, set pages to []; otherwise derive the page inventory from the file's markdown content.
+const pagesRef = { absent: pages.length === 0, path: '~/nixery/list-knowledge-pages/pages.md' };
 ```
 
-Envelope when present:
-
-```json
-{
-  "absent": false,
-  "extracted": [{ "page": "overview", "pagePath": "en/topics/foo/overview", "source": "export" }],
-  "extractedAt": "2026-07-12T00:00:00.000Z"
-}
-```
-
-When `absent: true`, `absentReason` must cite `ls` / `grep` exploration steps tried.
+Use `set_context` for produceContextKeys. Do not assume JSON envelopes.

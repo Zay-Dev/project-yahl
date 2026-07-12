@@ -1,7 +1,7 @@
 id: list-knowledge-pages
 description: List wiki export pages under a topic namespace
 
-packages: [shell, gnugrep, nodejs, curl, jq]
+packages: [shell, gnugrep, nodejs]
 
 env:
   OPENAI_BASE_URL: "https://api.deepseek.com"
@@ -12,7 +12,7 @@ env:
 
 nixery:
   default: "true"
-  tools: [shell, gnugrep, nodejs, curl, jq]
+  tools: [shell, gnugrep, nodejs]
   policies:
     - tools: [shell, gnugrep, nodejs]
       mode: "true"
@@ -38,3 +38,8 @@ mount:
 
 run:
   entry: [node, /opt/nixery/def/run.mjs]
+
+output:
+  default: pages.md
+  validate: validation.mjs
+  inlineTool: false

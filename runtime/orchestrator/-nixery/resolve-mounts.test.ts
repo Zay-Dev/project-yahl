@@ -52,4 +52,28 @@ describe('resolveMounts', () => {
       },
     ]);
   });
+
+  it('maps lib mount token to nixery _lib dist path', () => {
+    process.env.HOST_REPO_ROOT = hostRepoRoot;
+
+    const mounts = resolveMounts({
+      def: {
+        id: 'write-def-fixture',
+        packages: ['nodejs'],
+        mount: {
+          '/opt/nixery/knowledge-wiki': { host: 'lib/knowledge-wiki', mode: 'ro' },
+        },
+      },
+      defId: 'write-def-fixture',
+      sessionId: 'session-1',
+    });
+
+    assert.deepEqual(mounts, [
+      {
+        containerPath: '/opt/nixery/knowledge-wiki',
+        hostPath: path.join(hostRepoRoot, 'server/nixery/_lib/knowledge-wiki/dist'),
+        mode: 'ro',
+      },
+    ]);
+  });
 });

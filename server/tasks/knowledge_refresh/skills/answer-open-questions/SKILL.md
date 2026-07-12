@@ -16,7 +16,7 @@ After rerun Batch 2 (`open_questions_pick`) when user selected one or more quest
 ## Persist
 
 ```text
-/mastermind(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: TOpenQuestionsQa })
+/nixery(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: TOpenQuestionsQa })
 ```
 
 ## Synthesis handoff

@@ -5,6 +5,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TStorage } from '@/shared/transports/-types';
 
 import { toAgentStage } from '@/shared/yahl-stage';
+import { parseNixeryToolArguments } from '@/shared/stage-tools';
 
 import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
@@ -30,11 +31,10 @@ import {
 
 import { archiveStagePlan, prepareStagePlan } from './plan-mode';
 import {
-  isNixeryReadStage,
   loadNixeryDef,
   resolveNixeryStageInput,
   runNixeryDef,
-  runNixeryReadStage,
+  runNixeryInlineTool,
   teardownNixeryContainer,
 } from '@/orchestrator/-nixery';
 import { isTypesPreambleStage, seedTypesPreamble } from '@project-yahl/shared/yahl/types-preamble';
@@ -367,6 +367,28 @@ class YahlAgentRunner {
           });
         }
 
+        if (toolCall.function.name === 'nixery') {
+          const nixeryArgs = parseNixeryToolArguments(toolCall.function.arguments ?? '{}');
+
+          if (!nixeryArgs) {
+            return {
+              hasError: true,
+              result: 'nixery: invalid arguments',
+            };
+          }
+
+          const result = await runNixeryInlineTool({
+            args: nixeryArgs.args,
+            defId: nixeryArgs.defId,
+            sessionId: this.sessionId,
+          });
+
+          return {
+            hasError: !result.ok,
+            result: JSON.stringify(result),
+          };
+        }
+
         if (AGENT_LOCAL_TOOLS.has(toolCall.function.name)) {
           return {
             hasError: false,
@@ -488,17 +510,6 @@ class YahlAgentRunner {
 
       await this.finishOrchestratorDirectStage();
       await teardownNixeryContainer(containerName, this.sessionId, nixeryRun);
-      return;
-    }
-
-    if (isNixeryReadStage(this.activeStage)) {
-      await runNixeryReadStage({
-        sessionId: this.sessionId,
-        stage: this.activeStage,
-        storage: this.storage,
-      });
-
-      await this.finishOrchestratorDirectStage();
       return;
     }
 

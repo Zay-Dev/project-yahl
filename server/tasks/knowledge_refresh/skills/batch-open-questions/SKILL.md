@@ -9,7 +9,7 @@ Run ask-user batches from `design-questions` output (todo-driven refresh).
 3. Persist:
 
 ```text
-/mastermind(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: open_questions_qa })
+/nixery(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: open_questions_qa })
 ```
 
 4. Mark matching `expand_questions` todo items `done` when their gaps are closed.

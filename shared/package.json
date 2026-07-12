@@ -115,6 +115,18 @@
     "./nixery/load-def": {
       "development": "./nixery/load-def.ts",
       "import": "./dist/nixery/load-def.js"
+    },
+    "./nixery/output-contract": {
+      "development": "./nixery/output-contract.ts",
+      "import": "./dist/nixery/output-contract.js"
+    },
+    "./nixery/list-defs": {
+      "development": "./nixery/list-defs.ts",
+      "import": "./dist/nixery/list-defs.js"
+    },
+    "./nixery/load-validation": {
+      "development": "./nixery/load-validation.ts",
+      "import": "./dist/nixery/load-validation.js"
     }
   },
   "scripts": {

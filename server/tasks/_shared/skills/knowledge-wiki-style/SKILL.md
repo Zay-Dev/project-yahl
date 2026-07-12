@@ -33,7 +33,7 @@ Overview may link to raw refs: `[[topics/{slug}/raw/open_questions_qa]]`.
 
 ## Agent API
 
-- **Write:** `/mastermind(upsert-knowledge-page, topic: …, key: …, value: …)` — mastermind picks wiki + raw targets.
+- **Write:** `/nixery(upsert-knowledge-page, topic: …, key: …, value: …)` — nixery def picks wiki + raw targets.
 - **Read (preferred):** `nixeryRun: get-knowledge` + read `~/nixery/get-knowledge/{output}` — see `~/task-skills/nixery-get-knowledge/SKILL.md` when mounted via `_shared`.
 - **Read (legacy):** `/mastermind(get-knowledge, topic: …, need: …)` — deprecated; do not add new usages.
 

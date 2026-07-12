@@ -39,6 +39,12 @@ const inputFieldSchema = z.object({
   type: z.literal('string'),
 });
 
+const outputSpecSchema = z.object({
+  default: z.string().trim().min(1).optional(),
+  inlineTool: z.boolean().optional(),
+  validate: z.string().trim().min(1).regex(/\.mjs$/).optional(),
+});
+
 export const nixeryDefSchema = z.object({
   description: z.string().trim().optional(),
   env: z.record(z.string(), z.string()).optional(),
@@ -46,6 +52,7 @@ export const nixeryDefSchema = z.object({
   input: z.record(z.string(), inputFieldSchema).optional(),
   mount: z.record(z.string(), mountSpecSchema).optional(),
   nixery: nixeryDefBlockSchema.optional(),
+  output: outputSpecSchema.optional(),
   packages: z.array(z.string().trim().min(1)).min(1),
   run: z.object({
     entry: z.array(z.string().trim().min(1)).min(1),

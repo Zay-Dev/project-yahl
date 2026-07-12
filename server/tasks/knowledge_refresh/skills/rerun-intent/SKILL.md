@@ -78,4 +78,4 @@ Reuse patterns from user-onboarding rerun-intent: `*build_rerun_intent_batch`, `
 
 ## Persist
 
-`/mastermind(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: [...] })`.
+`/nixery(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: [...] })`.

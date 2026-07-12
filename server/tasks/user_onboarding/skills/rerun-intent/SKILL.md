@@ -94,4 +94,4 @@ Append `{ questionRef, question, answer }` entries; dedupe by `questionRef`.
 
 ## Persist
 
-After open-question answers: `/mastermind(upsert-knowledge-page, topic: user-onboarding, key: open_questions_qa, value: { items: [...] })` — stored under `raw/open_questions_qa` only.
+After open-question answers: `/nixery(upsert-knowledge-page, topic: user-onboarding, key: open_questions_qa, value: { items: [...] })` — stored under `raw/open_questions_qa` only.

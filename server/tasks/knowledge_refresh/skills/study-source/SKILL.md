@@ -28,7 +28,7 @@ When extracting facts, cite `sources[]` URLs. Load `sources` via `get-knowledge`
 ## Persist
 
 ```text
-/mastermind(upsert-knowledge-page, topic: knowledge_topic, key: study_{slug}, value: { url, title, studyMd, studiedAt, trustTier })
+/nixery(upsert-knowledge-page, topic: knowledge_topic, key: study_{slug}, value: { url, title, studyMd, studiedAt, trustTier })
 ```
 
 Mastermind writes `studyMd` to wiki page `studies/{slug}` and metadata to `raw/study_{slug}`.

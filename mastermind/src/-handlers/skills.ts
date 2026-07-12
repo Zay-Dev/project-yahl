@@ -10,16 +10,12 @@ import {
 } from '../../contract/index.js';
 
 import {
-  hasPathArgs,
-  measurePersistPayloadBytes,
   resolveCanonicalTopic,
-  resolveTopicForPersist,
   runTidyKnowledge,
   evaluateKnowledgeRefresh,
   listTopicPolicies,
   patchTopicPolicy,
   resolveTopicPolicy,
-  shouldPersistAsMarkdown,
   type TPatchTopicPolicyInput,
   type TRefreshInterval,
   type TRefreshRunStatus,
@@ -27,8 +23,6 @@ import {
 } from '../-knowledge/index.js';
 import {
   loadKnowledgeCorpusForNeed,
-  upsertKnowledgeWikiPage,
-  upsertKnowledgeKey,
   wikiConfigured,
 } from '../-knowledge/wiki/index.js';
 import { formatShortError, writeAndAnalyzeCrash } from '../-crash-reports/index.js';
@@ -46,51 +40,6 @@ import {
   registerRequestActivity,
 } from '../-sdk/request-activity.js';
 import { isVerifyInfraError } from '../-sdk/verify-infra.js';
-
-const PERSIST_KNOWLEDGE_MAX_VALUE_BYTES = 256 * 1024;
-
-const validatePersistKnowledgeValue = (key: string, value: unknown): string | null => {
-  if (key === 'sources') {
-    if (!Array.isArray(value)) {
-      return 'upsert-knowledge-page sources must be an array';
-    }
-
-    const studyKeys = new Set<string>();
-
-    for (const item of value) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return 'upsert-knowledge-page sources items must be objects';
-      }
-
-      const studyKey = (item as { studyKey?: string }).studyKey?.trim();
-
-      if (!studyKey) {
-        return 'upsert-knowledge-page sources items require studyKey';
-      }
-
-      if (studyKeys.has(studyKey)) {
-        return `upsert-knowledge-page duplicate studyKey: ${studyKey}`;
-      }
-
-      studyKeys.add(studyKey);
-    }
-  }
-
-  if (key === 'facts') {
-    const items = value
-      && typeof value === 'object'
-      && !Array.isArray(value)
-      && Array.isArray((value as { items?: unknown }).items)
-      ? (value as { items: unknown[] }).items
-      : null;
-
-    if (!items) {
-      return 'upsert-knowledge-page facts must be an object with items array';
-    }
-  }
-
-  return null;
-};
 
 const readKnowledgeSnippet = async (source?: string, sessionId?: string): Promise<string> => {
   if (!source) {
@@ -600,117 +549,6 @@ const runDispatchTaskRun = async (
   }
 };
 
-const runUpsertKnowledgePage = async (
-  args: Record<string, unknown>,
-): Promise<TSkillResponse> => {
-  if (hasPathArgs(args)) {
-    return { ok: false, error: 'upsert-knowledge-page does not accept file paths' };
-  }
-
-  const topic = typeof args.topic === 'string' ? args.topic.trim() : undefined;
-  const topicText = typeof args.topicText === 'string' ? args.topicText.trim() : undefined;
-  const seedUrls = Array.isArray(args.seedUrls)
-    ? args.seedUrls.filter((url): url is string => typeof url === 'string')
-    : undefined;
-  const key = typeof args.key === 'string' ? args.key.trim() : '';
-  const page = typeof args.page === 'string' ? args.page.trim() : '';
-  const content = typeof args.content === 'string' ? args.content : undefined;
-  const mode = args.mode === 'append' || args.mode === 'create' || args.mode === 'replace'
-    ? args.mode
-    : undefined;
-
-  if (!wikiConfigured()) {
-    return {
-      error: 'Wiki.js not configured (WIKI_API_TOKEN required)',
-      ok: false,
-    };
-  }
-
-  if (key) {
-    if (args.value === undefined) {
-      return { ok: false, error: 'upsert-knowledge-page requires value when key is set' };
-    }
-
-    const shapeError = validatePersistKnowledgeValue(key, args.value);
-
-    if (shapeError) {
-      return { ok: false, error: shapeError };
-    }
-
-    const payloadBytes = measurePersistPayloadBytes(
-      key,
-      args.value,
-      shouldPersistAsMarkdown(key, args.value) ? '.md' : '.json',
-    );
-
-    if (payloadBytes > PERSIST_KNOWLEDGE_MAX_VALUE_BYTES) {
-      return {
-        error: 'value too large; persist summary chunks under separate pages (e.g. studies/{slug}, facts)',
-        ok: false,
-      };
-    }
-  } else if (!page || (content === undefined && args.value === undefined)) {
-    return { ok: false, error: 'upsert-knowledge-page requires page+content or key+value' };
-  }
-
-  try {
-    const resolved = await resolveTopicForPersist({ seedUrls, topic, topicText });
-    const canonicalTopic = resolved.canonical;
-
-    if (key) {
-      const written = await upsertKnowledgeKey({
-        canonical: canonicalTopic,
-        key,
-        value: args.value,
-      });
-
-      return {
-        data: {
-          absolutePath: written.pagePath,
-          canonicalTopic,
-          key,
-          page: written.page,
-          pagePath: written.pagePath,
-          path: written.pagePath,
-          relativePath: written.pagePath,
-          wikiPath: written.wikiPath,
-          ...(written.rawPath ? { rawPath: written.rawPath } : {}),
-          ...(written.quality ? { quality: written.quality } : {}),
-          ...(topic && topic !== canonicalTopic ? { redirectedFrom: topic } : {}),
-        },
-        ok: true,
-      };
-    }
-
-    const written = await upsertKnowledgeWikiPage({
-      canonical: canonicalTopic,
-      content: content ?? String(args.value ?? ''),
-      mode,
-      page,
-      title: typeof args.title === 'string' ? args.title : undefined,
-    });
-
-    return {
-      data: {
-        absolutePath: written.pagePath,
-        canonicalTopic,
-        page,
-        pagePath: written.pagePath,
-        path: written.pagePath,
-        relativePath: written.pagePath,
-        wikiPath: written.wikiPath,
-        ...(topic && topic !== canonicalTopic ? { redirectedFrom: topic } : {}),
-      },
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'upsert-knowledge-page failed',
-      ok: false,
-    };
-  }
-};
-
 export const runSkill = async (
   agent: TMastermindAgent,
   name: TSkillName,
@@ -718,10 +556,6 @@ export const runSkill = async (
 ): Promise<TSkillResponse> => {
   if (body.caller !== 'stage-agent') {
     return { ok: false, error: 'skills require caller stage-agent' };
-  }
-
-  if (name === 'upsert-knowledge-page') {
-    return runUpsertKnowledgePage(body.args);
   }
 
   if (name === 'resolve-topic') {

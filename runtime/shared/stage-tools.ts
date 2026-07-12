@@ -194,7 +194,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|upsert-knowledge-page|resolve-topic|tidy-knowledge|knowledge-qa-review|resolve-topic-policy|media-to-text|plan|design-questions, ...) in stage logic. Knowledge reads use orchestrator nixeryRun (get-knowledge, list-knowledge-pages, search-knowledge) + ~/nixery/{defId}/{output}. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|resolve-topic|tidy-knowledge|knowledge-qa-review|resolve-topic-policy|media-to-text|plan|design-questions, ...) in stage logic. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Knowledge writes use the nixery tool for /nixery(defId, ...). Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -207,7 +207,6 @@ export const STAGE_TOOLS = [
             enum: [
               "research",
               "extract-info",
-              "upsert-knowledge-page",
               "resolve-topic",
               "tidy-knowledge",
               "knowledge-qa-review",
@@ -242,7 +241,51 @@ export const STAGE_TOOLS = [
     },
     type: "function" as const,
   },
+  {
+    function: {
+      description:
+        "Run a nixery def inline from stage logic. Use for /nixery(defId, …) where the def has output.inlineTool: true in server/nixery/{defId}/index.yml. Returns JSON { ok, data } or { ok: false, error }.",
+      name: "nixery",
+      parameters: {
+        properties: {
+          args: {
+            description: "Def-specific arguments object (topic, key, value, purpose, dryRun, …).",
+            type: "object",
+          },
+          defId: {
+            description: "Nixery def id under server/nixery/ with output.inlineTool: true.",
+            type: "string",
+          },
+        },
+        required: ["defId"],
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
 ];
+
+export const parseNixeryToolArguments = (
+  raw: string,
+): { args: Record<string, unknown>; defId: string } | null => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed)) return null;
+  if (typeof parsed.defId !== 'string' || !parsed.defId.trim()) return null;
+
+  const args = isRecord(parsed.args) ? parsed.args : {};
+
+  return {
+    args,
+    defId: parsed.defId.trim(),
+  };
+};
 
 export const parseMastermindStatusToolArguments = (
   raw: string,

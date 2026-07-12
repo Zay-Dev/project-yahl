@@ -367,7 +367,7 @@ export const runStageSession = async (
           continue;
         }
 
-        if (name === "set_context" || name === "ask_user") {
+        if (name === "set_context" || name === "ask_user" || name === "nixery") {
           continue;
         }
 

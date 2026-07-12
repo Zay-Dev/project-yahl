@@ -36,7 +36,7 @@ describe('buildAskUserResumePrompt', () => {
     assert.match(prompt, /Re-execute the full stage\.logic from the first line/);
     assert.match(prompt, /\*answer_of/);
     assert.match(prompt, /produceContextKeys/);
-    assert.match(prompt, /upsert-knowledge-page/);
+    assert.match(prompt, /\/nixery\(/);
     assert.match(prompt, /batchId:/);
   });
 

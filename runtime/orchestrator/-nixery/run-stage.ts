@@ -78,7 +78,7 @@ export const teardownNixeryContainer = async (
 
 export const runNixeryDef = async (params: {
   defId: string;
-  input: Record<string, string>;
+  input: Record<string, unknown>;
   sessionId: string;
   skipTeardown?: boolean;
 }): Promise<TNixeryRunResult> => {
@@ -145,7 +145,8 @@ export const runNixeryDef = async (params: {
 
     await waitForNixeryOutput({
       containerName,
-      outputHint: params.input.output,
+      defId: params.defId,
+      outputHint: typeof params.input.output === 'string' ? params.input.output : undefined,
       sessionDir,
     });
   } finally {
@@ -167,7 +168,7 @@ export const runNixeryDef = async (params: {
 
 export const runNixeryStage = async (params: {
   defId: string;
-  input: Record<string, string>;
+  input: Record<string, unknown>;
   sessionId: string;
 }) => {
   await runNixeryDef(params);

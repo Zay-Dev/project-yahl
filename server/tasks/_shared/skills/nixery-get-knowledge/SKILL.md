@@ -14,7 +14,7 @@ Shared contract for reading knowledge via orchestrator-direct `nixeryRun: get-kn
   nixeryInput:
     purpose: Natural-language extract intent (replaces mastermind `need:`)
     topic: knowledge_topic
-    output: workflow.json
+    output: workflow.md
   contextKeys: [knowledge_topic]
   logic: "(nixery)"
 ```
@@ -31,33 +31,15 @@ The in-container agent explores `/data/knowledge_export` with `ls`, `cat`, `grep
 
 ## Read pattern
 
-```javascript
-const extractPath = '~/nixery/get-knowledge/workflow.json';
-const extractFile = (*read(extractPath));
-const extractRef = { absent: extractFile.absent ?? !extractFile.extracted, path: extractPath };
-const extracted = extractRef.absent ? '<none>' : extractFile.extracted;
+After `nixeryRun` completes, read the artifact from the session workspace in a following AI stage:
+
+```text
+Read ~/nixery/get-knowledge/workflow.md from the session workspace.
+If missing or empty after trim, set extracted to '<none>'; otherwise set extracted to the file's full markdown content.
+const extractRef = { absent: extracted === '<none>', path: '~/nixery/get-knowledge/workflow.md' };
 ```
 
-Recommended primary JSON envelope (agent-written):
-
-```json
-{
-  "absent": false,
-  "extracted": "...",
-  "extractedAt": "2026-07-12T00:00:00.000Z"
-}
-```
-
-When `absent: true`, include `absentReason` citing exploration steps (`ls` / `grep` / `cat` paths and outcomes) before the conclusion — not a bare "not found".
-
-```json
-{
-  "absent": true,
-  "absentReason": "ls en/topics/hk-weather/ → 3 files; grep -r preferred_hk_weather_region en/topics/hk-weather/ → no matches",
-  "extracted": null,
-  "extractedAt": "2026-07-12T00:00:00.000Z"
-}
-```
+Use `set_context` (scope stage) for each produceContextKey. Do not assume JSON envelopes or `.extracted` fields — use the raw file content.
 
 The agent may write supporting files (notes, markdown) alongside the primary artifact.
 
@@ -65,12 +47,12 @@ The agent may write supporting files (notes, markdown) alongside the primary art
 
 | Former `need` | Suggested `output` | `purpose` sketch |
 |---------------|-------------------|------------------|
-| all keys / corpus intake | `intake.json` / `corpus.json` | Summarize topic corpus for gap assessment and intake |
-| todo | `todo.json` | Load todo list and pending expand_questions items |
-| open_questions_qa | `open-questions.json` | Load open_questions_qa items |
-| facts, study keys | `facts.json` | Facts, key_facts_md, and study_* content |
-| analysis | `synthesis.json` | analysis and analysis_md |
-| user-onboarding profile | `profile.json` | communication_style, preferences, goals, identity |
-| summary bundle | `summary.json` | Summary corpus for final brief |
+| all keys / corpus intake | `intake.md` | Summarize topic corpus for gap assessment and intake |
+| todo | `todo.md` | Load todo list and pending expand_questions items |
+| open_questions_qa | `open-questions.md` | Load open_questions_qa items |
+| facts, study keys | `facts.md` | Facts, key_facts_md, and study_* content |
+| analysis | `synthesis.md` | analysis and analysis_md |
+| user-onboarding profile | `profile.md` | communication_style, preferences, goals, identity |
+| summary bundle | `summary.md` | Summary corpus for final brief |
 
 Prefer fewer, broader `purpose` values when one extract serves multiple downstream stages.

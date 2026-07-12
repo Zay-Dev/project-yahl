@@ -39,9 +39,11 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
 
-Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, upsert-knowledge-page, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
+Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
 
-Knowledge reads use orchestrator **`nixeryRun: get-knowledge`** — read **`~/nixery/get-knowledge/{output}`** after the nixery stage. Wiki writes use **`upsert-knowledge-page`** with semantic `key` / `topic` only — never pass file paths.
+Use the **`nixery`** tool for `/nixery(upsert-knowledge-page, …)` and `/nixery(dedup-knowledge, …)`. Read `/opt/skills/nixery/SKILL.md`.
+
+Knowledge reads use orchestrator **`nixeryRun: get-knowledge`** — read **`~/nixery/get-knowledge/{output}`** after the nixery stage. Wiki writes use **`/nixery(upsert-knowledge-page, …)`** with semantic `key` / `topic` only — never pass file paths.
 
 **`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container).
 
@@ -103,4 +105,4 @@ Examples
 7. `records = [...records, ...new_records];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array>`.
 8. `records = [...records, ...new_records, mandatory_record];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array_with_mandatory_record>`.
 9. `value += other_value;` -> compute the updated value first (`value + other_value`), then call `set_context` with `scope="stage"` (or `global`), `key="value"`, `operation="set"`, `value=<updated_value>`.
-10. `EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);` -> after `/mastermind(upsert-knowledge-page, ...)`, call `set_context` with `scope="global"`, `key="knowledge_paths"`, `operation="set"`, `value=<merged knowledge_paths>` where each `persisted[]` item is `{ key, relativePath, absolutePath }` — never bare path strings.
+10. `EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);` -> after `/nixery(upsert-knowledge-page, ...)`, call `set_context` with `scope="global"`, `key="knowledge_paths"`, `operation="set"`, `value=<merged knowledge_paths>` where each `persisted[]` item is `{ key, relativePath, absolutePath }` — never bare path strings.

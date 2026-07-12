@@ -9,31 +9,20 @@ Search the wiki export mirror via orchestrator-direct `nixeryRun: search-knowled
   nixeryInput:
     query: forecast
     topic: hk-weather
-    output: results.json
+    output: gap-search.md
   logic: "(nixery)"
 ```
 
 ## Output location
 
-`~/nixery/search-knowledge/` — primary artifact e.g. `results.json`.
+`~/nixery/search-knowledge/` — primary artifact e.g. `gap-search.md`.
 
 ## Read pattern
 
-```javascript
-const resultsPath = '~/nixery/search-knowledge/results.json';
-const resultsFile = (*read(resultsPath));
-const resultsRef = { absent: resultsFile.absent ?? !resultsFile.extracted, path: resultsPath };
-const results = resultsRef.absent ? [] : resultsFile.extracted;
+```text
+Read ~/nixery/search-knowledge/gap-search.md from the session workspace.
+If missing or empty, set results to []; otherwise derive search hits from the file's markdown content.
+const resultsRef = { absent: results.length === 0, path: '~/nixery/search-knowledge/gap-search.md' };
 ```
 
-Envelope when present:
-
-```json
-{
-  "absent": false,
-  "extracted": [{ "pagePath": "en/topics/hk-weather/overview", "title": "...", "snippet": "..." }],
-  "extractedAt": "2026-07-12T00:00:00.000Z"
-}
-```
-
-When `absent: true`, `absentReason` must cite query, paths searched, and grep outcomes.
+Use `set_context` for produceContextKeys. Do not assume JSON envelopes.
