@@ -194,7 +194,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|upsert-knowledge-page|list-knowledge-pages|search-knowledge|resolve-topic|tidy-knowledge|knowledge-qa-review|resolve-topic-policy|media-to-text|plan|design-questions, ...) in stage logic. Knowledge reads use orchestrator nixeryRun: get-knowledge + ~/nixery/get-knowledge/{output}. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|upsert-knowledge-page|resolve-topic|tidy-knowledge|knowledge-qa-review|resolve-topic-policy|media-to-text|plan|design-questions, ...) in stage logic. Knowledge reads use orchestrator nixeryRun (get-knowledge, list-knowledge-pages, search-knowledge) + ~/nixery/{defId}/{output}. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -208,8 +208,6 @@ export const STAGE_TOOLS = [
               "research",
               "extract-info",
               "upsert-knowledge-page",
-              "list-knowledge-pages",
-              "search-knowledge",
               "resolve-topic",
               "tidy-knowledge",
               "knowledge-qa-review",

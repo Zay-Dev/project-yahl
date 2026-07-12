@@ -216,11 +216,18 @@ stages:
         END:
       END:
 
-  - nixeryRun: get-knowledge
+  - nixeryRun: list-knowledge-pages
     nixeryInput:
-      purpose: Full topic key inventory for corpus assessment and gap analysis
       topic: knowledge_topic
-      output: corpus.json
+      output: pages.json
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
+  - nixeryRun: search-knowledge
+    nixeryInput:
+      query: knowledge_topic
+      topic: knowledge_topic
+      output: gap-search.json
     contextKeys: [knowledge_topic]
     logic: "(nixery)"
 
@@ -231,12 +238,18 @@ stages:
       IF: refresh_skipped;
         const corpus_assessment = { topic: knowledge_topic, existingKeys: [], sufficientFor: [], gaps: [] };
       ELSE;
-        const corpusFile = (*read('~/nixery/get-knowledge/corpus.json'));
-        const knowledgeExtractRef = { absent: corpusFile.absent ?? !corpusFile.extracted, path: '~/nixery/get-knowledge/corpus.json' };
-        const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
+        const pagesFile = (*read('~/nixery/list-knowledge-pages/pages.json'));
+        const pagesRef = { absent: pagesFile.absent ?? !pagesFile.extracted, path: '~/nixery/list-knowledge-pages/pages.json' };
+        const pages = pagesRef.absent ? [] : pagesFile.extracted;
+        const searchFile = (*read('~/nixery/search-knowledge/gap-search.json'));
+        const searchRef = { absent: searchFile.absent ?? !searchFile.extracted, path: '~/nixery/search-knowledge/gap-search.json' };
+        const searchHits = searchRef.absent ? [] : searchFile.extracted;
+        const knowledge = { pages, searchHits };
         const corpus_assessment = *assess_corpus(knowledge, learning_contract, guideline: ~/task-skills/locate-knowledge/SKILL.md);
-        const metaPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: corpus_assessment, value: corpus_assessment);
-        EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);
+        IF: *should_update_scope('studies', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md) || *should_update_scope('clarify', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+          const metaPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: corpus_assessment, value: corpus_assessment);
+          EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);
+        END:
       END:
 
   - contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText, knowledge_paths, rerun_intent, refresh_skipped, todo_pickup, TStudyPlan]
@@ -254,8 +267,10 @@ stages:
           guidelinePath: ~/task-skills/plan-study/SKILL.md,
         );
         const study_plan = *parse_study_plan(plan, depth: learning_contract.depth, corpus_assessment);
-        const planPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: study_plan, value: study_plan);
-        EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, planPersist, key: study_plan);
+        IF: *should_update_scope('studies', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+          const planPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: study_plan, value: study_plan);
+          EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, planPersist, key: study_plan);
+        END:
       END:
 
   - loopSetup: for each src of [study_plan.sources]
@@ -353,9 +368,10 @@ stages:
           const facts = *normalize_facts(extracted, as: TFacts);
           const key_facts_md = *facts_to_markdown(facts, study_plan);
         END:
-        const factsPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: facts, value: facts);
-        EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, factsPersist, key: facts);
-        /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: key_facts_md, value: { content: key_facts_md });
+        IF: !assessment.sufficient || *should_update_scope('facts', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+          const factsPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: facts, value: facts);
+          EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, factsPersist, key: facts);
+        END:
       END:
 
   - nixeryRun: get-knowledge
@@ -407,9 +423,11 @@ stages:
         END:
         const analysis = synthesis_artifact.analysis;
         const analysis_md = synthesis_artifact.analysis_md;
-        const analysisPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: analysis, value: analysis);
-        EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, analysisPersist, key: analysis);
-        /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: analysis_md, value: { content: analysis_md });
+        IF: !assessment.sufficient || *should_update_scope('synthesis', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+          const analysisPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: analysis, value: analysis);
+          EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, analysisPersist, key: analysis);
+          /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: analysis_md, value: { content: analysis_md });
+        END:
       END:
 
   - nixeryRun: get-knowledge

@@ -48,6 +48,17 @@ Recommended primary JSON envelope (agent-written):
 }
 ```
 
+When `absent: true`, include `absentReason` citing exploration steps (`ls` / `grep` / `cat` paths and outcomes) before the conclusion — not a bare "not found".
+
+```json
+{
+  "absent": true,
+  "absentReason": "ls en/topics/hk-weather/ → 3 files; grep -r preferred_hk_weather_region en/topics/hk-weather/ → no matches",
+  "extracted": null,
+  "extractedAt": "2026-07-12T00:00:00.000Z"
+}
+```
+
 The agent may write supporting files (notes, markdown) alongside the primary artifact.
 
 ## Mastermind `need` → nixery `purpose` (examples)

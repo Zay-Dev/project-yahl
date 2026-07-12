@@ -45,8 +45,6 @@ export const skillNames = [
   'research',
   'extract-info',
   'upsert-knowledge-page',
-  'list-knowledge-pages',
-  'search-knowledge',
   'resolve-topic',
   'tidy-knowledge',
   'list-topic-policies',

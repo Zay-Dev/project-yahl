@@ -325,6 +325,6 @@ const main = async () => {
 };
 
 main().catch((error) => {
-  console.error('[nixery-get-knowledge]', error);
+  console.error('[nixery-list-knowledge-pages]', error);
   process.exit(1);
 });

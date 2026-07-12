@@ -42,6 +42,46 @@ test('validateNixeryDef coerces YAML boolean policy modes', () => {
   assert.equal(def.nixery?.policies?.[0]?.mode, 'true');
 });
 
+test('validateNixeryDef accepts list-knowledge-pages shape', () => {
+  const def = validateNixeryDef({
+    id: 'list-knowledge-pages',
+    packages: ['shell', 'gnugrep', 'nodejs'],
+    input: {
+      topic: { type: 'string', required: true },
+      output: { type: 'string', required: false },
+    },
+    mount: {
+      '/data/knowledge_export': { host: 'data/knowledge_export', mode: 'ro' },
+      '/workspace': { host: 'session', mode: 'rw' },
+    },
+    run: {
+      entry: ['node', '/opt/nixery/def/run.mjs'],
+    },
+  });
+
+  assert.equal(def.id, 'list-knowledge-pages');
+});
+
+test('validateNixeryDef accepts search-knowledge shape', () => {
+  const def = validateNixeryDef({
+    id: 'search-knowledge',
+    packages: ['shell', 'gnugrep', 'nodejs'],
+    input: {
+      query: { type: 'string', required: true },
+      topic: { type: 'string', required: false },
+    },
+    mount: {
+      '/data/knowledge_export': { host: 'data/knowledge_export', mode: 'ro' },
+      '/workspace': { host: 'session', mode: 'rw' },
+    },
+    run: {
+      entry: ['node', '/opt/nixery/def/run.mjs'],
+    },
+  });
+
+  assert.equal(def.id, 'search-knowledge');
+});
+
 test('validateNixeryArgv rejects docker flags', () => {
   assert.match(
     validateNixeryArgv(['git', 'status', '--mount', '/:/data']),

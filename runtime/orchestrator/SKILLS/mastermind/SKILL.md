@@ -22,7 +22,15 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `/mastermind(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `design-questions` (dynamic ask-user batches; `mission` frames subject vs task process) |
 | `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` | `propose-notification` (draft only; human approve → worker send) |
 
-**Knowledge reads** use orchestrator `nixeryRun: get-knowledge` — not mastermind. Read `~/nixery/get-knowledge/{output}` (see `~/task-skills/nixery-get-knowledge/SKILL.md` when mounted).
+**Knowledge reads** use orchestrator `nixeryRun` — not mastermind:
+
+| Def | Read path |
+|-----|-----------|
+| `get-knowledge` | `~/nixery/get-knowledge/{output}` |
+| `list-knowledge-pages` | `~/nixery/list-knowledge-pages/{output}` |
+| `search-knowledge` | `~/nixery/search-knowledge/{output}` |
+
+See `~/task-skills/nixery-get-knowledge/SKILL.md` (and sibling nixery task skills when mounted).
 
 **Verify/score is not a mastermind skill** — orchestrator runs verify on worker :4200.
 

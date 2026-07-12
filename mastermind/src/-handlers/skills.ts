@@ -27,8 +27,6 @@ import {
 } from '../-knowledge/index.js';
 import {
   loadKnowledgeCorpusForNeed,
-  listKnowledgeWikiPages,
-  searchKnowledgeWiki,
   upsertKnowledgeWikiPage,
   upsertKnowledgeKey,
   wikiConfigured,
@@ -713,54 +711,6 @@ const runUpsertKnowledgePage = async (
   }
 };
 
-const runListKnowledgePages = async (
-  args: Record<string, unknown>,
-): Promise<TSkillResponse> => {
-  const topic = typeof args.topic === 'string' ? args.topic.trim() : '';
-
-  if (!topic) {
-    return { ok: false, error: 'list-knowledge-pages requires topic' };
-  }
-
-  try {
-    const pages = await listKnowledgeWikiPages(topic);
-
-    return { data: { pages, topic }, ok: true };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'list-knowledge-pages failed',
-      ok: false,
-    };
-  }
-};
-
-const runSearchKnowledge = async (
-  args: Record<string, unknown>,
-): Promise<TSkillResponse> => {
-  const query = typeof args.query === 'string'
-    ? args.query.trim()
-    : typeof args.need === 'string'
-      ? args.need.trim()
-      : '';
-
-  if (!query) {
-    return { ok: false, error: 'search-knowledge requires query' };
-  }
-
-  const topic = typeof args.topic === 'string' ? args.topic.trim() : undefined;
-
-  try {
-    const results = await searchKnowledgeWiki(query, topic);
-
-    return { data: { query, results, topic }, ok: true };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'search-knowledge failed',
-      ok: false,
-    };
-  }
-};
-
 export const runSkill = async (
   agent: TMastermindAgent,
   name: TSkillName,
@@ -772,14 +722,6 @@ export const runSkill = async (
 
   if (name === 'upsert-knowledge-page') {
     return runUpsertKnowledgePage(body.args);
-  }
-
-  if (name === 'list-knowledge-pages') {
-    return runListKnowledgePages(body.args);
-  }
-
-  if (name === 'search-knowledge') {
-    return runSearchKnowledge(body.args);
   }
 
   if (name === 'resolve-topic') {

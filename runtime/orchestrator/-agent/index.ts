@@ -35,6 +35,7 @@ import {
   resolveNixeryStageInput,
   runNixeryDef,
   runNixeryReadStage,
+  teardownNixeryContainer,
 } from '@/orchestrator/-nixery';
 import { isTypesPreambleStage, seedTypesPreamble } from '@project-yahl/shared/yahl/types-preamble';
 import {
@@ -478,13 +479,15 @@ class YahlAgentRunner {
 
       const def = await loadNixeryDef(nixeryRun);
 
-      await runNixeryDef({
+      const { containerName } = await runNixeryDef({
         defId: nixeryRun,
         input: resolveNixeryStageInput(this.filteredStorage, nixeryInput, def.input),
         sessionId: this.sessionId,
+        skipTeardown: true,
       });
 
       await this.finishOrchestratorDirectStage();
+      await teardownNixeryContainer(containerName, this.sessionId, nixeryRun);
       return;
     }
 

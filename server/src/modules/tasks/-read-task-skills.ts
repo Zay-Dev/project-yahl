@@ -9,6 +9,9 @@ import { resolveTasksRoot } from './-tasks-root';
 const taskSkillsDir = (taskId: string) =>
   path.join(resolveTasksRoot(), taskId, 'skills');
 
+const sharedSkillsDir = () =>
+  path.join(resolveTasksRoot(), '_shared', 'skills');
+
 const walkSkillsDir = async (
   dir: string,
   root: string,
@@ -42,10 +45,25 @@ const walkSkillsDir = async (
 };
 
 export const readTaskSkillsFromDisk = async (taskId: string): Promise<TTaskSkillFile[]> => {
-  const root = taskSkillsDir(taskId);
-  const files: TTaskSkillFile[] = [];
+  const sharedRoot = sharedSkillsDir();
+  const taskRoot = taskSkillsDir(taskId);
+  const byPath = new Map<string, TTaskSkillFile>();
 
-  await walkSkillsDir(root, root, files);
+  const sharedFiles: TTaskSkillFile[] = [];
 
-  return files.sort((left, right) => left.path.localeCompare(right.path));
+  await walkSkillsDir(sharedRoot, sharedRoot, sharedFiles);
+
+  for (const file of sharedFiles) {
+    byPath.set(file.path, file);
+  }
+
+  const taskFiles: TTaskSkillFile[] = [];
+
+  await walkSkillsDir(taskRoot, taskRoot, taskFiles);
+
+  for (const file of taskFiles) {
+    byPath.set(file.path, file);
+  }
+
+  return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
 };

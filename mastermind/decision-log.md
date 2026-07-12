@@ -15,7 +15,7 @@ See [docs/decision-log/mastermind.md](../docs/decision-log/mastermind.md).
 - Crash analyst uses the same queued prompt (injected via `initCrashReports`); no static `Agent.prompt` bypass.
 - Stage verify runs on **worker** (`POST /v1/verify`, `agent --yolo`, file context under `workspace/sessions/.../verify/`); mastermind has no verify endpoint.
 - Verify infra failures return `unavailable: true` from worker; orchestrator must not treat them as rubric misses for verifyAutoRetry.
-- Canonical knowledge is Wiki.js (`topics/{slug}/…`) with Local FS push export at `data/knowledge_export/`; agents read session extracts at `~/knowledge/{key}.json` after `get-knowledge`.
+- Canonical knowledge is Wiki.js (`topics/{slug}/…`) with Local FS push export at `data/knowledge_export/`; task reads use nixery `get-knowledge` at `~/nixery/get-knowledge/{output}`.
 - Hybrid RAG: GraphQL for single-page reads; export mirror when topic exceeds page/byte thresholds (`WIKI_EXPORT_PAGE_THRESHOLD`, `WIKI_EXPORT_BYTES_THRESHOLD`). Do not edit export files — push-only.
 - Topic registry at `data/mastermind/topics.json`; `resolve-topic` skill; legacy flat `knowledges/` deprecated — archive with `scripts/archive-legacy-knowledges.sh`.
 - Knowledges HTTP: `POST /v1/internal/knowledges/persisted-index` only (orchestrator verify); no public topics/resolve/tidy routes.
