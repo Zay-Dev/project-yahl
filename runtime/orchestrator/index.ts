@@ -20,7 +20,6 @@ import { loadNixeryDef, parseNixeryRunInputJson, runNixeryDef } from './-nixery'
 
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
-import { ensureSessionWorkspace } from './-utils/workspace-paths';
 
 import { AskUserPausedError } from './-ask-user';
 
@@ -78,15 +77,15 @@ const _shutdownAgent = (
 const _composeUp = async (
   agentName: string,
   sessionId: string,
+  taskId: string,
   tracker: ReturnType<typeof createSessionEventTracker>,
 ) => {
-  await ensureSessionWorkspace(sessionId);
-
   const liveView = isStagehandLiveview();
 
   const sessionOverrideFilePath = await writeAgentSessionOverride({
     publishVnc: liveView,
     sessionId,
+    taskId,
   });
   const onecliOverrideFilePath = await writeSharedOneCliOverride();
 
@@ -157,14 +156,15 @@ runCommand.action(async options => {
     buildAgent();
 
     await _shutdownAgent(agentName, sessionId);
-    await _composeUp(agentName, sessionId, tracker);
-    await _setupPublisher(tracker, sessionId);
 
     const run = resolveOrchestratorRun(options);
 
     console.log(`[orchestrator] mode=${run.mode} sessionId=${sessionId}`);
 
-    await prepareTaskWorkspace(sessionId);
+    const { session } = await prepareTaskWorkspace(sessionId);
+    await _composeUp(agentName, sessionId, session.taskId, tracker);
+    await _setupPublisher(tracker, sessionId);
+
     const prepared = await resolvePreparedRun(sessionId, run);
 
     console.log(

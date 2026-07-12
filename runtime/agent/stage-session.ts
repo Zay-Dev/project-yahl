@@ -22,6 +22,7 @@ import { callMastermindSkill, fetchMastermindRequestStatus } from "@/shared/mast
 
 import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
+import { isOrchestratorHandledTool } from "./-utils/orchestrator-handled-tools";
 
 type BootstrapMessage = {
   content: string;
@@ -367,7 +368,7 @@ export const runStageSession = async (
           continue;
         }
 
-        if (name === "set_context" || name === "ask_user" || name === "nixery") {
+        if (isOrchestratorHandledTool(name)) {
           continue;
         }
 

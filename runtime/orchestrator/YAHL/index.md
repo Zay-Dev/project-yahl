@@ -84,9 +84,15 @@ Syntax of "/skill(...args)" is a skill, that means
 
 Syntax of "~/some-text" means the workspace, it takes the linux's home (~/) syntax sematically, usually means accessing (read/write) the file system, we only access file-system when this syntax presents, and ~/ means our workspace (user's home), use bash command to validate if you have written content correctly if it is a write virtual function
 
+| Path | Scope |
+|------|-------|
+| `~/` | Session scratch (`nixery/`, `plans/`, `task-skills/`, …) — per `sessionId` |
+| `~/data/` | Task-persistent — bind-mounted to `tasks/{taskId}/`; shared across all runs of the same task |
+
 examples:
 - Read ~/nixery/get-knowledge/my-extract.md from the session workspace — use the file's full markdown content
-- *save(~/memory.md, new_memory) means saving new memory to the ~/memory.md file
+- *save(~/data/hk_observatory_api.md, api_doc) means saving task-durable reference data under ~/data/
+- *save(~/memory.md, new_memory) means saving session-scratch memory to ~/memory.md
 
 ### Instructions
 

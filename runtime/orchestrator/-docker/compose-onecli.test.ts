@@ -1,80 +1,42 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import path from 'node:path';
+import { after, describe, it } from 'node:test';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
-import {
-  buildComposeDownArgs,
-  buildComposeUpArgs,
-} from '@/orchestrator/-docker/compose-onecli';
-import { composeFile } from '@/orchestrator/-docker/paths';
+import { writeAgentSessionOverride } from './compose-onecli';
 
-describe('buildComposeUpArgs', () => {
-  it('includes force-recreate for agent bring-up', () => {
-    const args = buildComposeUpArgs({ composeProjectName: 'agent-sess-1' });
+describe('writeAgentSessionOverride', () => {
+  let runtimeAgentsRoot = '';
+  let previousHostRepoRoot: string | undefined;
 
-    assert.deepEqual(args, [
-      '-f',
-      composeFile,
-      '-p',
-      'agent-sess-1',
-      'up',
-      '-d',
-      '--force-recreate',
-      'agent',
-    ]);
+  after(async () => {
+    process.env.HOST_REPO_ROOT = previousHostRepoRoot;
+
+    if (runtimeAgentsRoot) {
+      await rm(runtimeAgentsRoot, { force: true, recursive: true });
+    }
   });
 
-  it('passes override files before project name', () => {
-    const args = buildComposeUpArgs({
-      composeOverrideFilePaths: ['/tmp/session.override.yml', '/tmp/onecli.override.yml'],
-      composeProjectName: 'agent-sess-2',
-    });
+  it('bind-mounts task workspace to session ~/data', async () => {
+    previousHostRepoRoot = process.env.HOST_REPO_ROOT;
+    const repoRoot = await mkdtemp(path.join(tmpdir(), 'yahl-compose-override-'));
+    runtimeAgentsRoot = path.join(repoRoot, 'runtime', '.agents');
+    process.env.HOST_REPO_ROOT = repoRoot;
+    process.env.RUNTIME_REPO_ROOT = path.join(repoRoot, 'runtime');
 
-    assert.deepEqual(args, [
-      '-f',
-      composeFile,
-      '-f',
-      '/tmp/session.override.yml',
-      '-f',
-      '/tmp/onecli.override.yml',
-      '-p',
-      'agent-sess-2',
-      'up',
-      '-d',
-      '--force-recreate',
-      'agent',
-    ]);
-  });
-});
+    const sessionId = 'sess-mount';
+    const taskId = 'hk_weather';
+    const overridePath = await writeAgentSessionOverride({ sessionId, taskId });
+    const content = await readFile(overridePath, 'utf8');
 
-describe('buildComposeDownArgs', () => {
-  it('uses base compose file only when no overrides', () => {
-    const args = buildComposeDownArgs({ composeProjectName: 'agent-sess-1' });
-
-    assert.deepEqual(args, [
-      '-f',
-      composeFile,
-      '-p',
-      'agent-sess-1',
-      'down',
-      '--remove-orphans',
-    ]);
-  });
-
-  it('includes override files when provided', () => {
-    const args = buildComposeDownArgs({
-      composeOverrideFilePaths: ['/tmp/session.override.yml'],
-      composeProjectName: 'agent-sess-3',
-    });
-
-    assert.deepEqual(args, [
-      '-f',
-      composeFile,
-      '-f',
-      '/tmp/session.override.yml',
-      '-p',
-      'agent-sess-3',
-      'down',
-      '--remove-orphans',
-    ]);
+    assert.match(content, /AGENT_SESSION_HOME: "\/workspace\/sessions\/sess-mount"/);
+    assert.match(
+      content,
+      new RegExp(
+        `${path.join(repoRoot, 'data', 'workspace', 'tasks', taskId).replaceAll('/', '[/\\\\]')}`
+        + ':/workspace/sessions/sess-mount/data:rw',
+      ),
+    );
   });
 });

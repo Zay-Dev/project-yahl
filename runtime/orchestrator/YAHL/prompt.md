@@ -50,7 +50,7 @@ Knowledge reads use orchestrator **`nixeryRun: get-knowledge`** — read **`~/ni
 - Arguments: `{ "mode": "goto|act|extract|observe|agent", "instruction": "<text>", "url"?: "<url>", "schema"?: { ... }, "maxSteps"?: <number> }`.
 - Returns JSON `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.
 - Do not use `run_bash` + curl for web search, HTML page browse, or scraping; use **`browser`** instead.
-- **Exception:** when stage logic references a documented HTTP API in a workspace file (e.g. `~/hk_observatory_api.md`), use `run_bash` + `curl` to fetch JSON/API responses per that file.
+- **Exception:** when stage logic references a documented HTTP API in a workspace file (e.g. `~/data/hk_observatory_api.md`), use `run_bash` + `curl` to fetch JSON/API responses per that file. Use `~/data/` for task-persistent files shared across sessions of the same task; other `~/` paths are session scratch.
 - After `browser`, call **`set_context`** to persist `data`.
 
 ## ask_user (API tool)

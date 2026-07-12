@@ -4,51 +4,64 @@ import path from 'path';
 
 import { promises as fs } from 'fs';
 
-import config from '../config';
+import {
+  ensureTaskWorkspace as ensureTaskWorkspaceShared,
+  removeSessionWorkspace as removeSessionWorkspaceShared,
+  resolveDataWorkspaceRoot,
+  sessionTaskDataPath,
+  sessionWorkspaceRoot,
+  taskWorkspaceRoot,
+} from '@project-yahl/shared/yahl/workspace-paths';
 
-export const workspaceRoot = () =>
-  process.env.WORKSPACE_ROOT?.trim()
-  || path.resolve(config.__dirname, '../../data/workspace');
+export {
+  SESSION_TASK_DATA_DIR,
+  sessionTaskDataPath,
+  sessionWorkspaceRoot,
+  taskWorkspaceRoot,
+} from '@project-yahl/shared/yahl/workspace-paths';
 
-export const sessionWorkspaceRoot = (sessionId: string) =>
-  path.join(workspaceRoot(), 'sessions', sessionId);
+export type { TRemoveSessionWorkspaceResult } from '@project-yahl/shared/yahl/workspace-paths';
 
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_.-]+$/;
+export const workspaceRoot = resolveDataWorkspaceRoot;
 
-export type TRemoveSessionWorkspaceResult = {
+export const taskDataSymlinkRelative = (taskId: string) =>
+  path.join('..', '..', 'tasks', taskId);
+
+export const ensureTaskWorkspace = (taskId: string) =>
+  ensureTaskWorkspaceShared(taskId, 'orchestrator');
+
+export type TEnsureTaskDataSymlinkResult = {
+  created: boolean;
   path: string;
-  removed: boolean;
 };
 
-export const removeSessionWorkspace = async (
+export const ensureTaskDataSymlink = async (
   sessionId: string,
-): Promise<TRemoveSessionWorkspaceResult> => {
-  const trimmed = sessionId.trim();
-  const root = sessionWorkspaceRoot(trimmed);
-
-  if (!trimmed || !SESSION_ID_PATTERN.test(trimmed)) {
-    console.warn(
-      `[orchestrator] session workspace cleanup skipped invalid sessionId=${JSON.stringify(sessionId)}`,
-    );
-
-    return { path: root, removed: false };
-  }
+  taskId: string,
+): Promise<TEnsureTaskDataSymlinkResult> => {
+  const dataPath = sessionTaskDataPath(sessionId.trim());
 
   try {
-    await fs.rm(root, { force: true, recursive: true });
-    console.log(
-      `[orchestrator] session workspace removed sessionId=${trimmed} path=${root}`,
-    );
+    await fs.lstat(dataPath);
 
-    return { path: root, removed: true };
-  } catch (error) {
-    console.warn(
-      `[orchestrator] session workspace cleanup failed sessionId=${trimmed} path=${root}: ${String(error)}`,
-    );
-
-    return { path: root, removed: false };
+    return { created: false, path: dataPath };
+  } catch {
+    // absent — create symlink below
   }
+
+  await ensureTaskWorkspace(taskId);
+  await fs.symlink(taskDataSymlinkRelative(taskId.trim()), dataPath);
+
+  console.log(
+    `[orchestrator] task data symlink created sessionId=${sessionId} `
+    + `taskId=${taskId} path=${dataPath}`,
+  );
+
+  return { created: true, path: dataPath };
 };
+
+export const removeSessionWorkspace = (sessionId: string) =>
+  removeSessionWorkspaceShared(sessionId, 'orchestrator');
 
 export type TEchoTaskSkillsResult = {
   echoed: boolean;

@@ -8,6 +8,8 @@ import { promisify } from "util";
 
 import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 
+import { handleToolCalls } from './-utils/handle-tool-calls';
+import { isOrchestratorHandledTool } from './-utils/orchestrator-handled-tools';
 import { buildResumeStageMessages } from './-utils/resume-messages';
 import { runStageSession } from "./stage-session";
 
@@ -17,8 +19,6 @@ import { fastForward, type TContextBuckets } from './-utils/ff-client';
 import { chatWithTools } from "./-utils/llm-client";
 import { isVmConditionBranch, wrapVmLogic } from "./condition-branch";
 import { runScript, runConditionScript } from "./-utils/vm-client";
-
-type TGetReplyReturnType = ReturnType<typeof subscriber['getReply']>;
 
 type TFastModel = 'vm' | 'fast-forward';
 
@@ -80,42 +80,6 @@ const _toSetContextToolCalls = (
   }));
 };
 
-const _handleToolCalls = async (
-  storage: TStorage,
-  error: TGetReplyReturnType['error'],
-  toolCall: TGetReplyReturnType['toolCall'],
-  toolCalls: Awaited<ReturnType<typeof _toSetContextToolCalls>>,
-) => {
-  const toolCallMessages = new Array<{ role: 'tool'; content: string; tool_call_id: string; }>();
-
-  for (const call of toolCalls) {
-    const result = await toolCall(call);
-    const baseMessage = { role: 'tool' as const, tool_call_id: call.id };
-
-    if (result.hasError) {
-      await error(new Error(result.result));
-
-      toolCallMessages.push({ ...baseMessage, content: `tool call error: ${result.result}` });      
-    } else if (result.newStorage) {
-      const replace = (key: keyof TStorage) => {
-        storage[key].clear();
-
-        Object.entries(result.newStorage![key])
-          .forEach(([key, value]) => {
-            storage[key].set(key, value);
-          });
-      };
-
-      replace('context');
-      replace('types');
-
-      toolCallMessages.push({ ...baseMessage, content: `tool call result: OK` });
-    }
-  }
-
-  return { toolCallMessages };
-};
-
 export const startRedisDaemon = async () => {
   if (!config.apiKey) {
     console.warn("[WARN] Running without API KEY\n");
@@ -160,7 +124,12 @@ export const startRedisDaemon = async () => {
     ) => {
       const calls = _toSetContextToolCalls(model, requestId, buckets);
 
-      await _handleToolCalls(context, error, toolCall, calls);
+      await handleToolCalls({
+        error,
+        storage: context,
+        toolCall,
+        toolCalls: calls,
+      });
     };
 
     try {
@@ -234,8 +203,6 @@ export const startRedisDaemon = async () => {
                 `[agent-daemon] chat turn end requestId=${requestId} turn=${turn} durationMs=${durationMs} toolCalls=${toolCallCount}\n`,
               );
 
-              const allowedTools = ['set_context', 'ask_user'];
-
               await onModelResponse({
                 ...result.response,
                 durationMs,
@@ -243,13 +210,13 @@ export const startRedisDaemon = async () => {
                 thinkingMode: config.thinkingMode,
               });
 
-              const { toolCallMessages } = await _handleToolCalls(
-                context,
+              const { toolCallMessages } = await handleToolCalls({
                 error,
+                storage: context,
                 toolCall,
-                (result.tool_calls || [])
-                  .filter(tool => allowedTools.includes(tool.function.name)),
-              );
+                toolCalls: (result.tool_calls || [])
+                  .filter(tool => isOrchestratorHandledTool(tool.function.name)),
+              });
 
               return [
                 result,

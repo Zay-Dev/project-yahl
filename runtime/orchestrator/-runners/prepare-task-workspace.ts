@@ -5,6 +5,9 @@ import { sessionReferencesTaskSkills } from '@project-yahl/shared/yahl/session-r
 import { fetchSession } from '@/orchestrator/-ask-user';
 import {
   echoTaskSkillsToSession,
+  ensureSessionWorkspace,
+  ensureTaskDataSymlink,
+  ensureTaskWorkspace,
   verifyTaskSkillsMount,
 } from '@/orchestrator/-utils/workspace-paths';
 
@@ -27,6 +30,16 @@ export const prepareTaskWorkspace = async (sessionId: string) => {
   const session = await fetchSession(sessionId);
 
   assertSessionBundle(session);
+
+  await ensureSessionWorkspace(sessionId);
+  await ensureTaskWorkspace(session.taskId);
+
+  const useSymlink = process.env.YAHL_TASK_DATA_SYMLINK?.trim().toLowerCase() === '1'
+    || process.env.YAHL_TASK_DATA_SYMLINK?.trim().toLowerCase() === 'true';
+
+  if (useSymlink) {
+    await ensureTaskDataSymlink(sessionId, session.taskId);
+  }
 
   const needsSkills = sessionReferencesTaskSkills(session);
   const files = session.taskSkills;

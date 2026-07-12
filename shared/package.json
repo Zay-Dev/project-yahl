@@ -64,6 +64,10 @@
       "development": "./yahl/task-skills.ts",
       "import": "./dist/yahl/task-skills.js"
     },
+    "./yahl/workspace-paths": {
+      "development": "./yahl/workspace-paths.ts",
+      "import": "./dist/yahl/workspace-paths.js"
+    },
     "./yahl/types": {
       "development": "./yahl/types.ts",
       "import": "./dist/yahl/types.js"

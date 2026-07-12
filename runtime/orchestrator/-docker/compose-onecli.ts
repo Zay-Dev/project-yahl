@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import path from "path";
 import { promises as fs } from "fs";
 
 import {
@@ -14,6 +15,7 @@ import {
   composeFile,
   onecliSharedComposeOverrideFile,
   repoRoot,
+  resolveDockerHostWorkspacePath,
 } from "./paths";
 
 const runCommand = (
@@ -108,15 +110,24 @@ export const writeSharedOneCliOverride = async () => {
 export type TAgentSessionOverrideOptions = {
   publishVnc?: boolean;
   sessionId: string;
+  taskId: string;
 };
 
 export const writeAgentSessionOverride = async (opts: TAgentSessionOverrideOptions) => {
   const sessionHome = `/workspace/sessions/${opts.sessionId}`;
+  const hostTaskData = path.join(
+    resolveDockerHostWorkspacePath(),
+    'tasks',
+    opts.taskId.trim(),
+  );
+  const containerTaskData = `/workspace/sessions/${opts.sessionId}/data`;
   const lines = [
     "services:",
     "  agent:",
     "    environment:",
     `      AGENT_SESSION_HOME: ${yamlQuote(sessionHome)}`,
+    "    volumes:",
+    `      - ${yamlQuote(`${hostTaskData}:${containerTaskData}:rw`)}`,
   ];
 
   if (opts.publishVnc) {
