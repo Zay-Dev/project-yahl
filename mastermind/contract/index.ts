@@ -53,7 +53,6 @@ export const skillNames = [
   'dispatch-task-run',
   'knowledge-qa-review',
   'media-to-text',
-  'plan',
   'design-questions',
   'propose-notification',
 ] as const;

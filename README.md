@@ -116,7 +116,7 @@ Tasks can ship their own SKILL files — handy when you want assess/synthesize r
 - **Echo:** orchestrator writes the session snapshot → `data/workspace/sessions/{sessionId}/task-skills/` (agent `~/task-skills/`)
 - **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
-- **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` / `plan` (untrusted hints banner)
+- **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` (untrusted hints banner). Planning via orchestrator `nixeryRun: plan` / `plan-study`.
 - **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_tidy` (see [`mastermind/skills/get-knowledge/SKILL.md`](mastermind/skills/get-knowledge/SKILL.md) for the read path)
 
 ```

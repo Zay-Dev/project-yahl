@@ -32,7 +32,6 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   loopSetup: Joi.string().trim().pattern(LOOP_SETUP_PATTERN).optional(),
   nixeryInput: Joi.object().min(1).optional(),
   nixeryRun: Joi.string().trim().optional(),
-  planMode: Joi.boolean().optional(),
   produceContextKeys: stringArraySchema.optional(),
   produceTypeKeys: stringArraySchema.optional(),
   temperature: Joi.number().min(0).max(2).optional(),
@@ -62,8 +61,8 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
         return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with contextMode or conditionMode' });
       }
 
-      if (value.planMode === true || value.verify === true) {
-        return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with planMode or verify' });
+      if (value.verify === true) {
+        return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with verify' });
       }
 
       if (value.loopSetup !== undefined) {

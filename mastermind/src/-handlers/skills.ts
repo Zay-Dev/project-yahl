@@ -154,34 +154,6 @@ const buildSkillPrompt = async (
         'Transcribe or summarize the media content as plain text.',
       ].filter(Boolean).join('\n\n');
 
-    case 'plan': {
-      const goal = String(args.goal ?? args.topic ?? args.stageLogic ?? '');
-      const stageLogic = typeof args.stageLogic === 'string' ? args.stageLogic.trim() : '';
-      const contextJson = args.context && typeof args.context === 'object' && !Array.isArray(args.context)
-        ? JSON.stringify(args.context, null, 2).slice(0, 8_000)
-        : '';
-
-      return [
-        'You are the YAHL mastermind planning helper.',
-        'Design a step-by-step execution plan for a stage agent.',
-        'Do NOT execute changes, run tools, or write files.',
-        'Your entire reply must be markdown only — no preamble, no status lines, no "I found…" narration.',
-        '',
-        'Use exactly this structure:',
-        '# Plan',
-        '## Goal',
-        '## Context',
-        '## Steps',
-        '1. ...',
-        '## Success criteria',
-        '',
-        `Goal: ${goal}`,
-        stageLogic ? `Stage logic:\n${stageLogic.slice(0, 2_000)}` : '',
-        contextJson ? `Available context:\n${contextJson}` : '',
-        guidelineContent,
-      ].filter(Boolean).join('\n\n');
-    }
-
     case 'design-questions': {
       const stage = args.stage ?? args.stageIndex ?? args.stageName ?? '';
       const gaps = args.gaps ?? args.need ?? [];

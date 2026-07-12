@@ -72,7 +72,7 @@ describe('request-activity', () => {
       kind: 'skill',
       requestId: 'req-2',
       sessionId: 'session-2',
-      skill: 'plan',
+      skill: 'research',
       unavailable: true,
     });
 

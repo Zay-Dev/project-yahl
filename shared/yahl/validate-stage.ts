@@ -130,8 +130,8 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
       throw new Error(`${label}: nixeryRun cannot combine with contextMode or conditionMode`);
     }
 
-    if (stage.planMode === true || stage.verify === true) {
-      throw new Error(`${label}: nixeryRun cannot combine with planMode or verify`);
+    if (stage.verify === true) {
+      throw new Error(`${label}: nixeryRun cannot combine with verify`);
     }
 
     if (stage.loopSetup !== undefined) {
@@ -235,7 +235,6 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     ...(stage.temperature !== undefined ? { temperature: Number(stage.temperature) } : {}),
     ...(isStringArray(stage.contextKeys) ? { contextKeys: stage.contextKeys } : {}),
     ...(isStringArray(stage.updateContextKeys) ? { updateContextKeys: stage.updateContextKeys } : {}),
-    ...(stage.planMode === true ? { planMode: true } : {}),
     ...(isStringArray(stage.produceContextKeys) ? { produceContextKeys: stage.produceContextKeys } : {}),
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
     ...(stage.verify === true ? { verify: true } : {}),

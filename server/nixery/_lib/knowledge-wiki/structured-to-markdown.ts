@@ -181,7 +181,7 @@ export const structuredKeyToWikiMarkdown = (
       .join('\n') || '- _(no sources)_';
   }
 
-  if ((key === 'study_plan' || key === 'corpus_assessment' || key === 'learning_contract' || key === 'meta')
+  if ((key === 'study_plan' || key === 'wiki_structure' || key === 'corpus_assessment' || key === 'learning_contract' || key === 'meta')
     && isRecord(value)) {
     return Object.entries(value)
       .map(([field, fieldValue]) => {

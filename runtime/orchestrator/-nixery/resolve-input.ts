@@ -27,6 +27,10 @@ const resolveField = (storage: TStorage, value: string): string => {
     if (resolved != null && typeof resolved !== 'object') {
       return String(resolved);
     }
+
+    if (resolved != null && typeof resolved === 'object') {
+      return JSON.stringify(resolved, null, 2);
+    }
   }
 
   return trimmed;

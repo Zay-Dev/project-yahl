@@ -61,6 +61,7 @@ const STATIC_KEY_MAP: Record<string, TKnowledgeKeyMapping> = {
   summary: { mode: 'replace', narrative: true, page: 'brief', raw: true },
   todo: { mode: 'replace', narrative: true, page: 'todo', raw: true },
   user_profile_summary: { mode: 'replace', narrative: true, page: 'brief', raw: true },
+  wiki_structure: dualWrite('sources', 'Wiki structure'),
 };
 
 export const mapKnowledgeKeyToPage = (key: string): TKnowledgeKeyMapping => {

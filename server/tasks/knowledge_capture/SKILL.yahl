@@ -259,8 +259,20 @@ stages:
       const metaPersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: corpus_assessment, value: corpus_assessment);
       EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);
 
+  - nixeryRun: plan-study
+    nixeryInput:
+      topic: knowledge_topic
+      purpose: Build study plan and wiki structure for learning contract
+      goal: build study plan and wiki structure for learning_contract
+      learning_contract: learning_contract
+      corpus_assessment: corpus_assessment
+      mission: missionText
+      output: plan.json
+    contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText, knowledge_paths, rerun_intent, TStudyPlan]
-    produceContextKeys: [study_plan]
+    produceContextKeys: [study_plan, wiki_structure]
     updateContextKeys: [knowledge_paths]
     verify: true
     verifyAutoRetry: true
@@ -269,18 +281,17 @@ stages:
       Pass when study_plan has non-empty researchQuestions, successCriteria, and sources array.
       Pass when each source has url, priority, rounds (1-3), and rationale.
       Pass when rounds align with depth (overview 1-2, deep_dive 2-3).
+      Pass when wiki_structure includes overview with action populate.
       Fail when plan empty or contradicts learning_contract.
     logic: |
-      const plan = /mastermind(
-        plan,
-        goal: build study plan for learning_contract,
-        mission: missionText,
-        facts: { learning_contract, corpus_assessment, mission: missionText, today },
-        guidelinePath: ~/task-skills/plan-study/SKILL.md,
-      );
-      const study_plan = *parse_study_plan(plan, depth: learning_contract.depth, corpus_assessment);
+      Read ~/nixery/plan-study/plan.json from the session workspace.
+      If missing or invalid JSON, fail the stage.
+      const study_plan = *parse_study_plan(raw.study_plan, depth: learning_contract.depth, corpus_assessment);
+      const wiki_structure = raw.wiki_structure;
       const planPersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: study_plan, value: study_plan);
       EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, planPersist, key: study_plan);
+      const wikiStructurePersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: wiki_structure, value: wiki_structure);
+      EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, wikiStructurePersist, key: wiki_structure);
 
   - loopSetup: for each src of [study_plan.sources]
     contextKeys: [learning_contract, knowledge_topic, study_plan, corpus_assessment, missionText, knowledge_paths, study_dialogue, rerun_intent, TSource, TSourceStudy]

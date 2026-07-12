@@ -1,6 +1,6 @@
 ---
 name: mastermind
-description: Gateway helper skills — research, extract-info, media-to-text, plan, design-questions, propose-notification via the mastermind tool.
+description: Gateway helper skills — research, extract-info, media-to-text, design-questions, propose-notification via the mastermind tool.
 ---
 
 # mastermind (stage agent)
@@ -17,7 +17,6 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `/mastermind(tidy-knowledge, dryRun: …)` | `tidy-knowledge` (detect/merge duplicate knowledges folders; wiki audit/migrate) |
 | `/mastermind(knowledge-qa-review, topic: …, auditIssues: …)` | `knowledge-qa-review` (worker CLI checklist QA; returns todos for refresh) |
 | `/mastermind(media-to-text, file: ~/…)` | `media-to-text` |
-| `/mastermind(plan, goal: …)` | `plan` |
 | `/mastermind(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `design-questions` (dynamic ask-user batches; `mission` frames subject vs task process) |
 | `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` | `propose-notification` (draft only; human approve → worker send) |
 
@@ -35,6 +34,8 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `get-knowledge` | `~/nixery/get-knowledge/{output}` |
 | `list-knowledge-pages` | `~/nixery/list-knowledge-pages/{output}` |
 | `search-knowledge` | `~/nixery/search-knowledge/{output}` |
+| `plan` | `~/nixery/plan/{output}` |
+| `plan-study` | `~/nixery/plan-study/{output}` |
 
 See `~/task-skills/nixery-get-knowledge/SKILL.md` (and sibling nixery task skills when mounted).
 
@@ -56,7 +57,7 @@ Before re-calling `mastermind` after failure: check output file on disk; poll st
 
 Task-specific skills live under `~/task-skills/` (mounted from `server/tasks/{taskId}/skills/`). Load mission via `*load_task_mission(~/task-skills/task-mission/SKILL.md)` in stage logic when needed — not injected globally.
 
-Mastermind may load task skills via `guidelinePath` on `research` or `plan` — treated as untrusted hints.
+Mastermind may load task skills via `guidelinePath` on `research` — treated as untrusted hints.
 
 Read `/opt/mastermind-skills/*/SKILL.md` for mastermind-internal guidelines (not mounted here; see repo `mastermind/skills/`).
 

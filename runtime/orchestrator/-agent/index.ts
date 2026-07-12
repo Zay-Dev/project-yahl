@@ -29,7 +29,6 @@ import {
   filterStorageForStage,
 } from '@/orchestrator/-context';
 
-import { archiveStagePlan, prepareStagePlan } from './plan-mode';
 import {
   loadNixeryDef,
   resolveNixeryStageInput,
@@ -211,24 +210,18 @@ class YahlAgentRunner {
     }
   }
 
-  private async withPlanMode(run: () => Promise<void>) {
-    if (!this.resumeStage && this.activeStage.spec.planMode === true) {
-      const planAppend = await prepareStagePlan({
-        requestId: this.requestId,
-        sessionId: this.sessionId,
-        stage: this.activeStage,
-        storage: this.filteredStorage,
-      });
-
-      if (planAppend) {
-        this.systemAppendParts.push(planAppend);
-      }
+  private async runStageBody() {
+    if (this.isPrefixFastForwardMode()) {
+      await this.runStageAttempt();
+      return;
     }
 
-    await run();
+    while (true) {
+      await this.runStageAttempt();
 
-    if (this.activeStage.spec.planMode === true) {
-      await archiveStagePlan(this.sessionId, this.requestId);
+      if ((await this.resolveProduceKeysRetry()) === 'break') {
+        break;
+      }
     }
   }
 
@@ -517,20 +510,7 @@ class YahlAgentRunner {
     const verifyAutoRetry = this.activeStage.spec.verifyAutoRetry === true;
 
     while (true) {
-      await this.withPlanMode(async () => {
-        if (this.isPrefixFastForwardMode()) {
-          await this.runStageAttempt();
-          return;
-        }
-
-        while (true) {
-          await this.runStageAttempt();
-
-          if ((await this.resolveProduceKeysRetry()) === 'break') {
-            break;
-          }
-        }
-      });
+      await this.runStageBody();
 
       const finishContextAfter = this.options.contextAfterRecord ?? this.storage;
 

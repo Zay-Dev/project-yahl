@@ -6,6 +6,7 @@ Assess existing wiki corpus for the topic before spending tokens on re-fetch.
 
 - `knowledge_topic` canonical slug from resolve-topic
 - `learning_contract` from clarify stage
+- `wiki_structure` from plan-study when available (honor `action: populate` pages only)
 - Nixery `list-knowledge-pages` at `~/nixery/list-knowledge-pages/pages.md` (read `.extracted`)
 - Nixery `search-knowledge` at `~/nixery/search-knowledge/gap-search.md` (read `.extracted`) for supplemental gap hints
 
@@ -23,21 +24,23 @@ Assess existing wiki corpus for the topic before spending tokens on re-fetch.
 
 ## Assessment rules (generic)
 
+When `wiki_structure` is set, gap checks focus on pages with `action: populate` and mapped logical keys (`facts`, `summary`, `study_*`, …). Skip pages with `action: skip` or `defer`.
+
 | Check | sufficientFor | gap when missing |
 |-------|---------------|------------------|
 | `learning_contract` or `meta` | clarify | learning_contract |
 | `study_plan` with researchQuestions | plan | study_plan |
 | Each `study_*` with non-empty `studyMd` | study_{slug} | study for that source |
-| `facts.items` non-empty | facts | facts |
+| `facts.items` non-empty | facts | facts (when facts page planned populate) |
 | `analysis` + `analysis_md` | synthesis | analysis |
-| `summary` with summaryMd | final brief | summary |
+| `summary` with summaryMd | final brief | summary (when brief page planned populate) |
 
 ## Smart skip
 
 - Derive `existingKeys` from `list-knowledge-pages` page inventory (`page` or basename of `pagePath`).
 - Use `search-knowledge` hits to refine gap hints when page names alone are ambiguous.
 - `sufficientFor` = stage goals already met by persisted keys with valid content.
-- `gaps` = what `learning_contract` still needs vs corpus.
+- `gaps` = what `learning_contract` still needs vs corpus, filtered by `wiki_structure` when present.
 - Use `today` from context when framing freshness; do not hardcode repo paths or hostnames.
 
 ## Rerun intent override

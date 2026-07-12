@@ -252,24 +252,36 @@ stages:
         END:
       END:
 
+  - nixeryRun: plan-study
+    nixeryInput:
+      topic: knowledge_topic
+      purpose: Build refresh study plan and wiki structure
+      goal: build refresh study plan and wiki structure
+      learning_contract: learning_contract
+      corpus_assessment: corpus_assessment
+      mission: missionText
+      todo_pickup: todo_pickup
+      output: plan.json
+    contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText, todo_pickup]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText, knowledge_paths, rerun_intent, refresh_skipped, todo_pickup, TStudyPlan]
-    produceContextKeys: [study_plan]
+    produceContextKeys: [study_plan, wiki_structure]
     updateContextKeys: [knowledge_paths]
     logic: |
       IF: refresh_skipped;
         const study_plan = { researchQuestions: [], successCriteria: [], exclusions: [], sources: [], reuseExisting: [] };
+        const wiki_structure = { knowledgeType: 'skipped', rationale: 'refresh_skipped', pages: [{ path: 'overview', origin: 'suggested', action: 'populate' }], studies: { action: 'skip', expectedCount: 0 } };
       ELSE;
-        const plan = /mastermind(
-          plan,
-          goal: build refresh study plan,
-          mission: missionText,
-          facts: { learning_contract, corpus_assessment, mission: missionText, todo_pickup, today },
-          guidelinePath: ~/task-skills/plan-study/SKILL.md,
-        );
-        const study_plan = *parse_study_plan(plan, depth: learning_contract.depth, corpus_assessment);
+        Read ~/nixery/plan-study/plan.json from the session workspace.
+        If missing or invalid JSON, fail the stage.
+        const study_plan = *parse_study_plan(raw.study_plan, depth: learning_contract.depth, corpus_assessment);
+        const wiki_structure = raw.wiki_structure;
         IF: *should_update_scope('studies', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
           const planPersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: study_plan, value: study_plan);
           EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, planPersist, key: study_plan);
+          const wikiStructurePersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: wiki_structure, value: wiki_structure);
+          EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, wikiStructurePersist, key: wiki_structure);
         END:
       END:
 

@@ -46,7 +46,6 @@ export type TYahlStage = {
   loopSetup?: string;
   nixeryInput?: TNixeryStageInput;
   nixeryRun?: string;
-  planMode?: boolean;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   temperature?: number;

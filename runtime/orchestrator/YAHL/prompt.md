@@ -39,7 +39,7 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
 
-Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
+Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, media-to-text). Planning uses orchestrator **`nixeryRun: plan`** or **`nixeryRun: plan-study`**. Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
 
 Use the **`nixery`** tool for `/nixery(upsert-knowledge-page, …)` and `/nixery(dedup-knowledge, …)`. Read `/opt/skills/nixery/SKILL.md`.
 

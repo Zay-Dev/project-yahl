@@ -2,14 +2,16 @@
 
 Read-only rubric for worker `knowledge-qa-review` CLI jobs. Worker copies this file into each job dir as `checklist.md`.
 
+When `wiki_structure` is available on the topic (from `raw/wiki_structure` or sources section), score only pages with `action: populate`. Do not fail skipped or deferred suggested pages.
+
 ## Checklist IDs (score each)
 
 | id | Pass when |
 |----|-----------|
-| `layout_canonical` | `topics/{slug}/overview`, `sources`, `facts`, `brief` exist; studies under `studies/`; structured keys mirrored under `raw/` |
+| `layout_canonical` | Planned populate pages exist under `topics/{slug}/`; `overview` always required; studies under `studies/` when planned; structured keys mirrored under `raw/` |
 | `overview_prose` | Overview is readable prose with headings — not JSON-only or empty |
-| `brief_present` | Brief page exists with user-facing summary prose |
-| `raw_mirrors` | Key structured artifacts (`identity`, `facts`, `open_questions`, `study_plan`, …) have `raw/{key}` pages when present in corpus |
+| `brief_present` | Brief page exists with user-facing summary prose when `wiki_structure` plans brief as populate |
+| `raw_mirrors` | Key structured artifacts (`identity`, `facts`, `open_questions`, `study_plan`, `wiki_structure`, …) have `raw/{key}` pages when present in corpus |
 | `no_json_fences` | Wiki pages are not ```json fence-only bodies |
 | `sources_documented` | Sources page lists seed URLs and/or study plan when studies exist |
 | `wikilinks_valid` | Internal wikilinks use `topics/{slug}/…` shape |
