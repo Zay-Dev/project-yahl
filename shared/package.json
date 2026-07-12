@@ -91,6 +91,30 @@
     "./yahl/session-references-task-skills": {
       "development": "./yahl/session-references-task-skills.ts",
       "import": "./dist/yahl/session-references-task-skills.js"
+    },
+    "./yahl/types-preamble": {
+      "development": "./yahl/types-preamble.ts",
+      "import": "./dist/yahl/types-preamble.js"
+    },
+    "./nixery/types": {
+      "development": "./nixery/types.ts",
+      "import": "./dist/nixery/types.js"
+    },
+    "./nixery/validate-def": {
+      "development": "./nixery/validate-def.ts",
+      "import": "./dist/nixery/validate-def.js"
+    },
+    "./nixery/validate-argv": {
+      "development": "./nixery/validate-argv.ts",
+      "import": "./dist/nixery/validate-argv.js"
+    },
+    "./nixery/resolve-policy": {
+      "development": "./nixery/resolve-policy.ts",
+      "import": "./dist/nixery/resolve-policy.js"
+    },
+    "./nixery/load-def": {
+      "development": "./nixery/load-def.ts",
+      "import": "./dist/nixery/load-def.js"
     }
   },
   "scripts": {

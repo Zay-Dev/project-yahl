@@ -2,8 +2,6 @@ import type { TLoopMeta } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 import type { TPreparedRunInput } from './prepared-run-types';
-
-import { mergeTaskSystemAppend } from '@/orchestrator/-utils/workspace-paths';
 import {
   applyAskUserAnswerToStage,
   fetchAskUserCheckpoint,
@@ -121,7 +119,6 @@ const _resolveAskUserPrepared = async (
     parsedStages: yahlStages,
     resultContextKey: session.resultContextKey ?? 'result',
     storage,
-    systemAppend: await mergeTaskSystemAppend(sessionId, session.taskId),
     taskYahl: session.taskYahl,
   };
 };
@@ -198,17 +195,7 @@ const _resolveVerifyPrepared = async (
     yahlStages,
   } = await loadCheckpointResumeContext(sessionId, verifyId);
 
-  const withBaseAppend = async (extra?: string) => {
-    if (baseSystemAppend && extra) {
-      return `${baseSystemAppend}\n\n${extra}`;
-    }
-
-    if (baseSystemAppend) {
-      return baseSystemAppend;
-    }
-
-    return mergeTaskSystemAppend(sessionId, session.taskId, extra);
-  };
+  const withBaseAppend = async (extra?: string) => extra;
 
   if (checkpoint.unavailable) {
     const requestId = String(checkpoint.requestId);

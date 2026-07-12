@@ -44,7 +44,6 @@ export const orgScopeSchema = z.object({
 export const skillNames = [
   'research',
   'extract-info',
-  'get-knowledge',
   'upsert-knowledge-page',
   'list-knowledge-pages',
   'search-knowledge',

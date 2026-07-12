@@ -33,4 +33,10 @@ export const runCommand = program
   .addOption(
     new Option('--session-id <id>')
       .argParser(_normalizeContainerName),
+  )
+  .addOption(
+    new Option('--nixery-def <id>'),
+  )
+  .addOption(
+    new Option('--nixery-input <json>'),
   );

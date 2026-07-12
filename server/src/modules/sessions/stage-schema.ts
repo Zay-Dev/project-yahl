@@ -24,8 +24,14 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   conditionMode: Joi.boolean().optional(),
   contextKeys: stringArraySchema.optional(),
   contextMode: Joi.boolean().optional(),
-  logic: Joi.string().trim().required(),
+  logic: Joi.string().trim().when('nixeryRun', {
+    is: Joi.exist(),
+    otherwise: Joi.required(),
+    then: Joi.optional(),
+  }),
   loopSetup: Joi.string().trim().pattern(LOOP_SETUP_PATTERN).optional(),
+  nixeryInput: Joi.object().min(1).optional(),
+  nixeryRun: Joi.string().trim().optional(),
   planMode: Joi.boolean().optional(),
   produceContextKeys: stringArraySchema.optional(),
   produceTypeKeys: stringArraySchema.optional(),
@@ -49,6 +55,28 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
 
     if (value.conditionMode === true && !String(value.logic).includes('IF:')) {
       return helpers.error('any.invalid', { message: 'conditionMode logic must contain IF:' });
+    }
+
+    if (value.nixeryRun) {
+      if (value.contextMode === true || value.conditionMode === true) {
+        return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with contextMode or conditionMode' });
+      }
+
+      if (value.planMode === true || value.verify === true) {
+        return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with planMode or verify' });
+      }
+
+      if (value.loopSetup !== undefined) {
+        return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with loopSetup' });
+      }
+
+      if (value.produceContextKeys !== undefined) {
+        return helpers.error('any.invalid', { message: 'nixeryRun stages must not set produceContextKeys' });
+      }
+
+      if (!value.nixeryInput || Object.keys(value.nixeryInput).length === 0) {
+        return helpers.error('any.invalid', { message: 'nixeryInput is required when nixeryRun is set' });
+      }
     }
 
     return value;

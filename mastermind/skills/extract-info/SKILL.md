@@ -23,4 +23,4 @@ This replaces the former stage-agent **`rag`** tool. Call the **`mastermind`** t
 
 `~/` means the shared workspace folder (`/root` in the container).
 
-For curated knowledge under `knowledges/`, use **`get-knowledge`** instead (no `source` arg).
+For curated knowledge reads, use orchestrator **`nixeryRun: get-knowledge`** and read `~/nixery/get-knowledge/{output}` — not mastermind.

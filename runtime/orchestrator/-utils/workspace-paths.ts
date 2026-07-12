@@ -88,39 +88,11 @@ export const echoTaskSkillsToSession = async (
 export const taskMissionSkillPath = (sessionId: string) =>
   path.join(sessionWorkspaceRoot(sessionId), 'task-skills', 'task-mission', 'SKILL.md');
 
-export const readTaskMissionPrompt = async (sessionId: string) => {
-  const missionPath = taskMissionSkillPath(sessionId);
-
-  try {
-    const content = await fs.readFile(missionPath, 'utf8').then((text) => text.trim());
-
-    if (!content) {
-      return undefined;
-    }
-
-    return [
-      '## Task mission',
-      '',
-      'Use this mission on every `/mastermind(design-questions|research|plan, mission: …)` call.',
-      'Also readable at `~/task-skills/task-mission/SKILL.md`.',
-      '',
-      content.slice(0, 8_000),
-    ].join('\n');
-  } catch {
-    return undefined;
-  }
-};
-
 export const mergeTaskSystemAppend = async (
-  sessionId: string,
-  taskId: string | undefined,
+  _sessionId: string,
+  _taskId: string | undefined,
   existing?: string,
-) => {
-  const mission = taskId ? await readTaskMissionPrompt(sessionId) : undefined;
-  const parts = [mission, existing].filter(Boolean);
-
-  return parts.length > 0 ? parts.join('\n\n') : undefined;
-};
+) => existing;
 
 export const planFilePath = (sessionId: string, requestId: string) =>
   path.join(sessionWorkspaceRoot(sessionId), 'plans', `${requestId}.md`);

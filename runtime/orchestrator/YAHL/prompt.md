@@ -39,11 +39,11 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
 
-Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, get-knowledge, upsert-knowledge-page, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
+Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, upsert-knowledge-page, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
 
-Knowledge read/write: use **`get-knowledge`** and **`upsert-knowledge-page`** with semantic `need` / `key` / `topic` only — never pass file paths to those skills.
+Knowledge reads use orchestrator **`nixeryRun: get-knowledge`** — read **`~/nixery/get-knowledge/{output}`** after the nixery stage. Wiki writes use **`upsert-knowledge-page`** with semantic `key` / `topic` only — never pass file paths.
 
-**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container). After **`get-knowledge`**, read **`~/knowledge/{key}.json`** — never read `~/knowledges/` (canonical store is mastermind-private).
+**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container).
 
 - Arguments: `{ "mode": "goto|act|extract|observe|agent", "instruction": "<text>", "url"?: "<url>", "schema"?: { ... }, "maxSteps"?: <number> }`.
 - Returns JSON `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.

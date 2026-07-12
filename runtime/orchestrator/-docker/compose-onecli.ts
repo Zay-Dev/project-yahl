@@ -1,16 +1,17 @@
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
 
-import { createOneCliDashboardClient } from "./clients/api";
+import {
+  formatOneCliComposeOverride,
+  loadOneCliSnapshot,
+  persistOneCliSnapshot,
+} from "./onecli-snapshot";
 
 import type { ComposeDownOptions, ComposeUpOptions } from '@/orchestrator/-utils/yahl/types';
 import {
   agentSessionComposeOverrideFile,
   agentSessionRuntimePath,
   composeFile,
-  onecliRuntimePath,
-  onecliSharedCaFile,
-  onecliSharedCombinedCaFile,
   onecliSharedComposeOverrideFile,
   repoRoot,
 } from "./paths";
@@ -50,29 +51,13 @@ const runComposeCommand = async (
   await runCommand('docker', ["compose", ...args], options);
 };
 
-const readFirstExistingFile = async (candidates: string[]) => {
-  for (const candidate of candidates) {
-    try {
-      const content = await fs.readFile(candidate, "utf-8");
-      if (content.trim()) return content;
-    } catch { }
-  }
-
-  return null;
-};
-
 const yamlQuote = (value: string) => JSON.stringify(value);
-
-const agentNoProxy = 'localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,host.docker.internal';
 
 const sharedOneCliOverrideReady = async () => {
   try {
-    const [override, ca] = await Promise.all([
-      fs.readFile(onecliSharedComposeOverrideFile, 'utf-8'),
-      fs.readFile(onecliSharedCaFile, 'utf-8'),
-    ]);
+    const content = await fs.readFile(onecliSharedComposeOverrideFile, 'utf-8');
 
-    return override.trim().length > 0 && ca.trim().length > 0;
+    return content.trim().length > 0;
   } catch {
     return false;
   }
@@ -92,15 +77,21 @@ export const writeSharedOneCliOverride = async () => {
     return onecliSharedComposeOverrideFile;
   }
 
-  const client = createOneCliDashboardClient({
-    apiKey: onecliApiKey,
-    url: onecliDashboardUrl,
-  });
-
-  let config: Awaited<ReturnType<typeof client.getContainerConfig>>;
-
   try {
-    config = await client.getContainerConfig();
+    const snapshot = await loadOneCliSnapshot();
+
+    if (!snapshot) {
+      return undefined;
+    }
+
+    await persistOneCliSnapshot(snapshot);
+    await fs.writeFile(
+      onecliSharedComposeOverrideFile,
+      formatOneCliComposeOverride(snapshot),
+      "utf-8",
+    );
+
+    return onecliSharedComposeOverrideFile;
   } catch (error) {
     if (await sharedOneCliOverrideReady()) {
       process.stdout.write(
@@ -112,61 +103,6 @@ export const writeSharedOneCliOverride = async () => {
 
     throw error;
   }
-
-  const configEnv = config?.env && typeof config.env === "object" ? config.env : {};
-  const caCertificate = typeof config?.caCertificate === "string" ? config.caCertificate : "";
-  const caContainerPath = typeof config?.caCertificateContainerPath === "string"
-    ? config.caCertificateContainerPath
-    : "";
-
-  if (!caCertificate || !caContainerPath) {
-    throw new Error("[OneCLI] Missing CA certificate fields from container config");
-  }
-
-  await fs.mkdir(onecliRuntimePath, { recursive: true });
-  await fs.writeFile(onecliSharedCaFile, caCertificate, "utf-8");
-
-  const baseCa = await readFirstExistingFile([
-    "/etc/ssl/cert.pem",
-    "/etc/ssl/certs/ca-certificates.crt",
-    "/etc/pki/tls/certs/ca-bundle.crt",
-  ]);
-
-  const hasCombinedBundle = !!baseCa;
-  if (hasCombinedBundle) {
-    const combined = `${baseCa!.trimEnd()}\n${caCertificate.trimEnd()}\n`;
-    await fs.writeFile(onecliSharedCombinedCaFile, combined, "utf-8");
-  }
-
-  const envLines = Object.entries(configEnv).map(([key, value]) =>
-    `      ${key}: ${yamlQuote(String(value))}`);
-  envLines.push(`      NO_PROXY: ${yamlQuote(agentNoProxy)}`);
-  envLines.push(`      no_proxy: ${yamlQuote(agentNoProxy)}`);
-  if (hasCombinedBundle) {
-    envLines.push(`      SSL_CERT_FILE: ${yamlQuote("/tmp/onecli-combined-ca.pem")}`);
-    envLines.push(`      DENO_CERT: ${yamlQuote("/tmp/onecli-combined-ca.pem")}`);
-  }
-
-  const volumeLines = [
-    `      - ${yamlQuote(`${onecliSharedCaFile}:${caContainerPath}:ro`)}`,
-    ...(hasCombinedBundle
-      ? [`      - ${yamlQuote(`${onecliSharedCombinedCaFile}:/tmp/onecli-combined-ca.pem:ro`)}`]
-      : []),
-  ];
-
-  const composeOverride = [
-    "services:",
-    "  agent:",
-    "    environment:",
-    ...envLines,
-    "    volumes:",
-    ...volumeLines,
-    "",
-  ].join("\n");
-
-  await fs.writeFile(onecliSharedComposeOverrideFile, composeOverride, "utf-8");
-
-  return onecliSharedComposeOverrideFile;
 };
 
 export type TAgentSessionOverrideOptions = {

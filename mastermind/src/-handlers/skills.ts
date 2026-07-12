@@ -10,7 +10,6 @@ import {
 } from '../../contract/index.js';
 
 import {
-  expandTopicSlugs,
   hasPathArgs,
   measurePersistPayloadBytes,
   resolveCanonicalTopic,
@@ -48,12 +47,6 @@ import {
   markRequestActivitySucceeded,
   registerRequestActivity,
 } from '../-sdk/request-activity.js';
-import {
-  isExtractAbsent,
-  resolveUniqueSessionKnowledgeKey,
-  validateSessionId,
-  writeSessionKnowledgeExtract,
-} from '../-knowledge/session-extract.js';
 import { isVerifyInfraError } from '../-sdk/verify-infra.js';
 
 const PERSIST_KNOWLEDGE_MAX_VALUE_BYTES = 256 * 1024;
@@ -205,35 +198,6 @@ const buildSkillPrompt = async (
         sourceContent ? `Source:\n${sourceContent}` : `Source path: ${String(args.source ?? args.file ?? '')}`,
         'Extract only what was requested. Return plain text or JSON.',
       ].filter(Boolean).join('\n\n');
-
-    case 'get-knowledge': {
-      const need = args.need ?? args.lookingFor ?? 'key facts';
-      const knowledgeTopic = typeof args.topic === 'string' ? args.topic : undefined;
-      const topicSlugs = knowledgeTopic ? await expandTopicSlugs(knowledgeTopic) : [];
-      let corpus = '';
-      let corpusSource = 'empty';
-
-      if (wikiConfigured()) {
-        const loaded = await loadKnowledgeCorpusForNeed(knowledgeTopic, String(need));
-
-        corpus = loaded.corpus;
-        corpusSource = loaded.source;
-      } else {
-        console.warn('[mastermind] get-knowledge: Wiki.js not configured (WIKI_API_TOKEN required); returning empty corpus');
-      }
-
-      return [
-        'You are the YAHL mastermind get-knowledge helper.',
-        'Read only from the knowledge corpus below.',
-        `Need: ${JSON.stringify(need)}`,
-        knowledgeTopic
-          ? `Topic filter: ${knowledgeTopic}${topicSlugs.length > 1 ? ` (includes aliases: ${topicSlugs.join(', ')})` : ''}`
-          : '',
-        corpus ? `Knowledge corpus (${corpusSource}):\n${corpus}` : 'Knowledge corpus: (empty)',
-        'Extract only what was requested. Return plain text or JSON.',
-        'If the requested information is not present in the corpus, return exactly: <none>',
-      ].filter(Boolean).join('\n\n');
-    }
 
     case 'media-to-text':
       return [
@@ -749,139 +713,6 @@ const runUpsertKnowledgePage = async (
   }
 };
 
-const runGetKnowledge = async (
-  agent: TMastermindAgent,
-  body: TSkillRequest,
-): Promise<TSkillResponse> => {
-  const skillName = 'get-knowledge';
-  if (hasPathArgs(body.args)) {
-    return { ok: false, error: `${skillName} does not accept file paths` };
-  }
-
-  const sessionId = body.sessionId?.trim() ?? '';
-  const sessionError = validateSessionId(sessionId);
-
-  if (sessionError) {
-    return { ok: false, error: sessionError };
-  }
-
-  const need = String(body.args.need ?? body.args.lookingFor ?? 'key facts').trim();
-
-  if (!need) {
-    return { ok: false, error: `${skillName} requires need` };
-  }
-
-  const topic = typeof body.args.topic === 'string' ? body.args.topic.trim() : undefined;
-
-  if (agent.status !== 'ready') {
-    const activity = resolveRequestActivityRef(body.sessionId, body.requestId, body.invocationId);
-
-    failRequestActivity(activity, {
-      error: 'mastermind unavailable',
-      kind: 'skill',
-      skill: skillName,
-      unavailable: true,
-    });
-
-    return { ok: false, error: 'mastermind unavailable' };
-  }
-
-  const prompt = await buildSkillPrompt(skillName, body.args, body.sessionId);
-  const mode = 'agent' as const;
-  const startedAt = Date.now();
-  const activity = resolveRequestActivityRef(body.sessionId, body.requestId, body.invocationId);
-
-  console.log(
-    `[mastermind] skill=${skillName} start sessionId=${sessionId} caller=${body.caller}`,
-  );
-
-  if (activity) {
-    registerRequestActivity({
-      invocationId: activity.invocationId,
-      kind: 'skill',
-      requestId: activity.requestId,
-      sessionId: activity.sessionId,
-      skill: skillName,
-    });
-  }
-
-  try {
-    const { result } = await promptWithActiveRunRetry(
-      wrapPromptWithRequestActivity(agent, activity),
-      prompt,
-      { mode },
-    );
-    const text = typeof result === 'string' ? result.trim() : '';
-    const absent = isExtractAbsent(text);
-    const key = await resolveUniqueSessionKnowledgeKey(sessionId, need);
-    const written = await writeSessionKnowledgeExtract({
-      absent,
-      extracted: absent ? null : text,
-      key,
-      need,
-      sessionId,
-      topic,
-    });
-    const durationMs = Date.now() - startedAt;
-
-    console.log(
-      `[mastermind] skill=${skillName} done ok=true durationMs=${durationMs} key=${written.key} absent=${absent}`,
-    );
-
-    if (activity) {
-      markRequestActivitySucceeded(
-        activity.sessionId,
-        activity.requestId,
-        activity.invocationId,
-        written.key,
-      );
-    }
-
-    return {
-      data: {
-        absent,
-        key: written.key,
-        path: written.agentPath,
-      },
-      ok: true,
-    };
-  } catch (error) {
-    const durationMs = Date.now() - startedAt;
-    const shortError = formatShortError(error);
-
-    console.log(
-      `[mastermind] skill=${skillName} done ok=false durationMs=${durationMs} error=${shortError}`,
-    );
-
-    if (activity) {
-      markRequestActivityFailed(
-        activity.sessionId,
-        activity.requestId,
-        shortError,
-        isVerifyInfraError(shortError),
-        activity.invocationId,
-      );
-    }
-
-    void writeAndAnalyzeCrash({
-      args: body.args,
-      caller: body.caller,
-      error,
-      mode,
-      promptPreview: prompt,
-      sessionId: body.sessionId,
-      skill: skillName,
-    }).catch((reportError) => {
-      console.error('[mastermind] crash report failed', reportError);
-    });
-
-    return {
-      error: formatShortError(error),
-      ok: false,
-    };
-  }
-};
-
 const runListKnowledgePages = async (
   args: Record<string, unknown>,
 ): Promise<TSkillResponse> => {
@@ -937,10 +768,6 @@ export const runSkill = async (
 ): Promise<TSkillResponse> => {
   if (body.caller !== 'stage-agent') {
     return { ok: false, error: 'skills require caller stage-agent' };
-  }
-
-  if (name === 'get-knowledge') {
-    return runGetKnowledge(agent, body);
   }
 
   if (name === 'upsert-knowledge-page') {

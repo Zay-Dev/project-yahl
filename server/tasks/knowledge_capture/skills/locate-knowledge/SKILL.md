@@ -6,7 +6,7 @@ Assess existing wiki corpus for the topic before spending tokens on re-fetch.
 
 - `knowledge_topic` canonical slug from resolve-topic
 - `learning_contract` from clarify stage
-- `get-knowledge` session file at `~/knowledge/{key}.json` (read `.extracted` field)
+- Nixery `get-knowledge` output at `~/nixery/get-knowledge/corpus.json` (read `.extracted`) when a prior `nixeryRun: get-knowledge` stage ran
 
 ## Output (`corpus_assessment` via set_context)
 
@@ -33,7 +33,7 @@ Assess existing wiki corpus for the topic before spending tokens on re-fetch.
 
 ## Smart skip
 
-- List `existingKeys` from the session extract JSON (parsed from `~/knowledge/` after get-knowledge).
+- List `existingKeys` from `~/nixery/get-knowledge/` after nixery stages.
 - `sufficientFor` = stage goals already met by persisted keys with valid content.
 - `gaps` = what `learning_contract` still needs vs corpus.
 - Use `today` from context when framing freshness; do not hardcode repo paths or hostnames.

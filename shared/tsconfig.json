@@ -13,6 +13,8 @@
     "declaration": true
   },
   "include": [
+    "knowledge-qa/**/*.ts",
+    "nixery/**/*.ts",
     "request-activity/**/*.ts",
     "verify/**/*.ts",
     "yahl/**/*.ts"

@@ -11,6 +11,8 @@ export type TYahlAskUserEntry = {
   question: string;
 };
 
+export type TNixeryStageInput = Record<string, string | number | boolean>;
+
 export type TYahlStage = {
   askUser?: TYahlAskUserEntry[];
   conditionMode?: boolean;
@@ -18,6 +20,8 @@ export type TYahlStage = {
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
+  nixeryInput?: TNixeryStageInput;
+  nixeryRun?: string;
   planMode?: boolean;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];

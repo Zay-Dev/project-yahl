@@ -31,10 +31,11 @@ Mastermind **dual-writes** on `upsert-knowledge-page` with `key` + `value`: narr
 
 Overview may link to raw refs: `[[topics/{slug}/raw/open_questions_qa]]`.
 
-## Agent API (unchanged)
+## Agent API
 
 - **Write:** `/mastermind(upsert-knowledge-page, topic: …, key: …, value: …)` — mastermind picks wiki + raw targets.
-- **Read:** `/mastermind(get-knowledge, topic: …, need: …)` — agents pass `need` only; mastermind selects which wiki + raw pages to load.
+- **Read (preferred):** `nixeryRun: get-knowledge` + read `~/nixery/get-knowledge/{output}` — see `~/task-skills/nixery-get-knowledge/SKILL.md` when mounted via `_shared`.
+- **Read (legacy):** `/mastermind(get-knowledge, topic: …, need: …)` — deprecated; do not add new usages.
 
 ## Refresh
 

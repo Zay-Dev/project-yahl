@@ -134,7 +134,26 @@ types: |
   };
 
 stages:
+  - produceContextKeys: [missionText, knowledge_topic, partial_topic]
+    logic: |
+      const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      const topicAnswers = /ask-user-batch(clarify-topic-minimal);
+      const partial = *build_learning_contract_partial(topicAnswers, guideline: ~/task-skills/clarify-topic-minimal/SKILL.md);
+      const proposed_topic = *slugify_learning_topic(partial);
+      const resolvedTopic = /mastermind(resolve-topic, topicText: partial.topic, seedUrls: partial.seedUrls, slug: proposed_topic);
+      const knowledge_topic = resolvedTopic.canonical;
+      const partial_topic = partial;
+
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load full topic corpus for clarify rerun and intake decisions
+      topic: knowledge_topic
+      output: corpus.json
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
   - produceContextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, rerun_intent, pending_open_questions, open_questions_qa]
+    contextKeys: [missionText, knowledge_topic, partial_topic]
     verify: true
     verifyAutoRetry: true
     verifyMinScore: 0.75
@@ -143,13 +162,8 @@ stages:
       Pass when knowledge_topic is a non-empty canonical slug from resolve-topic and missionText is non-empty.
       Fail when topic and seedUrls both empty, intent missing, depth missing, or knowledge_topic differs from resolve-topic canonical.
     logic: |
-      const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
-      const topicAnswers = /ask-user-batch(clarify-topic-minimal);
-      const partial = *build_learning_contract_partial(topicAnswers, guideline: ~/task-skills/clarify-topic-minimal/SKILL.md);
-      const proposed_topic = *slugify_learning_topic(partial);
-      const resolvedTopic = /mastermind(resolve-topic, topicText: partial.topic, seedUrls: partial.seedUrls, slug: proposed_topic);
-      const knowledge_topic = resolvedTopic.canonical;
-      const knowledgeExtractRef = /mastermind(get-knowledge, topic: knowledge_topic, need: all keys);
+      const corpusFile = (*read('~/nixery/get-knowledge/corpus.json'));
+      const knowledgeExtractRef = { absent: corpusFile.absent ?? !corpusFile.extracted, path: '~/nixery/get-knowledge/corpus.json' };
       IF: !knowledgeExtractRef.absent;
         const knowledge = (*read(knowledgeExtractRef.path)).extracted;
         const pending_open_questions = *extract_open_questions(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
@@ -208,6 +222,14 @@ stages:
         study_dialogue: { sources: [] },
       }))
 
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Full topic key inventory for corpus assessment and gap analysis
+      topic: knowledge_topic
+      output: corpus.json
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, knowledge_paths, rerun_intent, TCorpusAssessment]
     produceContextKeys: [corpus_assessment]
     updateContextKeys: [knowledge_paths]
@@ -219,7 +241,8 @@ stages:
       Pass when knowledge_paths.persisted includes meta and learning_contract paths after persist.
       Fail when assessment missing or topic mismatch.
     logic: |
-      const knowledgeExtractRef = /mastermind(get-knowledge, topic: knowledge_topic, need: all keys);
+      const corpusFile = (*read('~/nixery/get-knowledge/corpus.json'));
+      const knowledgeExtractRef = { absent: corpusFile.absent ?? !corpusFile.extracted, path: '~/nixery/get-knowledge/corpus.json' };
       const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const corpus_assessment = *assess_corpus(knowledge, learning_contract, guideline: ~/task-skills/locate-knowledge/SKILL.md);
       const metaPersist = /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: corpus_assessment, value: corpus_assessment);
@@ -306,6 +329,14 @@ stages:
         EXTENDS: source_studies = *append_source_study(source_studies, src, studyMd, now_iso);
       END:
 
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load facts, key_facts_md, and study_* content for facts stage assessment
+      topic: knowledge_topic
+      output: facts.json
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, knowledge_paths, rerun_intent, TFacts]
     produceContextKeys: [facts, key_facts_md]
     updateContextKeys: [knowledge_paths, sources]
@@ -322,7 +353,8 @@ stages:
         const sources = *rebuild_sources_index(knowledge_topic);
         /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: sources, value: sources);
       END:
-      const knowledgeExtractRef = /mastermind(get-knowledge, topic: knowledge_topic, need: facts, key_facts_md, study keys);
+      const factsFile = (*read('~/nixery/get-knowledge/facts.json'));
+      const knowledgeExtractRef = { absent: factsFile.absent ?? !factsFile.extracted, path: '~/nixery/get-knowledge/facts.json' };
       const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_learning_stage(stage: facts, knowledge, learning_contract, study_plan, sources, source_studies, rerun_intent);
       IF: assessment.sufficient && !*should_update_scope('facts', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
@@ -343,6 +375,21 @@ stages:
       EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, factsPersist, key: facts);
       /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: key_facts_md, value: { content: key_facts_md });
 
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load user-onboarding profile slice — communication_style, preferences, goals, identity
+      topic: user-onboarding
+      output: profile.json
+    logic: "(nixery)"
+
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load analysis and analysis_md for synthesis stage assessment
+      topic: knowledge_topic
+      output: synthesis.json
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, facts, key_facts_md, rerun_intent, open_questions_qa, TAnalysis, userProfile]
     produceContextKeys: [analysis, analysis_md, userProfile]
     updateContextKeys: [knowledge_paths]
@@ -355,9 +402,11 @@ stages:
       Fail when analysis contradicts facts or ignores intent.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
-      const userProfileExtractRef = /mastermind(get-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
+      const profileFile = (*read('~/nixery/get-knowledge/profile.json'));
+      const userProfileExtractRef = { absent: profileFile.absent ?? !profileFile.extracted, path: '~/nixery/get-knowledge/profile.json' };
       const userProfile = userProfileExtractRef.absent ? '<none>' : (*read(userProfileExtractRef.path)).extracted;
-      const knowledgeExtractRef = /mastermind(get-knowledge, topic: knowledge_topic, need: analysis, analysis_md);
+      const synthesisFile = (*read('~/nixery/get-knowledge/synthesis.json'));
+      const knowledgeExtractRef = { absent: synthesisFile.absent ?? !synthesisFile.extracted, path: '~/nixery/get-knowledge/synthesis.json' };
       const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
       const assessment = *assess_learning_stage(stage: synthesis, knowledge, learning_contract, study_plan, facts, sources, rerun_intent);
       IF: assessment.sufficient && !*should_update_scope('synthesis', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
@@ -378,6 +427,14 @@ stages:
       EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, analysisPersist, key: analysis);
       /mastermind(upsert-knowledge-page, topic: knowledge_topic, key: analysis_md, value: { content: analysis_md });
 
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load summary corpus — summary, analysis, facts — for final brief stage
+      topic: knowledge_topic
+      output: summary.json
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, facts, analysis, analysis_md, userProfile, knowledge_paths, rerun_intent, open_questions_qa, TResult]
     produceContextKeys: [result]
     verify: true
@@ -389,18 +446,17 @@ stages:
       Fail when either brief missing or knowledgePaths empty.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      const summaryFile = (*read('~/nixery/get-knowledge/summary.json'));
+      const corpusExtractRef = { absent: summaryFile.absent ?? !summaryFile.extracted, path: '~/nixery/get-knowledge/summary.json' };
       IF: rerun_intent && rerun_intent.proceedMode === 'update_selected' && !*should_update_scope('summary', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
-        const corpusExtractRef = /mastermind(get-knowledge, topic: knowledge_topic, need: summary, analysis, facts);
         const corpus = corpusExtractRef.absent ? '<none>' : (*read(corpusExtractRef.path)).extracted;
         const summaryMd = *load_summary_md_from_corpus(corpus);
         const personalizedBriefMd = *load_personalized_brief_from_corpus(corpus);
       ELSE;
-      const corpusExtractRef = /mastermind(get-knowledge, topic: knowledge_topic, need: all keys in topic folder);
       const corpus = corpusExtractRef.absent ? '<none>' : (*read(corpusExtractRef.path)).extracted;
-      const userProfileExtractRef = userProfile
-        ? { absent: true }
-        : /mastermind(get-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
-      const userProfile = userProfile || (userProfileExtractRef.absent ? '<none>' : (*read(userProfileExtractRef.path)).extracted);
+      const profileFile = (*read('~/nixery/get-knowledge/profile.json'));
+      const profileRef = { absent: profileFile.absent ?? !profileFile.extracted, path: '~/nixery/get-knowledge/profile.json' };
+      const userProfile = userProfile || (profileRef.absent ? '<none>' : (*read(profileRef.path)).extracted);
       const brief = /mastermind(
         research,
         topic: final knowledge brief and personalized summary,

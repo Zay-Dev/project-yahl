@@ -5,7 +5,8 @@ Load refresh backlog from wiki `todo` page at start of `knowledge_refresh`.
 ## Load
 
 ```text
-const todoRef = /mastermind(get-knowledge, topic: knowledge_topic, need: todo);
+const todoFile = (*read('~/nixery/get-knowledge/todo.json'));
+const todoRef = { absent: todoFile.absent ?? !todoFile.extracted, path: '~/nixery/get-knowledge/todo.json' };
 const todo_pickup = todoRef.absent
   ? { items: [], summaryMd: '' }
   : (*read(todoRef.path)).extracted;

@@ -16,6 +16,8 @@ import {
 } from './-docker';
 import { program, resolveOrchestratorRun, resolveSessionId, runCommand } from './-cli';
 
+import { loadNixeryDef, parseNixeryRunInputJson, runNixeryDef } from './-nixery';
+
 import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
 import { ensureSessionWorkspace } from './-utils/workspace-paths';
@@ -110,7 +112,31 @@ const _composeUp = async (
 
 runCommand.action(async options => {
   const sessionId = resolveSessionId(options.sessionId);
-  
+  const nixeryDef = typeof options.nixeryDef === 'string' ? options.nixeryDef.trim() : '';
+
+  if (nixeryDef) {
+    acquireOrchestratorRunLock(sessionId);
+
+    try {
+      const def = await loadNixeryDef(nixeryDef);
+      const input = parseNixeryRunInputJson(
+        typeof options.nixeryInput === 'string' && options.nixeryInput.trim()
+          ? options.nixeryInput
+          : '{}',
+        def,
+      );
+
+      await runNixeryDef({ defId: nixeryDef, input, sessionId });
+    } catch (error) {
+      console.error('[orchestrator] nixery run failed:', error);
+      process.exit(1);
+    } finally {
+      releaseOrchestratorRunLock(sessionId);
+    }
+
+    return;
+  }
+
   const agentName = `agent-${sessionId}`;
   const tracker = createSessionEventTracker();
 
@@ -138,14 +164,8 @@ runCommand.action(async options => {
 
     console.log(`[orchestrator] mode=${run.mode} sessionId=${sessionId}`);
 
-    const { systemAppend: workspaceAppend } = await prepareTaskWorkspace(sessionId);
+    await prepareTaskWorkspace(sessionId);
     const prepared = await resolvePreparedRun(sessionId, run);
-
-    if (!prepared.systemAppend && workspaceAppend) {
-      prepared.systemAppend = workspaceAppend;
-    } else if (prepared.systemAppend && workspaceAppend) {
-      prepared.systemAppend = `${workspaceAppend}\n\n${prepared.systemAppend}`;
-    }
 
     console.log(
       `[orchestrator] runSessionFrom start sessionId=${sessionId} stageIndex=${prepared.cursor.stageIndex} stageCount=${prepared.parsedStages.length}`,

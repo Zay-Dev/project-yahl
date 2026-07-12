@@ -1,7 +1,10 @@
-import type { TKnowledgePersistedIndexItem } from '@/shared/mastermind-client';
+export type TKnowledgePersistedIndexItem = {
+  absolutePath: string;
+  key: string;
+  relativePath: string;
+};
 
 export type TKnowledgePaths = {
-  knowledgesPersistDir?: string;
   missionPath?: string;
   persisted?: unknown[];
   studyWorkspace?: string;
@@ -41,7 +44,7 @@ export const appendKnowledgePersistedPath = (
 
   const persisted = normalizePersistedIndex(Array.isArray(paths.persisted) ? paths.persisted : []);
   const entry: TKnowledgePersistedIndexItem = {
-    absolutePath: `~/knowledges/${relativePath}`,
+    absolutePath: `~/knowledge/${relativePath}`,
     key: key.trim(),
     relativePath,
   };

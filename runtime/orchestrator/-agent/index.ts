@@ -30,6 +30,14 @@ import {
 
 import { archiveStagePlan, prepareStagePlan } from './plan-mode';
 import {
+  isNixeryReadStage,
+  loadNixeryDef,
+  resolveNixeryStageInput,
+  runNixeryDef,
+  runNixeryReadStage,
+} from '@/orchestrator/-nixery';
+import { isTypesPreambleStage, seedTypesPreamble } from '@project-yahl/shared/yahl/types-preamble';
+import {
   buildProduceKeysSystemAppend,
   missingProduceKeys,
   pauseForProduceKeys,
@@ -39,6 +47,11 @@ import {
 import { handleLoop } from './loop';
 
 const AGENT_LOCAL_TOOLS = new Set(['browser', 'mastermind', 'run_bash']);
+
+const serializeStorageSnapshot = (storage: TStorage) => ({
+  context: Object.fromEntries(storage.context.entries()),
+  types: Object.fromEntries(storage.types.entries()),
+});
 
 type TRunYahlOptions = NonNullable<Parameters<TRunYahl>[1]>;
 
@@ -141,6 +154,13 @@ class YahlAgentRunner {
           this.pipelineStageIndex,
           this.options.recoveryStages ?? this.stages,
         );
+        continue;
+      }
+
+      if (!isResumingThisStage && isTypesPreambleStage(stage, stageIndex)) {
+        seedTypesPreamble(this.storage.types, stage.spec.logic);
+        this.resetStageContext(stage, stageIndex, false);
+        await this.finishOrchestratorDirectStage();
         continue;
       }
 
@@ -429,7 +449,56 @@ class YahlAgentRunner {
     return Boolean(this.options.verifyFastForward && this.options.contextAfter);
   }
 
+  private async finishOrchestratorDirectStage() {
+    globalThis.sessionTracker?.createStage(this.sessionId, {
+      context: serializeStorageSnapshot(this.filteredStorage),
+      parsedStageIndex: this.boundParsedStageIndex,
+      requestId: this.requestId,
+      sourceStartLine: this.boundSourceStartLine,
+      stage: toAgentStage(this.activeStage.spec),
+      temperature: this.temperature,
+    });
+
+    publisher.emitStageFinish({
+      requestId: this.requestId,
+      contextAfter: this.storage,
+    });
+    await globalThis.sessionTracker?.flush?.();
+  }
+
   private async runOneStage() {
+    const nixeryRun = this.activeStage.spec.nixeryRun;
+
+    if (nixeryRun) {
+      const nixeryInput = this.activeStage.spec.nixeryInput;
+
+      if (!nixeryInput) {
+        throw new Error('nixeryRun stage requires nixeryInput');
+      }
+
+      const def = await loadNixeryDef(nixeryRun);
+
+      await runNixeryDef({
+        defId: nixeryRun,
+        input: resolveNixeryStageInput(this.filteredStorage, nixeryInput, def.input),
+        sessionId: this.sessionId,
+      });
+
+      await this.finishOrchestratorDirectStage();
+      return;
+    }
+
+    if (isNixeryReadStage(this.activeStage)) {
+      await runNixeryReadStage({
+        sessionId: this.sessionId,
+        stage: this.activeStage,
+        storage: this.storage,
+      });
+
+      await this.finishOrchestratorDirectStage();
+      return;
+    }
+
     const maxVerifyRetries = verifyAutoRetryMaxIterations();
     const verifyAutoRetry = this.activeStage.spec.verifyAutoRetry === true;
 

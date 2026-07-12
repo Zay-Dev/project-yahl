@@ -2,7 +2,6 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TLoopMeta, TStorage } from '@/shared/transports/-types';
 
 import { fetchSession, fetchStageDetail } from '@/orchestrator/-ask-user';
-import { mergeTaskSystemAppend } from '@/orchestrator/-utils/workspace-paths';
 import { isStageFinished } from '@/shared/stage-status';
 import { runVerifyGate } from '@/orchestrator/-verify';
 
@@ -13,8 +12,8 @@ import {
 } from './pipeline-continuation';
 
 const withBaseSystemAppend = async (
-  sessionId: string,
-  taskId: string,
+  _sessionId: string,
+  _taskId: string,
   baseAppend: string | undefined,
   extra?: string,
 ) => {
@@ -26,7 +25,7 @@ const withBaseSystemAppend = async (
     return baseAppend;
   }
 
-  return mergeTaskSystemAppend(sessionId, taskId, extra);
+  return extra;
 };
 
 const resumeVerifyWithProducedKeys = async (params: {

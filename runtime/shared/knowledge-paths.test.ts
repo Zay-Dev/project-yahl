@@ -12,7 +12,7 @@ describe('knowledge-paths helpers', () => {
   it('filters non-object persisted entries', () => {
     const normalized = normalizePersistedIndex([
       {
-        absolutePath: '~/knowledges/demo/meta.json',
+        absolutePath: '~/knowledge/demo/meta.json',
         key: 'meta',
         relativePath: 'demo/meta.json',
       },
@@ -33,7 +33,7 @@ describe('knowledge-paths helpers', () => {
 
     assert.equal(next.persisted?.length, 1);
     assert.deepEqual(next.persisted?.[0], {
-      absolutePath: '~/knowledges/demo/study_plan.json',
+      absolutePath: '~/knowledge/demo/study_plan.json',
       key: 'study_plan',
       relativePath: 'demo/study_plan.json',
     });
@@ -43,7 +43,7 @@ describe('knowledge-paths helpers', () => {
     const next = appendKnowledgePersistedPath(
       {
         persisted: [{
-          absolutePath: '~/knowledges/demo/study_plan.json',
+          absolutePath: '~/knowledge/demo/study_plan.json',
           key: 'study_plan',
           relativePath: 'demo/study_plan.json',
         }],
@@ -60,7 +60,7 @@ describe('knowledge-paths helpers', () => {
     const normalized = normalizeKnowledgePathsValue({
       persisted: [
         {
-          absolutePath: '~/knowledges/demo/meta.json',
+          absolutePath: '~/knowledge/demo/meta.json',
           key: 'meta',
           relativePath: 'demo/meta.json',
         },

@@ -86,6 +86,7 @@ services:
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
       - ./data/workspace:/workspace
       - ./server/tasks:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/server/tasks
+      - ./server/nixery:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/server/nixery
       - /var/run/docker.sock:/var/run/docker.sock
 
   web:

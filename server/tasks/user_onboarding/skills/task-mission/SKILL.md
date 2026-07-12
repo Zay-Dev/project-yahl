@@ -8,7 +8,7 @@ Build a personal assistant user profile for future teamwork — questions are ab
 
 ## Rules for stage agents
 
-1. Read this file via `run_bash`: `cat ~/task-skills/task-mission/SKILL.md` (also injected in stage system prompt).
+1. Load via `*load_task_mission(~/task-skills/task-mission/SKILL.md)` in stage logic when a stage needs mission text.
 2. Pass the full mission text as the `mission` argument on every `design-questions`, `research`, and `plan` Mastermind call.
 3. Include the same mission string inside `facts.mission` on research/plan calls when using structured facts.
 4. Ask-user questions must clarify the **user's identity, goals, preferences, or communication style** — not the task pipeline.

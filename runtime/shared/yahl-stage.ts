@@ -11,6 +11,8 @@ export type YahlAskUserEntry = {
   question: string;
 };
 
+export type TNixeryStageInput = Record<string, string | number | boolean>;
+
 export interface YahlStage {
   askUser?: YahlAskUserEntry[];
   conditionMode?: boolean;
@@ -18,6 +20,8 @@ export interface YahlStage {
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
+  nixeryInput?: TNixeryStageInput;
+  nixeryRun?: string;
   planMode?: boolean;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
@@ -120,9 +124,62 @@ const validateAskUserEntry = (
   };
 };
 
+const isNixeryStageInput = (value: unknown): value is Record<string, string | number | boolean> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.keys(value).length > 0;
+};
+
+const normalizeNixeryStageInput = (
+  raw: Record<string, string | number | boolean>,
+): Record<string, string | number | boolean> => {
+  const normalized: Record<string, string | number | boolean> = {};
+
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") {
+      normalized[key] = value.trim();
+      continue;
+    }
+
+    normalized[key] = value;
+  }
+
+  return normalized;
+};
+
 const assertStageFields = (stage: Record<string, unknown>, label: string): YahlStage => {
-  if (typeof stage.logic !== "string" || !stage.logic.trim()) {
+  const nixeryRun = typeof stage.nixeryRun === "string" && stage.nixeryRun.trim()
+    ? stage.nixeryRun.trim()
+    : undefined;
+
+  const logicRaw = typeof stage.logic === "string" ? stage.logic.trim() : "";
+
+  if (!nixeryRun && !logicRaw) {
     throw new Error(`${label}.logic: required non-empty string`);
+  }
+
+  if (nixeryRun) {
+    if (stage.contextMode === true || stage.conditionMode === true) {
+      throw new Error(`${label}: nixeryRun cannot combine with contextMode or conditionMode`);
+    }
+
+    if (stage.planMode === true || stage.verify === true) {
+      throw new Error(`${label}: nixeryRun cannot combine with planMode or verify`);
+    }
+
+    if (stage.loopSetup !== undefined) {
+      throw new Error(`${label}: nixeryRun cannot combine with loopSetup`);
+    }
+
+    if (stage.produceContextKeys !== undefined) {
+      throw new Error(`${label}: nixeryRun stages must not set produceContextKeys`);
+    }
+
+    if (!isNixeryStageInput(stage.nixeryInput)) {
+      throw new Error(`${label}.nixeryInput: required non-empty object when nixeryRun is set`);
+    }
   }
 
   if (stage.contextMode === true && stage.conditionMode === true) {
@@ -174,7 +231,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     }
   }
 
-  if (stage.conditionMode === true && !stage.logic.includes("IF:")) {
+  if (stage.conditionMode === true && !nixeryRun && !logicRaw.includes("IF:")) {
     throw new Error(`${label}: conditionMode logic must contain IF:`);
   }
 
@@ -201,7 +258,11 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
   }
 
   return {
-    logic: stage.logic.trim(),
+    logic: logicRaw || "(nixery)",
+    ...(nixeryRun ? { nixeryRun } : {}),
+    ...(isNixeryStageInput(stage.nixeryInput)
+      ? { nixeryInput: normalizeNixeryStageInput(stage.nixeryInput) }
+      : {}),
     ...(askUser ? { askUser } : {}),
     ...(stage.contextMode === true ? { contextMode: true } : {}),
     ...(stage.conditionMode === true ? { conditionMode: true } : {}),

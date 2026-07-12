@@ -5,7 +5,6 @@ import { sessionReferencesTaskSkills } from '@project-yahl/shared/yahl/session-r
 import { fetchSession } from '@/orchestrator/-ask-user';
 import {
   echoTaskSkillsToSession,
-  mergeTaskSystemAppend,
   verifyTaskSkillsMount,
 } from '@/orchestrator/-utils/workspace-paths';
 
@@ -57,7 +56,5 @@ export const prepareTaskWorkspace = async (sessionId: string) => {
     }
   }
 
-  const systemAppend = await mergeTaskSystemAppend(sessionId, session.taskId);
-
-  return { session, systemAppend };
+  return { session };
 };
