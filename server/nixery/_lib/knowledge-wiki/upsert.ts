@@ -61,6 +61,22 @@ export type TUpsertKnowledgePageError = {
   ok: false;
 };
 
+const toPageContent = (content: string | undefined, value: unknown): string => {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value);
+};
+
 const loadWikiPageContent = async (
   canonical: string,
   page: string,
@@ -272,7 +288,7 @@ export const runUpsertKnowledgePage = async (
 
     const written = await upsertKnowledgeWikiPage({
       canonical: canonicalTopic,
-      content: content ?? String(args.value ?? ''),
+      content: toPageContent(content, args.value),
       mode,
       page,
       title: typeof args.title === 'string' ? args.title : undefined,

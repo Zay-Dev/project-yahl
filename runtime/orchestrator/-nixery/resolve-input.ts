@@ -89,6 +89,10 @@ const resolveLiteralValue = (rawValue: unknown): string => {
     return String(rawValue);
   }
 
+  if (rawValue != null && typeof rawValue === 'object') {
+    return JSON.stringify(rawValue, null, 2);
+  }
+
   return '';
 };
 
