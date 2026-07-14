@@ -30,7 +30,9 @@ Goal:
 
 These suggestions are starting points, not a checklist. Review the corpus and inputs. Skip pages that do not fit. Add custom pages when the knowledge type needs structure the suggestions do not cover. You do not need to adopt every suggested page.
 
-Also include `studies/*` per source when study_plan has sources. Do not plan custom pages under `raw/` or `studies/`.
+`wiki_structure.pages[].path` must be a **single kebab-case** segment (`[a-z0-9]+(?:-[a-z0-9]+)*`) — e.g. `overview`, `brief`, `endpoint-catalog`. Allowed paths: the required/suggested pages above, plus custom kebab pages when needed.
+
+Do **not** put knowledge keys or export basenames into `pages[]`. Export files like `study_plan.md` / `study_raw_facts.md` and keys like `study_plan`, `wiki_structure`, `corpus_assessment`, `learning_contract` are persisted later via `upsert-knowledge-page` (often into `sources` sections), not as top-level page paths. Never use underscores in `pages[].path`. Do not plan custom pages under `raw/` or `studies/` — study documents belong in `wiki_structure.studies`, not `pages[]`.
 
 Suggested primary output file (hint only): {{output}}
 
@@ -73,7 +75,7 @@ Suggested primary output file (hint only): {{output}}
    }
    ```
 4. `wiki_structure.pages` must include `overview` with `action: "populate"`.
-5. `origin` is `suggested` or `custom`. `action` is `populate`, `skip`, or `defer`.
+5. `pages[].path` is kebab-case only. `origin` is `suggested` or `custom`. `action` is `populate`, `skip`, or `defer`.
 6. Include every `learning_contract.seedUrls` entry in `study_plan.sources` as `priority: required` when learning_contract is available.
 7. Set `rounds` from depth: overview → 1–2, deep_dive → 2–3 (max 3).
 8. Optionally write `/workspace/plan.md` with a human-readable execution summary.

@@ -65,7 +65,9 @@ Build `study_plan` and `wiki_structure` via orchestrator `nixeryRun: plan-study`
 }
 ```
 
-Suggested wiki pages are starting points — the nixery agent may skip, defer, or add custom pages. `overview` with `action: populate` is required.
+Suggested wiki pages are starting points — the nixery agent may skip, defer, or add custom kebab-case pages. `overview` with `action: populate` is required.
+
+`pages[].path` is a top-level wiki page slug (kebab-case only: `overview`, `brief`, `facts`, `sources`, `todo`, or custom like `endpoint-catalog`). Do **not** use knowledge keys (`study_plan`, `wiki_structure`, `corpus_assessment`) or legacy export basenames (`study_plan.md`, `study_raw_facts.md`) as `pages[].path` — those persist via upsert keys (often into `sources` sections), not as page paths.
 
 ## study_plan rules
 
@@ -79,6 +81,6 @@ Suggested wiki pages are starting points — the nixery agent may skip, defer, o
 ## After plan-study
 
 - Read `~/nixery/plan-study/plan.json`; parse `study_plan` and `wiki_structure`.
-- Persist with `upsert-knowledge-page` keys `study_plan` and `wiki_structure`.
+- Persist with `upsert-knowledge-page` keys `study_plan` and `wiki_structure` (keys → sources sections / raw mirrors — not `pages[].path` values).
 - Append persist `{ path }` entries to `knowledge_paths.persisted`.
 - Downstream stages honor `wiki_structure.pages` where `action: populate`.

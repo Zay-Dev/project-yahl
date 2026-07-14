@@ -15,30 +15,34 @@ const isValidSource = (source) =>
   && source.rounds >= 1
   && source.rounds <= 3;
 
-const isValidPage = (page) => {
+const pageEntryReason = (page) => {
   if (!page || typeof page !== 'object') {
-    return false;
+    return 'not an object';
   }
 
   const pagePath = typeof page.path === 'string' ? page.path.trim() : '';
 
-  if (!pagePath || !SLUG_PATTERN.test(pagePath)) {
-    return false;
+  if (!pagePath) {
+    return 'missing path';
+  }
+
+  if (!SLUG_PATTERN.test(pagePath)) {
+    return `path "${pagePath}" must be a single kebab-case segment`;
   }
 
   if (pagePath.startsWith('raw') || pagePath.startsWith('studies')) {
-    return false;
+    return `path "${pagePath}" must not start with raw or studies`;
   }
 
   if (page.origin !== 'suggested' && page.origin !== 'custom') {
-    return false;
+    return `path "${pagePath}" origin must be suggested or custom`;
   }
 
   if (page.action !== 'populate' && page.action !== 'skip' && page.action !== 'defer') {
-    return false;
+    return `path "${pagePath}" action must be populate, skip, or defer`;
   }
 
-  return true;
+  return null;
 };
 
 export async function validateOutput(ctx) {
@@ -89,8 +93,12 @@ export async function validateOutput(ctx) {
     return { ok: false, reason: 'wiki_structure.pages must be a non-empty array' };
   }
 
-  if (!wikiStructure.pages.every(isValidPage)) {
-    return { ok: false, reason: 'invalid wiki_structure.pages entry' };
+  for (const page of wikiStructure.pages) {
+    const reason = pageEntryReason(page);
+
+    if (reason) {
+      return { ok: false, reason: `invalid wiki_structure.pages entry: ${reason}` };
+    }
   }
 
   const overviewPopulate = wikiStructure.pages.some(
