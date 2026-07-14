@@ -11,6 +11,9 @@ import { workspaceRoot } from '@/orchestrator/-utils/workspace-paths';
 export const resolveDockerHostSessionNixeryDir = (sessionId: string, defId: string) =>
   path.join(resolveDockerHostWorkspacePath(), 'sessions', sessionId, 'nixery', defId);
 
+export const resolveDockerHostSessionRootDir = (sessionId: string) =>
+  path.join(resolveDockerHostWorkspacePath(), 'sessions', sessionId);
+
 export const resolveDockerHostSessionDir = (sessionDir: string) => {
   const orchestratorWorkspace = path.resolve(workspaceRoot());
   const resolved = path.resolve(sessionDir);
@@ -49,6 +52,10 @@ const resolveMountHost = (params: {
 
   if (token === 'session') {
     return resolveDockerHostSessionNixeryDir(params.sessionId, params.defId);
+  }
+
+  if (token === 'session-root') {
+    return resolveDockerHostSessionRootDir(params.sessionId);
   }
 
   if (token === 'def') {

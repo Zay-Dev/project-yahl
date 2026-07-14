@@ -50,12 +50,24 @@ const parseValue = (input) => {
   }
 };
 
+const toCanonicalWikiPath = (result) => {
+  const candidates = [result.wikiPath, result.relativePath, result.path, result.pagePath]
+    .filter((item) => typeof item === 'string' && item.trim());
+
+  const raw = candidates[0]?.trim() ?? '';
+
+  return raw.replace(/^en\//, '');
+};
+
 const toGateResult = (result) => {
   if (result.ok) {
-    const paths = [result.path, result.pagePath]
-      .filter((item) => typeof item === 'string' && item.trim());
+    const path = toCanonicalWikiPath(result);
 
-    return { ok: true, paths };
+    if (!path) {
+      return { ok: false, error: 'upsert succeeded without wiki path' };
+    }
+
+    return { ok: true, path };
   }
 
   return { ok: false, error: result.error ?? 'upsert failed' };

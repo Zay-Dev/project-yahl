@@ -26,11 +26,11 @@ Models change; your curated knowledge doesn't. YAHL's value compounds when the a
 
 **User first.** Knowledge is what you browse, trust, edit, and link. Wiki pages under `topics/{slug}/` are the product surface, not a debug dump of JSON keys. Refresh keeps knowledge current without re-running full capture.
 
-**Agents second (downstream).** Stage agents never read the full corpus; they get session extracts from `get-knowledge`. Better pages → better extracts → better behavior on every task that reads knowledge (`user_onboarding`, `knowledge_capture`, `hk_weather`, future tasks). Garbage summaries → repeated questions and wrong assumptions — that's a knowledge problem, not a model problem.
+**Agents second (downstream).** Stage agents never read the full corpus; they get session extracts from orchestrator `nixeryRun: get-knowledge` at `~/nixery/get-knowledge/{output}.md`. Better pages → better extracts → better behavior on every task that reads knowledge (`user_onboarding`, `knowledge_capture`, `hk_weather`, future tasks). Garbage summaries → repeated questions and wrong assumptions — that's a knowledge problem, not a model problem.
 
 **Why so much effort.** Flat key-files and 64KB corpus walks produced disposable summaries. We invested in Wiki.js + elaboration rules + capture/refresh pipelines + topic governance because **knowledge quality is the primary lever on product quality** — more than picking a slightly newer model.
 
-**What we built.** Wiki.js canonical store, `./data/knowledge_export` Local FS push export for scale, mastermind hybrid RAG (GraphQL + export mirror), capture/refresh tasks, human browse at **`WIKI_PUBLIC_URL`** (dedicated wiki URL), and a strict trust boundary. Details: [`docs/knowledge.md`](docs/knowledge.md).
+**What we built.** Wiki.js canonical store, `./data/knowledge_export` Local FS push export for scale, nixery plug-in defs for knowledge reads/writes and LLM helpers (`research`, `design-questions`, `extract-info`), capture/refresh tasks, human browse at **`WIKI_PUBLIC_URL`**, and a strict trust boundary. Details: [`docs/knowledge.md`](docs/knowledge.md) and [`docs/nixery-tools.md`](docs/nixery-tools.md).
 
 ## Status
 
@@ -53,8 +53,9 @@ Stuff that already works (aka things that surprisingly do not explode):
 - Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
 - VM client runs on `isolated-vm` for stronger sandbox boundaries and fewer "hope-this-is-fine" moments.
 - You can attach the orchestrator to a debugger, hit breakpoints, and poke variables manually while tracing execution.
-- **Mastermind stack:** gateway (port 4100) and worker (port 4200, verify gates) in `docker compose`; orchestrator verify calls worker; `/mastermind(...)` in the agent for skills (requires `CURSOR_API_KEY`). Boot fail-fast when the SDK agent is not ready; stack probe via `pnpm run doctor`.
-- **`design-questions`:** platform Mastermind skill for dynamic ask-user batches (pass `mission:` for subject framing).
+- **Mastermind stack:** gateway (port 4100) and worker (port 4200, verify gates) in `docker compose`; orchestrator verify calls worker; `/mastermind(...)` for topic registry, policies, tidy, notifications; `/nixery(...)` for knowledge writes and LLM helpers. Boot fail-fast when the SDK agent is not ready; stack probe via `pnpm run doctor`.
+- **Nixery tools:** orchestrator-direct reads (`nixeryRun: get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `plan-study`); inline writes and helpers (`upsert-knowledge-page`, `dedup-knowledge`, `research`, `design-questions`, `extract-info`). See [`docs/nixery-tools.md`](docs/nixery-tools.md).
+- **`design-questions`:** nixery inline def for dynamic ask-user batches (pass `mission:` for subject framing).
 - **`verifyAutoRetry`:** orchestrator in-process verify loop on stages with `verify: true` + `verifyAutoRetry: true`.
 - **Task-local skills:** echoed from session snapshot to agent `~/task-skills/`; see **Authoring tasks** below.
 - **Knowledge store:** Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see **Why knowledge matters** and **Protecting the knowledge store** below.
@@ -102,7 +103,8 @@ Syntax reference:
 - `EXTENDS: ...` — append or merge into an existing context value without replacing it.
 - `/ask-user-batch(...)` — pause for **`askUserBatch.v1`** (one or more questions per submit: text, radio, or checkbox MC).
 - `/skill_name(...)` — call into a skill from the skills folder.
-- `/mastermind(...)` — call the Mastermind gateway (research, verify, notifications, etc.).
+- `/mastermind(...)` — topic registry, policies, tidy, notifications (deterministic + platform ops).
+- `/nixery(...)` — knowledge writes, research, design-questions, extract-info (see `/opt/skills/nixery/SKILL.md`).
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 
 `SKILL.yahl` is a single YAML document (`name`, `description`, optional `types`, and a `stages` list). Each stage has a `logic: |` block; the runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF:` branches, and brace-wrapped AI blocks). See `server/tasks/test/SKILL.yahl` for the canonical shape.
@@ -117,7 +119,7 @@ Tasks can ship their own SKILL files — handy when you want assess/synthesize r
 - **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
 - **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` (untrusted hints banner). Planning via orchestrator `nixeryRun: plan` / `plan-study`.
-- **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_tidy` (see [`mastermind/skills/get-knowledge/SKILL.md`](mastermind/skills/get-knowledge/SKILL.md) for the read path)
+- **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_tidy` (see [`server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md`](server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md) for the read path)
 
 ```
 server/tasks/my_task/
@@ -129,43 +131,36 @@ server/tasks/my_task/
 
 ## Protecting the knowledge store
 
-Curated knowledge lives in **Wiki.js** (Postgres) with a Local FS export at `data/knowledge_export/`. Stage agents do **not** get wiki, export files, or legacy flat keys mounted — they only see what Mastermind extracts into the current session scratch dir.
+Curated knowledge lives in **Wiki.js** (Postgres) with a Local FS export at `data/knowledge_export/`. Stage agents do **not** get wiki, export files, or legacy flat keys mounted — they only see nixery session artifacts and task skills.
 
 ```mermaid
 sequenceDiagram
+  participant Orch as Orchestrator
+  participant Nix as NixeryContainer
   participant Agent as StageAgent
-  participant MM as Mastermind
-  participant Wiki as Wiki.js GraphQL
-  participant Export as data_knowledge_export
-  participant Scratch as workspace_sessions_id
+  participant Wiki as Wiki.js
 
-  Agent->>MM: get-knowledge need topic
-  MM->>Wiki: read page(s) or export mirror for large topics
-  MM->>Scratch: write knowledge/key.json
-  MM-->>Agent: key path absent only
-  Agent->>Scratch: read .extracted field
-
-  Agent->>MM: upsert-knowledge-page key value topic
-  MM->>Wiki: GraphQL create/update
-  Wiki->>Export: push on change
-  MM-->>Agent: pagePath only
+  Orch->>Nix: nixeryRun get-knowledge
+  Nix->>Agent: ~/nixery/get-knowledge/intake.md
+  Agent->>Nix: /nixery upsert-knowledge-page
+  Nix->>Wiki: GraphQL write
+  Wiki-->>Agent: wiki path in result
 ```
 
-- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** wiki/export/knowledges ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Mastermind: `./data/mastermind:/data`, read-only `./data/knowledge_export` ([`docker-compose.yml`](docker-compose.yml)).
-- **No direct corpus access** — agents must not read wiki HTTP, export mirror, or legacy `~/knowledges/`; canonical store is mastermind-private only.
-- **Session-scoped reads** — `get-knowledge` reads wiki corpus internally, writes `data/workspace/sessions/{sessionId}/knowledge/{key}.json`, returns `{ key, path: "~/knowledge/…", absent }` only ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts), [`skills.ts`](mastermind/src/-handlers/skills.ts)).
-- **Path injection blocked** — `get-knowledge` and `upsert-knowledge-page` reject caller `source` / `file` / `path` args ([`hasPathArgs`](mastermind/src/-knowledge/index.ts)).
-- **Controlled writes** — `upsert-knowledge-page` accepts `key`+`value` or `page`+`content` with `topic` only; Mastermind maps legacy keys to wiki paths ([`upsert-knowledge-page` SKILL](mastermind/skills/upsert-knowledge-page/SKILL.md)).
-- **Key sanitization** — session ids and extract keys sanitized before filesystem writes ([`session-extract.ts`](mastermind/src/-knowledge/session-extract.ts)).
+- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** wiki/export/knowledges ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Nixery defs mount export mirror ro and session workspace as needed.
+- **No direct corpus access** — agents must not read wiki HTTP, export mirror, or legacy `~/knowledges/`; canonical store is server/nixery-private only.
+- **Session-scoped reads** — `nixeryRun: get-knowledge` explores export mirror in-container, writes markdown to `~/nixery/get-knowledge/{output}`; agent reads full file content in following stages.
+- **Path injection blocked** — upsert rejects caller `source` / `file` / `path` args.
+- **Controlled writes** — `upsert-knowledge-page` accepts `key`+`value` or `page`+`content` with `topic` only; maps legacy keys to wiki paths.
 - **Human browse** — Wiki.js at `WIKI_PUBLIC_URL` (dev: `http://127.0.0.1:3001`); web sidebar links there directly; agents never use this route.
-- **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on `research` / `plan` get an explicit untrusted-content banner in the Mastermind prompt ([`UNTRUSTED_GUIDELINE_PREAMBLE`](mastermind/src/-handlers/skills.ts)).
-- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `get-knowledge` = curated wiki corpus. Different skills, different trust boundary.
+- **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on nixery `research` get an explicit untrusted-content banner in the prompt.
+- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `get-knowledge` = curated wiki corpus via export mirror. Different defs, different trust boundary.
 
-Two-step read in stage logic:
+Read pattern in stage logic:
 
 ```text
-const extractRef = /mastermind(get-knowledge, topic: user-onboarding, need: identity, goals);
-const knowledge = extractRef.absent ? '<none>' : (*read(extractRef.path)).extracted;
+Read ~/nixery/get-knowledge/identity.md from the session workspace.
+If missing or empty after trim, set extracted to '<none>'; otherwise set extracted to the file's full markdown content.
 ```
 
 ## How it works under the hood
@@ -263,7 +258,7 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 
 - **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-onecli.ts`](runtime/orchestrator/-docker/compose-onecli.ts), project `agent-{sessionId}`), then tears it down.
 - **Minimal mounts** — only [`data/workspace/`](data/workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
-- **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge via `get-knowledge` → `~/knowledge/{key}.json` only — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see **Protecting the knowledge store**).
+- **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge reads via `nixeryRun` → `~/nixery/get-knowledge/`; study dialogue under `~/nixery/study/` — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see **Protecting the knowledge store**).
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See **OneCLI setup** below for vault rules.

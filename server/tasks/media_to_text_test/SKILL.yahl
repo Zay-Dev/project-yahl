@@ -1,12 +1,12 @@
 name: media-to-text-test
-description: E2E test for mastermind research, curl download, and media-to-text on a Pexels image.
+description: E2E test for nixery research, curl download, and media-to-text on a Pexels image.
 resultContextKey: result
 
 stages:
   - contextKeys: []
     produceContextKeys: [image_search]
     logic: |
-      const image_search = /mastermind(research,
+      const image_search = /nixery(research,
         topic: free stock photo direct download URL on pexels.com suitable for OCR text extraction test
       );
 

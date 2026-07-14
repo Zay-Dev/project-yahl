@@ -163,8 +163,8 @@ stages:
         return {
           knowledge_paths: {
             topic: context.context.knowledge_topic,
-            topicWorkspace: `~/knowledge/${context.context.knowledge_topic}`,
-            studyWorkspace: `~/knowledge/${context.context.knowledge_topic}/study`,
+            topicWorkspace: `~/nixery/study/${context.context.knowledge_topic}`,
+            studyWorkspace: `~/nixery/study/${context.context.knowledge_topic}`,
             missionPath: '~/task-skills/task-mission/SKILL.md',
             taskSkillsDir: '~/task-skills',
             persisted: [],
@@ -208,7 +208,7 @@ stages:
           Read ~/nixery/get-knowledge/open-questions.md from the session workspace.
           If missing or empty, set open_questions_qa to []; otherwise derive open_questions_qa items from the file's markdown content.
           const oqExtractRef = { absent: open_questions_qa.length === 0, path: '~/nixery/get-knowledge/open-questions.md' };
-          const batches = /mastermind(design-questions, stage: todo_expand, gaps: *todo_gaps_from_items(expandItems), priorQa: open_questions_qa, mission: missionText, goal: resolve todo expand_questions);
+          const batches = /nixery(design-questions, stage: todo_expand, gaps: *todo_gaps_from_items(expandItems), priorQa: open_questions_qa, mission: missionText, goal: resolve todo expand_questions);
           const oqAnswers = /ask-user-batch(batches);
           const open_questions_qa = *merge_open_questions_qa(open_questions_qa, oqAnswers, guideline: ~/task-skills/answer-open-questions/SKILL.md);
           /nixery(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: open_questions_qa });
@@ -301,18 +301,18 @@ stages:
         /stagehand(goto, url: src.url) → rawMd;
         for each round of [1..src.rounds];
           const priorPath = round === 1 ? rawMd : `${workspaceDir}/round-${round - 1}-agent.md`;
-          const mastermindMd = `${workspaceDir}/round-${round}-mastermind.md`;
+          const researchMd = `${workspaceDir}/round-${round}-research.md`;
           const agentMd = `${workspaceDir}/round-${round}-agent.md`;
-          /mastermind(
+          /nixery(
             research,
             source: priorPath,
             topic: study src for learning_contract,
             mission: missionText,
             facts: { learning_contract, study_plan, src, round, today, mission: missionText },
             guidelinePath: ~/task-skills/dialogue-round/SKILL.md,
-          ) → mastermindMd;
+          ) → researchMd;
           *agent_analyze_round(
-            mastermindMd,
+            researchMd,
             output: agentMd,
             guideline: ~/task-skills/dialogue-round/SKILL.md,
             learning_contract,
@@ -320,7 +320,7 @@ stages:
             src,
             round,
           );
-          EXTENDS: study_dialogue = *append_dialogue_round(study_dialogue, src, round, mastermindMd, agentMd, rawMd);
+          EXTENDS: study_dialogue = *append_dialogue_round(study_dialogue, src, round, researchMd, agentMd, rawMd);
         END:
         const finalMd = `${workspaceDir}/final.md`;
         *merge_dialogue_rounds(workspaceDir, src.rounds, output: finalMd);
@@ -370,7 +370,7 @@ stages:
           const facts = assessment.artifact.facts;
           const key_facts_md = assessment.artifact.key_facts_md;
         ELSE;
-          const extracted = /mastermind(
+          const extracted = /nixery(
             research,
             topic: extract structured facts from persisted studies,
             mission: missionText,
@@ -424,7 +424,7 @@ stages:
         IF: assessment.sufficient && !*should_update_scope('synthesis', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
           const synthesis_artifact = assessment.artifact;
         ELSE;
-          const synthesis = /mastermind(
+          const synthesis = /nixery(
             research,
             topic: cross-source synthesis,
             mission: missionText,
@@ -478,7 +478,7 @@ stages:
           Read ~/nixery/get-knowledge/profile.md from the session workspace when userProfile is not already set.
           If missing or empty after trim, set userProfile to '<none>'; otherwise set userProfile to the file's full markdown content.
           const profileRef = { absent: userProfile === '<none>', path: '~/nixery/get-knowledge/profile.md' };
-          const brief = /mastermind(
+          const brief = /nixery(
             research,
             topic: final knowledge brief and personalized summary,
             mission: missionText,

@@ -1,15 +1,10 @@
----
-name: nixery-upsert-knowledge-page
-description: Deterministic wiki upsert via orchestrator nixery def
----
-
 # nixery-upsert-knowledge-page
 
 Use `/nixery(upsert-knowledge-page, topic: …, key: …, value: …)` in stage logic for every knowledge persist.
 
 ## Contract
 
-- **No file paths** — `source`, `file`, and `path` are rejected.
+- **No file paths** — `source`, `file`, and `path` args are rejected.
 - **Key + value** or **page + content** with optional `topic` / `topicText` / `seedUrls`.
 - Writes via Wiki.js GraphQL; updates `topics.json` when the topic is new.
 - **No on-write dedup** — use `dedup-knowledge` for repair passes.
@@ -29,16 +24,15 @@ Use `/nixery(upsert-knowledge-page, topic: …, key: …, value: …)` in stage 
 
 ## Result
 
-Read `~/nixery/upsert-knowledge-page/result.json`:
+Inline tool returns `{ ok, data }` where `data` is the gate:
 
 ```json
 {
   "ok": true,
-  "path": "en/topics/hk-weather/facts",
-  "pagePath": "en/topics/hk-weather/facts",
-  "wikiPath": "topics/hk-weather/facts",
-  "canonicalTopic": "hk-weather"
+  "path": "topics/hk-weather/facts"
 }
 ```
 
-Append `{ path }` to `knowledge_paths.persisted` after each successful upsert.
+`path` is the canonical wiki-relative page path. Use `data.path` when appending to `knowledge_paths.persisted`.
+
+Rich detail also lands in `~/nixery/upsert-knowledge-page/upsert-detail.json` for debugging.

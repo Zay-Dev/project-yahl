@@ -9,7 +9,7 @@ After rerun Batch 2 (`open_questions_pick`) when user selected one or more quest
 ## Flow
 
 1. `*picked_open_questions(pickAnswers)` → list of question strings
-2. `/mastermind(design-questions, stage: open_questions, gaps: <picked>, priorQa: open_questions_qa, mission: missionText, goal: resolve pending knowledge gaps)` — prefer MC batches
+2. `/nixery(design-questions, stage: open_questions, gaps: <picked>, priorQa: open_questions_qa, mission: missionText, goal: resolve pending knowledge gaps)` — prefer MC batches
 3. `/ask-user-batch(batches)` — one batch per question or grouped if independent; MC options first
 4. `*merge_open_questions_qa(open_questions_qa, oqAnswers)` → context + persist
 

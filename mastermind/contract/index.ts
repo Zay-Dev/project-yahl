@@ -42,8 +42,6 @@ export const orgScopeSchema = z.object({
 });
 
 export const skillNames = [
-  'research',
-  'extract-info',
   'resolve-topic',
   'tidy-knowledge',
   'list-topic-policies',
@@ -53,7 +51,6 @@ export const skillNames = [
   'dispatch-task-run',
   'knowledge-qa-review',
   'media-to-text',
-  'design-questions',
   'propose-notification',
 ] as const;
 

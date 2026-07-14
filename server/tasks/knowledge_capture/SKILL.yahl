@@ -1,7 +1,7 @@
 name: knowledge-capture
 description: |
   Generic knowledge capture: clarify intent, locate existing corpus, plan study,
-  dialogue-loop per source (mastermind ↔ agent via filesystem), then facts,
+  dialogue-loop per source (nixery research ↔ agent via filesystem), then facts,
   synthesis, and final brief. Persists under knowledges/{slug}/.
   Run with task id knowledge_capture.
 resultContextKey: result
@@ -60,7 +60,7 @@ types: |
 
   type TSourceRoundPaths = {
     round: number;
-    mastermindMd: string;
+    researchMd: string;
     agentMd: string;
   };
 
@@ -173,7 +173,7 @@ stages:
         IF: rerun_intent.addressOpenQuestions && pending_open_questions.length > 0;
           const pickBatch = *build_open_questions_pick_batch(pending_open_questions, guideline: ~/task-skills/rerun-intent/SKILL.md);
           const pickAnswers = /ask-user-batch(pickBatch);
-          const batches = /mastermind(design-questions, stage: open_questions, mission: missionText, gaps: *picked_open_questions(pickAnswers), priorQa: open_questions_qa, goal: resolve pending knowledge gaps);
+          const batches = /nixery(design-questions, stage: open_questions, mission: missionText, gaps: *picked_open_questions(pickAnswers), priorQa: open_questions_qa, goal: resolve pending knowledge gaps);
           const oqAnswers = /ask-user-batch(batches);
           const open_questions_qa = *merge_open_questions_qa(open_questions_qa, oqAnswers, guideline: ~/task-skills/answer-open-questions/SKILL.md);
           /nixery(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: open_questions_qa });
@@ -195,7 +195,7 @@ stages:
         const knowledge_topic = resolvedTopic.canonical;
       END:
       IF: *clarify_needs_follow_up(learning_contract);
-        const batches = /mastermind(design-questions, stage: clarify, mission: missionText, gaps: *clarify_gaps(learning_contract), priorQa: clarify_qa_log, goal: clarify subject and intent);
+        const batches = /nixery(design-questions, stage: clarify, mission: missionText, gaps: *clarify_gaps(learning_contract), priorQa: clarify_qa_log, goal: clarify subject and intent);
         const followUp = /ask-user-batch(batches);
         const clarify_qa_log = *merge_qa(clarify_qa_log, followUp);
         const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
@@ -213,8 +213,8 @@ stages:
       (() => ({
         knowledge_paths: {
           topic: context.context.knowledge_topic,
-          topicWorkspace: `~/knowledge/${context.context.knowledge_topic}`,
-          studyWorkspace: `~/knowledge/${context.context.knowledge_topic}/study`,
+          topicWorkspace: `~/nixery/study/${context.context.knowledge_topic}`,
+          studyWorkspace: `~/nixery/study/${context.context.knowledge_topic}`,
           missionPath: '~/task-skills/task-mission/SKILL.md',
           taskSkillsDir: '~/task-skills',
           persisted: [],
@@ -301,7 +301,7 @@ stages:
     verifyMinScore: 0.75
     verifyRubric: |
       Pass when src is skipped via reuseExisting or has persisted study_{slug} with non-empty studyMd.
-      Pass when dialogue artifacts exist on disk for each round (mastermind + agent md) before persist.
+      Pass when dialogue artifacts exist on disk for each round (research + agent md) before persist.
       Pass when study_dialogue.sources includes src with studyPersistPath after persist.
       Fail when raw.md missing, round files missing, or studyMd empty.
     logic: |
@@ -315,18 +315,18 @@ stages:
         /stagehand(goto, url: src.url) → rawMd;
         for each round of [1..src.rounds];
           const priorPath = round === 1 ? rawMd : `${workspaceDir}/round-${round - 1}-agent.md`;
-          const mastermindMd = `${workspaceDir}/round-${round}-mastermind.md`;
+          const researchMd = `${workspaceDir}/round-${round}-research.md`;
           const agentMd = `${workspaceDir}/round-${round}-agent.md`;
-          /mastermind(
+          /nixery(
             research,
             source: priorPath,
             topic: study src for learning_contract,
             mission: missionText,
             facts: { learning_contract, study_plan, src, round, today, mission: missionText },
             guidelinePath: ~/task-skills/dialogue-round/SKILL.md,
-          ) → mastermindMd;
+          ) → researchMd;
           *agent_analyze_round(
-            mastermindMd,
+            researchMd,
             output: agentMd,
             guideline: ~/task-skills/dialogue-round/SKILL.md,
             learning_contract,
@@ -334,7 +334,7 @@ stages:
             src,
             round,
           );
-          EXTENDS: study_dialogue = *append_dialogue_round(study_dialogue, src, round, mastermindMd, agentMd, rawMd);
+          EXTENDS: study_dialogue = *append_dialogue_round(study_dialogue, src, round, researchMd, agentMd, rawMd);
         END:
         const finalMd = `${workspaceDir}/final.md`;
         *merge_dialogue_rounds(workspaceDir, src.rounds, output: finalMd);
@@ -383,7 +383,7 @@ stages:
         const facts = assessment.artifact.facts;
         const key_facts_md = assessment.artifact.key_facts_md;
       ELSE;
-        const extracted = /mastermind(
+        const extracted = /nixery(
           research,
           topic: extract structured facts from persisted studies,
           mission: missionText,
@@ -435,7 +435,7 @@ stages:
       IF: assessment.sufficient && !*should_update_scope('synthesis', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
         const synthesis_artifact = assessment.artifact;
       ELSE;
-        const synthesis = /mastermind(
+        const synthesis = /nixery(
           research,
           topic: cross-source synthesis,
           mission: missionText,
@@ -481,7 +481,7 @@ stages:
       Read ~/nixery/get-knowledge/profile.md from the session workspace when userProfile is not already set.
       If missing or empty after trim, set userProfile to '<none>'; otherwise set userProfile to the file's full markdown content.
       const profileRef = { absent: userProfile === '<none>', path: '~/nixery/get-knowledge/profile.md' };
-      const brief = /mastermind(
+      const brief = /nixery(
         research,
         topic: final knowledge brief and personalized summary,
         mission: missionText,

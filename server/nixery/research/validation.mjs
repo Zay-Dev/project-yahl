@@ -8,6 +8,8 @@ const parseGateJson = (raw) => {
   }
 };
 
+const MIN_MARKDOWN_CHARS = 32;
+
 export async function validateOutput(ctx) {
   let raw = '';
 
@@ -23,20 +25,12 @@ export async function validateOutput(ctx) {
     return { ok: false, reason: 'invalid json gate file' };
   }
 
-  if (typeof parsed.ok !== 'boolean') {
-    return { ok: false, reason: 'missing ok boolean' };
+  if (parsed.ok !== true) {
+    return { ok: false, reason: 'gate ok must be true' };
   }
 
-  if (parsed.ok === true) {
-    if (typeof parsed.path !== 'string' || !parsed.path.trim()) {
-      return { ok: false, reason: 'success gate requires non-empty path string' };
-    }
-
-    return { ok: true };
-  }
-
-  if (typeof parsed.error !== 'string' || !parsed.error.trim()) {
-    return { ok: false, reason: 'failed gate requires error string' };
+  if (typeof parsed.markdown !== 'string' || parsed.markdown.trim().length < MIN_MARKDOWN_CHARS) {
+    return { ok: false, reason: 'markdown too short' };
   }
 
   return { ok: true };

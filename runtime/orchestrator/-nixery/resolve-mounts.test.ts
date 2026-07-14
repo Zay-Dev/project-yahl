@@ -76,4 +76,28 @@ describe('resolveMounts', () => {
       },
     ]);
   });
+
+  it('maps session-root mount token to session workspace root', () => {
+    process.env.HOST_REPO_ROOT = hostRepoRoot;
+
+    const mounts = resolveMounts({
+      def: {
+        id: 'research',
+        packages: ['nodejs'],
+        mount: {
+          '/session': { host: 'session-root', mode: 'rw' },
+        },
+      },
+      defId: 'research',
+      sessionId: 'session-1',
+    });
+
+    assert.deepEqual(mounts, [
+      {
+        containerPath: '/session',
+        hostPath: path.join(hostRepoRoot, 'data/workspace/sessions/session-1'),
+        mode: 'rw',
+      },
+    ]);
+  });
 });

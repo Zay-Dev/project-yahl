@@ -5,7 +5,7 @@ Generic smart-skip assessment for knowledge_capture stages.
 ## Input
 
 - `stage` name: `facts` | `synthesis` | `locate` | `plan` | `dialogue`
-- Session extract `.extracted` content for `knowledge_topic` (from `~/knowledge/` after get-knowledge)
+- Session extract markdown for `knowledge_topic` (from `~/nixery/get-knowledge/` after nixeryRun)
 - `learning_contract`, `study_plan`, `corpus_assessment` as available
 - Prior context keys for the stage
 
@@ -33,7 +33,7 @@ Generic smart-skip assessment for knowledge_capture stages.
 
 When `sufficient: true`:
 
-1. Build stage `produceContextKeys` from extracted knowledge.
+1. Build stage `produceContextKeys` from extracted knowledge markdown.
 2. Call `upsert-knowledge-page` only if updates needed.
 3. Proceed to verify.
 

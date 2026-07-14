@@ -194,7 +194,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|resolve-topic|tidy-knowledge|knowledge-qa-review|resolve-topic-policy|media-to-text|design-questions, ...) in stage logic. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Knowledge writes use the nixery tool for /nixery(defId, ...). Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(resolve-topic|tidy-knowledge|knowledge-qa-review|resolve-topic-policy|media-to-text, ...) in stage logic. LLM helpers (research, extract-info, design-questions) use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -205,14 +205,11 @@ export const STAGE_TOOLS = [
           skill: {
             description: "Helper skill name.",
             enum: [
-              "research",
-              "extract-info",
               "resolve-topic",
               "tidy-knowledge",
               "knowledge-qa-review",
               "resolve-topic-policy",
               "media-to-text",
-              "design-questions",
             ],
             type: "string",
           },

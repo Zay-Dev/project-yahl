@@ -7,8 +7,8 @@ Assess existing wiki corpus for the topic before spending tokens on re-fetch.
 - `knowledge_topic` canonical slug from resolve-topic
 - `learning_contract` from clarify stage
 - `wiki_structure` from plan-study when available (honor `action: populate` pages only)
-- Nixery `list-knowledge-pages` at `~/nixery/list-knowledge-pages/pages.md` (read `.extracted`)
-- Nixery `search-knowledge` at `~/nixery/search-knowledge/gap-search.md` (read `.extracted`) for supplemental gap hints
+- Nixery `list-knowledge-pages` at `~/nixery/list-knowledge-pages/pages.md` (read full markdown content)
+- Nixery `search-knowledge` at `~/nixery/search-knowledge/gap-search.md` (read full markdown content) for supplemental gap hints
 
 ## Output (`corpus_assessment` via set_context)
 
@@ -50,4 +50,4 @@ When `rerun_intent.isRerun` is true, read `~/task-skills/rerun-intent/SKILL.md`:
 - `*should_update_scope('clarify'|'studies'|'facts'|'synthesis'|'summary', rerun_intent)` affects downstream stage skip decisions.
 - `corpus_assessment.gaps` still reflects objective corpus state; rerun scope decides whether to act on gaps.
 
-After building `corpus_assessment`, persist via `/nixery(upsert-knowledge-page, …)` and append returned `{ path }` to `knowledge_paths.persisted`.
+After building `corpus_assessment`, persist via `/nixery(upsert-knowledge-page, …)` and append returned `data.path` to `knowledge_paths.persisted`.

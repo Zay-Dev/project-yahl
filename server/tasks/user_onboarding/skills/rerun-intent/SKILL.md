@@ -53,7 +53,7 @@ When `address_open_questions === yes` and `pending_open_questions.length > 0`:
 
 One option per pending question: `{ id: "oq_0", label: "<question text truncated to 120 chars>" }`.
 
-Then call `/mastermind(design-questions, gaps: <picked question texts>, priorQa: open_questions_qa, mission: …)`.
+Then call `/nixery(design-questions, gaps: <picked question texts>, priorQa: open_questions_qa, mission: …)`.
 
 ## Helper pseudo-ops
 
