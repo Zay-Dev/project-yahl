@@ -5,10 +5,54 @@ import { wikiLink, wikiRawLink } from './content-model.js';
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const formatBulletItem = (item: unknown): string => {
+  if (typeof item === 'string') {
+    return item.trim();
+  }
+
+  if (isRecord(item) && typeof item.claim === 'string') {
+    return item.claim.trim();
+  }
+
+  if (item == null) {
+    return '';
+  }
+
+  try {
+    return JSON.stringify(item);
+  } catch {
+    return '';
+  }
+};
+
+const formatClaimLine = (item: unknown): string => {
+  if (typeof item === 'string') {
+    const text = item.trim();
+
+    return text ? `- ${text}` : '';
+  }
+
+  if (!isRecord(item)) {
+    return '';
+  }
+
+  const claim = typeof item.claim === 'string' ? item.claim.trim() : '';
+
+  if (!claim) {
+    return '';
+  }
+
+  const sourceUrls = Array.isArray(item.sourceUrls)
+    ? item.sourceUrls.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+    : [];
+  const sourceUrl = sourceUrls[0]
+    ?? (typeof item.sourceUrl === 'string' && item.sourceUrl.trim() ? item.sourceUrl.trim() : '');
+
+  return sourceUrl ? `- ${claim} ([source](${sourceUrl}))` : `- ${claim}`;
+};
+
 const bulletList = (items: unknown[]): string => {
-  const strings = items
-    .map((item) => (typeof item === 'string' ? item.trim() : String(item)))
-    .filter(Boolean);
+  const strings = items.map(formatBulletItem).filter(Boolean);
 
   return strings.length > 0 ? strings.map((item) => `- ${item}`).join('\n') : '- _(none)_';
 };
@@ -139,10 +183,11 @@ export const structuredKeyToWikiMarkdown = (
     const themes = Array.isArray(value.themes) ? value.themes : [];
     const claims = Array.isArray(value.claims) ? value.claims : [];
     const openQuestions = Array.isArray(value.openQuestions) ? value.openQuestions : [];
+    const claimLines = claims.map(formatClaimLine).filter(Boolean);
 
     return [
       themes.length > 0 ? `**Themes:**\n${bulletList(themes)}` : '',
-      claims.length > 0 ? `**Claims:**\n${bulletList(claims)}` : '',
+      claimLines.length > 0 ? `**Claims:**\n${claimLines.join('\n')}` : '',
       openQuestions.length > 0 ? `**Open questions:**\n${bulletList(openQuestions)}` : '',
     ].filter(Boolean).join('\n\n');
   }

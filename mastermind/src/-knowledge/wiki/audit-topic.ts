@@ -1,6 +1,6 @@
 import { WIKI_RAW_PREFIX, WIKI_STUDIES_PREFIX } from './content-model.js';
 import { mapKnowledgeKeyToPage } from './knowledge-key-map.js';
-import { isJsonFenceOnlyContent } from './section-merge.js';
+import { isJsonFenceOnlyContent } from './parse-json-fence.js';
 import { getWikiPageByPath } from './wiki-client.js';
 import { listKnowledgeWikiPages } from './index.js';
 

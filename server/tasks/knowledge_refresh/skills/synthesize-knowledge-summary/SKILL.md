@@ -8,7 +8,7 @@ Loaded by Mastermind via `guidelinePath` (untrusted hints). Stage agent follows 
 
 Produce:
 
-1. **`analysis`** (JSON): `{ themes[], claims[], openQuestions[], confidence, intentAlignment }`
+1. **`analysis`** (JSON): `{ themes[], claims[{ claim, sourceUrls[], trustTier }], openQuestions[], confidence, intentAlignment }`
 2. **`analysis_md`** (Markdown string): narrative synthesis with section headings
 
 Requirements:
@@ -17,7 +17,7 @@ Requirements:
 - Cite sources by URL from `sources` / `facts`.
 - Do not contradict extracted facts.
 - If `userProfile` from user-onboarding is present, note relevance to user goals/preferences where appropriate.
-- When `open_questions_qa` is in facts, promote each answered question into `claims[]` and exclude from `openQuestions[]`.
+- When `open_questions_qa` is in facts, promote each answered question into `claims[]` as `{ claim, sourceUrls, trustTier }` objects and exclude from `openQuestions[]`.
 - Remaining unresolved gaps go in `openQuestions[]`.
 
 Persist via `upsert-knowledge-page`:

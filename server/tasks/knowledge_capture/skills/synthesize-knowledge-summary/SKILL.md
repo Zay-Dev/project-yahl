@@ -16,7 +16,7 @@ Write for **human readers** revisiting the topic in six months — not disposabl
 
 Produce:
 
-1. **`analysis`** (JSON): `{ themes[], claims[], openQuestions[], confidence, intentAlignment }`
+1. **`analysis`** (JSON): `{ themes[], claims[{ claim, sourceUrls[], trustTier }], openQuestions[], confidence, intentAlignment }`
 2. **`analysis_md`** (Markdown): narrative synthesis with section headings
 
 Requirements:
@@ -25,7 +25,7 @@ Requirements:
 - Cite sources by URL from `sources` / `facts`.
 - Do not contradict extracted facts.
 - If `userProfile` from user-onboarding is present, note relevance to user goals/preferences.
-- When `open_questions_qa` is in facts, promote answered questions into `claims[]`.
+- When `open_questions_qa` is in facts, promote answered questions into `claims[]` as `{ claim, sourceUrls, trustTier }` objects.
 - Remaining gaps go in `openQuestions[]`.
 
 Persist via `upsert-knowledge-page`:

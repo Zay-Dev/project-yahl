@@ -1,5 +1,12 @@
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const sectionBlockPattern = (heading: string, flags = ''): RegExp =>
+  // Do not use /m with $ — $ would match end-of-line and truncate multi-line bodies.
+  new RegExp(
+    `(^|\\n)${escapeRegExp(heading)}\\r?\\n[\\s\\S]*?(?=\\n## |$)`,
+    flags,
+  );
+
 export const mergeWikiSection = (
   existingContent: string,
   sectionTitle: string,
@@ -14,14 +21,14 @@ export const mergeWikiSection = (
     return `${sectionBlock}\n`;
   }
 
-  const sectionPattern = new RegExp(
-    `^${escapeRegExp(heading)}\\s*\\n[\\s\\S]*?(?=^## |$)`,
-    'm',
-  );
+  const sectionPattern = sectionBlockPattern(heading);
   const match = content.match(sectionPattern);
 
   if (match) {
-    return `${content.replace(sectionPattern, sectionBlock).trim()}\n`;
+    const lead = match[1] ?? '';
+    const replaced = content.replace(sectionPattern, `${lead}${sectionBlock}`);
+
+    return `${replaced.trim()}\n`;
   }
 
   return `${content}\n\n${sectionBlock}\n`;
@@ -57,10 +64,7 @@ export const collapseDuplicateWikiSections = (
   }
 
   const heading = `## ${sectionTitle}`;
-  const sectionPattern = new RegExp(
-    `^${escapeRegExp(heading)}\\s*\\n[\\s\\S]*?(?=^## |$)`,
-    'gm',
-  );
+  const sectionPattern = sectionBlockPattern(heading, 'g');
   const matches = [...content.matchAll(sectionPattern)];
 
   if (matches.length <= 1) {

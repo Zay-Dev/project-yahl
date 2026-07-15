@@ -92,4 +92,40 @@ describe('mergeWikiSection', () => {
     assert.match(merged, /\bsecond\b/);
     assert.equal((merged.match(/^## Corpus assessment$/gm) ?? []).length, 2);
   });
+
+  it('replaces a multi-line Analysis section through EOF without truncating at first line', () => {
+    const existing = [
+      '## Key facts',
+      '',
+      '- fact',
+      '',
+      '## Analysis',
+      '',
+      '**Themes:**',
+      '- old theme',
+      '',
+      '**Claims:**',
+      '- [object Object]',
+      '',
+      '**Open questions:**',
+      '- old gap',
+    ].join('\n');
+
+    const merged = mergeWikiSection(existing, 'Analysis', [
+      '**Themes:**',
+      '- new theme',
+      '',
+      '**Claims:**',
+      '- real claim',
+      '',
+      '**Open questions:**',
+      '- new gap',
+    ].join('\n'));
+
+    assert.match(merged, /real claim/);
+    assert.match(merged, /new theme/);
+    assert.doesNotMatch(merged, /\[object Object\]/);
+    assert.doesNotMatch(merged, /old theme/);
+    assert.match(merged, /## Key facts/);
+  });
 });

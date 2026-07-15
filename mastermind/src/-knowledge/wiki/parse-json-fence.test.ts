@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { parseJsonFenceFromContent } from './parse-json-fence.js';
-import { isJsonFenceOnlyContent } from './section-merge.js';
+import {
+  isJsonFenceOnlyContent,
+  parseJsonFenceFromContent,
+} from './parse-json-fence.js';
 
 describe('parse-json-fence', () => {
   it('parses fenced json body', () => {

@@ -90,7 +90,11 @@ types: |
 
   type TAnalysis = {
     themes: string[];
-    claims: string[];
+    claims: {
+      claim: string;
+      sourceUrls: string[];
+      trustTier: 'high' | 'medium' | 'low';
+    }[];
     openQuestions: string[];
     confidence: string;
     intentAlignment: string;

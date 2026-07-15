@@ -33,7 +33,7 @@ On synthesis persist:
 
 ### `*merge_open_questions_into_analysis(analysis, open_questions_qa, guideline)`
 
-- Append each answered question as a claim in `analysis.claims[]` (format: `"Resolved: <question> — <answer>"`).
+- Append each answered question as a claim object in `analysis.claims[]`: `{ claim: "Resolved: <question> — <answer>", sourceUrls: [], trustTier: "medium" }` (add source URLs when known).
 - Remove matching texts from `analysis.openQuestions[]`.
 
 ### `*refresh_analysis_md_open_questions(analysis_md, analysis, guideline)`
