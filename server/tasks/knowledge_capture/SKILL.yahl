@@ -144,7 +144,7 @@ stages:
       const topicAnswers = /ask-user-batch(clarify-topic-minimal);
       const partial = *build_learning_contract_partial(topicAnswers, guideline: ~/task-skills/clarify-topic-minimal/SKILL.md);
       const proposed_topic = *slugify_learning_topic(partial);
-      const resolvedTopic = /mastermind(resolve-topic, topicText: partial.topic, seedUrls: partial.seedUrls, slug: proposed_topic);
+      const resolvedTopic = /nixery(resolve-topic, topicText: partial.topic, seedUrls: partial.seedUrls, slug: proposed_topic);
       const knowledge_topic = resolvedTopic.canonical;
       const partial_topic = partial;
 
@@ -195,7 +195,7 @@ stages:
         const clarify_qa_log = *merge_qa(clarify_qa_log, clarifyAnswers);
         const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
         const proposed_topic = *slugify_learning_topic(learning_contract);
-        const resolvedTopic = /mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
+        const resolvedTopic = /nixery(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
         const knowledge_topic = resolvedTopic.canonical;
       END:
       IF: *clarify_needs_follow_up(learning_contract);
@@ -204,7 +204,7 @@ stages:
         const clarify_qa_log = *merge_qa(clarify_qa_log, followUp);
         const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
         const proposed_topic = *slugify_learning_topic(learning_contract);
-        const resolvedTopic = /mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
+        const resolvedTopic = /nixery(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
         const knowledge_topic = resolvedTopic.canonical;
       END:
       /nixery(upsert-knowledge-page, topic: knowledge_topic, key: meta, value: { slug: knowledge_topic, intent: learning_contract.intent, created_at: now_iso });

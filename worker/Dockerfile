@@ -26,7 +26,6 @@ COPY ${OMNIFLEX_APP_DIR}/worker/package.json ./${OMNIFLEX_APP_DIR}/worker/
 RUN pnpm install --frozen-lockfile --filter @project-yahl/worker...
 
 COPY ${OMNIFLEX_APP_DIR}/shared ./${OMNIFLEX_APP_DIR}/shared
-COPY ${OMNIFLEX_APP_DIR}/server/tasks/_shared/skills/knowledge-qa-checklist ./knowledge-qa-checklist
 COPY ${OMNIFLEX_APP_DIR}/worker ./${OMNIFLEX_APP_DIR}/worker
 
 WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/worker

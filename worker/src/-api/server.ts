@@ -4,10 +4,8 @@ import {
   requestStatusQuerySchema,
   verifyRequestSchema,
 } from '@project-yahl/shared/verify/schemas';
-import { knowledgeQaReviewRequestSchema } from '@project-yahl/shared/knowledge-qa/schemas';
 
 import { isWorkerReady, resolveWorkerReady } from '../-health/server.js';
-import { runKnowledgeQaReview } from '../-knowledge-qa/handlers.js';
 import { isAgentCliReady } from '../-verify/agent-cli.js';
 import { runVerify } from '../-verify/handlers.js';
 import {
@@ -107,19 +105,6 @@ export const startApiServer = () => {
         }
 
         const result = await runVerify(parsed.data);
-        sendJson(res, 200, result);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/v1/knowledge-qa-review') {
-        const parsed = knowledgeQaReviewRequestSchema.safeParse(await readJsonBody(req));
-
-        if (!parsed.success) {
-          sendJson(res, 400, { error: parsed.error.message });
-          return;
-        }
-
-        const result = await runKnowledgeQaReview(parsed.data);
         sendJson(res, 200, result);
         return;
       }

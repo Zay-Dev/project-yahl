@@ -1,11 +1,19 @@
 ---
 name: nixery
-description: Inline nixery defs for knowledge writes, LLM helpers, and dedup
+description: Inline nixery defs for knowledge, topic resolve, tidy, QA, and LLM helpers
 ---
 
 # nixery tool
 
 Use the **`nixery`** tool for `/nixery(...)` in stage logic.
+
+## Topic / tidy / QA
+
+| Call | Result |
+|------|--------|
+| `/nixery(resolve-topic, topicText: …, slug: …, seedUrls: …)` | `canonical` |
+| `/nixery(tidy-knowledge, dryRun: …, topic: …)` | `report` |
+| `/nixery(knowledge-qa-review, topic: …, auditIssues: …)` | `review` (OpenAI in-def) |
 
 ## Writes
 
@@ -38,6 +46,7 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 - Never pass `source`, `file`, or `path` to upsert (except `outputPath` on research).
 - Dedup is opt-in maintenance — not on every upsert.
 - Append `data.path` from upsert results to `knowledge_paths.persisted` (task convention — see context-paths skill).
+- `knowledge-qa-review` fails closed on empty corpus; judgment is OpenAI in-def (no Cursor key / no worker hop).
 
 ## Reads
 

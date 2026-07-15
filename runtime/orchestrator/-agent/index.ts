@@ -373,6 +373,7 @@ class YahlAgentRunner {
           const result = await runNixeryInlineTool({
             args: nixeryArgs.args,
             defId: nixeryArgs.defId,
+            requestId: this.requestId,
             sessionId: this.sessionId,
           });
 

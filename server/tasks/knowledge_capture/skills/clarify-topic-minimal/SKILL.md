@@ -28,7 +28,7 @@ Call `*build_learning_contract_partial(topicAnswers)` — intent/depth may be em
 
 ```text
 const proposed_topic = *slugify_learning_topic({ topic, seedUrls });
-const resolvedTopic = /mastermind(resolve-topic, topicText: topic, seedUrls, slug: proposed_topic);
+const resolvedTopic = /nixery(resolve-topic, topicText: topic, seedUrls, slug: proposed_topic);
 const knowledge_topic = resolvedTopic.canonical;
 ```
 

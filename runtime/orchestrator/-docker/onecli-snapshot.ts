@@ -11,7 +11,7 @@ import {
   onecliSharedComposeOverrideFile,
 } from './paths';
 
-export const agentNoProxy = 'localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,wiki,wiki_postgres,host.docker.internal';
+export const agentNoProxy = 'localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,wiki,wiki_postgres,worker,host.docker.internal';
 
 export type TOneCliVolumeMount = {
   containerPath: string;

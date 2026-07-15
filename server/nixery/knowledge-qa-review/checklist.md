@@ -1,6 +1,6 @@
 # knowledge-qa-checklist
 
-Read-only rubric for nixery `knowledge-qa-review`. Canonical copy for authors; runtime uses `server/nixery/knowledge-qa-review/checklist.md` (keep in sync).
+Read-only rubric for nixery `knowledge-qa-review` (OpenAI in-def). Synced from `server/tasks/_shared/skills/knowledge-qa-checklist/SKILL.md`.
 
 When `wiki_structure` is available on the topic (from `raw/wiki_structure` or sources section), score only pages with `action: populate`. Do not fail skipped or deferred suggested pages.
 

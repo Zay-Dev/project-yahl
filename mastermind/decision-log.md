@@ -17,8 +17,8 @@ See [docs/decision-log/mastermind.md](../docs/decision-log/mastermind.md).
 - Verify infra failures return `unavailable: true` from worker; orchestrator must not treat them as rubric misses for verifyAutoRetry.
 - Canonical knowledge is Wiki.js (`topics/{slug}/…`) with Local FS push export at `data/knowledge_export/`; task reads use nixery `get-knowledge` at `~/nixery/get-knowledge/{output}`.
 - Hybrid RAG: GraphQL for single-page reads; export mirror when topic exceeds page/byte thresholds (`WIKI_EXPORT_PAGE_THRESHOLD`, `WIKI_EXPORT_BYTES_THRESHOLD`). Do not edit export files — push-only.
-- Topic registry at `data/mastermind/topics.json`; `resolve-topic` skill; legacy flat `knowledges/` deprecated — archive with `scripts/archive-legacy-knowledges.sh`.
+- Topic registry at `data/mastermind/topics.json`; `resolve-topic` is a nixery def; legacy flat `knowledges/` deprecated — archive with `scripts/archive-legacy-knowledges.sh`.
 - Knowledges HTTP: `POST /v1/internal/knowledges/persisted-index` only (orchestrator verify); no public topics/resolve/tidy routes.
 - `persist-knowledge` hybrid format: narrative keys (`*_md`, summaries, string/`{content}`/`{mastermind,agent}` values) → `.md`; structured keys (`sources`, `facts`, `study_*`, profiles) → `.json`.
-- `knowledge-qa-review` mastermind skill is transport-only (corpus → worker `POST /v1/knowledge-qa-review`); checklist rubric in `server/tasks/_shared/skills/knowledge-qa-checklist/SKILL.md`.
-- `tidy-knowledge` extended: wiki audit/migrate per topic + duplicate folder merge; QA/todo prose lives in task skills, not mastermind handlers.
+- `knowledge-qa-review` is a nixery OpenAI in-def (corpus + checklist → JSON review); checklist at `server/nixery/knowledge-qa-review/checklist.md`.
+- `tidy-knowledge` is a nixery audit def; QA/todo prose lives in task skills, not mastermind handlers.

@@ -1,6 +1,6 @@
 ---
 name: mastermind
-description: Gateway helper skills — topic registry, policies, notifications, tidy, QA
+description: Gateway helper skills — topic policies, notifications, media-to-text
 ---
 
 # mastermind (stage agent)
@@ -9,17 +9,17 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 
 | Invocation | Tool skill |
 |------------|------------|
-| `/mastermind(resolve-topic, topicText: …, slug: …, seedUrls: …)` | `resolve-topic` (canonical folder slug before first persist) |
 | `/mastermind(resolve-topic-policy, topic: …)` | `resolve-topic-policy` (registry refresh row + `refresh_skipped`; no LLM) |
-| `/mastermind(tidy-knowledge, dryRun: …)` | `tidy-knowledge` (detect/merge duplicate knowledges folders; wiki audit/migrate) |
-| `/mastermind(knowledge-qa-review, topic: …, auditIssues: …)` | `knowledge-qa-review` (worker CLI checklist QA; returns todos for refresh) |
 | `/mastermind(media-to-text, file: ~/…)` | `media-to-text` |
 | `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` | `propose-notification` (draft only; human approve → worker send) |
 
-**LLM helpers moved to nixery** — use the **`nixery`** tool instead:
+**Moved to nixery** — use the **`nixery`** tool instead:
 
 | Invocation | Def |
 |------------|-----|
+| `/nixery(resolve-topic, …)` | canonical topic slug |
+| `/nixery(tidy-knowledge, …)` | wiki/export audit |
+| `/nixery(knowledge-qa-review, …)` | corpus load → OpenAI checklist QA |
 | `/nixery(research, …)` | study / synthesis markdown |
 | `/nixery(extract-info, source: ~/…, need: …)` | workspace-file RAG |
 | `/nixery(design-questions, …)` | dynamic ask-user batches |
@@ -44,7 +44,7 @@ The `mastermind` tool auto-waits on disconnect while status is `queued`/`running
 
 | Tool | Use |
 |------|-----|
-| `mastermind` | Deterministic + platform skills above |
-| `nixery` | Inline nixery defs (upsert, dedup, research, extract-info, design-questions) |
+| `mastermind` | Policy / notification / media-to-text skills above |
+| `nixery` | Inline nixery defs (resolve-topic, tidy, QA, upsert, dedup, research, …) |
 
 Task-specific skills live under `~/task-skills/`. Load mission via `*load_task_mission(~/task-skills/task-mission/SKILL.md)` when needed.

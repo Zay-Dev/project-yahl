@@ -10,8 +10,6 @@ import {
 } from '../../contract/index.js';
 
 import {
-  resolveCanonicalTopic,
-  runTidyKnowledge,
   evaluateKnowledgeRefresh,
   listTopicPolicies,
   patchTopicPolicy,
@@ -21,10 +19,6 @@ import {
   type TRefreshRunStatus,
   type TTopicRefreshScope,
 } from '../-knowledge/index.js';
-import {
-  loadKnowledgeCorpusForNeed,
-  wikiConfigured,
-} from '../-knowledge/wiki/index.js';
 import { formatShortError, writeAndAnalyzeCrash } from '../-crash-reports/index.js';
 import { config, paths } from '../config.js';
 import type { TMastermindAgent } from '../-sdk/agent.js';
@@ -119,119 +113,6 @@ const runProposeNotification = async (
     data: { proposalId: posted.id },
     ok: true,
   };
-};
-
-const runTidyKnowledgeSkill = async (
-  args: Record<string, unknown>,
-): Promise<TSkillResponse> => {
-  const dryRun = typeof args.dryRun === 'boolean'
-    ? args.dryRun
-    : process.env.KNOWLEDGE_TIDY_DRY_RUN?.trim() !== 'false';
-
-  try {
-    const report = await runTidyKnowledge({
-      dryRun,
-      topic: typeof args.topic === 'string' ? args.topic : undefined,
-    });
-
-    return {
-      data: { report },
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'tidy-knowledge failed',
-      ok: false,
-    };
-  }
-};
-
-const runKnowledgeQaReviewSkill = async (
-  args: Record<string, unknown>,
-  body: TSkillRequest,
-): Promise<TSkillResponse> => {
-  const topic = typeof args.topic === 'string' ? args.topic.trim() : '';
-
-  if (!topic) {
-    return { error: 'topic required', ok: false };
-  }
-
-  const sessionId = body.sessionId?.trim();
-  const requestId = body.requestId?.trim();
-
-  if (!sessionId || !requestId) {
-    return { error: 'sessionId and requestId required', ok: false };
-  }
-
-  const need = typeof args.need === 'string'
-    ? args.need
-    : 'overview, brief, facts, sources, raw keys';
-  const auditIssues = Array.isArray(args.auditIssues)
-    ? args.auditIssues.filter((item): item is string => typeof item === 'string')
-    : [];
-
-  try {
-    const loaded = wikiConfigured()
-      ? await loadKnowledgeCorpusForNeed(topic, need)
-      : { corpus: '', source: 'graphql' as const };
-
-    const res = await fetch(`${config.workerApiUrl}/v1/knowledge-qa-review`, {
-      body: JSON.stringify({
-        auditIssues,
-        corpusMd: loaded.corpus,
-        invocationId: body.invocationId,
-        requestId,
-        sessionId,
-        topic,
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-
-    if (!res.ok) {
-      return { error: `knowledge-qa-review failed: ${res.status}`, ok: false };
-    }
-
-    const review = await res.json() as Record<string, unknown>;
-
-    return {
-      data: { review },
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'knowledge-qa-review failed',
-      ok: false,
-    };
-  }
-};
-
-const runResolveTopic = async (
-  args: Record<string, unknown>,
-): Promise<TSkillResponse> => {
-  const topicText = typeof args.topicText === 'string' ? args.topicText.trim() : undefined;
-  const slug = typeof args.slug === 'string' ? args.slug.trim() : undefined;
-  const seedUrls = Array.isArray(args.seedUrls)
-    ? args.seedUrls.filter((url): url is string => typeof url === 'string')
-    : undefined;
-
-  try {
-    const resolved = await resolveCanonicalTopic({
-      seedUrls,
-      slug: slug ?? (typeof args.topic === 'string' ? args.topic : undefined),
-      topicText,
-    });
-
-    return {
-      data: resolved,
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'resolve-topic failed',
-      ok: false,
-    };
-  }
 };
 
 const parseRefreshInterval = (value: unknown): TRefreshInterval | null | undefined => {
@@ -436,18 +317,6 @@ export const runSkill = async (
 ): Promise<TSkillResponse> => {
   if (body.caller !== 'stage-agent') {
     return { ok: false, error: 'skills require caller stage-agent' };
-  }
-
-  if (name === 'resolve-topic') {
-    return runResolveTopic(body.args);
-  }
-
-  if (name === 'tidy-knowledge') {
-    return runTidyKnowledgeSkill(body.args);
-  }
-
-  if (name === 'knowledge-qa-review') {
-    return runKnowledgeQaReviewSkill(body.args, body);
   }
 
   if (name === 'list-topic-policies') {

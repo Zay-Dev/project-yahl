@@ -7,13 +7,31 @@ export {
   shouldPersistAsMarkdown,
   type TKnowledgeFileExtension,
 } from './knowledge-format.js';
+export {
+  listKnowledgeWikiPages,
+  loadKnowledgeCorpusForNeed,
+  loadTopicCorpus,
+  resolveTopicCanonical,
+} from './load-corpus.js';
+export { resolvePagesForNeed } from './resolve-pages-for-need.js';
 export { resolveTopicForPersist } from './topic-persist.js';
+export {
+  resolveCanonicalTopic,
+  type TResolveTopicInput,
+  type TResolveTopicResult,
+} from './topic-registry.js';
 export {
   collapseDuplicateWikiSections,
   isJsonFenceOnlyContent,
   mergeWikiSection,
   parseWikiPageRef,
 } from './section-merge.js';
+export {
+  runTidyKnowledge,
+  type TTidyKnowledgeReport,
+  type TTopicWikiAudit,
+  type TTopicWikiIssue,
+} from './tidy-knowledge.js';
 export {
   hasPathArgs,
   normalizePersistKnowledgeValue,

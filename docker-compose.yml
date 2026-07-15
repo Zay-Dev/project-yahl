@@ -156,7 +156,6 @@ services:
       MASTERMIND_API_URL: http://mastermind:4100
       SESSION_API_BASE_URL: http://server:4000
       VERIFY_RULES_ROOT: /data
-      KNOWLEDGE_QA_CHECKLIST_ROOT: /omniflex/project-yahl/knowledge-qa-checklist
       WORKER_API_URL: http://worker:4200
       WORKER_BATCH_RUNS_ROOT: /tmp/yahl-batch-runs
       WORKER_HEALTH_PORT: "4200"

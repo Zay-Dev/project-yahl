@@ -38,6 +38,7 @@ const parseInlineToolPayload = async (params: {
 export const runNixeryInlineTool = async (params: {
   args: Record<string, unknown>;
   defId: string;
+  requestId?: string;
   sessionId: string;
 }) => {
   const defId = params.defId.trim();
@@ -50,6 +51,12 @@ export const runNixeryInlineTool = async (params: {
   const output = resolveNixeryOutputHint(def, params.args);
   const input = {
     ...params.args,
+    ...(params.sessionId.trim() && !params.args.sessionId
+      ? { sessionId: params.sessionId }
+      : {}),
+    ...(params.requestId?.trim() && !params.args.requestId
+      ? { requestId: params.requestId.trim() }
+      : {}),
     output,
   };
 
