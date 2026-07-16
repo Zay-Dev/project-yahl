@@ -31,17 +31,6 @@ export {
   type TStaleTopic,
   type TTopicPolicyRow,
 } from './topic-refresh.js';
-export {
-  runTidyKnowledge,
-  type TTidyKnowledgeReport,
-} from './tidy-knowledge.js';
-export {
-  measurePersistPayloadBytes,
-  resolveKnowledgeFileExtension,
-  serializeMarkdownBody,
-  shouldPersistAsMarkdown,
-  type TKnowledgeFileExtension,
-} from './knowledge-format.js';
 
 export const resolveTopicForPersist = async (args: {
   seedUrls?: string[];

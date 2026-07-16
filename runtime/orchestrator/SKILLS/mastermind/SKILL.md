@@ -36,7 +36,7 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `plan` | `~/nixery/plan/{output}` |
 | `plan-study` | `~/nixery/plan-study/{output}` |
 
-**Verify/score is not a mastermind skill** — orchestrator runs verify on worker :4200.
+**Verify/score is not a mastermind skill** — orchestrator runs verify via nixery `verify.defId` (default `stage-verify`).
 
 ## Long-running calls
 

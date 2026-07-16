@@ -1,3 +1,11 @@
+import {
+  DEFAULT_VERIFY_DEF_ID,
+  type TYahlVerifySpec,
+} from '@project-yahl/shared/yahl/verify';
+
+export type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
+export { DEFAULT_VERIFY_DEF_ID } from '@project-yahl/shared/yahl/verify';
+
 export type YahlAskUserOption = {
   description?: string;
   id: string;
@@ -26,29 +34,25 @@ export interface YahlStage {
   produceTypeKeys?: string[];
   temperature?: number;
   updateContextKeys?: string[];
-  verify?: boolean;
-  verifyAutoRetry?: boolean;
-  verifyMinScore?: number;
-  verifyResume?: boolean;
-  verifyRubric?: string;
+  verify?: TYahlVerifySpec;
   version?: number;
 }
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
 
 const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
 
 const isAskUserId = (value: unknown): value is number | string =>
-  typeof value === "number" && Number.isFinite(value)
-  || typeof value === "string" && value.trim().length > 0;
+  typeof value === 'number' && Number.isFinite(value)
+  || typeof value === 'string' && value.trim().length > 0;
 
 const isAskUserAnswer = (value: unknown): value is number | string | string[] => {
-  if (typeof value === "number" && Number.isFinite(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     return true;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return true;
   }
 
@@ -59,7 +63,7 @@ const validateAskUserEntry = (
   raw: unknown,
   label: string,
 ): YahlAskUserEntry => {
-  if (!raw || typeof raw !== "object") {
+  if (!raw || typeof raw !== 'object') {
     throw new Error(`${label}: expected an object`);
   }
 
@@ -69,7 +73,7 @@ const validateAskUserEntry = (
     throw new Error(`${label}.id: required number or non-empty string`);
   }
 
-  if (typeof entry.question !== "string" || !entry.question.trim()) {
+  if (typeof entry.question !== 'string' || !entry.question.trim()) {
     throw new Error(`${label}.question: required non-empty string`);
   }
 
@@ -83,17 +87,17 @@ const validateAskUserEntry = (
     }
 
     entry.options.forEach((option, index) => {
-      if (!option || typeof option !== "object") {
+      if (!option || typeof option !== 'object') {
         throw new Error(`${label}.options[${index}]: expected an object`);
       }
 
       const item = option as Record<string, unknown>;
 
-      if (typeof item.id !== "string" || !item.id.trim()) {
+      if (typeof item.id !== 'string' || !item.id.trim()) {
         throw new Error(`${label}.options[${index}].id: required non-empty string`);
       }
 
-      if (typeof item.label !== "string" || !item.label.trim()) {
+      if (typeof item.label !== 'string' || !item.label.trim()) {
         throw new Error(`${label}.options[${index}].label: required non-empty string`);
       }
     });
@@ -113,7 +117,7 @@ const validateAskUserEntry = (
           return {
             id: String(item.id).trim(),
             label: String(item.label).trim(),
-            ...(typeof item.description === "string" && item.description.trim()
+            ...(typeof item.description === 'string' && item.description.trim()
               ? { description: item.description.trim() }
               : {}),
           };
@@ -124,7 +128,7 @@ const validateAskUserEntry = (
 };
 
 const isNixeryStageInput = (value: unknown): value is Record<string, string | number | boolean> => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
   }
 
@@ -137,7 +141,7 @@ const normalizeNixeryStageInput = (
   const normalized: Record<string, string | number | boolean> = {};
 
   for (const [key, value] of Object.entries(raw)) {
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       normalized[key] = value.trim();
       continue;
     }
@@ -148,12 +152,72 @@ const normalizeNixeryStageInput = (
   return normalized;
 };
 
+const hasVerifyEnabled = (verify: unknown): boolean => {
+  if (verify === true) {
+    return true;
+  }
+
+  return Boolean(verify && typeof verify === 'object' && !Array.isArray(verify));
+};
+
+const normalizeVerifySpec = (
+  raw: unknown,
+  label: string,
+): TYahlVerifySpec | undefined => {
+  if (raw === undefined || raw === false) {
+    return undefined;
+  }
+
+  if (raw === true) {
+    return { defId: DEFAULT_VERIFY_DEF_ID };
+  }
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`${label}.verify: must be true or an object`);
+  }
+
+  const entry = raw as Record<string, unknown>;
+  const defId = typeof entry.defId === 'string' && entry.defId.trim()
+    ? entry.defId.trim()
+    : DEFAULT_VERIFY_DEF_ID;
+
+  if (entry.minScore !== undefined) {
+    const score = Number(entry.minScore);
+
+    if (!Number.isFinite(score) || score < 0 || score > 1) {
+      throw new Error(`${label}.verify.minScore: must be a number from 0 to 1`);
+    }
+  }
+
+  if (entry.rubric !== undefined && typeof entry.rubric !== 'string') {
+    throw new Error(`${label}.verify.rubric: must be a string when present`);
+  }
+
+  if (entry.autoRetry !== undefined && typeof entry.autoRetry !== 'boolean') {
+    throw new Error(`${label}.verify.autoRetry: must be a boolean when present`);
+  }
+
+  if (entry.resume !== undefined && typeof entry.resume !== 'boolean') {
+    throw new Error(`${label}.verify.resume: must be a boolean when present`);
+  }
+
+  return {
+    defId,
+    ...(entry.autoRetry === true ? { autoRetry: true } : {}),
+    ...(entry.minScore !== undefined ? { minScore: Number(entry.minScore) } : {}),
+    ...(entry.resume === false ? { resume: false } : {}),
+    ...(typeof entry.rubric === 'string' && entry.rubric.trim()
+      ? { rubric: entry.rubric.trim() }
+      : {}),
+  };
+};
+
 const assertStageFields = (stage: Record<string, unknown>, label: string): YahlStage => {
-  const nixeryRun = typeof stage.nixeryRun === "string" && stage.nixeryRun.trim()
+  const nixeryRun = typeof stage.nixeryRun === 'string' && stage.nixeryRun.trim()
     ? stage.nixeryRun.trim()
     : undefined;
 
-  const logicRaw = typeof stage.logic === "string" ? stage.logic.trim() : "";
+  const logicRaw = typeof stage.logic === 'string' ? stage.logic.trim() : '';
 
   if (!nixeryRun && !logicRaw) {
     throw new Error(`${label}.logic: required non-empty string`);
@@ -164,7 +228,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
       throw new Error(`${label}: nixeryRun cannot combine with contextMode or conditionMode`);
     }
 
-    if (stage.verify === true) {
+    if (hasVerifyEnabled(stage.verify)) {
       throw new Error(`${label}: nixeryRun cannot combine with verify`);
     }
 
@@ -190,7 +254,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
   }
 
   if (stage.loopSetup !== undefined) {
-    if (typeof stage.loopSetup !== "string" || !LOOP_SETUP_PATTERN.test(stage.loopSetup.trim())) {
+    if (typeof stage.loopSetup !== 'string' || !LOOP_SETUP_PATTERN.test(stage.loopSetup.trim())) {
       throw new Error(`${label}.loopSetup: must match "for each <id> of [...]"`);
     }
   }
@@ -204,21 +268,13 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
   }
 
   for (const key of [
-    "contextKeys",
-    "updateContextKeys",
-    "produceContextKeys",
-    "produceTypeKeys",
+    'contextKeys',
+    'updateContextKeys',
+    'produceContextKeys',
+    'produceTypeKeys',
   ] as const) {
     if (stage[key] !== undefined && !isStringArray(stage[key])) {
       throw new Error(`${label}.${key}: must be a string array`);
-    }
-  }
-
-  if (stage.verifyMinScore !== undefined) {
-    const score = Number(stage.verifyMinScore);
-
-    if (!Number.isFinite(score) || score < 0 || score > 1) {
-      throw new Error(`${label}.verifyMinScore: must be a number from 0 to 1`);
     }
   }
 
@@ -230,7 +286,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     }
   }
 
-  if (stage.conditionMode === true && !nixeryRun && !logicRaw.includes("IF:")) {
+  if (stage.conditionMode === true && !nixeryRun && !logicRaw.includes('IF:')) {
     throw new Error(`${label}: conditionMode logic must contain IF:`);
   }
 
@@ -256,8 +312,10 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     });
   }
 
+  const verify = normalizeVerifySpec(stage.verify, label);
+
   return {
-    logic: logicRaw || "(nixery)",
+    logic: logicRaw || '(nixery)',
     ...(nixeryRun ? { nixeryRun } : {}),
     ...(isNixeryStageInput(stage.nixeryInput)
       ? { nixeryInput: normalizeNixeryStageInput(stage.nixeryInput) }
@@ -265,17 +323,13 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     ...(askUser ? { askUser } : {}),
     ...(stage.contextMode === true ? { contextMode: true } : {}),
     ...(stage.conditionMode === true ? { conditionMode: true } : {}),
-    ...(typeof stage.loopSetup === "string" ? { loopSetup: stage.loopSetup.trim() } : {}),
+    ...(typeof stage.loopSetup === 'string' ? { loopSetup: stage.loopSetup.trim() } : {}),
     ...(stage.temperature !== undefined ? { temperature: Number(stage.temperature) } : {}),
     ...(isStringArray(stage.contextKeys) ? { contextKeys: stage.contextKeys } : {}),
     ...(isStringArray(stage.updateContextKeys) ? { updateContextKeys: stage.updateContextKeys } : {}),
     ...(isStringArray(stage.produceContextKeys) ? { produceContextKeys: stage.produceContextKeys } : {}),
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
-    ...(stage.verify === true ? { verify: true } : {}),
-    ...(stage.verifyAutoRetry === true ? { verifyAutoRetry: true } : {}),
-    ...(stage.verifyMinScore !== undefined ? { verifyMinScore: Number(stage.verifyMinScore) } : {}),
-    ...(stage.verifyResume === false ? { verifyResume: false } : {}),
-    ...(typeof stage.verifyRubric === 'string' ? { verifyRubric: stage.verifyRubric.trim() } : {}),
+    ...(verify ? { verify } : {}),
     ...(stage.version !== undefined ? { version: Number(stage.version) } : {}),
   };
 };
@@ -287,12 +341,12 @@ export const toAgentStage = (stage: YahlStage): YahlStage => {
 };
 
 export const validateYahlStage = (raw: unknown, index?: number): YahlStage => {
-  if (!raw || typeof raw !== "object") {
-    throw new Error(index === undefined ? "stage: expected an object" : `stages[${index}]: expected an object`);
+  if (!raw || typeof raw !== 'object') {
+    throw new Error(index === undefined ? 'stage: expected an object' : `stages[${index}]: expected an object`);
   }
 
   return assertStageFields(
     raw as Record<string, unknown>,
-    index === undefined ? "stage" : `stages[${index}]`,
+    index === undefined ? 'stage' : `stages[${index}]`,
   );
 };

@@ -39,7 +39,7 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
 
-Use the **`mastermind`** tool for `/mastermind(...)` platform skills (resolve-topic-policy, media-to-text, propose-notification). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
+Use the **`mastermind`** tool for `/mastermind(...)` platform skills (resolve-topic-policy, media-to-text, propose-notification). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with a `verify:` object (or `verify: true`) are scored by the orchestrator via nixery `verify.defId` after the stage finishes.
 
 Use the **`nixery`** tool for `/nixery(resolve-topic, …)`, `/nixery(tidy-knowledge, …)`, `/nixery(knowledge-qa-review, …)`, `/nixery(upsert-knowledge-page, …)`, `/nixery(dedup-knowledge, …)`, `/nixery(research, …)`, `/nixery(design-questions, …)`, `/nixery(extract-info, …)`. Read `/opt/skills/nixery/SKILL.md`.
 

@@ -1,4 +1,5 @@
-import type { TYahlAskUserEntry, TYahlStage } from './types';
+import type { TYahlAskUserEntry, TYahlStage, TYahlVerifySpec } from './types';
+import { DEFAULT_VERIFY_DEF_ID } from './verify';
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
 
@@ -114,6 +115,66 @@ const normalizeNixeryStageInput = (
   return normalized;
 };
 
+const hasVerifyEnabled = (verify: unknown): boolean => {
+  if (verify === true) {
+    return true;
+  }
+
+  return Boolean(verify && typeof verify === 'object' && !Array.isArray(verify));
+};
+
+const normalizeVerifySpec = (
+  raw: unknown,
+  label: string,
+): TYahlVerifySpec | undefined => {
+  if (raw === undefined || raw === false) {
+    return undefined;
+  }
+
+  if (raw === true) {
+    return { defId: DEFAULT_VERIFY_DEF_ID };
+  }
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`${label}.verify: must be true or an object`);
+  }
+
+  const entry = raw as Record<string, unknown>;
+  const defId = typeof entry.defId === 'string' && entry.defId.trim()
+    ? entry.defId.trim()
+    : DEFAULT_VERIFY_DEF_ID;
+
+  if (entry.minScore !== undefined) {
+    const score = Number(entry.minScore);
+
+    if (!Number.isFinite(score) || score < 0 || score > 1) {
+      throw new Error(`${label}.verify.minScore: must be a number from 0 to 1`);
+    }
+  }
+
+  if (entry.rubric !== undefined && typeof entry.rubric !== 'string') {
+    throw new Error(`${label}.verify.rubric: must be a string when present`);
+  }
+
+  if (entry.autoRetry !== undefined && typeof entry.autoRetry !== 'boolean') {
+    throw new Error(`${label}.verify.autoRetry: must be a boolean when present`);
+  }
+
+  if (entry.resume !== undefined && typeof entry.resume !== 'boolean') {
+    throw new Error(`${label}.verify.resume: must be a boolean when present`);
+  }
+
+  return {
+    defId,
+    ...(entry.autoRetry === true ? { autoRetry: true } : {}),
+    ...(entry.minScore !== undefined ? { minScore: Number(entry.minScore) } : {}),
+    ...(entry.resume === false ? { resume: false } : {}),
+    ...(typeof entry.rubric === 'string' && entry.rubric.trim()
+      ? { rubric: entry.rubric.trim() }
+      : {}),
+  };
+};
+
 const assertStageFields = (stage: Record<string, unknown>, label: string): TYahlStage => {
   const nixeryRun = typeof stage.nixeryRun === 'string' && stage.nixeryRun.trim()
     ? stage.nixeryRun.trim()
@@ -130,7 +191,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
       throw new Error(`${label}: nixeryRun cannot combine with contextMode or conditionMode`);
     }
 
-    if (stage.verify === true) {
+    if (hasVerifyEnabled(stage.verify)) {
       throw new Error(`${label}: nixeryRun cannot combine with verify`);
     }
 
@@ -180,14 +241,6 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     }
   }
 
-  if (stage.verifyMinScore !== undefined) {
-    const score = Number(stage.verifyMinScore);
-
-    if (!Number.isFinite(score) || score < 0 || score > 1) {
-      throw new Error(`${label}.verifyMinScore: must be a number from 0 to 1`);
-    }
-  }
-
   if (stage.version !== undefined) {
     const version = Number(stage.version);
 
@@ -222,6 +275,8 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     });
   }
 
+  const verify = normalizeVerifySpec(stage.verify, label);
+
   return {
     logic: logicRaw || '(nixery)',
     ...(nixeryRun ? { nixeryRun } : {}),
@@ -237,11 +292,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     ...(isStringArray(stage.updateContextKeys) ? { updateContextKeys: stage.updateContextKeys } : {}),
     ...(isStringArray(stage.produceContextKeys) ? { produceContextKeys: stage.produceContextKeys } : {}),
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
-    ...(stage.verify === true ? { verify: true } : {}),
-    ...(stage.verifyAutoRetry === true ? { verifyAutoRetry: true } : {}),
-    ...(stage.verifyMinScore !== undefined ? { verifyMinScore: Number(stage.verifyMinScore) } : {}),
-    ...(stage.verifyResume === false ? { verifyResume: false } : {}),
-    ...(typeof stage.verifyRubric === 'string' ? { verifyRubric: stage.verifyRubric.trim() } : {}),
+    ...(verify ? { verify } : {}),
     ...(stage.version !== undefined ? { version: Number(stage.version) } : {}),
   };
 };

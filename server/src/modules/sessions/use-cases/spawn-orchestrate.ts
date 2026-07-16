@@ -255,7 +255,6 @@ export const spawnOrchestrate = async (
       ...process.env,
       REDIS_URL: redisUrl,
       SESSION_API_BASE_URL: sessionApiBaseUrl,
-      WORKER_API_URL: process.env.WORKER_API_URL?.trim() || 'http://worker:4200',
       WORKSPACE_ROOT: resolveOrchestratorWorkspaceRoot(),
     },
     stdio: ['ignore', logFd, logFd],

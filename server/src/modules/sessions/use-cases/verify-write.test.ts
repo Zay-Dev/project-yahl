@@ -25,7 +25,7 @@ describe('toVerifyCheckpointResponse', () => {
       stage: {
         askUser: [{ id: 'target_metric', question: 'metric?' }],
         logic: 'const report = {};',
-        verify: true,
+        verify: { defId: 'stage-verify' },
       },
       stageIndex: 2,
       status: 'pending',
@@ -47,7 +47,7 @@ describe('toVerifyCheckpointResponse', () => {
     });
     assert.deepEqual(response.storageSnapshot, { context: { report: { metric: null } } });
     assert.equal(response.parsedStageSnapshot?.sourceStartLine, 24);
-    assert.equal(response.stage.verify, true);
+    assert.deepEqual(response.stage.verify, { defId: 'stage-verify' });
   });
 
   it('returns unavailable when checkpoint is infra-paused', () => {
@@ -61,7 +61,7 @@ describe('toVerifyCheckpointResponse', () => {
       },
       requestId: 'req-1',
       score: 0,
-      stage: { logic: 'const x = 1;', verify: true },
+      stage: { logic: 'const x = 1;', verify: { defId: 'stage-verify' } },
       status: 'pending',
       storageSnapshot: { context: {} },
       unavailable: true,

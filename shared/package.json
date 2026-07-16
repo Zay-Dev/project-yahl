@@ -72,6 +72,10 @@
       "development": "./yahl/types.ts",
       "import": "./dist/yahl/types.js"
     },
+    "./yahl/verify": {
+      "development": "./yahl/verify.ts",
+      "import": "./dist/yahl/verify.js"
+    },
     "./yahl/replay-dedupe": {
       "development": "./yahl/replay-dedupe.ts",
       "import": "./dist/yahl/replay-dedupe.js"

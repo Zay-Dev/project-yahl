@@ -10,7 +10,7 @@ export const toVerifyStageSnapshot = (spec: YahlStage): TVerifyStageSnapshot => 
 });
 
 export const resolveVerifyResumeEnabled = (spec: YahlStage) => {
-  if (spec.verifyResume === false) {
+  if (spec.verify?.resume === false) {
     return false;
   }
 

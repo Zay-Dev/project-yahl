@@ -1,6 +1,9 @@
 import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
 import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+import type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
+
+export type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
 
 export type TTokenTotals = {
   cacheHitTokens: number;
@@ -50,11 +53,7 @@ export type TYahlStage = {
   produceTypeKeys?: string[];
   temperature?: number;
   updateContextKeys?: string[];
-  verify?: boolean;
-  verifyAutoRetry?: boolean;
-  verifyMinScore?: number;
-  verifyResume?: boolean;
-  verifyRubric?: string;
+  verify?: TYahlVerifySpec;
   version?: number;
 };
 

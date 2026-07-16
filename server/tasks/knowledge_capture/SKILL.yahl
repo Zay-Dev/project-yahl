@@ -158,13 +158,14 @@ stages:
 
   - produceContextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, rerun_intent, pending_open_questions, open_questions_qa]
     contextKeys: [missionText, knowledge_topic, partial_topic]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when learning_contract has non-empty topic OR at least one seedUrl, valid intent, and depth.
-      Pass when knowledge_topic is a non-empty canonical slug from resolve-topic and missionText is non-empty.
-      Fail when topic and seedUrls both empty, intent missing, depth missing, or knowledge_topic differs from resolve-topic canonical.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when learning_contract has non-empty topic OR at least one seedUrl, valid intent, and depth.
+        Pass when knowledge_topic is a non-empty canonical slug from resolve-topic and missionText is non-empty.
+        Fail when topic and seedUrls both empty, intent missing, depth missing, or knowledge_topic differs from resolve-topic canonical.
     logic: |
       Read ~/nixery/get-knowledge/intake.md from the session workspace.
       If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
@@ -244,13 +245,14 @@ stages:
   - contextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, knowledge_paths, rerun_intent, TCorpusAssessment]
     produceContextKeys: [corpus_assessment]
     updateContextKeys: [knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when corpus_assessment has topic, existingKeys array, sufficientFor array, and gaps array.
-      Pass when knowledge_paths.persisted includes meta and learning_contract paths after persist.
-      Fail when assessment missing or topic mismatch.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when corpus_assessment has topic, existingKeys array, sufficientFor array, and gaps array.
+        Pass when knowledge_paths.persisted includes meta and learning_contract paths after persist.
+        Fail when assessment missing or topic mismatch.
     logic: |
       Read ~/nixery/list-knowledge-pages/pages.md from the session workspace.
       If missing or empty, set pages to []; otherwise derive pages (page inventory array) from the file's markdown content.
@@ -278,15 +280,16 @@ stages:
   - contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText, knowledge_paths, rerun_intent, TStudyPlan]
     produceContextKeys: [study_plan, wiki_structure]
     updateContextKeys: [knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when study_plan has non-empty researchQuestions, successCriteria, and sources array.
-      Pass when each source has url, priority, rounds (1-3), and rationale.
-      Pass when rounds align with depth (overview 1-2, deep_dive 2-3).
-      Pass when wiki_structure includes overview with action populate.
-      Fail when plan empty or contradicts learning_contract.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when study_plan has non-empty researchQuestions, successCriteria, and sources array.
+        Pass when each source has url, priority, rounds (1-3), and rationale.
+        Pass when rounds align with depth (overview 1-2, deep_dive 2-3).
+        Pass when wiki_structure includes overview with action populate.
+        Fail when plan empty or contradicts learning_contract.
     logic: |
       Read ~/nixery/plan-study/plan.json from the session workspace.
       If missing or invalid JSON, fail the stage.
@@ -300,14 +303,15 @@ stages:
   - loopSetup: for each src of [study_plan.sources]
     contextKeys: [learning_contract, knowledge_topic, study_plan, corpus_assessment, missionText, knowledge_paths, study_dialogue, rerun_intent, TSource, TSourceStudy]
     updateContextKeys: [study_dialogue, sources, source_studies, knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when src is skipped via reuseExisting or has persisted study_{slug} with non-empty studyMd.
-      Pass when dialogue artifacts exist on disk for each round (research + agent md) before persist.
-      Pass when study_dialogue.sources includes src with studyPersistPath after persist.
-      Fail when raw.md missing, round files missing, or studyMd empty.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when src is skipped via reuseExisting or has persisted study_{slug} with non-empty studyMd.
+        Pass when dialogue artifacts exist on disk for each round (research + agent md) before persist.
+        Pass when study_dialogue.sources includes src with studyPersistPath after persist.
+        Fail when raw.md missing, round files missing, or studyMd empty.
     logic: |
       IF: *source_in_reuse_list(src, study_plan.reuseExisting, corpus_assessment) && !*should_update_scope('studies', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
         // skip fetch — load from existing knowledges
@@ -366,13 +370,14 @@ stages:
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, knowledge_paths, rerun_intent, TFacts]
     produceContextKeys: [facts, key_facts_md]
     updateContextKeys: [knowledge_paths, sources]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when facts.items is non-empty array with claim and sourceUrl per item.
-      Pass when sources is a non-empty array with unique studyKey values.
-      Fail when facts uncited or sources not an array.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when facts.items is non-empty array with claim and sourceUrl per item.
+        Pass when sources is a non-empty array with unique studyKey values.
+        Fail when facts uncited or sources not an array.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
       IF: !sources || !Array.isArray(sources) || sources.length === 0;
@@ -420,13 +425,14 @@ stages:
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, facts, key_facts_md, rerun_intent, open_questions_qa, TAnalysis, userProfile]
     produceContextKeys: [analysis, analysis_md, userProfile]
     updateContextKeys: [knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when analysis has themes, claims, and intentAlignment.
-      Pass when analysis_md is non-empty Markdown consistent with facts.
-      Fail when analysis contradicts facts or ignores intent.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when analysis has themes, claims, and intentAlignment.
+        Pass when analysis_md is non-empty Markdown consistent with facts.
+        Fail when analysis contradicts facts or ignores intent.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
       Read ~/nixery/get-knowledge/profile.md from the session workspace.
@@ -466,13 +472,14 @@ stages:
 
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, facts, analysis, analysis_md, userProfile, knowledge_paths, rerun_intent, open_questions_qa, TResult]
     produceContextKeys: [result]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when result.summaryMd and result.personalizedBriefMd are non-empty Markdown.
-      Pass when result.knowledgeTopic matches knowledge_topic and knowledgePaths lists persisted relative paths.
-      Fail when either brief missing or knowledgePaths empty.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when result.summaryMd and result.personalizedBriefMd are non-empty Markdown.
+        Pass when result.knowledgeTopic matches knowledge_topic and knowledgePaths lists persisted relative paths.
+        Fail when either brief missing or knowledgePaths empty.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
       Read ~/nixery/get-knowledge/summary.md from the session workspace.

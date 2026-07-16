@@ -13,7 +13,6 @@ const readConfig = () => ({
     || path.resolve(moduleDir, '../..'),
   sdkStreamLog: process.env.MASTERMIND_SDK_STREAM_LOG?.trim() === '1',
   sessionApiBaseUrl: (process.env.SESSION_API_BASE_URL?.trim() || 'http://server:4000').replace(/\/+$/, ''),
-  workerApiUrl: (process.env.WORKER_API_URL?.trim() || 'http://worker:4200').replace(/\/+$/, ''),
   wikiApiToken: process.env.WIKI_API_TOKEN?.trim() ?? '',
   wikiExportBytesThreshold: Number(process.env.WIKI_EXPORT_BYTES_THRESHOLD?.trim() || String(256 * 1024)),
   wikiExportPageThreshold: Number(process.env.WIKI_EXPORT_PAGE_THRESHOLD?.trim() || '10'),

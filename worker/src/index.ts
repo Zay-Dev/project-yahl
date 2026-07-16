@@ -1,8 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import { startApiServer } from './-api/server.js';
-import { exitIfMissingApiKey, markPollSucceeded } from './-health/server.js';
-import { assertAgentCliOnBoot } from './-verify/agent-cli.js';
+import { markPollSucceeded } from './-health/server.js';
 import { sendEmail, sendWhatsApp } from './-channels/outbound.js';
 import { runIsolatedBatchCli } from './-cli/run-isolated-batch.js';
 import { startCronScheduler, type TCronJobDef } from './-cron/scheduler.js';
@@ -75,13 +73,12 @@ const pollApprovedWork = async () => {
 };
 
 const main = async () => {
-  exitIfMissingApiKey(config.apiKey);
+  console.log('[worker] starting (outbound-only: cron + platform poll)');
 
-  console.log('[worker] starting');
-
-  await assertAgentCliOnBoot();
-
-  startApiServer();
+  if (process.env.WORKER_ENABLE_BATCH_POLL === 'true' && !config.apiKey) {
+    console.error('[worker] fatal: CURSOR_API_KEY required when WORKER_ENABLE_BATCH_POLL=true');
+    process.exit(1);
+  }
 
   startCronScheduler((job) => {
     void handleCronTick(job);

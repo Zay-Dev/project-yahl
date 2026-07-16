@@ -53,10 +53,10 @@ Stuff that already works (aka things that surprisingly do not explode):
 - Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
 - VM client runs on `isolated-vm` for stronger sandbox boundaries and fewer "hope-this-is-fine" moments.
 - You can attach the orchestrator to a debugger, hit breakpoints, and poke variables manually while tracing execution.
-- **Mastermind stack:** gateway (port 4100) and worker (port 4200, verify gates) in `docker compose`; orchestrator verify calls worker; `/mastermind(...)` for policies, media-to-text, notifications; `/nixery(...)` for knowledge, topic resolve, tidy, QA, and LLM helpers. Boot fail-fast when the SDK agent is not ready; stack probe via `pnpm run doctor`.
-- **Nixery tools:** orchestrator-direct reads (`nixeryRun: get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `plan-study`); inline defs (`resolve-topic`, `tidy-knowledge`, `knowledge-qa-review`, `upsert-knowledge-page`, `dedup-knowledge`, `research`, `design-questions`, `extract-info`). See [`docs/nixery-tools.md`](docs/nixery-tools.md) and [`docs/nixery-risk-control.md`](docs/nixery-risk-control.md).
+- **Mastermind stack:** gateway (port 4100) and outbound-only worker (cron/approvals) in `docker compose`; stage verify via nixery `verify.defId`; `/mastermind(...)` for policies, media-to-text, notifications; `/nixery(...)` for knowledge, topic resolve, tidy, QA, LLM helpers, and stage-verify. Boot fail-fast when the SDK agent is not ready; stack probe via `pnpm run doctor`.
+- **Nixery tools:** orchestrator-direct reads (`nixeryRun: get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `plan-study`); inline defs (`resolve-topic`, `tidy-knowledge`, `knowledge-qa-review`, `upsert-knowledge-page`, `dedup-knowledge`, `research`, `design-questions`, `extract-info`); stage gate `stage-verify` via YAHL `verify.defId`. See [`docs/nixery-tools.md`](docs/nixery-tools.md) and [`docs/nixery-risk-control.md`](docs/nixery-risk-control.md).
 - **`design-questions`:** nixery inline def for dynamic ask-user batches (pass `mission:` for subject framing).
-- **`verifyAutoRetry`:** orchestrator in-process verify loop on stages with `verify: true` + `verifyAutoRetry: true`.
+- **`verify.autoRetry`:** orchestrator in-process verify loop on stages with `verify.autoRetry: true`.
 - **Task-local skills:** echoed from session snapshot to agent `~/task-skills/`; see **Authoring tasks** below.
 - **Knowledge store:** Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see **Why knowledge matters** and **Protecting the knowledge store** below.
 - **Topic governance:** nixery `resolve-topic` + `knowledge_tidy` background task (`background: true` in `SKILL.yahl`).
@@ -346,9 +346,6 @@ curl -sf http://127.0.0.1:4100/health
 
 # Server aggregated health (mongo + mastermind)
 curl -sf http://127.0.0.1:4000/__/health
-
-# Worker health
-curl -sf http://127.0.0.1:4200/health
 
 # Full stack doctor (host)
 pnpm run doctor

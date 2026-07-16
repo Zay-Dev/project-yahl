@@ -508,7 +508,7 @@ class YahlAgentRunner {
     }
 
     const maxVerifyRetries = verifyAutoRetryMaxIterations();
-    const verifyAutoRetry = this.activeStage.spec.verifyAutoRetry === true;
+    const verifyAutoRetry = this.activeStage.spec.verify?.autoRetry === true;
 
     while (true) {
       await this.runStageBody();

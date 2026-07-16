@@ -13,12 +13,10 @@ See [docs/decision-log/mastermind.md](../docs/decision-log/mastermind.md).
 - Proposals go to server API; mastermind never sends email/WhatsApp directly.
 - All Cursor SDK `agent.send` calls are serialized through a single in-process prompt queue (one active run per agent).
 - Crash analyst uses the same queued prompt (injected via `initCrashReports`); no static `Agent.prompt` bypass.
-- Stage verify runs on **worker** (`POST /v1/verify`, `agent --yolo`, file context under `workspace/sessions/.../verify/`); mastermind has no verify endpoint.
-- Verify infra failures return `unavailable: true` from worker; orchestrator must not treat them as rubric misses for verifyAutoRetry.
+- Stage verify runs via **nixery** (`verify.defId`, default `stage-verify`, OpenAI in-def); mastermind has no verify endpoint; worker has no inbound HTTP.
+- Verify infra failures return `unavailable: true` from the nixery def; orchestrator must not treat them as rubric misses for `verify.autoRetry`.
 - Canonical knowledge is Wiki.js (`topics/{slug}/…`) with Local FS push export at `data/knowledge_export/`; task reads use nixery `get-knowledge` at `~/nixery/get-knowledge/{output}`.
 - Hybrid RAG: GraphQL for single-page reads; export mirror when topic exceeds page/byte thresholds (`WIKI_EXPORT_PAGE_THRESHOLD`, `WIKI_EXPORT_BYTES_THRESHOLD`). Do not edit export files — push-only.
 - Topic registry at `data/mastermind/topics.json`; `resolve-topic` is a nixery def; legacy flat `knowledges/` deprecated — archive with `scripts/archive-legacy-knowledges.sh`.
-- Knowledges HTTP: `POST /v1/internal/knowledges/persisted-index` only (orchestrator verify); no public topics/resolve/tidy routes.
-- `persist-knowledge` hybrid format: narrative keys (`*_md`, summaries, string/`{content}`/`{mastermind,agent}` values) → `.md`; structured keys (`sources`, `facts`, `study_*`, profiles) → `.json`.
 - `knowledge-qa-review` is a nixery OpenAI in-def (corpus + checklist → JSON review); checklist at `server/nixery/knowledge-qa-review/checklist.md`.
 - `tidy-knowledge` is a nixery audit def; QA/todo prose lives in task skills, not mastermind handlers.

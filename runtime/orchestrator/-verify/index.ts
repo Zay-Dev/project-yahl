@@ -4,6 +4,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import { shutdownAgent } from '@/orchestrator/-docker';
 
 import { VerifyFailedError, VerifyUnavailableError } from './errors';
+import { nixeryVerifyApi } from './nixery-verify';
 import { postVerifyCheckpoint, postVerifyPass, postVerifyStart } from './session-api';
 import { resolveVerifyResumeEnabled, toVerifyStageSnapshot } from './stage-snapshot';
 import { toParsedStageSnapshot } from '@/orchestrator/-ask-user/parsed-stage-snapshot';
@@ -63,15 +64,17 @@ export const runVerifyGate = async (params: {
 }): Promise<TVerifyGateResult> => {
   const { stage } = params;
   const spec = stage.spec;
+  const verify = spec.verify;
 
-  if (spec.verify !== true) {
+  if (!verify || typeof verify !== 'object') {
     return { feedback: '', pass: true };
   }
 
   const startedAt = Date.now();
 
   console.log(
-    `[agent] verify start sessionId=${params.sessionId} requestId=${params.requestId} stageIndex=${params.pipelineStageIndex}`,
+    `[agent] verify start sessionId=${params.sessionId} requestId=${params.requestId} `
+    + `stageIndex=${params.pipelineStageIndex} defId=${verify.defId}`,
   );
 
   if (params.verifyFastForward) {
@@ -93,25 +96,32 @@ export const runVerifyGate = async (params: {
 
   await postVerifyStart(params.sessionId, params.requestId);
 
-  const { callWorkerVerify } = await import('@/shared/worker-client');
-
-  const verifyBody = {
-    contextSnapshot: _serializeContextSnapshot(params.storage),
-    minScore: spec.verifyMinScore,
+  const stageSnapshot = toVerifyStageSnapshot(spec);
+  const verifyInput: Record<string, unknown> = {
+    contextSnapshot: JSON.stringify(_serializeContextSnapshot(params.storage)),
+    minScore: String(verify.minScore ?? 0.75),
     requestId: params.requestId,
-    rubric: spec.verifyRubric,
-    sessionId: params.sessionId,
-    stageIndex: params.pipelineStageIndex,
-    stageSnapshot: toVerifyStageSnapshot(spec),
-    stageVersion: spec.version,
-    verifyResume: resolveVerifyResumeEnabled(spec),
+    stageIndex: String(params.pipelineStageIndex),
+    verifyResume: String(resolveVerifyResumeEnabled(spec)),
+    ...(verify.rubric ? { rubric: verify.rubric } : {}),
+    ...(Object.keys(stageSnapshot).length
+      ? { stageSnapshot: JSON.stringify(stageSnapshot) }
+      : {}),
   };
 
-  let result = await callWorkerVerify(verifyBody);
+  let result = await nixeryVerifyApi.run({
+    defId: verify.defId,
+    input: verifyInput,
+    sessionId: params.sessionId,
+  });
 
   if (!result.pass && result.unavailable) {
     await sleep(VERIFY_UNAVAILABLE_RETRY_MS);
-    result = await callWorkerVerify(verifyBody);
+    result = await nixeryVerifyApi.run({
+      defId: verify.defId,
+      input: verifyInput,
+      sessionId: params.sessionId,
+    });
   }
 
   if (result.pass) {

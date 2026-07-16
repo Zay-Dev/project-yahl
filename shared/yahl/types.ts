@@ -1,3 +1,8 @@
+import type { TYahlVerifySpec } from './verify';
+
+export type { TYahlVerifySpec } from './verify';
+export { DEFAULT_VERIFY_DEF_ID } from './verify';
+
 export type TYahlAskUserOption = {
   description?: string;
   id: string;
@@ -26,11 +31,7 @@ export type TYahlStage = {
   produceTypeKeys?: string[];
   temperature?: number;
   updateContextKeys?: string[];
-  verify?: boolean;
-  verifyAutoRetry?: boolean;
-  verifyMinScore?: number;
-  verifyResume?: boolean;
-  verifyRubric?: string;
+  verify?: TYahlVerifySpec;
   version?: number;
 };
 

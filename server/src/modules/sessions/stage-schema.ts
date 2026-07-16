@@ -19,6 +19,14 @@ const askUserEntrySchema = Joi.object({
   question: Joi.string().trim().required(),
 });
 
+const verifySpecSchema = Joi.object({
+  autoRetry: Joi.boolean().optional(),
+  defId: Joi.string().trim().required(),
+  minScore: Joi.number().min(0).max(1).optional(),
+  resume: Joi.boolean().optional(),
+  rubric: Joi.string().trim().optional(),
+});
+
 export const yahlStageSchema = Joi.object<TYahlStage>({
   askUser: Joi.array().items(askUserEntrySchema).min(1).optional(),
   conditionMode: Joi.boolean().optional(),
@@ -36,11 +44,7 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   produceTypeKeys: stringArraySchema.optional(),
   temperature: Joi.number().min(0).max(2).optional(),
   updateContextKeys: stringArraySchema.optional(),
-  verify: Joi.boolean().optional(),
-  verifyAutoRetry: Joi.boolean().optional(),
-  verifyMinScore: Joi.number().min(0).max(1).optional(),
-  verifyResume: Joi.boolean().optional(),
-  verifyRubric: Joi.string().trim().optional(),
+  verify: verifySpecSchema.optional(),
   version: Joi.number().integer().min(1).optional(),
 })
   .custom((value, helpers) => {
@@ -61,7 +65,7 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
         return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with contextMode or conditionMode' });
       }
 
-      if (value.verify === true) {
+      if (value.verify) {
         return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with verify' });
       }
 

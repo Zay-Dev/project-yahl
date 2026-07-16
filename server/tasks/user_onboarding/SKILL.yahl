@@ -65,15 +65,16 @@ stages:
     logic: "(nixery)"
 
   - produceContextKeys: [identity_profile, stage1_qa_log, rerun_intent, pending_open_questions, open_questions_qa]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when identity_profile has non-empty preferredName, role, timezone, languages (array length >= 1), and background.
-      Fail when any required identity field is missing, placeholder, or contradicts persisted user-onboarding knowledge.
-      On fail with incomplete profile, set resumeAction follow_up with askUserRef for the most critical missing field.
-      On fail when ask-user answer is invalid, set edit_answer with askUserRef.
-      On fail when stage output wrong but answers valid, set rerun.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when identity_profile has non-empty preferredName, role, timezone, languages (array length >= 1), and background.
+        Fail when any required identity field is missing, placeholder, or contradicts persisted user-onboarding knowledge.
+        On fail with incomplete profile, set resumeAction follow_up with askUserRef for the most critical missing field.
+        On fail when ask-user answer is invalid, set edit_answer with askUserRef.
+        On fail when stage output wrong but answers valid, set rerun.
     logic: |
       Read ~/nixery/get-knowledge/onboarding.md from the session workspace.
       If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
@@ -108,13 +109,14 @@ stages:
 
   - contextKeys: [identity_profile, stage1_qa_log, rerun_intent]
     produceContextKeys: [goals_profile, stage2_qa_log]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when goals_profile has non-empty shortTermGoals, longTermGoals, priorities, and successCriteria arrays.
-      Fail when goals are missing or contradict identity_profile or persisted knowledge.
-      Use follow_up for incomplete goal data; edit_answer when a specific ask-user answer is wrong; rerun when output mapping failed.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when goals_profile has non-empty shortTermGoals, longTermGoals, priorities, and successCriteria arrays.
+        Fail when goals are missing or contradict identity_profile or persisted knowledge.
+        Use follow_up for incomplete goal data; edit_answer when a specific ask-user answer is wrong; rerun when output mapping failed.
     logic: |
       Read ~/nixery/get-knowledge/onboarding.md from the session workspace.
       If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
@@ -135,13 +137,14 @@ stages:
 
   - contextKeys: [identity_profile, goals_profile, stage1_qa_log, stage2_qa_log, rerun_intent]
     produceContextKeys: [preferences_profile, stage3_qa_log]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when preferences_profile has tools, topics, boundaries, and avoid arrays with substantive entries.
-      Fail when preferences are missing or contradict prior stage profiles.
-      Use follow_up, edit_answer, or rerun as appropriate.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when preferences_profile has tools, topics, boundaries, and avoid arrays with substantive entries.
+        Fail when preferences are missing or contradict prior stage profiles.
+        Use follow_up, edit_answer, or rerun as appropriate.
     logic: |
       Read ~/nixery/get-knowledge/onboarding.md from the session workspace.
       If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
@@ -162,13 +165,14 @@ stages:
 
   - contextKeys: [identity_profile, goals_profile, preferences_profile, rerun_intent]
     produceContextKeys: [communication_profile, stage4_qa_log]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when communication_profile has non-empty tone, detailLevel, languagePreference, and proactivity.
-      Fail when communication style is missing or contradicts prior profiles.
-      Use follow_up, edit_answer, or rerun as appropriate.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when communication_profile has non-empty tone, detailLevel, languagePreference, and proactivity.
+        Fail when communication style is missing or contradicts prior profiles.
+        Use follow_up, edit_answer, or rerun as appropriate.
     logic: |
       Read ~/nixery/get-knowledge/onboarding.md from the session workspace.
       If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
@@ -187,13 +191,14 @@ stages:
 
   - contextKeys: [identity_profile, goals_profile, preferences_profile, communication_profile, stage1_qa_log, stage2_qa_log, stage3_qa_log, stage4_qa_log, rerun_intent, open_questions_qa, pending_open_questions, TResult]
     produceContextKeys: [result, open_questions]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when result.research and result.agent are non-empty Markdown with sections for identity, goals, preferences, and communication.
-      Fail when either field is missing, placeholder, or contradicts persisted knowledges/user-onboarding facts.
-      Use follow_up for gap-fill batches before synthesis; rerun when synthesis mapping failed.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when result.research and result.agent are non-empty Markdown with sections for identity, goals, preferences, and communication.
+        Fail when either field is missing, placeholder, or contradicts persisted knowledges/user-onboarding facts.
+        Use follow_up for gap-fill batches before synthesis; rerun when synthesis mapping failed.
     logic: |
       Read ~/nixery/get-knowledge/onboarding.md from the session workspace.
       If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.

@@ -122,7 +122,7 @@ export const createForkSession = [
           );
         }
 
-        if (row.stage.verify === true && row.verifyResult?.pass !== true) {
+        if (row.stage.verify && row.verifyResult?.pass !== true) {
           throw errors.badRequest(
             `Prefix stage ${row.stageId} has verify enabled but no passing verify result; cannot fast-forward verify`,
           );

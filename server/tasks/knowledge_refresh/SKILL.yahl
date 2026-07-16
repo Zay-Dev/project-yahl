@@ -352,10 +352,11 @@ stages:
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, knowledge_paths, rerun_intent, refresh_skipped, TFacts]
     produceContextKeys: [facts, key_facts_md]
     updateContextKeys: [knowledge_paths, sources]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: knowledge-refresh-facts
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: knowledge-refresh-facts
     logic: |
       IF: refresh_skipped;
         const facts = { items: [] };
@@ -408,10 +409,11 @@ stages:
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, facts, key_facts_md, rerun_intent, refresh_skipped, TAnalysis, userProfile]
     produceContextKeys: [analysis, analysis_md, userProfile]
     updateContextKeys: [knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: knowledge-refresh-synthesis
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: knowledge-refresh-synthesis
     logic: |
       IF: refresh_skipped;
         const analysis = { themes: [], claims: [], openQuestions: [], confidence: '', intentAlignment: '' };
@@ -456,10 +458,11 @@ stages:
 
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, facts, analysis, analysis_md, userProfile, knowledge_paths, rerun_intent, refresh_skipped, TResult]
     produceContextKeys: [result, refresh_status]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: knowledge-refresh-summary
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: knowledge-refresh-summary
     logic: |
       IF: refresh_skipped;
         const refresh_status = 'skipped';
