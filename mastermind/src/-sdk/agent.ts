@@ -83,6 +83,12 @@ export const createMastermindAgent = async (): Promise<TMastermindAgent> => {
 
       const result = await run.wait();
 
+      if (result.status !== 'finished') {
+        throw new Error(
+          `mastermind run ${result.status}${result.result ? `: ${result.result.slice(0, 200)}` : ''}`,
+        );
+      }
+
       return { result: result.result };
     }),
     status: 'ready',

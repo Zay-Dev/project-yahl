@@ -9,7 +9,11 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 
 | Invocation | Tool skill |
 |------------|------------|
+| `/mastermind(list-topic-policies)` | `list-topic-policies` (registry rows; no LLM) |
 | `/mastermind(resolve-topic-policy, topic: …)` | `resolve-topic-policy` (registry refresh row + `refresh_skipped`; no LLM) |
+| `/mastermind(patch-topic-policy, topic: …, …)` | `patch-topic-policy` (update refresh policy; no LLM) |
+| `/mastermind(evaluate-knowledge-refresh)` | `evaluate-knowledge-refresh` (stale topics; no LLM) |
+| `/mastermind(dispatch-task-run, taskId: …, …)` | `dispatch-task-run` (queue a task run; no LLM) |
 | `/mastermind(media-to-text, file: ~/…)` | `media-to-text` |
 | `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` | `propose-notification` (draft only; human approve → worker send) |
 
@@ -44,7 +48,7 @@ The `mastermind` tool auto-waits on disconnect while status is `queued`/`running
 
 | Tool | Use |
 |------|-----|
-| `mastermind` | Policy / notification / media-to-text skills above |
+| `mastermind` | Policy / dispatch / notification / media-to-text skills above |
 | `nixery` | Inline nixery defs (resolve-topic, tidy, QA, upsert, dedup, research, …) |
 
 Task-specific skills live under `~/task-skills/`. Load mission via `*load_task_mission(~/task-skills/task-mission/SKILL.md)` when needed.

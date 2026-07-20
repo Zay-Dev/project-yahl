@@ -50,10 +50,15 @@ export const postTaskRun = async (taskId: string): Promise<{ sessionId?: string;
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     });
-    const body = await res.json() as { sessionId?: string; taskId?: string; error?: string };
+    const body = await res.json() as {
+      error?: string;
+      message?: string;
+      sessionId?: string;
+      taskId?: string;
+    };
 
     if (!res.ok) {
-      console.error('[worker][cron] task run failed', taskId, body.error ?? res.status);
+      console.error('[worker][cron] task run failed', taskId, body.message ?? body.error ?? res.status);
       return {};
     }
 

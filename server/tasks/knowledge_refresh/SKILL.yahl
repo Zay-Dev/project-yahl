@@ -129,7 +129,11 @@ stages:
     logic: |
       const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
       IF: !knowledge_topic;
+        const knowledge_topic = '__refresh_skipped__';
         const refresh_skipped = true;
+        const refresh_policy = {};
+        const learning_contract = { intent: 'preserve_for_future_tasks', topic: '', seedUrls: [], depth: 'overview' };
+        const rerun_intent = { isRerun: true, proceedMode: 'summary_only', updateScope: [], addressOpenQuestions: false };
       ELSE;
         const policyRef = /mastermind(resolve-topic-policy, topic: knowledge_topic);
         const refresh_policy = policyRef.row;
@@ -200,6 +204,7 @@ stages:
     logic: |
       IF: refresh_skipped;
         const todo_pickup = { items: [], summaryMd: '' };
+        const open_questions_qa = [];
       ELSE;
         Read ~/task-skills/pickup-todo/SKILL.md
         Read ~/nixery/get-knowledge/todo.md from the session workspace.
@@ -467,7 +472,7 @@ stages:
       IF: refresh_skipped;
         const refresh_status = 'skipped';
         const result = {
-          knowledgeTopic: knowledge_topic,
+          knowledgeTopic: knowledge_topic === '__refresh_skipped__' ? '' : knowledge_topic,
           knowledgePaths: [],
           refreshStatus: 'skipped',
           summaryMd: '',
@@ -512,12 +517,14 @@ stages:
         Read ~/task-skills/pickup-todo/SKILL.md
         /nixery(upsert-knowledge-page, topic: knowledge_topic, key: todo, value: *mark_remaining_todos_done(todo_pickup));
       END:
-      /mastermind(
-        patch-topic-policy,
-        slug: knowledge_topic,
-        lastRunAt: now_iso,
-        lastRunStatus: refresh_status,
-      );
+      IF: !refresh_skipped;
+        /mastermind(
+          patch-topic-policy,
+          slug: knowledge_topic,
+          lastRunAt: now_iso,
+          lastRunStatus: refresh_status,
+        );
+      END:
       *echo('Call set_context with key result and the result object before ending this stage');
 
   - contextMode: true

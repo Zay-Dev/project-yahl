@@ -59,7 +59,7 @@ Stuff that already works (aka things that surprisingly do not explode):
 - **`verify.autoRetry`:** orchestrator in-process verify loop on stages with `verify.autoRetry: true`.
 - **Task-local skills:** echoed from session snapshot to agent `~/task-skills/`; see **Authoring tasks** below.
 - **Knowledge store:** Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see **Why knowledge matters** and **Protecting the knowledge store** below.
-- **Topic governance:** nixery `resolve-topic` + `knowledge_tidy` background task (`background: true` in `SKILL.yahl`).
+- **Topic governance:** nixery `resolve-topic` + nixery `tidy-knowledge` audit; cron `auto_knowledge_refresh` → `knowledge_refresh`.
 - **Background sessions:** cron/utility runs hidden by default on `/sessions` (toggle to show).
 - **Platform UI:** `/platform/approvals` for notification/settings proposals; `/platform/cron-jobs` for cron job create/edit/delete (worker ticks via `POST /api/runs`).
 
@@ -119,7 +119,7 @@ Tasks can ship their own SKILL files — handy when you want assess/synthesize r
 - **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
 - **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` (untrusted hints banner). Planning via orchestrator `nixeryRun: plan` / `plan-study`.
-- **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_tidy` (see [`server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md`](server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md) for the read path)
+- **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_refresh` (see [`server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md`](server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md) for the read path)
 
 ```
 server/tasks/my_task/

@@ -384,6 +384,29 @@ export const runSkill = async (
     const text = typeof result === 'string' ? result.trim() : '';
     const durationMs = Date.now() - startedAt;
 
+    if (name === 'media-to-text' && text.length === 0) {
+      const emptyError = 'media-to-text returned empty text';
+
+      console.log(
+        `[mastermind] skill=${name} done ok=false durationMs=${durationMs} error=${emptyError}`,
+      );
+
+      if (activity) {
+        markRequestActivityFailed(
+          activity.sessionId,
+          activity.requestId,
+          emptyError,
+          false,
+          activity.invocationId,
+        );
+      }
+
+      return {
+        error: emptyError,
+        ok: false,
+      };
+    }
+
     console.log(
       `[mastermind] skill=${name} done ok=true durationMs=${durationMs} chars=${text.length}`,
     );

@@ -1,26 +1,24 @@
 name: media-to-text-test
-description: E2E test for nixery research, curl download, and media-to-text on a Pexels image.
+description: E2E test for media-to-text on a stable fixture image under ~/data/.
 resultContextKey: result
 
 stages:
   - contextKeys: []
-    produceContextKeys: [image_search]
-    logic: |
-      const image_search = /nixery(research,
-        topic: free stock photo direct download URL on pexels.com suitable for OCR text extraction test
-      );
-
-  - contextKeys: [image_search]
     produceContextKeys: [image_path]
     logic: |
-      Use run_bash to download a direct image URL from image_search to ~/tmp/pexels-test.jpg with curl -fsSL.
-      Persist image_path as '~/tmp/pexels-test.jpg' via set_context.
+      Prefer existing task-persistent fixture ~/data/ocr-fixture.bmp.
+      If missing, download with curl -fsSL into ~/data/ocr-fixture.bmp from:
+      https://images.pexels.com/photos/301673/pexels-photo-301673.jpeg?auto=compress&cs=tinysrgb&w=800
+      Persist image_path as '~/data/ocr-fixture.bmp' via set_context.
+      Do not use ~/tmp for the fixture. Do not call nixery research.
 
   - contextKeys: [image_path]
     produceContextKeys: [extracted_text]
     logic: |
-      const extracted_text = /mastermind(media-to-text, file: image_path);
-      *rm(~/tmp/pexels-test.jpg)
+      Call /mastermind(media-to-text, file: image_path) once.
+      Persist extracted_text only when the tool returns ok with non-empty plain text (trim length >= 5).
+      Never set extracted_text to an empty string.
+      Do not delete ~/data/ocr-fixture.bmp.
 
   - contextMode: true
     contextKeys: [extracted_text, image_path]
@@ -33,7 +31,7 @@ stages:
       if (!text || text.trim().length < 5) {
         throw new Error('extracted_text too short');
       }
-      
+
       const result = {
         textLength: text.trim().length,
         message: 'media-to-text test passed',

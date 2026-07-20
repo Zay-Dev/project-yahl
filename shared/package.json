@@ -4,14 +4,6 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./knowledge-qa/build-knowledge-qa-prompt": {
-      "development": "./knowledge-qa/build-knowledge-qa-prompt.ts",
-      "import": "./dist/knowledge-qa/build-knowledge-qa-prompt.js"
-    },
-    "./knowledge-qa/load-checklist": {
-      "development": "./knowledge-qa/load-checklist.ts",
-      "import": "./dist/knowledge-qa/load-checklist.js"
-    },
     "./knowledge-qa/parse-response": {
       "development": "./knowledge-qa/parse-response.ts",
       "import": "./dist/knowledge-qa/parse-response.js"
@@ -31,14 +23,6 @@
     "./request-activity/types": {
       "development": "./request-activity/types.ts",
       "import": "./dist/request-activity/types.js"
-    },
-    "./verify/build-file-prompt": {
-      "development": "./verify/build-file-prompt.ts",
-      "import": "./dist/verify/build-file-prompt.js"
-    },
-    "./verify/load-rubric": {
-      "development": "./verify/load-rubric.ts",
-      "import": "./dist/verify/load-rubric.js"
     },
     "./verify/parse-response": {
       "development": "./verify/parse-response.ts",

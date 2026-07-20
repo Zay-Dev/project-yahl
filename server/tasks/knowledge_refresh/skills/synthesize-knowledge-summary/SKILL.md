@@ -2,7 +2,7 @@
 
 Task-local skill for cross-source synthesis (stage 4) and final brief (stage 5).
 
-Loaded by Mastermind via `guidelinePath` (untrusted hints). Stage agent follows the same rules when building context.
+Loaded by nixery `research` via `guidelinePath` (untrusted hints). Stage agent follows the same rules when building context.
 
 ## Stage 4 — analysis
 
