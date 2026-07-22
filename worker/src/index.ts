@@ -1,8 +1,5 @@
-import { randomUUID } from 'crypto';
-
 import { markPollSucceeded } from './-health/server.js';
 import { sendEmail, sendWhatsApp } from './-channels/outbound.js';
-import { runIsolatedBatchCli } from './-cli/run-isolated-batch.js';
 import { startCronScheduler, type TCronJobDef } from './-cron/scheduler.js';
 import {
   applySettingProposal,
@@ -75,11 +72,6 @@ const pollApprovedWork = async () => {
 const main = async () => {
   console.log('[worker] starting (outbound-only: cron + platform poll)');
 
-  if (process.env.WORKER_ENABLE_BATCH_POLL === 'true' && !config.apiKey) {
-    console.error('[worker] fatal: CURSOR_API_KEY required when WORKER_ENABLE_BATCH_POLL=true');
-    process.exit(1);
-  }
-
   startCronScheduler((job) => {
     void handleCronTick(job);
   });
@@ -89,12 +81,6 @@ const main = async () => {
   }, config.pollIntervalMs);
 
   void pollApprovedWork();
-
-  if (process.env.WORKER_ENABLE_BATCH_POLL === 'true') {
-    setInterval(() => {
-      void runIsolatedBatchCli('heartbeat batch check', randomUUID());
-    }, 86_400_000);
-  }
 };
 
 void main();

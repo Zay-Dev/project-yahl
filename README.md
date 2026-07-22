@@ -193,8 +193,8 @@ flowchart LR
 | `runtime/` | `@project-yahl/runtime` — YAHL runtime + orchestrator |
 | `server/` | `@project-yahl/server` — Express + Mongoose session/tasks API |
 | `web/` | Vite + shadcn — Sessions, Tasks, platform approvals, cron jobs |
-| `mastermind/` | Personal assistant gateway (Cursor SDK skills) |
-| `worker/` | Cron ticks (via server API), platform approvals, **verify gate** (`agent --yolo` CLI) |
+| `mastermind/` | Personal assistant gateway (HTTP skills) |
+| `worker/` | Cron ticks (via server API), platform approvals |
 
 Install and build framework packages from the **Omniflex repo root**:
 
@@ -208,7 +208,7 @@ Copy [`.env.example`](.env.example) to `.env`. Set at minimum:
 
 - `HOST_REPO_ROOT` — absolute path to this repo (required for agent workspace bind mounts)
 - `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` — OneCLI proxy for LLM keys
-- `CURSOR_API_KEY` — required for nixery `media-to-text` (Cursor CLI) and worker batch CLI; not used by mastermind
+- `CURSOR_API_KEY` — required for nixery `media-to-text` (Cursor CLI); not used by mastermind or worker
 
 Copy `server/.env.example` to `server/.env` if you run the server standalone.
 
@@ -243,9 +243,9 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Server** | Host (`pnpm run dev:server`) or `server` container (prod) | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic; control plane only |
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
-| **Mastermind** | `mastermind` container (4100) | Wiki.js GraphQL + read-only `data/knowledge_export`, workspace `/workspace`, Cursor SDK skills | Side effects without approval — proposals go to server first |
+| **Mastermind** | `mastermind` container (4100) | Wiki.js GraphQL + read-only `data/knowledge_export`, workspace `/workspace`, HTTP skills | Side effects without approval — proposals go to server first |
 | **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
-| **Worker** | `worker` container | Cron (via server API), platform approvals, **verify gate** (Cursor CLI) | Does not spawn orchestrator or agent containers |
+| **Worker** | `worker` container | Cron (via server API), platform approvals | Does not spawn orchestrator or agent containers |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
 Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir; see [mastermind/decision-log.md](mastermind/decision-log.md)).

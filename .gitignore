@@ -405,3 +405,5 @@ next-env.d.ts
 .onecli/
 runtime/.agents/
 tsconfig.tsbuildinfo
+# Vendored Linux cursor-agent for nixery media-to-text (scripts/bootstrap-cursor-agent.sh)
+server/nixery/_shared/cursor-agent/

@@ -149,9 +149,7 @@ services:
       - .env
     environment:
       TZ: ${TZ:-Asia/Hong_Kong}
-      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       SESSION_API_BASE_URL: http://server:4000
-      WORKER_BATCH_RUNS_ROOT: /tmp/yahl-batch-runs
       WORKER_POLL_INTERVAL_MS: "5000"
       WORKSPACE_ROOT: /workspace
     volumes:
