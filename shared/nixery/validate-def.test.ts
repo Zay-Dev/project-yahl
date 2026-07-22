@@ -95,6 +95,31 @@ test('validateNixeryDef rejects invalid output.validate filename', () => {
   }));
 });
 
+test('validateNixeryDef rejects empty packages', () => {
+  assert.throws(() => validateNixeryDef({
+    id: 'no-packages',
+    packages: [],
+  }));
+});
+
+test('validateNixeryDef accepts dockerfile filename', () => {
+  const def = validateNixeryDef({
+    id: 'dockerfile-fixture',
+    packages: ['shell', 'nodejs'],
+    dockerfile: 'Dockerfile',
+  });
+
+  assert.equal(def.dockerfile, 'Dockerfile');
+});
+
+test('validateNixeryDef rejects dockerfile path segments', () => {
+  assert.throws(() => validateNixeryDef({
+    id: 'bad-dockerfile',
+    packages: ['nodejs'],
+    dockerfile: '../Dockerfile',
+  }));
+});
+
 test('validateNixeryDef parses all live index.yml files', async () => {
   const nixeryRoot = path.join(import.meta.dirname, '..', '..', 'server', 'nixery');
   const defIds = await listNixeryDefIds(nixeryRoot);

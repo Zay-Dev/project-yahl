@@ -4,14 +4,12 @@ import { fileURLToPath } from 'url';
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 const readConfig = () => ({
-  apiKey: process.env.CURSOR_API_KEY?.trim() ?? '',
   dataRoot: process.env.MASTERMIND_DATA_ROOT?.trim() || '/data',
   internalToken: process.env.MASTERMIND_INTERNAL_TOKEN?.trim() ?? '',
   knowledgeExportRoot: process.env.KNOWLEDGE_EXPORT_ROOT?.trim() || '/data/knowledge_export',
   port: Number(process.env.MASTERMIND_PORT?.trim() || '4100'),
   repoRoot: process.env.HOST_REPO_ROOT?.trim()
     || path.resolve(moduleDir, '../..'),
-  sdkStreamLog: process.env.MASTERMIND_SDK_STREAM_LOG?.trim() === '1',
   sessionApiBaseUrl: (process.env.SESSION_API_BASE_URL?.trim() || 'http://server:4000').replace(/\/+$/, ''),
   wikiApiToken: process.env.WIKI_API_TOKEN?.trim() ?? '',
   wikiExportBytesThreshold: Number(process.env.WIKI_EXPORT_BYTES_THRESHOLD?.trim() || String(256 * 1024)),

@@ -53,7 +53,7 @@ Stuff that already works (aka things that surprisingly do not explode):
 - Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero.
 - VM client runs on `isolated-vm` for stronger sandbox boundaries and fewer "hope-this-is-fine" moments.
 - You can attach the orchestrator to a debugger, hit breakpoints, and poke variables manually while tracing execution.
-- **Mastermind stack:** gateway (port 4100) and outbound-only worker (cron/approvals) in `docker compose`; stage verify via nixery `verify.defId`; `/mastermind(...)` for policies, media-to-text, notifications; `/nixery(...)` for knowledge, topic resolve, tidy, QA, LLM helpers, and stage-verify. Boot fail-fast when the SDK agent is not ready; stack probe via `pnpm run doctor`.
+- **Mastermind stack:** gateway (port 4100) and outbound-only worker (cron/approvals) in `docker compose`; stage verify via nixery `verify.defId`; `/mastermind(...)` for policies, dispatch, notifications; `/nixery(...)` for knowledge, topic resolve, tidy, QA, media-to-text, LLM helpers, and stage-verify. Stack probe via `pnpm run doctor`.
 - **Nixery tools:** orchestrator-direct reads (`nixeryRun: get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `plan-study`); inline defs (`resolve-topic`, `tidy-knowledge`, `knowledge-qa-review`, `upsert-knowledge-page`, `dedup-knowledge`, `research`, `design-questions`, `extract-info`); stage gate `stage-verify` via YAHL `verify.defId`. See [`docs/nixery-tools.md`](docs/nixery-tools.md) and [`docs/nixery-risk-control.md`](docs/nixery-risk-control.md).
 - **`design-questions`:** nixery inline def for dynamic ask-user batches (pass `mission:` for subject framing).
 - **`verify.autoRetry`:** orchestrator in-process verify loop on stages with `verify.autoRetry: true`.
@@ -208,7 +208,7 @@ Copy [`.env.example`](.env.example) to `.env`. Set at minimum:
 
 - `HOST_REPO_ROOT` — absolute path to this repo (required for agent workspace bind mounts)
 - `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` — OneCLI proxy for LLM keys
-- `CURSOR_API_KEY` — required for Mastermind SDK skills and worker verify CLI
+- `CURSOR_API_KEY` — required for nixery `media-to-text` (Cursor CLI) and worker batch CLI; not used by mastermind
 
 Copy `server/.env.example` to `server/.env` if you run the server standalone.
 
@@ -262,7 +262,7 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See **OneCLI setup** below for vault rules.
-- **Mastermind is HTTP** — agent calls `MASTERMIND_API_URL` with named skills; `CURSOR_API_KEY` stays in the mastermind container. Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals`.
+- **Mastermind is HTTP** — agent calls `MASTERMIND_API_URL` with named skills (policies, dispatch, notifications). Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals`. Cursor credentials are not injected into mastermind.
 - **VM control flow off-agent** — `CONTEXT` / `IF` blocks run in `isolated-vm` on the orchestrator process, not inside the agent.
 
 `docker.sock` on **server** only: the server spawns orchestrator/agent containers per run. It is not mounted into agent or worker containers.

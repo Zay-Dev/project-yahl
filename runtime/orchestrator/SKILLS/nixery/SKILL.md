@@ -27,6 +27,7 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 | Call | Use `data` field |
 |------|------------------|
 | `/nixery(extract-info, source: ~/…, need: …)` | `text` |
+| `/nixery(media-to-text, file: ~/…)` | `text` |
 | `/nixery(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `batches` |
 | `/nixery(research, topic: …, source: ~/…, mission: …, guidelinePath: …)` | `markdown` |
 
@@ -47,6 +48,7 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 - Dedup is opt-in maintenance — not on every upsert.
 - Append `data.path` from upsert results to `knowledge_paths.persisted` (task convention — see context-paths skill).
 - `knowledge-qa-review` fails closed on empty corpus; judgment is OpenAI in-def (no Cursor key / no worker hop).
+- `media-to-text` uses Cursor CLI inside the nixery container (`CURSOR_API_KEY` declared on that def only); persist `data.text`.
 
 ## Reads
 

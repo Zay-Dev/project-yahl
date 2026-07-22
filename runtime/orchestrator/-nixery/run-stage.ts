@@ -5,7 +5,7 @@ import { writeSharedOneCliOverride } from '@/orchestrator/-docker/compose-onecli
 import { resolveDockerHostRepoRoot } from '@/orchestrator/-docker/paths';
 import { workspaceRoot } from '@/orchestrator/-utils/workspace-paths';
 
-import { loadNixeryDef } from './load-def';
+import { loadNixeryDef, resolveNixeryRoot } from './load-def';
 import { resolveNixeryEnv } from './resolve-def-env';
 import { resolveMounts } from './resolve-mounts';
 import {
@@ -119,7 +119,12 @@ export const runNixeryDef = async (params: {
     hostPath: path.join(resolveDockerHostRepoRoot(), 'server', 'nixery', '_shared'),
     mode: 'ro' as const,
   };
-  const { cleanup, image } = await prepareNixeryImage(def.packages);
+  const { cleanup, image } = await prepareNixeryImage({
+    defId: params.defId,
+    dockerfile: def.dockerfile,
+    nixeryRoot: resolveNixeryRoot(),
+    packages: def.packages,
+  });
 
   console.log(
     `[nixery] run start def=${params.defId} sessionId=${params.sessionId} `

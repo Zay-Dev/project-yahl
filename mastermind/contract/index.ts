@@ -47,7 +47,6 @@ export const skillNames = [
   'patch-topic-policy',
   'evaluate-knowledge-refresh',
   'dispatch-task-run',
-  'media-to-text',
   'propose-notification',
 ] as const;
 

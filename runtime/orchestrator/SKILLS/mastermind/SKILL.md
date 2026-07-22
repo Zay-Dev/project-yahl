@@ -1,11 +1,11 @@
 ---
 name: mastermind
-description: Gateway helper skills — topic policies, notifications, media-to-text
+description: Gateway helper skills — topic policies, dispatch, notifications
 ---
 
 # mastermind (stage agent)
 
-Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
+Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic. Mastermind is HTTP-only (no Cursor).
 
 | Invocation | Tool skill |
 |------------|------------|
@@ -14,7 +14,6 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `/mastermind(patch-topic-policy, topic: …, …)` | `patch-topic-policy` (update refresh policy; no LLM) |
 | `/mastermind(evaluate-knowledge-refresh)` | `evaluate-knowledge-refresh` (stale topics; no LLM) |
 | `/mastermind(dispatch-task-run, taskId: …, …)` | `dispatch-task-run` (queue a task run; no LLM) |
-| `/mastermind(media-to-text, file: ~/…)` | `media-to-text` |
 | `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` | `propose-notification` (draft only; human approve → worker send) |
 
 **Moved to nixery** — use the **`nixery`** tool instead:
@@ -26,6 +25,7 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 | `/nixery(knowledge-qa-review, …)` | corpus load → OpenAI checklist QA |
 | `/nixery(research, …)` | study / synthesis markdown |
 | `/nixery(extract-info, source: ~/…, need: …)` | workspace-file RAG |
+| `/nixery(media-to-text, file: ~/…)` | media → plain text for text-only agents (Cursor CLI) |
 | `/nixery(design-questions, …)` | dynamic ask-user batches |
 
 **Knowledge writes** use **`nixery`** — see `/opt/skills/nixery/SKILL.md`.
@@ -42,13 +42,9 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
 
 **Verify/score is not a mastermind skill** — orchestrator runs verify via nixery `verify.defId` (default `stage-verify`).
 
-## Long-running calls
-
-The `mastermind` tool auto-waits on disconnect while status is `queued`/`running` (up to 90 minutes). The `nixery` tool uses the same wait semantics for `research`.
-
 | Tool | Use |
 |------|-----|
-| `mastermind` | Policy / dispatch / notification / media-to-text skills above |
-| `nixery` | Inline nixery defs (resolve-topic, tidy, QA, upsert, dedup, research, …) |
+| `mastermind` | Policy / dispatch / notification skills above |
+| `nixery` | Inline nixery defs (resolve-topic, tidy, QA, upsert, dedup, research, media-to-text, …) |
 
 Task-specific skills live under `~/task-skills/`. Load mission via `*load_task_mission(~/task-skills/task-mission/SKILL.md)` when needed.

@@ -1,24 +1,25 @@
 name: media-to-text-test
-description: E2E test for media-to-text on a stable fixture image under ~/data/.
+description: E2E test for media-to-text on a fresh Pexels JPEG downloaded into session scratch ~/tmp/.
 resultContextKey: result
 
 stages:
   - contextKeys: []
     produceContextKeys: [image_path]
     logic: |
-      Prefer existing task-persistent fixture ~/data/ocr-fixture.bmp.
-      If missing, download with curl -fsSL into ~/data/ocr-fixture.bmp from:
+      Always download/overwrite with curl -fsSL into ~/tmp/ocr-fixture.jpg from:
       https://images.pexels.com/photos/301673/pexels-photo-301673.jpeg?auto=compress&cs=tinysrgb&w=800
-      Persist image_path as '~/data/ocr-fixture.bmp' via set_context.
-      Do not use ~/tmp for the fixture. Do not call nixery research.
+      Do not use ~/data or any task-persistent path.
+      Persist image_path as '~/tmp/ocr-fixture.jpg' via set_context.
+      Do not call nixery research.
 
   - contextKeys: [image_path]
     produceContextKeys: [extracted_text]
     logic: |
-      Call /mastermind(media-to-text, file: image_path) once.
-      Persist extracted_text only when the tool returns ok with non-empty plain text (trim length >= 5).
+      Call /nixery(media-to-text, file: image_path) once.
+      Persist extracted_text only when the tool returns ok with non-empty data.text (trim length >= 5).
       Never set extracted_text to an empty string.
-      Do not delete ~/data/ocr-fixture.bmp.
+      After extracted_text is successfully persisted, delete ~/tmp/ocr-fixture.jpg.
+      Do not delete the fixture when nixery fails (produce-keys retries need the file).
 
   - contextMode: true
     contextKeys: [extracted_text, image_path]
@@ -35,7 +36,7 @@ stages:
       const result = {
         textLength: text.trim().length,
         message: 'media-to-text test passed',
-        text: text.trim().slice(0, 200),
+        text: text.trim().slice(0, 400),
       };
 
       (() => ({result}))

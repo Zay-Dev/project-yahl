@@ -81,7 +81,12 @@ export const runNixeryValidationContainer = async (params: {
     return { ok: true };
   }
 
-  const { image } = await prepareNixeryImage(def.packages);
+  const { image } = await prepareNixeryImage({
+    defId: params.defId,
+    dockerfile: def.dockerfile,
+    nixeryRoot: resolveNixeryRoot(),
+    packages: def.packages,
+  });
   const repoRoot = resolveDockerHostRepoRoot();
   const hostSessionDir = resolveDockerHostSessionDir(params.sessionDir);
   const validateCtx = buildNixeryValidationContext({

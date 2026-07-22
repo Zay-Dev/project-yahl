@@ -1,5 +1,3 @@
-import { getPromptQueueDepth } from './agent-prompt-queue.js';
-
 export type TRequestActivityStatus = 'failed' | 'queued' | 'running' | 'succeeded';
 
 export type TRequestActivityKind = 'skill' | 'verify';
@@ -219,16 +217,14 @@ export const getActiveSkillActivity = (
 };
 
 export const buildRequestStatusPayload = (params: {
-  agent: string;
   request: TRequestActivityRecord | null;
 }) => {
-  const queueDepth = getPromptQueueDepth();
   const failed = params.request?.status === 'failed';
 
   return {
-    agent: params.agent,
+    agent: 'ready',
     ok: !failed,
-    queueDepth,
+    queueDepth: 0,
     ...(params.request ? { request: params.request } : { request: null }),
     ...(failed && params.request?.error ? { error: params.request.error } : {}),
     ...(failed && params.request?.unavailable ? { unavailable: true } : {}),

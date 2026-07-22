@@ -194,7 +194,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(resolve-topic-policy|media-to-text|propose-notification, ...) in stage logic. Topic resolve, tidy, QA, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(list-topic-policies|resolve-topic-policy|patch-topic-policy|evaluate-knowledge-refresh|dispatch-task-run|propose-notification, ...) in stage logic. Topic resolve, tidy, QA, media-to-text, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -205,8 +205,11 @@ export const STAGE_TOOLS = [
           skill: {
             description: "Helper skill name.",
             enum: [
+              "list-topic-policies",
               "resolve-topic-policy",
-              "media-to-text",
+              "patch-topic-policy",
+              "evaluate-knowledge-refresh",
+              "dispatch-task-run",
               "propose-notification",
             ],
             type: "string",
@@ -221,7 +224,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Poll mastermind request activity for the current session stage request. Use for debugging long research calls — do not re-POST while status is queued or running. Returns { ok, agent, queueDepth, request: { status, skill, invocationId, startedAt, updatedAt } }.",
+        "Poll mastermind request activity for the current session stage request. Use for debugging long skill calls — do not re-POST while status is queued or running. Returns { ok, agent, queueDepth, request: { status, skill, invocationId, startedAt, updatedAt } }.",
       name: "mastermind_status",
       parameters: {
         properties: {

@@ -1,9 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
-
 import {
   notificationProposalSchema,
-  resolveWorkspacePath,
   type TSkillName,
   type TSkillRequest,
   type TSkillResponse,
@@ -19,76 +15,7 @@ import {
   type TRefreshRunStatus,
   type TTopicRefreshScope,
 } from '../-knowledge/index.js';
-import { formatShortError, writeAndAnalyzeCrash } from '../-crash-reports/index.js';
-import { config, paths } from '../config.js';
-import type { TMastermindAgent } from '../-sdk/agent.js';
-import {
-  failRequestActivity,
-  resolveRequestActivityRef,
-  wrapPromptWithRequestActivity,
-} from '../-sdk/request-activity-track.js';
-import { promptWithActiveRunRetry } from '../-sdk/prompt-with-retry.js';
-import {
-  markRequestActivityFailed,
-  markRequestActivitySucceeded,
-  registerRequestActivity,
-} from '../-sdk/request-activity.js';
-import { isVerifyInfraError } from '../-sdk/verify-infra.js';
-
-const readKnowledgeSnippet = async (source?: string, sessionId?: string): Promise<string> => {
-  if (!source) {
-    return '';
-  }
-
-  const resolved = resolveWorkspacePath(source, sessionId);
-  const candidates = [
-    resolved,
-    ...(sessionId
-      ? [resolveWorkspacePath(source)]
-      : []),
-    path.join(paths.docs, source.replace(/^~\//, '')),
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      const stat = await fs.stat(candidate);
-
-      if (stat.isFile()) {
-        const content = await fs.readFile(candidate, 'utf8');
-
-        return content.slice(0, 32_000);
-      }
-    } catch {
-      // try next
-    }
-  }
-
-  return '';
-};
-
-const buildSkillPrompt = async (
-  name: TSkillName,
-  args: Record<string, unknown>,
-  sessionId?: string,
-): Promise<string> => {
-  const sourceContent = await readKnowledgeSnippet(
-    typeof args.source === 'string' ? args.source : typeof args.file === 'string' ? args.file : undefined,
-    sessionId,
-  );
-
-  switch (name) {
-    case 'media-to-text':
-      return [
-        'You are the YAHL mastermind media-to-text helper.',
-        `File: ${String(args.file ?? args.source ?? '')}`,
-        sourceContent ? `Content preview:\n${sourceContent.slice(0, 8000)}` : '',
-        'Transcribe or summarize the media content as plain text.',
-      ].filter(Boolean).join('\n\n');
-
-    default:
-      return `Unknown skill ${name}`;
-  }
-};
+import { config } from '../config.js';
 
 const runProposeNotification = async (
   args: Record<string, unknown>,
@@ -311,7 +238,6 @@ const runDispatchTaskRun = async (
 };
 
 export const runSkill = async (
-  agent: TMastermindAgent,
   name: TSkillName,
   body: TSkillRequest,
 ): Promise<TSkillResponse> => {
@@ -343,121 +269,7 @@ export const runSkill = async (
     return runProposeNotification(body.args, body.sessionId);
   }
 
-  if (agent.status !== 'ready') {
-    const activity = resolveRequestActivityRef(body.sessionId, body.requestId, body.invocationId);
-
-    failRequestActivity(activity, {
-      error: 'mastermind unavailable',
-      kind: 'skill',
-      skill: name,
-      unavailable: true,
-    });
-
-    return { ok: false, error: 'mastermind unavailable' };
-  }
-
-  const prompt = await buildSkillPrompt(name, body.args, body.sessionId);
-  const mode = 'agent' as const;
-  const startedAt = Date.now();
-  const activity = resolveRequestActivityRef(body.sessionId, body.requestId, body.invocationId);
-
-  console.log(
-    `[mastermind] skill=${name} start sessionId=${body.sessionId ?? '-'} caller=${body.caller}`,
-  );
-
-  if (activity) {
-    registerRequestActivity({
-      invocationId: activity.invocationId,
-      kind: 'skill',
-      requestId: activity.requestId,
-      sessionId: activity.sessionId,
-      skill: name,
-    });
-  }
-
-  try {
-    const { result } = await promptWithActiveRunRetry(
-      wrapPromptWithRequestActivity(agent, activity),
-      prompt,
-      { mode },
-    );
-    const text = typeof result === 'string' ? result.trim() : '';
-    const durationMs = Date.now() - startedAt;
-
-    if (name === 'media-to-text' && text.length === 0) {
-      const emptyError = 'media-to-text returned empty text';
-
-      console.log(
-        `[mastermind] skill=${name} done ok=false durationMs=${durationMs} error=${emptyError}`,
-      );
-
-      if (activity) {
-        markRequestActivityFailed(
-          activity.sessionId,
-          activity.requestId,
-          emptyError,
-          false,
-          activity.invocationId,
-        );
-      }
-
-      return {
-        error: emptyError,
-        ok: false,
-      };
-    }
-
-    console.log(
-      `[mastermind] skill=${name} done ok=true durationMs=${durationMs} chars=${text.length}`,
-    );
-
-    if (activity) {
-      markRequestActivitySucceeded(
-        activity.sessionId,
-        activity.requestId,
-        activity.invocationId,
-        text,
-      );
-    }
-
-    return {
-      data: text,
-      ok: true,
-    };
-  } catch (error) {
-    const durationMs = Date.now() - startedAt;
-    const shortError = formatShortError(error);
-
-    console.log(
-      `[mastermind] skill=${name} done ok=false durationMs=${durationMs} error=${shortError}`,
-    );
-
-    if (activity) {
-      markRequestActivityFailed(
-        activity.sessionId,
-        activity.requestId,
-        shortError,
-        isVerifyInfraError(shortError),
-        activity.invocationId,
-      );
-    }
-    void writeAndAnalyzeCrash({
-      args: body.args,
-      caller: body.caller,
-      error,
-      mode,
-      promptPreview: prompt,
-      sessionId: body.sessionId,
-      skill: name,
-    }).catch((reportError) => {
-      console.error('[mastermind] crash report failed', reportError);
-    });
-
-    return {
-      error: formatShortError(error),
-      ok: false,
-    };
-  }
+  return { ok: false, error: `unknown skill: ${name}` };
 };
 
 export const postProposal = async (

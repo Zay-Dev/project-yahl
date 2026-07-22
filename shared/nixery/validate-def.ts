@@ -47,6 +47,7 @@ const outputSpecSchema = z.object({
 
 export const nixeryDefSchema = z.object({
   description: z.string().trim().optional(),
+  dockerfile: z.string().trim().min(1).optional(),
   env: z.record(z.string(), z.string()).optional(),
   id: z.string().trim().min(1),
   input: z.record(z.string(), inputFieldSchema).optional(),
@@ -57,6 +58,20 @@ export const nixeryDefSchema = z.object({
   run: z.object({
     entry: z.array(z.string().trim().min(1)).min(1),
   }).optional(),
+}).superRefine((value, ctx) => {
+  const dockerfile = value.dockerfile;
+
+  if (!dockerfile) {
+    return;
+  }
+
+  if (dockerfile.includes('..') || dockerfile.includes('/') || dockerfile.includes('\\')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'dockerfile must be a filename under the def directory (no path segments)',
+      path: ['dockerfile'],
+    });
+  }
 });
 
 export const validateNixeryDef = (raw: unknown) => {

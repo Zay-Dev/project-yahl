@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import path from 'node:path';
 
 const GRACEFUL_WAIT_MS = 60_000;
 const STOP_TIMEOUT_SEC = 60;
@@ -165,7 +167,13 @@ export const resolveNixeryImage = (registry: string, packages: string[]) => {
   return `${registry}/${deduped.join('/')}`;
 };
 
-export const prepareNixeryImage = async (packages: string[]) => {
+export const resolveCustomNixeryImageTag = (defId: string, dockerfileBytes: string | Buffer) => {
+  const hash = createHash('md5').update(dockerfileBytes).digest('hex');
+
+  return `custom-nixery-${defId}:v${hash}`;
+};
+
+const prefetchNixeryPackages = async (packages: string[]) => {
   const registry = resolveNixeryRegistry();
   const deduped = dedupePackages(packages);
   const composedImage = resolveNixeryImage(registry, deduped);
@@ -177,9 +185,43 @@ export const prepareNixeryImage = async (packages: string[]) => {
     await runDocker(['pull', composedImage]);
   }
 
+  return composedImage;
+};
+
+export const prepareNixeryImage = async (params: {
+  defId: string;
+  dockerfile?: string;
+  nixeryRoot: string;
+  packages: string[];
+}) => {
+  const composedImage = await prefetchNixeryPackages(params.packages);
+  const dockerfileName = params.dockerfile?.trim();
+
+  if (!dockerfileName) {
+    return {
+      cleanup: () => runDocker(['rmi', composedImage], { ignoreFailure: true }),
+      image: composedImage,
+    };
+  }
+
+  const dockerfilePath = path.join(params.nixeryRoot, params.defId, dockerfileName);
+  const dockerfileBytes = fs.readFileSync(dockerfilePath);
+  const tag = resolveCustomNixeryImageTag(params.defId, dockerfileBytes);
+
+  await runDocker([
+    'build',
+    '-t',
+    tag,
+    '--build-arg',
+    `NIXERY_BASE=${composedImage}`,
+    '-f',
+    dockerfilePath,
+    params.nixeryRoot,
+  ]);
+
   return {
-    cleanup: () => runDocker(['rmi', composedImage], { ignoreFailure: true }),
-    image: composedImage,
+    cleanup: async () => undefined,
+    image: tag,
   };
 };
 

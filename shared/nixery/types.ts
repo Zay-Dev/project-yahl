@@ -30,6 +30,7 @@ export type TNixeryInputField = {
 
 export type TNixeryDef = {
   description?: string;
+  dockerfile?: string;
   env?: Record<string, string>;
   id: string;
   input?: Record<string, TNixeryInputField>;
