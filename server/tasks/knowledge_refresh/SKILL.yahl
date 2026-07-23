@@ -5,6 +5,7 @@ resultContextKey: result
 runInput:
   - knowledge_topic
   - rerun_intent
+  - additional_instruction
 
 types: |
   type TLearningIntent = 'personal_interest' | 'preserve_for_future_tasks';
@@ -115,6 +116,17 @@ types: |
     addressOpenQuestions: boolean;
   };
 
+  type TInstructionFollowup =
+    | {
+        actionable: true;
+        missionAddon: string;
+        seedUrls: string[];
+        scopeHints: string[];
+        failFast: boolean;
+        notes: string;
+      }
+    | { actionable: false; reason: string };
+
 stages:
   - nixeryRun: get-knowledge
     nixeryInput:
@@ -124,8 +136,24 @@ stages:
     contextKeys: [knowledge_topic]
     logic: "(nixery)"
 
-  - contextKeys: [knowledge_topic, rerun_intent]
-    produceContextKeys: [knowledge_topic, missionText, refresh_policy, rerun_intent, learning_contract, refresh_skipped]
+  - produceContextKeys: [instruction_followup]
+    contextKeys: [knowledge_topic, additional_instruction]
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when instruction_followup is { actionable: false, reason: non-empty string }
+        OR { actionable: true, missionAddon: string, seedUrls: array, scopeHints: array, failFast: boolean, notes: string }.
+        Pass when additional_instruction is missing/blank and actionable is false with a clear reason.
+        Fail when instruction_followup is missing, actionable true without missionAddon, or seedUrls/scopeHints are not arrays.
+    logic: |
+      Read ~/task-skills/analyze-additional-instruction/SKILL.md.
+      Read ~/nixery/get-knowledge/intake.md when present (optional corpus hint for scopeHints).
+      const instruction_followup = *analyze_additional_instruction(additional_instruction, guideline: ~/task-skills/analyze-additional-instruction/SKILL.md);
+
+  - contextKeys: [knowledge_topic, rerun_intent, instruction_followup]
+    produceContextKeys: [knowledge_topic, missionText, refresh_policy, rerun_intent, learning_contract, refresh_skipped, instruction_followup]
     logic: |
       const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
       IF: !knowledge_topic;
@@ -135,25 +163,57 @@ stages:
         const learning_contract = { intent: 'preserve_for_future_tasks', topic: '', seedUrls: [], depth: 'overview' };
         const rerun_intent = { isRerun: true, proceedMode: 'summary_only', updateScope: [], addressOpenQuestions: false };
       ELSE;
-        const policyRef = /mastermind(resolve-topic-policy, topic: knowledge_topic);
-        const refresh_policy = policyRef.row;
-        const refresh_skipped = policyRef.refresh_skipped;
-        Read ~/nixery/get-knowledge/intake.md from the session workspace.
-        If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
-        const knowledgeExtractRef = { absent: knowledge === '<none>', path: '~/nixery/get-knowledge/intake.md' };
-        IF: rerun_intent;
-          // keep runInput-seeded rerun_intent
-        ELSE IF: !knowledgeExtractRef.absent;
-          const pending_open_questions = *extract_open_questions(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
-          const rerunBatch = *build_rerun_intent_batch(knowledge, pending_open_questions, guideline: ~/task-skills/rerun-intent/SKILL.md);
-          const rerunAnswers = /ask-user-batch(rerunBatch);
-          const rerun_intent = *parse_rerun_intent(rerunAnswers);
+        const topicRef = /nixery(resolve-topic, topicText: knowledge_topic, slug: knowledge_topic);
+        IF: topicRef.matchedBy !== 'new';
+          const knowledge_topic = topicRef.canonical;
+        ELSE IF: topicRef.suggestMerge?.length;
+          Read ~/nixery/get-knowledge/intake.md when present for primaryTopic / corpus slug hints.
+          const knowledge_topic = *pick_canonical_topic(topicRef, guideline: ~/task-skills/pick-canonical-topic/SKILL.md);
         ELSE;
-          const rerun_intent = *build_refresh_rerun_intent(refresh_policy, guideline: ~/task-skills/assess-refresh-gaps/SKILL.md);
+          const knowledge_topic = topicRef.canonical;
         END:
-        const learning_contract = knowledgeExtractRef.absent
-          ? *default_learning_contract(knowledge_topic, guideline: ~/task-skills/assess-refresh-gaps/SKILL.md)
-          : *load_learning_contract_from_corpus(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        const policyRef = /mastermind(resolve-topic-policy, topic: knowledge_topic);
+        IF: policyRef?.ok === false || !policyRef?.row;
+          const refresh_skipped = true;
+          const refresh_policy = {};
+          const learning_contract = { intent: 'preserve_for_future_tasks', topic: knowledge_topic, seedUrls: [], depth: 'overview' };
+          const rerun_intent = { isRerun: true, proceedMode: 'summary_only', updateScope: [], addressOpenQuestions: false };
+        ELSE;
+          const refresh_policy = policyRef.row;
+          const refresh_skipped = policyRef.refresh_skipped;
+          const knowledge_topic = refresh_policy.canonical || knowledge_topic;
+          Read ~/nixery/get-knowledge/intake.md from the session workspace.
+          If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
+          const knowledgeExtractRef = { absent: knowledge === '<none>', path: '~/nixery/get-knowledge/intake.md' };
+          IF: *is_structured_rerun_intent(rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+            // keep runInput-seeded structured rerun_intent
+          ELSE IF: instruction_followup?.actionable === true;
+            const rerun_intent = *build_refresh_rerun_intent(refresh_policy, guideline: ~/task-skills/assess-refresh-gaps/SKILL.md);
+            IF: instruction_followup.scopeHints?.length;
+              const rerun_intent = { ...rerun_intent, isRerun: true, proceedMode: 'update_selected', updateScope: instruction_followup.scopeHints };
+            END:
+          ELSE IF: !knowledgeExtractRef.absent;
+            const pending_open_questions = *extract_open_questions(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
+            const rerunBatch = *build_rerun_intent_batch(knowledge, pending_open_questions, guideline: ~/task-skills/rerun-intent/SKILL.md);
+            const rerunAnswers = /ask-user-batch(rerunBatch);
+            const rerun_intent = *parse_rerun_intent(rerunAnswers);
+          ELSE;
+            const rerun_intent = *build_refresh_rerun_intent(refresh_policy, guideline: ~/task-skills/assess-refresh-gaps/SKILL.md);
+          END:
+          IF: instruction_followup?.actionable === true && instruction_followup.missionAddon;
+            const missionText = missionText + '\n\nAdditional instruction:\n' + instruction_followup.missionAddon
+              + (instruction_followup.failFast ? '\nFail fast if required sources cannot be accessed.' : '');
+          END:
+          const learning_contract = knowledgeExtractRef.absent
+            ? *default_learning_contract(knowledge_topic, guideline: ~/task-skills/assess-refresh-gaps/SKILL.md)
+            : *load_learning_contract_from_corpus(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
+          IF: instruction_followup?.actionable === true && instruction_followup.seedUrls?.length;
+            const learning_contract = {
+              ...learning_contract,
+              seedUrls: [...new Set([...(learning_contract.seedUrls || []), ...instruction_followup.seedUrls])],
+            };
+          END:
+        END:
       END:
 
   - contextMode: true

@@ -6,7 +6,13 @@ Read after `get-knowledge` returns non-absent for `knowledge_topic`.
 
 ## runInput pre-seed (knowledge_refresh)
 
-When `rerun_intent` is declared in `knowledge_refresh` `runInput:` and seeded into context, **skip all ask-user batches** in stage 1. Auto dispatch supplies defaults; manual runs may pre-answer via `POST /api/runs` `runInput`.
+When `rerun_intent` is a **structured** object with `proceedMode` (and usually `isRerun` / `updateScope`) seeded from `runInput`, **skip all ask-user batches** in stage 1. Auto dispatch supplies defaults; manual runs may pre-answer via `POST /api/runs` `runInput`.
+
+A **string** or other non-object value is **not** a valid pre-seed — treat as absent (ask-user or build from policy / `instruction_followup`).
+
+### `*is_structured_rerun_intent(rerun_intent)`
+
+Returns true only when `rerun_intent` is a non-null object with string `proceedMode` in `update_selected` | `full_refresh` | `summary_only`.
 
 Never ask rerun intent during types preamble (stage 0). Stage 1 owns proceed-mode intake.
 

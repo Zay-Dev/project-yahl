@@ -79,6 +79,73 @@ describe('topic refresh', () => {
     );
   });
 
+  it('throws when topic policy slug is unknown', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-resolve-topic-missing-'));
+
+    process.env.MASTERMIND_DATA_ROOT = tmp;
+    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
+
+    await fs.mkdir(path.join(tmp, 'knowledge_export', 'en', 'topics'), { recursive: true });
+    await fs.writeFile(
+      path.join(tmp, 'topics.json'),
+      `${JSON.stringify({ topics: [] }, null, 2)}\n`,
+      'utf8',
+    );
+
+    const { resolveTopicPolicy } = await import('./topic-refresh.js');
+
+    await assert.rejects(
+      () => resolveTopicPolicy('project yahl'),
+      /Topic policy not found/,
+    );
+
+    delete process.env.MASTERMIND_DATA_ROOT;
+    delete process.env.KNOWLEDGE_EXPORT_ROOT;
+  });
+
+  it('resolves topic policy by declared registry alias', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-resolve-topic-alias-'));
+
+    process.env.MASTERMIND_DATA_ROOT = tmp;
+    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
+
+    const exportDir = path.join(tmp, 'knowledge_export', 'en', 'topics', 'project-yahl-develop');
+
+    await fs.mkdir(exportDir, { recursive: true });
+    await fs.writeFile(path.join(exportDir, 'overview.md'), '# Project Yahl\n', 'utf8');
+    await fs.writeFile(
+      path.join(tmp, 'topics.json'),
+      `${JSON.stringify({
+        topics: [{
+          aliases: ['yahl-develop'],
+          canonical: 'project-yahl-develop',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          maxAgeDays: null,
+          refresh: {
+            enabled: true,
+            interval: 'daily',
+            lastRunAt: null,
+            lastRunSessionId: null,
+            lastRunStatus: null,
+            scopes: ['studies', 'facts', 'synthesis', 'summary'],
+          },
+          signals: { seedUrlHosts: [], seedUrlPaths: [], topicTexts: [] },
+          updatedAt: '2020-01-01T00:00:00.000Z',
+        }],
+      }, null, 2)}\n`,
+      'utf8',
+    );
+
+    const { resolveTopicPolicy } = await import('./topic-refresh.js');
+    const resolved = await resolveTopicPolicy('yahl-develop');
+
+    assert.equal(resolved.row.canonical, 'project-yahl-develop');
+    assert.equal(resolved.refresh_skipped, false);
+
+    delete process.env.MASTERMIND_DATA_ROOT;
+    delete process.env.KNOWLEDGE_EXPORT_ROOT;
+  });
+
   it('resolves topic policy without skipping when enabled with null interval', async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-resolve-topic-policy-'));
 

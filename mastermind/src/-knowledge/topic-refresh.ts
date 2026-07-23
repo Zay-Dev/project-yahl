@@ -157,27 +157,13 @@ export const resolveTopicPolicy = async (
   }
 
   const rows = await listTopicPolicies();
-  const row = rows.find((item) => item.canonical === canonical)
-    ?? rows.find((item) => item.canonical === sanitizeSegment(topic));
+  const registry = await loadNormalizedRegistry();
+  const byAlias = findEntryBySlug(registry, canonical);
+  const lookupSlug = byAlias?.canonical ?? canonical;
+  const row = rows.find((item) => item.canonical === lookupSlug);
 
   if (!row) {
-    return {
-      refresh_skipped: true,
-      row: {
-        canonical,
-        fileCount: 0,
-        refresh: {
-          enabled: false,
-          interval: null,
-          lastRunAt: null,
-          lastRunSessionId: null,
-          lastRunStatus: null,
-          scopes: DEFAULT_REFRESH_SCOPES,
-        },
-        seedUrlCount: 0,
-        studyKeyCount: 0,
-      },
-    };
+    throw new Error(`Topic policy not found: ${canonical}`);
   }
 
   return {
