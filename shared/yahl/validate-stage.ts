@@ -230,6 +230,22 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     }
   }
 
+  if (stage.maxBashCalls !== undefined) {
+    const maxBashCalls = Number(stage.maxBashCalls);
+
+    if (!Number.isInteger(maxBashCalls) || maxBashCalls < 1) {
+      throw new Error(`${label}.maxBashCalls: must be a positive integer`);
+    }
+  }
+
+  if (stage.maxTurns !== undefined) {
+    const maxTurns = Number(stage.maxTurns);
+
+    if (!Number.isInteger(maxTurns) || maxTurns < 1) {
+      throw new Error(`${label}.maxTurns: must be a positive integer`);
+    }
+  }
+
   for (const key of [
     'contextKeys',
     'updateContextKeys',
@@ -288,6 +304,8 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     ...(stage.conditionMode === true ? { conditionMode: true } : {}),
     ...(typeof stage.loopSetup === 'string' ? { loopSetup: stage.loopSetup.trim() } : {}),
     ...(stage.temperature !== undefined ? { temperature: Number(stage.temperature) } : {}),
+    ...(stage.maxBashCalls !== undefined ? { maxBashCalls: Number(stage.maxBashCalls) } : {}),
+    ...(stage.maxTurns !== undefined ? { maxTurns: Number(stage.maxTurns) } : {}),
     ...(isStringArray(stage.contextKeys) ? { contextKeys: stage.contextKeys } : {}),
     ...(isStringArray(stage.updateContextKeys) ? { updateContextKeys: stage.updateContextKeys } : {}),
     ...(isStringArray(stage.produceContextKeys) ? { produceContextKeys: stage.produceContextKeys } : {}),

@@ -38,6 +38,8 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
     then: Joi.optional(),
   }),
   loopSetup: Joi.string().trim().pattern(LOOP_SETUP_PATTERN).optional(),
+  maxBashCalls: Joi.number().integer().min(1).optional(),
+  maxTurns: Joi.number().integer().min(1).optional(),
   nixeryInput: Joi.object().min(1).optional(),
   nixeryRun: Joi.string().trim().optional(),
   produceContextKeys: stringArraySchema.optional(),

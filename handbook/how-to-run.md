@@ -226,6 +226,23 @@ pnpm run orchestrate
 | PATCH | `/api/platform/cron/jobs/:id` | Update a cron job |
 | DELETE | `/api/platform/cron/jobs/:id` | Soft-delete a cron job |
 
+#### Example: morning traffic monitor cron
+
+Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`hk_morning_traffic`](../server/tasks/hk_morning_traffic/SKILL.yahl) at 08:00 HKT:
+
+```json
+{
+  "enabled": true,
+  "schedule": "0 8 * * *",
+  "timezone": "Asia/Hong_Kong",
+  "taskPath": "hk_morning_traffic"
+}
+```
+
+The task runs ~90 minutes of adaptive ETA polls (agent `run_bash sleep`); WhatsApp proposals use a dummy recipient until you change the skill. Approve outbound drafts at `/platform/approvals`.
+
+Long poll stages (e.g. `hk_morning_traffic`) need a higher `run_bash` timeout so `sleep 300` can finish. Default remains **60000**; set `AGENT_BASH_TIMEOUT_MS=360000` in `.env` (agent compose `env_file` picks it up) before those runs.
+
 SSE streams expose live run logs (`meta` / `log` / `status`) and session events for the web UI.
 
 Session persistence uses normalized Mongo collections (`Sessions`, `Stages`, `SessionToolCalls`, `SessionModelResponses`, `SessionAskUserQuestions`, `SessionVerifyCheckpoints`, `ForkSessions`, and related rows). After upgrading schema, wipe the database or drop those collections so old single-document `sessions` rows do not conflict with the new layout.

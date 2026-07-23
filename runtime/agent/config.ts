@@ -95,6 +95,10 @@ export const config = {
       || "deepseek-v4-flash",
   ),
   redisUrl: process.env.AGENT_REDIS_URL || "redis://127.0.0.1:6379",
+  bashTimeoutMs: Math.max(
+    1,
+    Number(process.env.AGENT_BASH_TIMEOUT_MS?.trim() || "60000") || 60_000,
+  ),
   thinkingMode: (process.env.LLM_THINKING_MODE || process.env.DEEPSEEK_THINKING_MODE || "disabled")
     .trim()
     .toLowerCase() === "enabled",

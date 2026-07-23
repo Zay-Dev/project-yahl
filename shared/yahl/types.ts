@@ -25,6 +25,8 @@ export type TYahlStage = {
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
+  maxBashCalls?: number;
+  maxTurns?: number;
   nixeryInput?: TNixeryStageInput;
   nixeryRun?: string;
   produceContextKeys?: string[];
