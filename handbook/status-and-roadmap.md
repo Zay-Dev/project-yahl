@@ -20,7 +20,7 @@ But more importantly — it does feel like patching in the right direction. No m
 | isolated-vm | Works | VM client runs on `isolated-vm` for stronger sandbox boundaries. |
 | Orchestrator debugger | Works | Attach the orchestrator to a debugger, hit breakpoints, and poke variables while tracing execution. |
 | Mastermind stack | Works | Gateway (port 4100) and outbound-only worker (cron/approvals) in `docker compose`; stage verify via nixery `verify.defId`; `/mastermind(...)` for policies, dispatch, notifications; `/nixery(...)` for knowledge, topic resolve, tidy, QA, media-to-text, LLM helpers, and stage-verify. Stack probe via `pnpm run doctor`. |
-| Nixery tools | Works | Orchestrator-direct reads (`nixeryRun: get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `plan-study`); inline defs (`resolve-topic`, `tidy-knowledge`, `knowledge-qa-review`, `upsert-knowledge-page`, `dedup-knowledge`, `research`, `design-questions`, `extract-info`); stage gate `stage-verify` via YAHL `verify.defId`. |
+| Nixery tools | Works | Orchestrator-direct reads (`nixeryRun: get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `plan-study`); inline defs (`resolve-topic`, `tidy-knowledge`, `knowledge-qa-review`, `upsert-knowledge-page`, `dedup-knowledge`, `research`, `design-questions`, `extract-info`, `consult-breaking-change`); stage gate `stage-verify` via YAHL `verify.defId`. |
 | design-questions | Works | Nixery inline def for dynamic ask-user batches (pass `mission:` for subject framing). |
 | verify.autoRetry | Works | Orchestrator in-process verify loop on stages with `verify.autoRetry: true`. |
 | Task-local skills | Works | Echoed from session snapshot to agent `~/task-skills/`; see [yahl-syntax.md](yahl-syntax.md). |

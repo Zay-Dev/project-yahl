@@ -13,7 +13,6 @@ services:
       AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
       AGENT_REDIS_URL: redis://redis:6379
       AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}
-      AGENT_BASH_TIMEOUT_MS: ${AGENT_BASH_TIMEOUT_MS:-60000}
       DISPLAY: ${STAGEHAND_LIVEVIEW_DISPLAY:-:99}
       MASTERMIND_API_URL: http://mastermind:4100
       NO_PROXY: localhost,127.0.0.1,::1,mastermind,redis,server,mongo,onecli,host.docker.internal

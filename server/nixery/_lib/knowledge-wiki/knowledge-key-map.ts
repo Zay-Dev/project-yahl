@@ -40,6 +40,7 @@ const dualWrite = (
   section,
 });
 
+/** Suggested key→page mappings only. Unknown keys fall back to wikiOnly(slugify(key)). */
 const STATIC_KEY_MAP: Record<string, TKnowledgeKeyMapping> = {
   analysis: dualWrite('facts', 'Analysis'),
   background_summary: wikiOnly('overview', 'append'),
@@ -98,7 +99,7 @@ export const mapKnowledgeKeyToPage = (key: string): TKnowledgeKeyMapping => {
     return wikiOnly(slugifyPageSegment(key.replace(/_md$/, '')));
   }
 
-  throw new Error(`upsert-knowledge-page: unknown key "${key}" — add mapping in knowledge-key-map.ts`);
+  return wikiOnly(slugifyPageSegment(key));
 };
 
 export const resolveReadPathsForKey = (key: string, canonical: string): string[] => {

@@ -1,4 +1,9 @@
-import type { TYahlAskUserEntry, TYahlStage, TYahlVerifySpec } from './types';
+import type {
+  TYahlAgentOverrides,
+  TYahlAskUserEntry,
+  TYahlStage,
+  TYahlVerifySpec,
+} from './types';
 import { DEFAULT_VERIFY_DEF_ID } from './verify';
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
@@ -121,6 +126,41 @@ const hasVerifyEnabled = (verify: unknown): boolean => {
   }
 
   return Boolean(verify && typeof verify === 'object' && !Array.isArray(verify));
+};
+
+const validateAgentOverrides = (
+  raw: unknown,
+  label: string,
+): TYahlAgentOverrides | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`${label}.agentOverrides: expected an object`);
+  }
+
+  const entry = raw as Record<string, unknown>;
+
+  for (const key of Object.keys(entry)) {
+    if (key !== 'bashTimeoutMs') {
+      throw new Error(
+        `${label}.agentOverrides: unknown key "${key}" (only bashTimeoutMs allowed)`,
+      );
+    }
+  }
+
+  if (entry.bashTimeoutMs === undefined) {
+    return {};
+  }
+
+  const bashTimeoutMs = Number(entry.bashTimeoutMs);
+
+  if (!Number.isInteger(bashTimeoutMs) || bashTimeoutMs < 1) {
+    throw new Error(`${label}.agentOverrides.bashTimeoutMs: must be a positive integer`);
+  }
+
+  return { bashTimeoutMs };
 };
 
 const normalizeVerifySpec = (
@@ -292,6 +332,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
   }
 
   const verify = normalizeVerifySpec(stage.verify, label);
+  const agentOverrides = validateAgentOverrides(stage.agentOverrides, label);
 
   return {
     logic: logicRaw || '(nixery)',
@@ -300,6 +341,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
       ? { nixeryInput: normalizeNixeryStageInput(stage.nixeryInput) }
       : {}),
     ...(askUser ? { askUser } : {}),
+    ...(agentOverrides ? { agentOverrides } : {}),
     ...(stage.contextMode === true ? { contextMode: true } : {}),
     ...(stage.conditionMode === true ? { conditionMode: true } : {}),
     ...(typeof stage.loopSetup === 'string' ? { loopSetup: stage.loopSetup.trim() } : {}),

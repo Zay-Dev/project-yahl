@@ -20,7 +20,7 @@ sequenceDiagram
 - **No direct corpus access** — agents must not read wiki HTTP, export mirror, or legacy `~/knowledges/`; canonical store is server/nixery-private only.
 - **Session-scoped reads** — `nixeryRun: get-knowledge` explores export mirror in-container, writes markdown to `~/nixery/get-knowledge/{output}`; agent reads full file content in following stages.
 - **Path injection blocked** — upsert rejects caller `source` / `file` / `path` args.
-- **Controlled writes** — `upsert-knowledge-page` accepts `key`+`value` or `page`+`content` with `topic` only; maps legacy keys to wiki paths.
+- **Controlled writes** — `upsert-knowledge-page` accepts `key`+`value` or `page`+`content` with `topic` only; known keys are suggestions (unknown keys soft-default to a slug page).
 - **Human browse** — Wiki.js at `WIKI_PUBLIC_URL` (dev: `http://127.0.0.1:3001`); web sidebar links there directly; agents never use this route.
 - **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on nixery `research` get an explicit untrusted-content banner in the prompt.
 - **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `get-knowledge` = curated wiki corpus via export mirror. Different defs, different trust boundary.

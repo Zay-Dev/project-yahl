@@ -27,7 +27,12 @@ const verifySpecSchema = Joi.object({
   rubric: Joi.string().trim().optional(),
 });
 
+const agentOverridesSchema = Joi.object({
+  bashTimeoutMs: Joi.number().integer().min(1).optional(),
+}).unknown(false);
+
 export const yahlStageSchema = Joi.object<TYahlStage>({
+  agentOverrides: agentOverridesSchema.optional(),
   askUser: Joi.array().items(askUserEntrySchema).min(1).optional(),
   conditionMode: Joi.boolean().optional(),
   contextKeys: stringArraySchema.optional(),

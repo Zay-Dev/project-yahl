@@ -45,3 +45,27 @@ Structured `rerun_intent` still works for auto dispatch:
   }
 }
 ```
+
+## Novel tasks (`novel_*`)
+
+Novels reuse `topics/{slug}/` via `resolve-topic` / `get-knowledge` / `upsert-knowledge-page` with **`page` + `content`** (do not add novel keys to the knowledge key map). Pass `novel` in `runInput` or the first stage asks.
+
+```bash
+curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "taskId": "novel_design",
+    "runInput": {
+      "novel": "my-novel-slug",
+      "additional_instruction": "new idea: a quiet coastal city where clocks run backward"
+    }
+  }'
+```
+
+Pipeline order: `novel_design` → `novel_plan_arc` → `novel_plan_stages` → `novel_plan_batch` → `novel_write`.
+
+After `novel_write`, sync chapters to tracked `novels/` for GitHub Pages (then commit/push `develop`):
+
+```bash
+./scripts/sync-novels-pages.sh
+```

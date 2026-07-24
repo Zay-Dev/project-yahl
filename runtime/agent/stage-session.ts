@@ -30,7 +30,7 @@ type BootstrapMessage = {
 };
 
 type StageRunner = {
-  runCommand: (command: string) => Promise<string>;
+  runCommand: (command: string, timeoutMs?: number) => Promise<string>;
 
   chatWithTools: (
     messages: ChatApiMessage[],
@@ -43,10 +43,16 @@ export type TLocalToolCallRecord = {
   resultContent: string;
 };
 
+export type TLocalToolStartRecord = {
+  call: ChatToolCall;
+  timeoutMs: number;
+};
+
 type StageSessionOptions = {
   maxBashCalls?: number;
   maxTurns?: number;
   onLocalToolCall?: (record: TLocalToolCallRecord) => Promise<void>;
+  onLocalToolStart?: (record: TLocalToolStartRecord) => Promise<void>;
   requestId?: string;
   resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
@@ -253,9 +259,27 @@ export const runStageSession = async (
           }
 
           bashCalls += 1;
-          const commandResult = await runner.runCommand(command);
+          const bashTimeoutMs =
+            stageInput.stage.agentOverrides?.bashTimeoutMs ?? config.bashTimeoutMs;
+          const preview = command.length > 200 ? `${command.slice(0, 200)}…` : command;
+
+          console.log(`[RUN_BASH] start timeoutMs=${bashTimeoutMs} command=${preview}`);
+          await options.onLocalToolStart?.({ call, timeoutMs: bashTimeoutMs });
+
+          const startedAt = Date.now();
+          const commandResult = await runner.runCommand(command, bashTimeoutMs);
+          const durationMs = Date.now() - startedAt;
+          const timedOut = commandResult.includes('run_bash: timed out after');
+          const resultPreview = commandResult.length > 120
+            ? `${commandResult.slice(0, 120)}…`
+            : commandResult;
+
+          console.log(
+            `[RUN_BASH] done durationMs=${durationMs} ${timedOut ? 'timedOut' : 'ok'} command=${preview} resultPreview=${JSON.stringify(resultPreview)}`,
+          );
+
           if (config.debug) {
-            console.log(`[DEBUG] [RUN_BASH] ${command}: ${commandResult}\n`);
+            console.log(`[DEBUG] [RUN_BASH] done durationMs=${durationMs} command=${preview}`);
           }
 
           stageMessages.push({

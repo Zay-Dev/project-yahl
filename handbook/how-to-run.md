@@ -241,7 +241,7 @@ Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the
 
 The task runs ~90 minutes of adaptive ETA polls (agent `run_bash sleep`); WhatsApp proposals use a dummy recipient until you change the skill. Approve outbound drafts at `/platform/approvals`.
 
-Long poll stages (e.g. `hk_morning_traffic`) need a higher `run_bash` timeout so `sleep 300` can finish. Default remains **60000**; set `AGENT_BASH_TIMEOUT_MS=360000` in `.env` (agent compose `env_file` picks it up) before those runs.
+Long poll stages (e.g. `hk_morning_traffic` monitor) set stage `agentOverrides.bashTimeoutMs` (e.g. `360000`) so a single `sleep 300` can finish. Shared agent default remains **60000** when unset — do not pin timeout in compose.
 
 SSE streams expose live run logs (`meta` / `log` / `status`) and session events for the web UI.
 

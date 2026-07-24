@@ -3,14 +3,12 @@ import type { YahlStage } from "@/shared/yahl-stage";
 
 import config from "./config";
 
-import { exec } from "child_process";
-import { promisify } from "util";
-
 import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 
 import { handleToolCalls } from './-utils/handle-tool-calls';
 import { isOrchestratorHandledTool } from './-utils/orchestrator-handled-tools';
 import { buildResumeStageMessages } from './-utils/resume-messages';
+import { runBashCommand } from './-utils/run-bash-command';
 import { runStageSession } from "./stage-session";
 
 import { deriveModelResponseTags } from "@/shared/model-response-tags";
@@ -22,25 +20,10 @@ import { runScript, runConditionScript } from "./-utils/vm-client";
 
 type TFastModel = 'vm' | 'fast-forward';
 
-const execAsync = promisify(exec);
+const runCommand = async (command: string, timeoutMs = config.bashTimeoutMs) => {
+  const result = await runBashCommand(command, timeoutMs);
 
-const runCommand = async (command: string) => {
-  try {
-    const result = await execAsync(command, {
-      maxBuffer: 20 * 1024 * 1024,
-      timeout: config.bashTimeoutMs,
-    });
-
-    return `${result.stdout || ""}${result.stderr || ""}`;
-  } catch (error) {
-    const failed = error as {
-      message?: string;
-      stderr?: string;
-      stdout?: string;
-    };
-
-    return `${failed.stdout || ""}${failed.stderr || ""}${failed.message || ""}`;
-  }
+  return result.output;
 };
 
 const _contextBucketsFromVm = (
@@ -226,6 +209,12 @@ export const startRedisDaemon = async () => {
           },
           {
             onLocalToolCall: async ({ call }) => {
+              await toolCall(call);
+            },
+            onLocalToolStart: async ({ call, timeoutMs }) => {
+              console.log(
+                `[agent-daemon] run_bash start requestId=${requestId} timeoutMs=${timeoutMs}`,
+              );
               await toolCall(call);
             },
             requestId,

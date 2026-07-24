@@ -40,7 +40,12 @@ export type TYahlAskUserEntry = {
 
 export type TNixeryStageInput = Record<string, string | number | boolean>;
 
+export type TYahlAgentOverrides = {
+  bashTimeoutMs?: number;
+};
+
 export type TYahlStage = {
+  agentOverrides?: TYahlAgentOverrides;
   askUser?: TYahlAskUserEntry[];
   conditionMode?: boolean;
   contextKeys?: string[];

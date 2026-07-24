@@ -50,6 +50,7 @@ Per-stage fields:
 | `loopSetup` | Orchestrator-only (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
 | `maxBashCalls` | Optional cap on `run_bash` calls for this AI stage (default 24) |
 | `maxTurns` | Optional cap on chat turns for this AI stage (default 60) |
+| `agentOverrides` | Optional agent knobs for this stage. **Only** `bashTimeoutMs` (positive int ms) is accepted — unknown keys fail validation. Used by `run_bash` instead of the shared 60s default. |
 | `temperature` | Model temperature for AI stages (0–2) |
 | `contextKeys` | Allowlist of context/stage keys passed into the runner |
 | `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |

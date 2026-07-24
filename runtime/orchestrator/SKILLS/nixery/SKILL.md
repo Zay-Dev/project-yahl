@@ -30,6 +30,7 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 | `/nixery(media-to-text, file: ~/…)` | `text` |
 | `/nixery(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `batches` |
 | `/nixery(research, topic: …, source: ~/…, mission: …, guidelinePath: …)` | `markdown` |
+| `/nixery(consult-breaking-change, proposedChange: …, reason: …, context?: …)` | `{ agree, reasons, alternatives }` |
 
 ```json
 {
@@ -49,6 +50,7 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 - Append `data.path` from upsert results to `knowledge_paths.persisted` (task convention — see context-paths skill).
 - `knowledge-qa-review` fails closed on empty corpus; judgment is OpenAI in-def (no Cursor key / no worker hop).
 - `media-to-text` uses Cursor CLI inside the nixery container (`CURSOR_API_KEY` declared on that def only); persist `data.text`.
+- Before breaking stage procedure (sleep protocol, window, thresholds, editing task skills), call `consult-breaking-change`; if `agree: false`, follow `alternatives`.
 
 ## Reads
 
