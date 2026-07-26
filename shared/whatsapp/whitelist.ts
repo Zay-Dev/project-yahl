@@ -69,6 +69,9 @@ export const recipientMatchesWhatsAppWhitelist = (
   return false;
 };
 
+export const whatsAppChatIdsMatch = (left: string, right: string): boolean =>
+  recipientMatchesWhatsAppWhitelist(left, [right]);
+
 export const toWhatsAppChatId = (recipient: string): string => {
   const trimmed = recipient.trim();
 

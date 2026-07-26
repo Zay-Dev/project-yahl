@@ -161,6 +161,7 @@ services:
       - ./data/workspace:/workspace
       - ./data/whatsapp_auth:/whatsapp/auth
       - ./data/whatsapp_inbox:/whatsapp/inbox
+      - ./worker:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker
     depends_on:
       server:
         condition: service_healthy

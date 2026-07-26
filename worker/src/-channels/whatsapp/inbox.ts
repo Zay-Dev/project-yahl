@@ -10,12 +10,13 @@ export type TInboxMessage = {
   chatId: string;
   from: string;
   isGroup: boolean;
+  lid?: string;
   messageId: string;
   ts: string;
 };
 
 export const appendInboxMessage = async (message: TInboxMessage): Promise<boolean> => {
-  const channel = await findOnboardedChannel(message.chatId);
+  const channel = await findOnboardedChannel(message.chatId, message.lid);
 
   if (!channel) {
     return false;
@@ -25,7 +26,10 @@ export const appendInboxMessage = async (message: TInboxMessage): Promise<boolea
 
   await mkdir(dir, { recursive: true });
 
-  const line = `${JSON.stringify(message)}\n`;
+  const line = `${JSON.stringify({
+    ...message,
+    chatId: channel.chatId,
+  })}\n`;
 
   await appendFile(path.join(dir, 'messages.jsonl'), line, 'utf8');
 

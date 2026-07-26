@@ -239,7 +239,7 @@ Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the
 }
 ```
 
-The task runs ~90 minutes of adaptive ETA polls (agent `run_bash sleep`); WhatsApp proposals use a dummy recipient until you change the skill. Approve outbound drafts at `/platform/approvals` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
+The task runs ~90 minutes of adaptive ETA polls (agent `run_bash sleep`); WhatsApp proposals go to the recipient configured in the task skill (`+85291234567`). Approve outbound drafts at `/platform/approvals` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
 
 #### Example: WhatsApp wiki stack cron
 

@@ -7,6 +7,7 @@ import {
   recipientMatchesWhatsAppWhitelist,
   sanitizeWhatsAppFolder,
   toWhatsAppChatId,
+  whatsAppChatIdsMatch,
 } from './whitelist.ts';
 
 describe('whatsapp whitelist', () => {
@@ -24,6 +25,25 @@ describe('whatsapp whitelist', () => {
     assert.equal(recipientMatchesWhatsAppWhitelist('+85291234567', list), true);
     assert.equal(recipientMatchesWhatsAppWhitelist('85291234567@c.us', list), true);
     assert.equal(recipientMatchesWhatsAppWhitelist('99999999', list), false);
+  });
+
+  it('matches phone chat ids by digits; opaque lids do not match phones', () => {
+    assert.equal(
+      whatsAppChatIdsMatch('85291234567@c.us', '91234567'),
+      true,
+    );
+    assert.equal(
+      whatsAppChatIdsMatch('85291234567@c.us', '99999999@c.us'),
+      false,
+    );
+    assert.equal(
+      whatsAppChatIdsMatch('85291234567@c.us', '58652174069847@lid'),
+      false,
+    );
+    assert.equal(
+      whatsAppChatIdsMatch('58652174069847@lid', '58652174069847@lid'),
+      true,
+    );
   });
 
   it('builds chat ids and folders', () => {
