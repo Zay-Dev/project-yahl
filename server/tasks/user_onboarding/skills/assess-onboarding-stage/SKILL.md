@@ -8,7 +8,7 @@ Given extracted knowledge and prior stage Q&A, decide whether the current onboar
 
 ## Input (from stage context)
 
-- Session extract `.extracted` content for topic `user-onboarding`
+- Session extract markdown for topic `user-onboarding` (read from `~/nixery/get-knowledge/` artifacts)
 - Stage-specific keys expected for this stage index
 - `onboarding_qa_<stageIndex>` log if present
 - Stage rubric from SKILL.yahl
@@ -36,12 +36,12 @@ Write an assessment object:
 When `sufficient: true`:
 
 1. Build stage `produceContextKeys` from extracted knowledge (no ask_user).
-2. Call `persist-knowledge` for stage keys.
+2. Call `upsert-knowledge-page` for stage keys (dual-write: overview sections + `raw/`).
 3. Proceed to verify.
 
 When `sufficient: false`:
 
-1. Call `/mastermind(design-questions, stage: N, gaps: …, priorQa: …)`.
+1. Call `/nixery(design-questions, stage: N, gaps: …, priorQa: …)`.
 2. Emit `ask_user` batch from the returned batch spec.
 3. Merge answers into context and `onboarding_qa_<stageIndex>`.
 4. Re-assess until sufficient or ready for verify.

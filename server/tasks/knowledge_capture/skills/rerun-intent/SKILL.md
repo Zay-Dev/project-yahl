@@ -2,7 +2,7 @@
 
 Rerun gate for knowledge_capture when persisted corpus already exists for the resolved topic.
 
-Read after `extract-knowledge` returns non-absent for `knowledge_topic`.
+Read after `get-knowledge` returns non-absent for `knowledge_topic`.
 
 ## Context types
 
@@ -72,4 +72,4 @@ Reuse patterns from user-onboarding rerun-intent: `*build_rerun_intent_batch`, `
 
 ## Persist
 
-`/mastermind(persist-knowledge, topic: knowledge_topic, key: open_questions_qa, value: { items: [...] })`.
+`/nixery(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: [...] })`.

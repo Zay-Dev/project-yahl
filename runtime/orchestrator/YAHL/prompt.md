@@ -39,16 +39,18 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
 
-Use the **`mastermind`** tool for `/mastermind(...)` helper skills (research, extract-info, extract-knowledge, persist-knowledge, media-to-text, plan). Read `/opt/skills/mastermind/SKILL.md`. **Do not use mastermind for verify** — stages with `verify: true` are scored by the orchestrator after the stage finishes.
+Use the **`mastermind`** tool for `/mastermind(...)` platform skills (list-topic-policies, resolve-topic-policy, patch-topic-policy, evaluate-knowledge-refresh, dispatch-task-run, propose-notification). Read `/opt/skills/mastermind/SKILL.md`. Use **`nixery`** for media-to-text and LLM helpers. **Do not use mastermind for verify** — stages with a `verify:` object (or `verify: true`) are scored by the orchestrator via nixery `verify.defId` after the stage finishes.
 
-Knowledge read/write: use **`extract-knowledge`** and **`persist-knowledge`** with semantic `need` / `key` / `topic` only — never pass file paths to those skills.
+Use the **`nixery`** tool for `/nixery(resolve-topic, …)`, `/nixery(tidy-knowledge, …)`, `/nixery(knowledge-qa-review, …)`, `/nixery(upsert-knowledge-page, …)`, `/nixery(dedup-knowledge, …)`, `/nixery(research, …)`, `/nixery(design-questions, …)`, `/nixery(extract-info, …)`, `/nixery(consult-breaking-change, …)`. Read `/opt/skills/nixery/SKILL.md`.
 
-**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container). After **`extract-knowledge`**, read **`~/knowledge/{key}.json`** — never read `~/knowledges/` (canonical store is mastermind-private).
+Knowledge reads use orchestrator **`nixeryRun: get-knowledge`** — read **`~/nixery/get-knowledge/{output}`** after the nixery stage. Wiki writes use **`/nixery(upsert-knowledge-page, …)`** with semantic `key` / `topic` only — never pass file paths.
+
+**`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container).
 
 - Arguments: `{ "mode": "goto|act|extract|observe|agent", "instruction": "<text>", "url"?: "<url>", "schema"?: { ... }, "maxSteps"?: <number> }`.
 - Returns JSON `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.
 - Do not use `run_bash` + curl for web search, HTML page browse, or scraping; use **`browser`** instead.
-- **Exception:** when stage logic references a documented HTTP API in a workspace file (e.g. `~/hk_observatory_api.md`), use `run_bash` + `curl` to fetch JSON/API responses per that file.
+- **Exception:** when stage logic references a documented HTTP API in a workspace file (e.g. `~/data/hk_observatory_api.md`), use `run_bash` + `curl` to fetch JSON/API responses per that file. Use `~/data/` for task-persistent files shared across sessions of the same task; other `~/` paths are session scratch.
 - After `browser`, call **`set_context`** to persist `data`.
 
 ## ask_user (API tool)
@@ -103,4 +105,4 @@ Examples
 7. `records = [...records, ...new_records];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array>`.
 8. `records = [...records, ...new_records, mandatory_record];` -> evaluate merged array first, then call `set_context` with `scope="stage"` (or `global`), `key="records"`, `operation="set"`, `value=<merged_records_array_with_mandatory_record>`.
 9. `value += other_value;` -> compute the updated value first (`value + other_value`), then call `set_context` with `scope="stage"` (or `global`), `key="value"`, `operation="set"`, `value=<updated_value>`.
-10. `EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);` -> after `/mastermind(persist-knowledge, ...)`, call `set_context` with `scope="global"`, `key="knowledge_paths"`, `operation="set"`, `value=<merged knowledge_paths>` where each `persisted[]` item is `{ key, relativePath, absolutePath }` — never bare path strings.
+10. `EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);` -> after `/nixery(upsert-knowledge-page, ...)`, read `data.path` from the tool result and call `set_context` with `scope="global"`, `key="knowledge_paths"`, `operation="set"`, `value=<merged knowledge_paths>` where each `persisted[]` item is `{ key, relativePath: path, absolutePath: path }` from that string — never bare path strings. `*append_persisted_path` is agent-implemented (`*`), not a runtime API.

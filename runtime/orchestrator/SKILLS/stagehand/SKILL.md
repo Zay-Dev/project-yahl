@@ -153,5 +153,5 @@ Then:
 
 - Chromium runs locally in the agent container (headless).
 - Reuse the same browser session within a stage; multiple `browser` calls share one Chromium instance.
-- For large page text saved to `~/tmp/`, follow up with `/mastermind(extract-info, source: ~/tmp/…, need: …)` per `/opt/skills/mastermind/SKILL.md`.
+- For large page text saved to `~/tmp/`, follow up with `/nixery(extract-info, source: ~/tmp/…, need: …)` per `/opt/skills/nixery/SKILL.md`.
 - HEAD may differ from full page load (paywalls, bot blocks, redirect chains without `-L`); use judgment — invalid HEAD does not always mean the URL is useless for a later `goto`.

@@ -15,9 +15,18 @@ describe('readTaskSkillsFromDisk', () => {
     assert.deepEqual(paths, [...paths].sort((left, right) => left.localeCompare(right)));
   });
 
-  it('returns empty array when skills directory is missing', async () => {
+  it('merges shared skills and prefers task-local overrides', async () => {
+    const files = await readTaskSkillsFromDisk('knowledge_refresh');
+
+    assert.ok(files.some((file) => file.path === 'locate-knowledge/SKILL.md'));
+    assert.ok(files.some((file) => file.path === 'task-mission/SKILL.md'));
+    assert.ok(!files.some((file) => file.path.includes('knowledge_capture')));
+  });
+
+  it('returns shared skills when task skills directory is missing', async () => {
     const files = await readTaskSkillsFromDisk('nonexistent_task_id_xyz');
 
-    assert.deepEqual(files, []);
+    assert.ok(files.some((file) => file.path === 'locate-knowledge/SKILL.md'));
+    assert.ok(!files.some((file) => file.path === 'task-mission/SKILL.md'));
   });
 });

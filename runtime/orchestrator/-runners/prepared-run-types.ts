@@ -20,7 +20,6 @@ export type TPreparedRunInput = {
   cursor: TRunStartCursor;
   parsedStages: ParsedStage[];
   resultContextKey: string;
-  runInput?: Record<string, unknown>;
   storage: TStorage;
   systemAppend?: string;
   taskYahl: string;

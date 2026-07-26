@@ -1,0 +1,43 @@
+id: media-to-text
+description: Translate session media (image/PDF/etc.) into plain text for text-only agents
+
+# Cursor CLI layered on nixery packages via dockerfile (glibc binary needs a runnable base)
+packages: [shell, nodejs]
+dockerfile: Dockerfile
+
+env:
+  CURSOR_API_KEY: ""
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  file:
+    type: string
+    required: true
+  output:
+    type: string
+    required: false
+
+mount:
+  /session:
+    host: session-root
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+
+run:
+  entry: [node, /opt/nixery/def/run.mjs]
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: true

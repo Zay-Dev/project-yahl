@@ -21,10 +21,10 @@ Use headings (`#`, `##`), bullets, and short prose. No placeholder text.
 
 | Field | Author | Source |
 |-------|--------|--------|
-| `result.mastermind` | Mastermind via `/mastermind(research, guidelinePath: ~/task-skills/synthesize-user-profile/SKILL.md, facts: …)` | knowledges + structured facts |
+| `result.research` | Nixery via `/nixery(research, guidelinePath: ~/task-skills/synthesize-user-profile/SKILL.md, facts: …)` | wiki corpus + structured facts |
 | `result.agent` | Stage agent following this same SKILL at `~/task-skills/synthesize-user-profile/SKILL.md` | in-session context + Q&A logs |
 
-Both documents cover the same user; tone/structure may differ.
+Both documents cover the same user; tone/structure may differ. Final profiles persist to wiki page `brief`; structured mirror under `raw/user_profile_summary`.
 
 ## Fact sources (required)
 
@@ -45,11 +45,11 @@ Read `~/task-skills/build-onboarding-profiles/SKILL.md` for normalization rules 
 
 ## Mastermind call
 
-Stage agent passes structured facts from context and session knowledge extracts (`~/knowledge/*.json` `.extracted`). Mastermind loads this file via `guidelinePath` behind an untrusted-content banner.
+Stage agent passes structured facts from context and session knowledge extracts (`~/nixery/get-knowledge/*.md` markdown). Nixery loads this file via `guidelinePath` behind an untrusted-content banner.
 
 ## Verify expectations
 
-Both Markdown strings must be non-empty, include all four section areas, and not contradict persisted `knowledges/user-onboarding/` facts.
+Both Markdown strings must be non-empty, include all four section areas, and not contradict persisted wiki pages for `user-onboarding`.
 
 ## Open questions
 
@@ -66,7 +66,7 @@ Rules:
 - Include only genuine unknowns — not fields already captured in profiles.
 - Remove items answered in `open_questions_qa` this run.
 - Carry forward unanswered items from prior `open_questions` extract unless superseded.
-- Persist via stage logic: `/mastermind(persist-knowledge, key: open_questions, value: { items: [...] })`.
+- Persist via stage logic: `/nixery(upsert-knowledge-page, key: open_questions, value: { items: [...] })` — overview summary + `raw/open_questions`.
 
 When `open_questions_qa` is present, weave answered content into the relevant profile sections before computing remaining open questions.
 

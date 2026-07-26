@@ -49,4 +49,3 @@ exposedRoute('/api/platform/cron/jobs')
 exposedRoute('/api/platform/knowledge-policies')
   .get('/', listKnowledgePolicies)
   .patch('/:slug', patchKnowledgePolicy);
-

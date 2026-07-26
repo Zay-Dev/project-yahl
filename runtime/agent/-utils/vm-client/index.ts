@@ -35,7 +35,7 @@ export const runScript = async (
   const { isolated, context } = await _createVm(_context, vmOptions);
 
   const compiled = await isolated.compileScript(script);
-  const result = await compiled.run(context, { timeout: 10 }) as unknown;
+  const result = await compiled.run(context, { timeout: 1000 }) as unknown;
 
   const objectOrFunction = ['object', 'function'].includes(typeof result);
 

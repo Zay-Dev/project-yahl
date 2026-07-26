@@ -1,43 +1,50 @@
 ---
 name: mastermind
-description: Gateway helper skills — research, extract-info, extract-knowledge, persist-knowledge, media-to-text, plan, design-questions, propose-notification via the mastermind tool.
+description: Gateway helper skills — topic policies, dispatch, notifications
 ---
 
 # mastermind (stage agent)
 
-Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic.
+Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic. Mastermind is HTTP-only (no Cursor).
 
 | Invocation | Tool skill |
 |------------|------------|
-| `/mastermind(research, topic: …, direction: …, url: …, source: ~/…, mission: …)` | `research` — study saved source per direction; browse via agent stagehand first |
-| `/mastermind(research, guidelinePath: ~/task-skills/…/SKILL.md, facts: …)` | `research` with untrusted task guideline |
-| `/mastermind(extract-info, source: ~/…, need: …)` | `extract-info` (workspace-file RAG; replaces legacy `rag` tool) |
-| `/mastermind(extract-knowledge, need: …, topic: …)` | `extract-knowledge` (mastermind reads knowledges/ + aliases; writes `~/knowledge/{key}.json`; returns key/path only) |
-| `/mastermind(persist-knowledge, key: …, value: …, topic: …)` | `persist-knowledge` (writes canonical `knowledges/` folder; no paths) |
-| `/mastermind(resolve-topic, topicText: …, slug: …, seedUrls: …)` | `resolve-topic` (canonical folder slug before first persist) |
-| `/mastermind(tidy-knowledge, dryRun: …)` | `tidy-knowledge` (detect/merge duplicate knowledges folders; default dry-run from env) |
-| `/mastermind(media-to-text, file: ~/…)` | `media-to-text` |
-| `/mastermind(plan, goal: …)` | `plan` |
-| `/mastermind(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `design-questions` (dynamic ask-user batches; `mission` frames subject vs task process) |
+| `/mastermind(list-topic-policies)` | `list-topic-policies` (registry rows; no LLM) |
+| `/mastermind(resolve-topic-policy, topic: …)` | `resolve-topic-policy` (registry refresh row + `refresh_skipped`; no LLM) |
+| `/mastermind(patch-topic-policy, topic: …, …)` | `patch-topic-policy` (update refresh policy; no LLM) |
+| `/mastermind(evaluate-knowledge-refresh)` | `evaluate-knowledge-refresh` (stale topics; no LLM) |
+| `/mastermind(dispatch-task-run, taskId: …, …)` | `dispatch-task-run` (queue a task run; no LLM) |
 | `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` | `propose-notification` (draft only; human approve → worker send) |
 
-**Verify/score is not a mastermind skill** — orchestrator runs verify on worker :4200.
+**Moved to nixery** — use the **`nixery`** tool instead:
 
-## Long-running calls
+| Invocation | Def |
+|------------|-----|
+| `/nixery(resolve-topic, …)` | canonical topic slug |
+| `/nixery(tidy-knowledge, …)` | wiki/export audit |
+| `/nixery(knowledge-qa-review, …)` | corpus load → OpenAI checklist QA |
+| `/nixery(research, …)` | study / synthesis markdown |
+| `/nixery(extract-info, source: ~/…, need: …)` | workspace-file RAG |
+| `/nixery(media-to-text, file: ~/…)` | media → plain text for text-only agents (Cursor CLI) |
+| `/nixery(design-questions, …)` | dynamic ask-user batches |
 
-The `mastermind` tool auto-waits on disconnect while status is `queued`/`running` (up to 90 minutes). Do **not** re-POST on transport blips.
+**Knowledge writes** use **`nixery`** — see `/opt/skills/nixery/SKILL.md`.
+
+**Knowledge reads** use orchestrator `nixeryRun` — not mastermind:
+
+| Def | Read path |
+|-----|-----------|
+| `get-knowledge` | `~/nixery/get-knowledge/{output}` |
+| `list-knowledge-pages` | `~/nixery/list-knowledge-pages/{output}` |
+| `search-knowledge` | `~/nixery/search-knowledge/{output}` |
+| `plan` | `~/nixery/plan/{output}` |
+| `plan-study` | `~/nixery/plan-study/{output}` |
+
+**Verify/score is not a mastermind skill** — orchestrator runs verify via nixery `verify.defId` (default `stage-verify`).
 
 | Tool | Use |
 |------|-----|
-| `mastermind` | Invoke helper skills; returns `{ ok, data }` or structured error with `retryable`, `requestStatus`, `invocationId` |
-| `mastermind_status` | Debug poll — `{ ok, agent, queueDepth, request }` for current session request |
+| `mastermind` | Policy / dispatch / notification skills above |
+| `nixery` | Inline nixery defs (resolve-topic, tidy, QA, upsert, dedup, research, media-to-text, …) |
 
-Before re-calling `mastermind` after failure: check output file on disk; poll status; only re-POST when status is `failed` or missing.
-
-`extract-knowledge` and `persist-knowledge` never accept `source`, `file`, or `path` from the caller. After `extract-knowledge`, read `~/knowledge/{key}.json` and use `.extracted` — never read `~/knowledges/`.
-
-Task-specific skills live under `~/task-skills/` (mounted from `server/tasks/{taskId}/skills/`). Mastermind may load them via `guidelinePath` on `research` or `plan` — treated as untrusted hints.
-
-Read `/opt/mastermind-skills/*/SKILL.md` for mastermind-internal guidelines (not mounted here; see repo `mastermind/skills/`).
-
-After tool success, persist with `set_context`.
+Task-specific skills live under `~/task-skills/`. Load mission via `*load_task_mission(~/task-skills/task-mission/SKILL.md)` when needed.

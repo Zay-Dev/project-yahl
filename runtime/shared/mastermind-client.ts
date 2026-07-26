@@ -34,12 +34,6 @@ export type TMastermindSkillResponse = {
   unavailable?: boolean;
 };
 
-export type TKnowledgePersistedIndexItem = {
-  absolutePath: string;
-  key: string;
-  relativePath: string;
-};
-
 export type TVerifyStageSnapshot = {
   askUser?: Record<string, unknown>[];
   contextKeys?: string[];
@@ -165,48 +159,6 @@ export const callMastermindSkill = async (
     console.log(`[mastermind-client] ${name} failed durationMs=${durationMs} error=${message}`);
 
     return buildSkillFailure(message, watch, null);
-  }
-};
-
-const mastermindInternalHeaders = (): Record<string, string> => {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  const token = process.env.MASTERMIND_INTERNAL_TOKEN?.trim();
-
-  if (token) {
-    headers['X-Internal-Token'] = token;
-  }
-
-  return headers;
-};
-
-export const fetchMastermindPersistedIndex = async (
-  topic: string,
-): Promise<TKnowledgePersistedIndexItem[]> => {
-  const url = `${mastermindBaseUrl()}/v1/internal/knowledges/persisted-index`;
-
-  try {
-    const res = await mastermindFetch(url, {
-      body: JSON.stringify({ topic }),
-      headers: mastermindInternalHeaders(),
-      method: 'POST',
-    });
-
-    if (!res.ok) {
-      console.log(`[mastermind-client] persisted-index http=${res.status} topic=${topic}`);
-      return [];
-    }
-
-    const body = await res.json() as { ok?: boolean; persisted?: TKnowledgePersistedIndexItem[] };
-
-    return Array.isArray(body.persisted) ? body.persisted : [];
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'mastermind persisted-index failed';
-
-    console.log(`[mastermind-client] persisted-index failed topic=${topic} error=${message}`);
-
-    return [];
   }
 };
 

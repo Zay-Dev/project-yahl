@@ -97,7 +97,7 @@ const multiTurnStageDetail = (): TStageDetailForResume => ({
             content: 'extract knowledge',
             tool_calls: [{
               function: {
-                arguments: '{"skill":"extract-knowledge","args":{}}',
+                arguments: '{"skill":"research","args":{}}',
                 name: 'mastermind',
               },
               id: 'tool-mastermind-1',

@@ -194,7 +194,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(research|extract-info|extract-knowledge|persist-knowledge|resolve-topic|tidy-knowledge|media-to-text|plan|design-questions, ...) in stage logic. extract-knowledge writes ~/knowledge/{key}.json and returns key/path only — read .extracted from that file. Long calls auto-wait up to 90 minutes. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(list-topic-policies|resolve-topic-policy|patch-topic-policy|evaluate-knowledge-refresh|dispatch-task-run|propose-notification, ...) in stage logic. Topic resolve, tidy, QA, media-to-text, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -205,15 +205,12 @@ export const STAGE_TOOLS = [
           skill: {
             description: "Helper skill name.",
             enum: [
-              "research",
-              "extract-info",
-              "extract-knowledge",
-              "persist-knowledge",
-              "resolve-topic",
-              "tidy-knowledge",
-              "media-to-text",
-              "plan",
-              "design-questions",
+              "list-topic-policies",
+              "resolve-topic-policy",
+              "patch-topic-policy",
+              "evaluate-knowledge-refresh",
+              "dispatch-task-run",
+              "propose-notification",
             ],
             type: "string",
           },
@@ -227,7 +224,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Poll mastermind request activity for the current session stage request. Use for debugging long research calls — do not re-POST while status is queued or running. Returns { ok, agent, queueDepth, request: { status, skill, invocationId, startedAt, updatedAt } }.",
+        "Poll mastermind request activity for the current session stage request. Use for debugging long skill calls — do not re-POST while status is queued or running. Returns { ok, agent, queueDepth, request: { status, skill, invocationId, startedAt, updatedAt } }.",
       name: "mastermind_status",
       parameters: {
         properties: {
@@ -241,7 +238,51 @@ export const STAGE_TOOLS = [
     },
     type: "function" as const,
   },
+  {
+    function: {
+      description:
+        "Run a nixery def inline from stage logic. Use for /nixery(defId, …) where the def has output.inlineTool: true in server/nixery/{defId}/index.yml. Returns JSON { ok, data } or { ok: false, error }.",
+      name: "nixery",
+      parameters: {
+        properties: {
+          args: {
+            description: "Def-specific arguments object (topic, key, value, purpose, dryRun, …).",
+            type: "object",
+          },
+          defId: {
+            description: "Nixery def id under server/nixery/ with output.inlineTool: true.",
+            type: "string",
+          },
+        },
+        required: ["defId"],
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
 ];
+
+export const parseNixeryToolArguments = (
+  raw: string,
+): { args: Record<string, unknown>; defId: string } | null => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed)) return null;
+  if (typeof parsed.defId !== 'string' || !parsed.defId.trim()) return null;
+
+  const args = isRecord(parsed.args) ? parsed.args : {};
+
+  return {
+    args,
+    defId: parsed.defId.trim(),
+  };
+};
 
 export const parseMastermindStatusToolArguments = (
   raw: string,

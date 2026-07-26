@@ -1,6 +1,6 @@
 # clarify-topic-minimal
 
-Minimal ask-user batch before full clarify on knowledge_capture. Resolves topic slug early so `extract-knowledge` can detect an existing corpus.
+Minimal ask-user batch before full clarify on knowledge_capture. Resolves topic slug early so `get-knowledge` can detect an existing corpus.
 
 ## Fixed batch spec
 
@@ -28,11 +28,11 @@ Call `*build_learning_contract_partial(topicAnswers)` — intent/depth may be em
 
 ```text
 const proposed_topic = *slugify_learning_topic({ topic, seedUrls });
-const resolvedTopic = /mastermind(resolve-topic, topicText: topic, seedUrls, slug: proposed_topic);
+const resolvedTopic = /nixery(resolve-topic, topicText: topic, seedUrls, slug: proposed_topic);
 const knowledge_topic = resolvedTopic.canonical;
 ```
 
-Then run `extract-knowledge` for `knowledge_topic` before deciding rerun gate vs full clarify.
+Then run `get-knowledge` for `knowledge_topic` before deciding rerun gate vs full clarify.
 
 ## When full clarify runs
 

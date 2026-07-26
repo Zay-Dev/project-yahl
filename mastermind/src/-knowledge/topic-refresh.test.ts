@@ -9,18 +9,14 @@ describe('topic refresh', () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-topic-refresh-'));
 
     process.env.MASTERMIND_DATA_ROOT = tmp;
+    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
 
-    const topicDir = path.join(tmp, 'knowledges', 'dogfood-topic');
+    const topicDir = path.join(tmp, 'knowledge_export', 'en', 'topics', 'dogfood-topic');
 
     await fs.mkdir(topicDir, { recursive: true });
-    await fs.mkdir(path.join(tmp, 'knowledges', '_index'), { recursive: true });
+    await fs.writeFile(path.join(topicDir, 'overview.md'), '# Dogfood\n', 'utf8');
     await fs.writeFile(
-      path.join(topicDir, 'meta.json'),
-      `${JSON.stringify({ meta: { slug: 'dogfood-topic', updated_at: '2020-01-01T00:00:00.000Z' } }, null, 2)}\n`,
-      'utf8',
-    );
-    await fs.writeFile(
-      path.join(tmp, 'knowledges', '_index', 'topics.json'),
+      path.join(tmp, 'topics.json'),
       `${JSON.stringify({
         topics: [{
           aliases: [],
@@ -50,6 +46,7 @@ describe('topic refresh', () => {
     assert.deepEqual(report.staleTopics[0]?.scopes, ['facts', 'summary']);
 
     delete process.env.MASTERMIND_DATA_ROOT;
+    delete process.env.KNOWLEDGE_EXPORT_ROOT;
   });
 
   it('skips topics with refresh disabled or null interval', async () => {
@@ -82,14 +79,124 @@ describe('topic refresh', () => {
     );
   });
 
+  it('throws when topic policy slug is unknown', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-resolve-topic-missing-'));
+
+    process.env.MASTERMIND_DATA_ROOT = tmp;
+    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
+
+    await fs.mkdir(path.join(tmp, 'knowledge_export', 'en', 'topics'), { recursive: true });
+    await fs.writeFile(
+      path.join(tmp, 'topics.json'),
+      `${JSON.stringify({ topics: [] }, null, 2)}\n`,
+      'utf8',
+    );
+
+    const { resolveTopicPolicy } = await import('./topic-refresh.js');
+
+    await assert.rejects(
+      () => resolveTopicPolicy('project yahl'),
+      /Topic policy not found/,
+    );
+
+    delete process.env.MASTERMIND_DATA_ROOT;
+    delete process.env.KNOWLEDGE_EXPORT_ROOT;
+  });
+
+  it('resolves topic policy by declared registry alias', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-resolve-topic-alias-'));
+
+    process.env.MASTERMIND_DATA_ROOT = tmp;
+    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
+
+    const exportDir = path.join(tmp, 'knowledge_export', 'en', 'topics', 'project-yahl-develop');
+
+    await fs.mkdir(exportDir, { recursive: true });
+    await fs.writeFile(path.join(exportDir, 'overview.md'), '# Project Yahl\n', 'utf8');
+    await fs.writeFile(
+      path.join(tmp, 'topics.json'),
+      `${JSON.stringify({
+        topics: [{
+          aliases: ['yahl-develop'],
+          canonical: 'project-yahl-develop',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          maxAgeDays: null,
+          refresh: {
+            enabled: true,
+            interval: 'daily',
+            lastRunAt: null,
+            lastRunSessionId: null,
+            lastRunStatus: null,
+            scopes: ['studies', 'facts', 'synthesis', 'summary'],
+          },
+          signals: { seedUrlHosts: [], seedUrlPaths: [], topicTexts: [] },
+          updatedAt: '2020-01-01T00:00:00.000Z',
+        }],
+      }, null, 2)}\n`,
+      'utf8',
+    );
+
+    const { resolveTopicPolicy } = await import('./topic-refresh.js');
+    const resolved = await resolveTopicPolicy('yahl-develop');
+
+    assert.equal(resolved.row.canonical, 'project-yahl-develop');
+    assert.equal(resolved.refresh_skipped, false);
+
+    delete process.env.MASTERMIND_DATA_ROOT;
+    delete process.env.KNOWLEDGE_EXPORT_ROOT;
+  });
+
+  it('resolves topic policy without skipping when enabled with null interval', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-resolve-topic-policy-'));
+
+    process.env.MASTERMIND_DATA_ROOT = tmp;
+    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
+
+    const exportDir = path.join(tmp, 'knowledge_export', 'en', 'topics', 'lego-story-of-reckless-ben');
+
+    await fs.mkdir(exportDir, { recursive: true });
+    await fs.writeFile(path.join(exportDir, 'overview.md'), '# Lego\n', 'utf8');
+    await fs.writeFile(
+      path.join(tmp, 'topics.json'),
+      `${JSON.stringify({
+        topics: [{
+          aliases: [],
+          canonical: 'lego-story-of-reckless-ben',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          maxAgeDays: null,
+          refresh: {
+            enabled: true,
+            interval: null,
+            lastRunAt: null,
+            lastRunSessionId: null,
+            lastRunStatus: null,
+            scopes: ['summary'],
+          },
+          signals: { seedUrlHosts: [], seedUrlPaths: [], topicTexts: [] },
+          updatedAt: '2020-01-01T00:00:00.000Z',
+        }],
+      }, null, 2)}\n`,
+      'utf8',
+    );
+
+    const { resolveTopicPolicy } = await import('./topic-refresh.js');
+    const resolved = await resolveTopicPolicy('lego-story-of-reckless-ben');
+
+    assert.equal(resolved.refresh_skipped, false);
+    assert.equal(resolved.row.refresh?.enabled, true);
+    assert.equal(resolved.row.refresh?.interval, null);
+
+    delete process.env.MASTERMIND_DATA_ROOT;
+    delete process.env.KNOWLEDGE_EXPORT_ROOT;
+  });
+
   it('patches refresh policy for canonical slug', async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-topic-refresh-patch-'));
 
     process.env.MASTERMIND_DATA_ROOT = tmp;
 
-    await fs.mkdir(path.join(tmp, 'knowledges', '_index'), { recursive: true });
     await fs.writeFile(
-      path.join(tmp, 'knowledges', '_index', 'topics.json'),
+      path.join(tmp, 'topics.json'),
       `${JSON.stringify({ topics: [] }, null, 2)}\n`,
       'utf8',
     );

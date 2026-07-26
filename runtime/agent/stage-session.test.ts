@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseStageSessionInput, runStageSession } from "./stage-session";
 import type { ChatAssistantMessage } from "@/shared/stage-tools";
+
+import { parseStageSessionInput, runStageSession } from "./stage-session";
 
 const assistant = (content: string | null, toolCalls?: ChatAssistantMessage["tool_calls"]): ChatAssistantMessage => ({
   content,
@@ -68,5 +69,54 @@ describe("runStageSession", () => {
 
     assert.equal(envelope.type, "result");
     assert.match(envelope.output, /done/);
+  });
+
+  it("continues after orchestrator-handled nixery tool message is present", async () => {
+    let turn = 0;
+    const nixeryPayload = JSON.stringify({ data: { ok: true }, ok: true });
+    const nixeryToolCall = {
+      function: {
+        arguments: JSON.stringify({ args: { topic: 'hk-weather' }, defId: 'upsert-knowledge-page' }),
+        name: 'nixery',
+      },
+      id: 'tool-nixery-1',
+      type: 'function' as const,
+    };
+
+    const envelope = await runStageSession(
+      {
+        context: emptyContext(),
+        stage: { logic: 'persist region' },
+      },
+      [],
+      {
+        chatWithTools: async (messages) => {
+          turn += 1;
+
+          if (turn === 1) {
+            return [
+              assistant(null, [nixeryToolCall]),
+              {
+                content: nixeryPayload,
+                role: 'tool',
+                tool_call_id: 'tool-nixery-1',
+              },
+            ];
+          }
+
+          const last = messages.at(-1);
+          assert.equal(last?.role, 'tool');
+          assert.equal((last as { tool_call_id: string }).tool_call_id, 'tool-nixery-1');
+
+          return [assistant(JSON.stringify({ output: 'saved', type: 'result' }))];
+        },
+        runCommand: async () => '',
+      },
+      { maxTurns: 3 },
+    );
+
+    assert.equal(turn, 2);
+    assert.equal(envelope.type, 'result');
+    assert.match(envelope.output, /saved/);
   });
 });

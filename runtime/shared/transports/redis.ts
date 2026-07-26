@@ -400,7 +400,15 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
         error: async (error) => {
           await this.redis.lpush(replyQueue, JSON.stringify({
             type: "result",
-            output: { error, type: 'error', message: error.message },
+            output: {
+              error: {
+                message: error.message,
+                name: error.name,
+                ...(typeof error.stack === 'string' ? { stack: error.stack } : {}),
+              },
+              message: error.message,
+              type: 'error',
+            },
           }));
         },
 

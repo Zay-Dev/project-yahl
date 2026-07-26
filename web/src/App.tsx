@@ -12,6 +12,7 @@ import { CronJobsPage } from "@/pages/platform/cron-jobs";
 import { CronJobCreatePage } from "@/pages/platform/cron-jobs/create";
 import { CronJobEditPage } from "@/pages/platform/cron-jobs/edit";
 import { SessionDetailPage } from "@/pages/sessions/detail";
+import { PendingQuestionsPage } from "@/pages/sessions/pending-questions";
 import { SessionsPage } from "@/pages/sessions";
 import { TaskCreatePage } from "@/pages/tasks/create";
 import { TaskDetailPage } from "@/pages/tasks/detail";
@@ -52,6 +53,7 @@ export function App() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="health" element={<HealthPage />} />
             <Route path="sessions" element={<SessionsPage />} />
+            <Route path="sessions/pending-questions" element={<PendingQuestionsPage />} />
             <Route path="sessions/:id" element={<SessionDetailPage />} />
             <Route path="tasks" element={<TasksPage />} />
             <Route path="tasks/new" element={<TaskCreatePage />} />

@@ -22,6 +22,7 @@ export function NavMain({
   items: {
     title: string
     url: string
+    external?: boolean
     icon?: React.ReactNode
     isActive?: boolean
     items?: {
@@ -70,6 +71,18 @@ export function NavMain({
                 </SidebarMenuSub>
               </CollapsibleContent>
             </Collapsible>
+          ) : item.external || /^https?:\/\//.test(item.url) ? (
+            <SidebarMenuItem key={item.title}>
+              <SidebarMenuButton
+                tooltip={item.title}
+                render={(
+                  <a href={item.url} rel="noreferrer" target="_blank" />
+                )}
+              >
+                {item.icon}
+                <span>{item.title}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           ) : (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton

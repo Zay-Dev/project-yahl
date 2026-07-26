@@ -1,6 +1,6 @@
 # task-mission
 
-Canonical mission framing for all Mastermind calls in the knowledge_capture task.
+Canonical mission framing for all helper calls in the knowledge_capture task.
 
 ## Mission text (copy into every design-questions / research call)
 
@@ -8,13 +8,14 @@ You are helping capture knowledge about a subject the user chose. Questions and 
 
 ## Rules for stage agents
 
-1. Read this file via `run_bash`: `cat ~/task-skills/task-mission/SKILL.md` (also injected in stage system prompt).
-2. Pass the full mission text as the `mission` argument on every `design-questions`, `research`, and `plan` Mastermind call.
+1. Load via `*load_task_mission(~/task-skills/task-mission/SKILL.md)` in stage logic when a stage needs mission text.
+2. Pass the full mission text as the `mission` argument on every `design-questions`, `research`, and `plan` call.
 3. Include the same mission string inside `facts.mission` on research/plan calls when using structured facts.
 4. Ask-user questions must clarify the **subject**, **scope**, or **user intent** — not the task pipeline.
-5. After each `/mastermind(research, …)` study call, **immediately** persist with `persist-knowledge` — never hold study output only in session context.
+5. After each `/nixery(research, …)` study call, **immediately** persist with `upsert-knowledge-page` — never hold study output only in session context.
 6. Never persist URL-only source rows without non-empty `studyMd`.
+7. Read `server/tasks/_shared/skills/knowledge-wiki-style/SKILL.md` for wiki vs `raw/` contract.
 
 ## Personalization (stages 4–5)
 
-When user-onboarding knowledge exists, tailor narrative tone and detail level to the user's communication preferences. If session extract `.extracted` is absent (`<none>`), use neutral professional tone and medium detail.
+When user-onboarding knowledge exists, tailor narrative tone and detail level to the user's communication preferences. If session extract markdown is absent (`<none>`), use neutral professional tone and medium detail.

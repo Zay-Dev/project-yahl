@@ -2,10 +2,8 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TLoopMeta, TStorage } from '@/shared/transports/-types';
 
 import { fetchSession, fetchStageDetail } from '@/orchestrator/-ask-user';
-import { mergeTaskSystemAppend } from '@/orchestrator/-utils/workspace-paths';
 import { isStageFinished } from '@/shared/stage-status';
 import { runVerifyGate } from '@/orchestrator/-verify';
-import { syncKnowledgePathsPersisted } from '@/orchestrator/-verify/knowledge-paths-sync';
 
 import {
   isLoopStageCheckpoint,
@@ -14,8 +12,8 @@ import {
 } from './pipeline-continuation';
 
 const withBaseSystemAppend = async (
-  sessionId: string,
-  taskId: string,
+  _sessionId: string,
+  _taskId: string,
   baseAppend: string | undefined,
   extra?: string,
 ) => {
@@ -27,7 +25,7 @@ const withBaseSystemAppend = async (
     return baseAppend;
   }
 
-  return mergeTaskSystemAppend(sessionId, taskId, extra);
+  return extra;
 };
 
 const resumeVerifyWithProducedKeys = async (params: {
@@ -41,8 +39,6 @@ const resumeVerifyWithProducedKeys = async (params: {
   yahlStages: ParsedStage[];
 }) => {
   const agentName = `agent-${params.sessionId}`;
-
-  await syncKnowledgePathsPersisted(params.storage);
 
   const stageDetail = await fetchStageDetail(params.sessionId, params.requestId);
   const verifyAlreadyPassed = isStageFinished(stageDetail);

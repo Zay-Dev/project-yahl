@@ -1,0 +1,45 @@
+id: list-knowledge-pages
+description: List wiki export pages under a topic namespace
+
+packages: [shell, gnugrep, nodejs]
+
+env:
+  OPENAI_BASE_URL: "https://api.deepseek.com"
+  OPENAI_MODEL: deepseek-v4-pro
+  OPENAI_API_KEY: ""
+  OPENAI_TEMPERATURE: "0.2"
+  OPENAI_MAX_TOKENS: "8192"
+
+nixery:
+  default: "true"
+  tools: [shell, gnugrep, nodejs]
+  policies:
+    - tools: [shell, gnugrep, nodejs]
+      mode: "true"
+
+input:
+  topic:
+    type: string
+    required: true
+  output:
+    type: string
+    required: false
+
+mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+
+run:
+  entry: [node, /opt/nixery/def/run.mjs]
+
+output:
+  default: pages.md
+  validate: validation.mjs
+  inlineTool: false

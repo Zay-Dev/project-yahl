@@ -31,11 +31,11 @@ describe('resolveVerifyResumeEnabled', () => {
     }), true);
   });
 
-  it('returns false when verifyResume is false', () => {
+  it('returns false when verify.resume is false', () => {
     assert.equal(resolveVerifyResumeEnabled({
       askUser: [{ id: '1', question: 'pick' }],
       logic: 'x',
-      verifyResume: false,
+      verify: { defId: 'stage-verify', resume: false },
     }), false);
   });
 });

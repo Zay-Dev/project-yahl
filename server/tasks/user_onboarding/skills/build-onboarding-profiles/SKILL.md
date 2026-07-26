@@ -9,6 +9,7 @@ Read this file before `*build_goals_profile`, `*build_preferences_profile`, or s
 1. Always write the full profile object to context via `set_context` using the stage `produceContextKeys` name (e.g. `goals_profile`, `preferences_profile`).
 2. Do not persist boolean maps or nested objects where the YAHL type expects `string[]`.
 3. Prefer normalized string tokens (snake_case) in arrays; include free-text themes as additional array entries.
+4. Persist with `upsert-knowledge-page` using legacy keys (`identity`, `goals`, …). Nixery dual-writes elaborated markdown to `overview`/`brief` and structured JSON to `raw/{key}` — see `server/tasks/_shared/skills/knowledge-wiki-style/SKILL.md`.
 
 ## build_goals_profile
 
@@ -80,7 +81,7 @@ Right:
 | `boundaries` | MC `constraints_boundaries` option ids |
 | `avoid` | MC `constraints_avoid` option ids |
 
-Persist the same normalized object to Mastermind (`preferences`, `constraints` keys).
+Persist the same normalized object via `upsert-knowledge-page` (`preferences`, `constraints` keys). Mastermind writes wiki overview sections + `raw/` JSON automatically.
 
 ## Verification
 

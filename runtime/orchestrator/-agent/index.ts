@@ -5,6 +5,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TStorage } from '@/shared/transports/-types';
 
 import { toAgentStage } from '@/shared/yahl-stage';
+import { parseNixeryToolArguments } from '@/shared/stage-tools';
 
 import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
@@ -28,7 +29,14 @@ import {
   filterStorageForStage,
 } from '@/orchestrator/-context';
 
-import { archiveStagePlan, prepareStagePlan } from './plan-mode';
+import {
+  loadNixeryDef,
+  resolveNixeryStageInput,
+  runNixeryDef,
+  runNixeryInlineTool,
+  teardownNixeryContainer,
+} from '@/orchestrator/-nixery';
+import { isTypesPreambleStage, seedTypesPreamble } from '@project-yahl/shared/yahl/types-preamble';
 import {
   buildProduceKeysSystemAppend,
   missingProduceKeys,
@@ -39,6 +47,11 @@ import {
 import { handleLoop } from './loop';
 
 const AGENT_LOCAL_TOOLS = new Set(['browser', 'mastermind', 'run_bash']);
+
+const serializeStorageSnapshot = (storage: TStorage) => ({
+  context: Object.fromEntries(storage.context.entries()),
+  types: Object.fromEntries(storage.types.entries()),
+});
 
 type TRunYahlOptions = NonNullable<Parameters<TRunYahl>[1]>;
 
@@ -144,6 +157,13 @@ class YahlAgentRunner {
         continue;
       }
 
+      if (!isResumingThisStage && isTypesPreambleStage(stage, stageIndex)) {
+        seedTypesPreamble(this.storage.types, stage.spec.logic);
+        this.resetStageContext(stage, stageIndex, false);
+        await this.finishOrchestratorDirectStage();
+        continue;
+      }
+
       this.resetStageContext(stage, stageIndex, isResumingThisStage);
       await this.runOneStage();
     }
@@ -190,24 +210,18 @@ class YahlAgentRunner {
     }
   }
 
-  private async withPlanMode(run: () => Promise<void>) {
-    if (!this.resumeStage && this.activeStage.spec.planMode === true) {
-      const planAppend = await prepareStagePlan({
-        requestId: this.requestId,
-        sessionId: this.sessionId,
-        stage: this.activeStage,
-        storage: this.filteredStorage,
-      });
-
-      if (planAppend) {
-        this.systemAppendParts.push(planAppend);
-      }
+  private async runStageBody() {
+    if (this.isPrefixFastForwardMode()) {
+      await this.runStageAttempt();
+      return;
     }
 
-    await run();
+    while (true) {
+      await this.runStageAttempt();
 
-    if (this.activeStage.spec.planMode === true) {
-      await archiveStagePlan(this.sessionId, this.requestId);
+      if ((await this.resolveProduceKeysRetry()) === 'break') {
+        break;
+      }
     }
   }
 
@@ -346,6 +360,29 @@ class YahlAgentRunner {
           });
         }
 
+        if (toolCall.function.name === 'nixery') {
+          const nixeryArgs = parseNixeryToolArguments(toolCall.function.arguments ?? '{}');
+
+          if (!nixeryArgs) {
+            return {
+              hasError: true,
+              result: 'nixery: invalid arguments',
+            };
+          }
+
+          const result = await runNixeryInlineTool({
+            args: nixeryArgs.args,
+            defId: nixeryArgs.defId,
+            requestId: this.requestId,
+            sessionId: this.sessionId,
+          });
+
+          return {
+            hasError: !result.ok,
+            result: JSON.stringify(result),
+          };
+        }
+
         if (AGENT_LOCAL_TOOLS.has(toolCall.function.name)) {
           return {
             hasError: false,
@@ -429,25 +466,52 @@ class YahlAgentRunner {
     return Boolean(this.options.verifyFastForward && this.options.contextAfter);
   }
 
+  private async finishOrchestratorDirectStage() {
+    globalThis.sessionTracker?.createStage(this.sessionId, {
+      context: serializeStorageSnapshot(this.filteredStorage),
+      parsedStageIndex: this.boundParsedStageIndex,
+      requestId: this.requestId,
+      sourceStartLine: this.boundSourceStartLine,
+      stage: toAgentStage(this.activeStage.spec),
+      temperature: this.temperature,
+    });
+
+    publisher.emitStageFinish({
+      requestId: this.requestId,
+      contextAfter: this.storage,
+    });
+    await globalThis.sessionTracker?.flush?.();
+  }
+
   private async runOneStage() {
+    const nixeryRun = this.activeStage.spec.nixeryRun;
+
+    if (nixeryRun) {
+      const nixeryInput = this.activeStage.spec.nixeryInput;
+
+      if (!nixeryInput) {
+        throw new Error('nixeryRun stage requires nixeryInput');
+      }
+
+      const def = await loadNixeryDef(nixeryRun);
+
+      const { containerName } = await runNixeryDef({
+        defId: nixeryRun,
+        input: resolveNixeryStageInput(this.filteredStorage, nixeryInput, def.input),
+        sessionId: this.sessionId,
+        skipTeardown: true,
+      });
+
+      await this.finishOrchestratorDirectStage();
+      await teardownNixeryContainer(containerName, this.sessionId, nixeryRun);
+      return;
+    }
+
     const maxVerifyRetries = verifyAutoRetryMaxIterations();
-    const verifyAutoRetry = this.activeStage.spec.verifyAutoRetry === true;
+    const verifyAutoRetry = this.activeStage.spec.verify?.autoRetry === true;
 
     while (true) {
-      await this.withPlanMode(async () => {
-        if (this.isPrefixFastForwardMode()) {
-          await this.runStageAttempt();
-          return;
-        }
-
-        while (true) {
-          await this.runStageAttempt();
-
-          if ((await this.resolveProduceKeysRetry()) === 'break') {
-            break;
-          }
-        }
-      });
+      await this.runStageBody();
 
       const finishContextAfter = this.options.contextAfterRecord ?? this.storage;
 

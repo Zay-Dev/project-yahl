@@ -9,14 +9,14 @@ After rerun Batch 2 (`open_questions_pick`) when user selected one or more quest
 ## Flow
 
 1. `*picked_open_questions(pickAnswers)` → list of question strings
-2. `/mastermind(design-questions, stage: open_questions, gaps: <picked>, priorQa: open_questions_qa, mission: missionText, goal: resolve pending knowledge gaps)`
-3. `/ask-user-batch(batches)` — one batch per question or grouped if independent
+2. `/nixery(design-questions, stage: open_questions, gaps: <picked>, priorQa: open_questions_qa, mission: missionText, goal: resolve pending knowledge gaps)` — prefer MC batches
+3. `/ask-user-batch(batches)` — one batch per question or grouped if independent; MC options first
 4. `*merge_open_questions_qa(open_questions_qa, oqAnswers)` → context + persist
 
 ## Persist
 
 ```text
-/mastermind(persist-knowledge, topic: knowledge_topic, key: open_questions_qa, value: { items: TOpenQuestionsQa })
+/nixery(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: TOpenQuestionsQa })
 ```
 
 ## Synthesis handoff
@@ -33,7 +33,7 @@ On synthesis persist:
 
 ### `*merge_open_questions_into_analysis(analysis, open_questions_qa, guideline)`
 
-- Append each answered question as a claim in `analysis.claims[]` (format: `"Resolved: <question> — <answer>"`).
+- Append each answered question as a claim object in `analysis.claims[]`: `{ claim: "Resolved: <question> — <answer>", sourceUrls: [], trustTier: "medium" }` (add source URLs when known).
 - Remove matching texts from `analysis.openQuestions[]`.
 
 ### `*refresh_analysis_md_open_questions(analysis_md, analysis, guideline)`

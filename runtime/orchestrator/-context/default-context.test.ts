@@ -34,11 +34,30 @@ describe('seedRunInputContext', () => {
   it('ignores undeclared runInput keys', () => {
     const storage = createStorage();
 
-    seedRunInputContext(storage, { topic: 'legacy-topic' }, ['knowledge_topic']);
+    seedRunInputContext(storage, { topic: 'legacy-topic' }, ['knowledge_topic', 'rerun_intent']);
 
     assert.equal(storage.context.get('knowledge_topic'), undefined);
     assert.equal(storage.context.get('topic'), undefined);
     assert.equal(storage.context.get('runInput'), undefined);
+  });
+
+  it('seeds nested rerun_intent object from runInput', () => {
+    const storage = createStorage();
+    const rerunIntent = {
+      isRerun: true,
+      proceedMode: 'update_selected',
+      updateScope: ['studies', 'facts'],
+      addressOpenQuestions: false,
+    };
+
+    seedRunInputContext(
+      storage,
+      { knowledge_topic: 'my-topic', rerun_intent: rerunIntent },
+      ['knowledge_topic', 'rerun_intent'],
+    );
+
+    assert.equal(storage.context.get('knowledge_topic'), 'my-topic');
+    assert.deepEqual(storage.context.get('rerun_intent'), rerunIntent);
   });
 
   it('no-ops when runInputContextKeys is absent', () => {

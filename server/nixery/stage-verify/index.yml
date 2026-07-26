@@ -1,0 +1,63 @@
+id: stage-verify
+description: Score YAHL stage context against a rubric via OpenAI — orchestrator verify gate
+
+packages: [nodejs]
+
+env:
+  OPENAI_BASE_URL: "https://api.deepseek.com"
+  OPENAI_MODEL: deepseek-v4-pro
+  OPENAI_API_KEY: ""
+  OPENAI_TEMPERATURE: "0.2"
+  OPENAI_MAX_TOKENS: "4096"
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  contextSnapshot:
+    type: string
+    required: true
+  minScore:
+    type: string
+    required: false
+  requestId:
+    type: string
+    required: false
+  rubric:
+    type: string
+    required: false
+  stageIndex:
+    type: string
+    required: false
+  stageSnapshot:
+    type: string
+    required: false
+  verifyResume:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /data/verify:
+    host: data/mastermind/rules/verify
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+
+run:
+  entry: [node, /opt/nixery/def/run.mjs]
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: false

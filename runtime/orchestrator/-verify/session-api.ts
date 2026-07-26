@@ -6,6 +6,14 @@ const sessionApiBaseUrl = () =>
   (process.env.SESSION_API_BASE_URL?.trim() || 'http://127.0.0.1:4000')
     .replace(/\/+$/, '');
 
+const unwrapSessionApiPayload = <T>(json: { data?: T } & Partial<T>): T => {
+  if (json.data !== undefined) {
+    return json.data;
+  }
+
+  return json as T;
+};
+
 export type TVerifyCheckpoint = {
   askUserQuestion?: Record<string, unknown>;
   askUserRef?: string;
@@ -43,9 +51,9 @@ export const postVerifyCheckpoint = async (
     throw new Error(`verify checkpoint failed: ${res.status} ${text}`);
   }
 
-  const json = await res.json() as { data?: { verifyId: string }; verifyId?: string };
+  const json = await res.json() as { data?: { verifyId: string } } & { verifyId?: string };
 
-  return json.data ?? json as { verifyId: string };
+  return unwrapSessionApiPayload(json);
 };
 
 export const postVerifyPass = async (
@@ -100,7 +108,7 @@ export const fetchVerifyCheckpoint = async (
     throw new Error(`verify checkpoint not found: ${verifyId}`);
   }
 
-  const json = await res.json() as TVerifyCheckpoint & { data?: TVerifyCheckpoint };
+  const json = await res.json() as { data?: TVerifyCheckpoint } & Partial<TVerifyCheckpoint>;
 
-  return json.data ?? json;
+  return unwrapSessionApiPayload(json);
 };

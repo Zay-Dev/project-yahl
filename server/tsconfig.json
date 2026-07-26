@@ -12,6 +12,7 @@
     "node_modules",
     "dist",
     "scripts",
+    "nixery",
     "**/node_modules",
     "**/dist"
   ]

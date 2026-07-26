@@ -2,13 +2,13 @@
 
 Task-local skill for cross-source synthesis (stage 4) and final brief (stage 5).
 
-Loaded by Mastermind via `guidelinePath` (untrusted hints). Stage agent follows the same rules when building context.
+Loaded by nixery `research` via `guidelinePath` (untrusted hints). Stage agent follows the same rules when building context.
 
 ## Stage 4 — analysis
 
 Produce:
 
-1. **`analysis`** (JSON): `{ themes[], claims[], openQuestions[], confidence, intentAlignment }`
+1. **`analysis`** (JSON): `{ themes[], claims[{ claim, sourceUrls[], trustTier }], openQuestions[], confidence, intentAlignment }`
 2. **`analysis_md`** (Markdown string): narrative synthesis with section headings
 
 Requirements:
@@ -17,8 +17,14 @@ Requirements:
 - Cite sources by URL from `sources` / `facts`.
 - Do not contradict extracted facts.
 - If `userProfile` from user-onboarding is present, note relevance to user goals/preferences where appropriate.
-- When `open_questions_qa` is in facts, promote each answered question into `claims[]` and exclude from `openQuestions[]`.
+- When `open_questions_qa` is in facts, promote each answered question into `claims[]` as `{ claim, sourceUrls, trustTier }` objects and exclude from `openQuestions[]`.
 - Remaining unresolved gaps go in `openQuestions[]`.
+
+Persist via `upsert-knowledge-page`:
+
+- `analysis` + `analysis_md` — narrative to `overview`/`facts`; structured JSON to `raw/analysis`
+- `key_facts_md` — narrative bullets on `facts` page
+- `facts` — narrative fallback on `facts`; `TFacts` JSON to `raw/facts`
 
 ## Stage 5 — final brief
 
@@ -44,7 +50,7 @@ Same substance reframed for **this user**:
 
 ## Persist
 
-Write to `summary` key:
+Upsert key `summary` → wiki page `brief` (+ `raw/summary` JSON mirror).
 
 ```json
 {
@@ -59,7 +65,7 @@ Write to `summary` key:
 ```json
 {
   "knowledgeTopic": "slug",
-  "knowledgePaths": ["slug/meta.json", "..."],
+  "knowledgePaths": ["topics/slug/overview", "..."],
   "summaryMd": "...",
   "personalizedBriefMd": "..."
 }

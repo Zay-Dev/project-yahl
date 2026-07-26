@@ -4,6 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./knowledge-qa/parse-response": {
+      "development": "./knowledge-qa/parse-response.ts",
+      "import": "./dist/knowledge-qa/parse-response.js"
+    },
+    "./knowledge-qa/schemas": {
+      "development": "./knowledge-qa/schemas.ts",
+      "import": "./dist/knowledge-qa/schemas.js"
+    },
+    "./knowledge-qa/types": {
+      "development": "./knowledge-qa/types.ts",
+      "import": "./dist/knowledge-qa/types.js"
+    },
     "./request-activity/client": {
       "development": "./request-activity/client.ts",
       "import": "./dist/request-activity/client.js"
@@ -11,14 +23,6 @@
     "./request-activity/types": {
       "development": "./request-activity/types.ts",
       "import": "./dist/request-activity/types.js"
-    },
-    "./verify/build-file-prompt": {
-      "development": "./verify/build-file-prompt.ts",
-      "import": "./dist/verify/build-file-prompt.js"
-    },
-    "./verify/load-rubric": {
-      "development": "./verify/load-rubric.ts",
-      "import": "./dist/verify/load-rubric.js"
     },
     "./verify/parse-response": {
       "development": "./verify/parse-response.ts",
@@ -44,9 +48,17 @@
       "development": "./yahl/task-skills.ts",
       "import": "./dist/yahl/task-skills.js"
     },
+    "./yahl/workspace-paths": {
+      "development": "./yahl/workspace-paths.ts",
+      "import": "./dist/yahl/workspace-paths.js"
+    },
     "./yahl/types": {
       "development": "./yahl/types.ts",
       "import": "./dist/yahl/types.js"
+    },
+    "./yahl/verify": {
+      "development": "./yahl/verify.ts",
+      "import": "./dist/yahl/verify.js"
     },
     "./yahl/replay-dedupe": {
       "development": "./yahl/replay-dedupe.ts",
@@ -71,6 +83,42 @@
     "./yahl/session-references-task-skills": {
       "development": "./yahl/session-references-task-skills.ts",
       "import": "./dist/yahl/session-references-task-skills.js"
+    },
+    "./yahl/types-preamble": {
+      "development": "./yahl/types-preamble.ts",
+      "import": "./dist/yahl/types-preamble.js"
+    },
+    "./nixery/types": {
+      "development": "./nixery/types.ts",
+      "import": "./dist/nixery/types.js"
+    },
+    "./nixery/validate-def": {
+      "development": "./nixery/validate-def.ts",
+      "import": "./dist/nixery/validate-def.js"
+    },
+    "./nixery/validate-argv": {
+      "development": "./nixery/validate-argv.ts",
+      "import": "./dist/nixery/validate-argv.js"
+    },
+    "./nixery/resolve-policy": {
+      "development": "./nixery/resolve-policy.ts",
+      "import": "./dist/nixery/resolve-policy.js"
+    },
+    "./nixery/load-def": {
+      "development": "./nixery/load-def.ts",
+      "import": "./dist/nixery/load-def.js"
+    },
+    "./nixery/output-contract": {
+      "development": "./nixery/output-contract.ts",
+      "import": "./dist/nixery/output-contract.js"
+    },
+    "./nixery/list-defs": {
+      "development": "./nixery/list-defs.ts",
+      "import": "./dist/nixery/list-defs.js"
+    },
+    "./nixery/load-validation": {
+      "development": "./nixery/load-validation.ts",
+      "import": "./dist/nixery/load-validation.js"
     }
   },
   "scripts": {

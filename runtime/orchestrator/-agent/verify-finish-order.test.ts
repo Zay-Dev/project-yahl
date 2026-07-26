@@ -17,8 +17,10 @@ describe('verify finish order', () => {
     assert.ok(runOneStageStart >= 0);
 
     const runOneStageBody = src.slice(runOneStageStart);
-    const verifyIdx = runOneStageBody.indexOf('await runVerifyGate');
-    const finishIdx = runOneStageBody.indexOf('publisher.emitStageFinish');
+    const agentLoopStart = runOneStageBody.indexOf('while (true)');
+    const agentPath = agentLoopStart >= 0 ? runOneStageBody.slice(agentLoopStart) : runOneStageBody;
+    const verifyIdx = agentPath.indexOf('await runVerifyGate');
+    const finishIdx = agentPath.indexOf('publisher.emitStageFinish');
 
     assert.ok(verifyIdx >= 0, 'runVerifyGate call missing from runOneStage');
     assert.ok(finishIdx >= 0, 'emitStageFinish call missing from runOneStage');
@@ -32,8 +34,10 @@ describe('verify finish order', () => {
     assert.ok(runOneStageStart >= 0);
 
     const runOneStageBody = src.slice(runOneStageStart);
-    const integrityIdx = runOneStageBody.indexOf('stage slot integrity');
-    const finishIdx = runOneStageBody.indexOf('publisher.emitStageFinish');
+    const agentLoopStart = runOneStageBody.indexOf('while (true)');
+    const agentPath = agentLoopStart >= 0 ? runOneStageBody.slice(agentLoopStart) : runOneStageBody;
+    const integrityIdx = agentPath.indexOf('stage slot integrity');
+    const finishIdx = agentPath.indexOf('publisher.emitStageFinish');
 
     assert.ok(integrityIdx >= 0, 'slot integrity guard missing from runOneStage');
     assert.ok(finishIdx >= 0, 'emitStageFinish call missing from runOneStage');

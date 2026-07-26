@@ -13,7 +13,7 @@ const checkpoint = (requestId: string, score = 0.72) => ({
   },
   requestId,
   score,
-  stage: { logic: 'const x = 1;', verify: true },
+  stage: { logic: 'const x = 1;', verify: { defId: 'stage-verify' } },
   status: 'pending' as const,
   storageSnapshot: { context: {} },
   verifyId: `verify-${requestId}`,

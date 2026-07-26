@@ -4,7 +4,7 @@ import { after, describe, it } from 'node:test';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
-import { echoTaskSkillsToSession, removeSessionWorkspace } from './workspace-paths';
+import { echoTaskSkillsToSession, ensureTaskDataSymlink, ensureTaskWorkspace, removeSessionWorkspace, taskWorkspaceRoot } from './workspace-paths';
 
 describe('echoTaskSkillsToSession', () => {
   let workspaceRoot = '';
@@ -54,7 +54,7 @@ describe('echoTaskSkillsToSession', () => {
   });
 });
 
-describe('removeSessionWorkspace', () => {
+describe('ensureTaskDataSymlink', () => {
   let workspaceRoot = '';
   let previousWorkspaceRoot: string | undefined;
 
@@ -66,31 +66,57 @@ describe('removeSessionWorkspace', () => {
     }
   });
 
-  it('removes the session workspace tree', async () => {
+  it('creates a relative symlink to the task workspace', async () => {
     previousWorkspaceRoot = process.env.WORKSPACE_ROOT;
-    workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-remove-ws-'));
+    workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-task-data-link-'));
     process.env.WORKSPACE_ROOT = workspaceRoot;
 
-    const sessionId = 'sess-remove';
-    const sessionRoot = path.join(workspaceRoot, 'sessions', sessionId);
+    const sessionId = 'sess-symlink';
+    const taskId = 'hk_weather';
 
-    await mkdir(path.join(sessionRoot, 'plans'), { recursive: true });
-    await writeFile(path.join(sessionRoot, 'plans', 'req-1.md'), '# plan', 'utf8');
+    await mkdir(path.join(workspaceRoot, 'sessions', sessionId), { recursive: true });
+
+    const result = await ensureTaskDataSymlink(sessionId, taskId);
+
+    assert.equal(result.created, true);
+    assert.equal(
+      result.path,
+      path.join(workspaceRoot, 'sessions', sessionId, 'data'),
+    );
+    assert.equal(taskWorkspaceRoot(taskId), path.join(workspaceRoot, 'tasks', taskId));
+  });
+});
+
+describe('removeSessionWorkspace orchestrator wrapper', () => {
+  let workspaceRoot = '';
+  let previousWorkspaceRoot: string | undefined;
+
+  after(async () => {
+    process.env.WORKSPACE_ROOT = previousWorkspaceRoot;
+
+    if (workspaceRoot) {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('removes session workspace but preserves task data symlink target', async () => {
+    previousWorkspaceRoot = process.env.WORKSPACE_ROOT;
+    workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-remove-data-link-'));
+    process.env.WORKSPACE_ROOT = workspaceRoot;
+
+    const sessionId = 'sess-data-link';
+    const taskId = 'hk_weather';
+
+    await ensureTaskWorkspace(taskId);
+    await mkdir(path.join(workspaceRoot, 'sessions', sessionId), { recursive: true });
+    await ensureTaskDataSymlink(sessionId, taskId);
+    await writeFile(path.join(workspaceRoot, 'tasks', taskId, 'hk_observatory_api.md'), '# api', 'utf8');
+    await mkdir(path.join(workspaceRoot, 'sessions', sessionId, 'plans'), { recursive: true });
 
     const result = await removeSessionWorkspace(sessionId);
 
     assert.equal(result.removed, true);
-    assert.equal(result.path, sessionRoot);
-    await assert.rejects(() => access(sessionRoot));
-  });
-
-  it('rejects unsafe session ids', async () => {
-    previousWorkspaceRoot = process.env.WORKSPACE_ROOT;
-    workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-remove-unsafe-'));
-    process.env.WORKSPACE_ROOT = workspaceRoot;
-
-    const result = await removeSessionWorkspace('../escape');
-
-    assert.equal(result.removed, false);
+    await access(path.join(workspaceRoot, 'tasks', taskId, 'hk_observatory_api.md'));
+    await assert.rejects(() => access(path.join(workspaceRoot, 'sessions', sessionId)));
   });
 });

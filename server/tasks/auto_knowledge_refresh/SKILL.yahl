@@ -31,7 +31,15 @@ stages:
       /mastermind(
         dispatch-task-run,
         taskId: knowledge_refresh,
-        runInput: { knowledge_topic: topic.canonical },
+        runInput: {
+          knowledge_topic: topic.canonical,
+          rerun_intent: {
+            isRerun: true,
+            proceedMode: update_selected,
+            updateScope: topic.scopes,
+            addressOpenQuestions: false,
+          },
+        },
       );
       *echo('set_context extend dispatched per ~/task-skills/dispatch-loop/SKILL.md');
 
@@ -40,7 +48,7 @@ stages:
     produceContextKeys: [result]
     logic: |
       (() => {
-        const evalData = context.context.refresh_eval?.data ?? context.context.refresh_eval;
+        const evalData = context.context.refresh_eval?.data;
         const items = context.context.dispatched ?? [];
         return {
           result: {

@@ -1,49 +1,6 @@
 # YAHL (Yet Another High-level Language)
 
-YAHL is a new language that allow developer to write pseudo code to communicate with AI.
-
-## SKILL.yahl file format
-
-Each task lives in `server/tasks/<id>/SKILL.yahl` as one YAML document:
-
-- `name`, `description` — task metadata
-- `types` (optional) — multiline type definitions (`|`), emitted as the first AI stage
-- `stages` — ordered list of stage objects
-
-Per-stage fields:
-
-| Field | Purpose |
-|-------|---------|
-| `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
-| `contextMode` | VM-only stage; read prior keys via `context.context.{key}`; return `(() => ({ ... }))` to write `produceContextKeys` |
-| `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` (same `context.context.{key}` reads as `contextMode`) |
-| `loopSetup` | Orchestrator-only (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
-| `temperature` | Model temperature for AI stages (0–2) |
-| `contextKeys` | Allowlist of context/stage keys passed into the runner |
-| `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |
-| `produceContextKeys` | Allowlist for VM / `set_context` writes to global context |
-| `produceTypeKeys` | Allowlist for VM / `set_context` writes to the types bucket |
-| `planMode` | When true, orchestrator calls mastermind plan before the agent stage and writes `~/plans/<requestId>.md` |
-| `verify` | When true, mastermind scores stage output after finish; failure pauses for resume |
-| `verifyMinScore` | Minimum pass score (0–1, default 0.75) |
-| `verifyRubric` | Rubric name or inline string for verify gate |
-
-### VM stages (`contextMode`, `conditionMode`)
-
-Runs in isolated-vm — **not** the agent. Prior context keys are **not** bare variables; read them as `context.context.{key}`.
-
-```yaml
-# Reference: server/tasks/test/SKILL.yahl
-- contextMode: true
-  contextKeys: [c, i]
-  updateContextKeys: [c]
-  logic: |
-    (() => ({
-      c: context.context.c + context.context.i,
-    }));
-```
-
-AI stages (no `contextMode`) may use bare names listed in `contextKeys` — the agent sees them in Input.
+YAHL is a language for writing pseudo-code that the stage agent executes. Orchestrator YAML schema (`loopSetup`, `nixeryRun`, `verify`, VM stages) lives in the handbook — not here.
 
 ### Syntaxes
 
@@ -84,9 +41,15 @@ Syntax of "/skill(...args)" is a skill, that means
 
 Syntax of "~/some-text" means the workspace, it takes the linux's home (~/) syntax sematically, usually means accessing (read/write) the file system, we only access file-system when this syntax presents, and ~/ means our workspace (user's home), use bash command to validate if you have written content correctly if it is a write virtual function
 
+| Path | Scope |
+|------|-------|
+| `~/` | Session scratch (`nixery/`, `plans/`, `task-skills/`, …) — per `sessionId` |
+| `~/data/` | Task-persistent — bind-mounted to `tasks/{taskId}/`; shared across all runs of the same task |
+
 examples:
-- *read(~/knowledge/my-extract.json) means reading a session extract written by extract-knowledge (use `.extracted` from the JSON payload)
-- *save(~/memory.md, new_memory) means saving new memory to the ~/memory.md file
+- Read ~/nixery/get-knowledge/my-extract.md from the session workspace — use the file's full markdown content
+- *save(~/data/hk_observatory_api.md, api_doc) means saving task-durable reference data under ~/data/
+- *save(~/memory.md, new_memory) means saving session-scratch memory to ~/memory.md
 
 ### Instructions
 

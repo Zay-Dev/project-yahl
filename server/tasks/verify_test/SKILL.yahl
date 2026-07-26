@@ -18,15 +18,16 @@ stages:
 
   - contextKeys: [draft]
     produceContextKeys: [draft_with_metric]
-    verify: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when draft_with_metric.metric is a number between 1 and 100.
-      Fail when draft_with_metric is missing, zero, or NaN.
-      On fail, set resumeAction:
-      - edit_answer when the ask-user answer is not a valid number from 1 to 100 but the question is clear; set askUserRef to target_metric
-      - rerun when the user answer looks like a valid number 1-100 but draft_with_metric was not written correctly
-      - reask when the ask-user question or options are unusable; set askUserRef to target_metric
+    verify:
+      defId: stage-verify
+      minScore: 0.75
+      rubric: |
+        Pass when draft_with_metric.metric is a number between 1 and 100.
+        Fail when draft_with_metric is missing, zero, or NaN.
+        On fail, set resumeAction:
+        - edit_answer when the ask-user answer is not a valid number from 1 to 100 but the question is clear; set askUserRef to target_metric
+        - rerun when the user answer looks like a valid number 1-100 but draft_with_metric was not written correctly
+        - reask when the ask-user question or options are unusable; set askUserRef to target_metric
     logic: |
       const prior = *answer_of(target_metric);
       IF: prior;
@@ -42,11 +43,12 @@ stages:
 
   - contextKeys: [draft_with_metric]
     produceContextKeys: [report]
-    verify: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when report.metric is a number between 1 and 100 and report.summary mentions the metric value.
-      Fail when metric is missing, zero, or summary does not reference the metric.
+    verify:
+      defId: stage-verify
+      minScore: 0.75
+      rubric: |
+        Pass when report.metric is a number between 1 and 100 and report.summary mentions the metric value.
+        Fail when metric is missing, zero, or summary does not reference the metric.
     logic: |
       const report = {
         metric: draft_with_metric.metric,

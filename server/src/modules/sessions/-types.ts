@@ -1,6 +1,9 @@
 import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
 import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+import type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
+
+export type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
 
 export type TTokenTotals = {
   cacheHitTokens: number;
@@ -35,23 +38,29 @@ export type TYahlAskUserEntry = {
   question: string;
 };
 
+export type TNixeryStageInput = Record<string, string | number | boolean>;
+
+export type TYahlAgentOverrides = {
+  bashTimeoutMs?: number;
+};
+
 export type TYahlStage = {
+  agentOverrides?: TYahlAgentOverrides;
   askUser?: TYahlAskUserEntry[];
   conditionMode?: boolean;
   contextKeys?: string[];
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
-  planMode?: boolean;
+  maxBashCalls?: number;
+  maxTurns?: number;
+  nixeryInput?: TNixeryStageInput;
+  nixeryRun?: string;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   temperature?: number;
   updateContextKeys?: string[];
-  verify?: boolean;
-  verifyAutoRetry?: boolean;
-  verifyMinScore?: number;
-  verifyResume?: boolean;
-  verifyRubric?: string;
+  verify?: TYahlVerifySpec;
   version?: number;
 };
 

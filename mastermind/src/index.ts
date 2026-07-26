@@ -3,12 +3,10 @@ import 'dotenv/config';
 import fs from 'fs/promises';
 import path from 'path';
 
-import { initCrashReports, reportProcessLevelCrash } from './-crash-reports/index.js';
-import { paths } from './config.js';
+import { assertBootReady } from './-activity/self-check.js';
 import { createApiServer } from './-api/server.js';
-import { createMastermindAgent } from './-sdk/agent.js';
-import { assertBootReady } from './-sdk/self-check.js';
-import { isSdkAuthError, isSdkStallAbortError } from './-sdk/verify-infra.js';
+import { reportProcessLevelCrash } from './-crash-reports/index.js';
+import { paths } from './config.js';
 
 const ensureDataDirs = async () => {
   await Promise.all([
@@ -22,16 +20,6 @@ const ensureDataDirs = async () => {
 };
 
 process.on('unhandledRejection', (reason) => {
-  if (isSdkStallAbortError(reason)) {
-    console.warn('[mastermind] SDK stall abort (suppressed process crash)', reason);
-    return;
-  }
-
-  if (isSdkAuthError(reason)) {
-    console.warn('[mastermind] SDK auth error (suppressed process crash)', reason);
-    return;
-  }
-
   void reportProcessLevelCrash(reason, 'process');
 });
 
@@ -41,13 +29,8 @@ process.on('uncaughtException', (error) => {
 
 const main = async () => {
   await ensureDataDirs();
-
-  const agent = await createMastermindAgent();
-
-  await assertBootReady(agent);
-
-  initCrashReports(agent.prompt);
-  createApiServer(agent);
+  await assertBootReady();
+  createApiServer();
 };
 
 main().catch(async (error) => {

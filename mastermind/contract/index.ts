@@ -42,19 +42,11 @@ export const orgScopeSchema = z.object({
 });
 
 export const skillNames = [
-  'research',
-  'extract-info',
-  'extract-knowledge',
-  'persist-knowledge',
-  'resolve-topic',
-  'tidy-knowledge',
   'list-topic-policies',
+  'resolve-topic-policy',
   'patch-topic-policy',
   'evaluate-knowledge-refresh',
   'dispatch-task-run',
-  'media-to-text',
-  'plan',
-  'design-questions',
   'propose-notification',
 ] as const;
 
@@ -78,46 +70,6 @@ export const skillResponseSchema = z.object({
 });
 
 export type TSkillResponse = z.infer<typeof skillResponseSchema>;
-
-export const verifyStageSnapshotSchema = z.object({
-  askUser: z.array(z.record(z.string(), z.unknown())).optional(),
-  contextKeys: z.array(z.string()).optional(),
-  logic: z.string().optional(),
-  produceContextKeys: z.array(z.string()).optional(),
-});
-
-export type TVerifyStageSnapshot = z.infer<typeof verifyStageSnapshotSchema>;
-
-export const verifyResumeActionSchema = z.enum(['rerun', 'edit_answer', 'reask', 'follow_up']);
-
-export type TVerifyResumeAction = z.infer<typeof verifyResumeActionSchema>;
-
-export const verifyRequestSchema = z.object({
-  contextSnapshot: z.record(z.string(), z.unknown()),
-  invocationId: z.string().optional(),
-  minScore: z.number().min(0).max(1).optional(),
-  requestId: z.string(),
-  rubric: z.string().optional(),
-  sessionId: z.string(),
-  stageIndex: z.number().int().nonnegative(),
-  stageSnapshot: verifyStageSnapshotSchema.optional(),
-  stageVersion: z.number().int().positive().optional(),
-  verifyResume: z.boolean().optional(),
-  ...orgScopeSchema.shape,
-});
-
-export type TVerifyRequest = z.infer<typeof verifyRequestSchema>;
-
-export const verifyResponseSchema = z.object({
-  askUserRef: z.string().optional(),
-  feedback: z.string(),
-  pass: z.boolean(),
-  resumeAction: verifyResumeActionSchema.optional(),
-  score: z.number().min(0).max(1),
-  unavailable: z.boolean().optional(),
-});
-
-export type TVerifyResponse = z.infer<typeof verifyResponseSchema>;
 
 export const requestActivityStatusSchema = z.enum(['failed', 'queued', 'running', 'succeeded']);
 

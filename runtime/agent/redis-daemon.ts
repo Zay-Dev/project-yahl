@@ -3,12 +3,12 @@ import type { YahlStage } from "@/shared/yahl-stage";
 
 import config from "./config";
 
-import { exec } from "child_process";
-import { promisify } from "util";
-
 import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
 
+import { handleToolCalls } from './-utils/handle-tool-calls';
+import { isOrchestratorHandledTool } from './-utils/orchestrator-handled-tools';
 import { buildResumeStageMessages } from './-utils/resume-messages';
+import { runBashCommand } from './-utils/run-bash-command';
 import { runStageSession } from "./stage-session";
 
 import { deriveModelResponseTags } from "@/shared/model-response-tags";
@@ -18,29 +18,12 @@ import { chatWithTools } from "./-utils/llm-client";
 import { isVmConditionBranch, wrapVmLogic } from "./condition-branch";
 import { runScript, runConditionScript } from "./-utils/vm-client";
 
-type TGetReplyReturnType = ReturnType<typeof subscriber['getReply']>;
-
 type TFastModel = 'vm' | 'fast-forward';
 
-const execAsync = promisify(exec);
+const runCommand = async (command: string, timeoutMs = config.bashTimeoutMs) => {
+  const result = await runBashCommand(command, timeoutMs);
 
-const runCommand = async (command: string) => {
-  try {
-    const result = await execAsync(command, {
-      maxBuffer: 20 * 1024 * 1024,
-      timeout: 60 * 1000,
-    });
-
-    return `${result.stdout || ""}${result.stderr || ""}`;
-  } catch (error) {
-    const failed = error as {
-      message?: string;
-      stderr?: string;
-      stdout?: string;
-    };
-
-    return `${failed.stdout || ""}${failed.stderr || ""}${failed.message || ""}`;
-  }
+  return result.output;
 };
 
 const _contextBucketsFromVm = (
@@ -78,42 +61,6 @@ const _toSetContextToolCalls = (
       arguments: JSON.stringify(arguments_),
     },
   }));
-};
-
-const _handleToolCalls = async (
-  storage: TStorage,
-  error: TGetReplyReturnType['error'],
-  toolCall: TGetReplyReturnType['toolCall'],
-  toolCalls: Awaited<ReturnType<typeof _toSetContextToolCalls>>,
-) => {
-  const toolCallMessages = new Array<{ role: 'tool'; content: string; tool_call_id: string; }>();
-
-  for (const call of toolCalls) {
-    const result = await toolCall(call);
-    const baseMessage = { role: 'tool' as const, tool_call_id: call.id };
-
-    if (result.hasError) {
-      await error(new Error(result.result));
-
-      toolCallMessages.push({ ...baseMessage, content: `tool call error: ${result.result}` });      
-    } else if (result.newStorage) {
-      const replace = (key: keyof TStorage) => {
-        storage[key].clear();
-
-        Object.entries(result.newStorage![key])
-          .forEach(([key, value]) => {
-            storage[key].set(key, value);
-          });
-      };
-
-      replace('context');
-      replace('types');
-
-      toolCallMessages.push({ ...baseMessage, content: `tool call result: OK` });
-    }
-  }
-
-  return { toolCallMessages };
 };
 
 export const startRedisDaemon = async () => {
@@ -160,7 +107,12 @@ export const startRedisDaemon = async () => {
     ) => {
       const calls = _toSetContextToolCalls(model, requestId, buckets);
 
-      await _handleToolCalls(context, error, toolCall, calls);
+      await handleToolCalls({
+        error,
+        storage: context,
+        toolCall,
+        toolCalls: calls,
+      });
     };
 
     try {
@@ -234,8 +186,6 @@ export const startRedisDaemon = async () => {
                 `[agent-daemon] chat turn end requestId=${requestId} turn=${turn} durationMs=${durationMs} toolCalls=${toolCallCount}\n`,
               );
 
-              const allowedTools = ['set_context', 'ask_user'];
-
               await onModelResponse({
                 ...result.response,
                 durationMs,
@@ -243,13 +193,13 @@ export const startRedisDaemon = async () => {
                 thinkingMode: config.thinkingMode,
               });
 
-              const { toolCallMessages } = await _handleToolCalls(
-                context,
+              const { toolCallMessages } = await handleToolCalls({
                 error,
+                storage: context,
                 toolCall,
-                (result.tool_calls || [])
-                  .filter(tool => allowedTools.includes(tool.function.name)),
-              );
+                toolCalls: (result.tool_calls || [])
+                  .filter(tool => isOrchestratorHandledTool(tool.function.name)),
+              });
 
               return [
                 result,
@@ -261,9 +211,21 @@ export const startRedisDaemon = async () => {
             onLocalToolCall: async ({ call }) => {
               await toolCall(call);
             },
+            onLocalToolStart: async ({ call, timeoutMs }) => {
+              console.log(
+                `[agent-daemon] run_bash start requestId=${requestId} timeoutMs=${timeoutMs}`,
+              );
+              await toolCall(call);
+            },
             requestId,
             resumeFrom,
             resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,
+            ...(stageSpec.maxBashCalls !== undefined
+              ? { maxBashCalls: stageSpec.maxBashCalls }
+              : {}),
+            ...(stageSpec.maxTurns !== undefined
+              ? { maxTurns: stageSpec.maxTurns }
+              : {}),
           },
         );
 

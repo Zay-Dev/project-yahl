@@ -1,7 +1,7 @@
 name: knowledge-capture
 description: |
   Generic knowledge capture: clarify intent, locate existing corpus, plan study,
-  dialogue-loop per source (mastermind ↔ agent via filesystem), then facts,
+  dialogue-loop per source (nixery research ↔ agent via filesystem), then facts,
   synthesis, and final brief. Persists under knowledges/{slug}/.
   Run with task id knowledge_capture.
 resultContextKey: result
@@ -53,7 +53,6 @@ types: |
     topic: string;
     topicWorkspace: string;
     studyWorkspace: string;
-    knowledgesPersistDir: string;
     missionPath: string;
     taskSkillsDir: string;
     persisted: TKnowledgePersisted[];
@@ -61,7 +60,7 @@ types: |
 
   type TSourceRoundPaths = {
     round: number;
-    mastermindMd: string;
+    researchMd: string;
     agentMd: string;
   };
 
@@ -108,7 +107,11 @@ types: |
 
   type TAnalysis = {
     themes: string[];
-    claims: string[];
+    claims: {
+      claim: string;
+      sourceUrls: string[];
+      trustTier: 'high' | 'medium' | 'low';
+    }[];
     openQuestions: string[];
     confidence: string;
     intentAlignment: string;
@@ -135,24 +138,39 @@ types: |
   };
 
 stages:
-  - produceContextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, rerun_intent, pending_open_questions, open_questions_qa]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when learning_contract has non-empty topic OR at least one seedUrl, valid intent, and depth.
-      Pass when knowledge_topic is a non-empty canonical slug from resolve-topic and missionText is non-empty.
-      Fail when topic and seedUrls both empty, intent missing, depth missing, or knowledge_topic differs from resolve-topic canonical.
+  - produceContextKeys: [missionText, knowledge_topic, partial_topic]
     logic: |
       const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
       const topicAnswers = /ask-user-batch(clarify-topic-minimal);
       const partial = *build_learning_contract_partial(topicAnswers, guideline: ~/task-skills/clarify-topic-minimal/SKILL.md);
       const proposed_topic = *slugify_learning_topic(partial);
-      const resolvedTopic = /mastermind(resolve-topic, topicText: partial.topic, seedUrls: partial.seedUrls, slug: proposed_topic);
+      const resolvedTopic = /nixery(resolve-topic, topicText: partial.topic, seedUrls: partial.seedUrls, slug: proposed_topic);
       const knowledge_topic = resolvedTopic.canonical;
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys);
+      const partial_topic = partial;
+
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load full topic corpus for clarify rerun and intake decisions
+      topic: knowledge_topic
+      output: intake.md
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
+  - produceContextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, rerun_intent, pending_open_questions, open_questions_qa]
+    contextKeys: [missionText, knowledge_topic, partial_topic]
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when learning_contract has non-empty topic OR at least one seedUrl, valid intent, and depth.
+        Pass when knowledge_topic is a non-empty canonical slug from resolve-topic and missionText is non-empty.
+        Fail when topic and seedUrls both empty, intent missing, depth missing, or knowledge_topic differs from resolve-topic canonical.
+    logic: |
+      Read ~/nixery/get-knowledge/intake.md from the session workspace.
+      If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
+      const knowledgeExtractRef = { absent: knowledge === '<none>', path: '~/nixery/get-knowledge/intake.md' };
       IF: !knowledgeExtractRef.absent;
-        const knowledge = (*read(knowledgeExtractRef.path)).extracted;
         const pending_open_questions = *extract_open_questions(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
         const rerunBatch = *build_rerun_intent_batch(knowledge, pending_open_questions, guideline: ~/task-skills/rerun-intent/SKILL.md);
         const rerunAnswers = /ask-user-batch(rerunBatch);
@@ -160,10 +178,10 @@ stages:
         IF: rerun_intent.addressOpenQuestions && pending_open_questions.length > 0;
           const pickBatch = *build_open_questions_pick_batch(pending_open_questions, guideline: ~/task-skills/rerun-intent/SKILL.md);
           const pickAnswers = /ask-user-batch(pickBatch);
-          const batches = /mastermind(design-questions, stage: open_questions, mission: missionText, gaps: *picked_open_questions(pickAnswers), priorQa: open_questions_qa, goal: resolve pending knowledge gaps);
+          const batches = /nixery(design-questions, stage: open_questions, mission: missionText, gaps: *picked_open_questions(pickAnswers), priorQa: open_questions_qa, goal: resolve pending knowledge gaps);
           const oqAnswers = /ask-user-batch(batches);
           const open_questions_qa = *merge_open_questions_qa(open_questions_qa, oqAnswers, guideline: ~/task-skills/answer-open-questions/SKILL.md);
-          /mastermind(persist-knowledge, topic: knowledge_topic, key: open_questions_qa, value: { items: open_questions_qa });
+          /nixery(upsert-knowledge-page, topic: knowledge_topic, key: open_questions_qa, value: { items: open_questions_qa });
         END:
         IF: rerun_intent.proceedMode !== 'full_refresh' && !*should_update_scope('clarify', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
           const learning_contract = *load_learning_contract_from_corpus(knowledgeExtractRef, guideline: ~/task-skills/rerun-intent/SKILL.md);
@@ -178,20 +196,20 @@ stages:
         const clarify_qa_log = *merge_qa(clarify_qa_log, clarifyAnswers);
         const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
         const proposed_topic = *slugify_learning_topic(learning_contract);
-        const resolvedTopic = /mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
+        const resolvedTopic = /nixery(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
         const knowledge_topic = resolvedTopic.canonical;
       END:
       IF: *clarify_needs_follow_up(learning_contract);
-        const batches = /mastermind(design-questions, stage: clarify, mission: missionText, gaps: *clarify_gaps(learning_contract), priorQa: clarify_qa_log, goal: clarify subject and intent);
+        const batches = /nixery(design-questions, stage: clarify, mission: missionText, gaps: *clarify_gaps(learning_contract), priorQa: clarify_qa_log, goal: clarify subject and intent);
         const followUp = /ask-user-batch(batches);
         const clarify_qa_log = *merge_qa(clarify_qa_log, followUp);
         const learning_contract = *build_learning_contract(clarify_qa_log, guideline: ~/task-skills/clarify-intake/SKILL.md);
         const proposed_topic = *slugify_learning_topic(learning_contract);
-        const resolvedTopic = /mastermind(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
+        const resolvedTopic = /nixery(resolve-topic, topicText: learning_contract.topic, seedUrls: learning_contract.seedUrls, slug: proposed_topic);
         const knowledge_topic = resolvedTopic.canonical;
       END:
-      /mastermind(persist-knowledge, topic: knowledge_topic, key: meta, value: { slug: knowledge_topic, intent: learning_contract.intent, created_at: now_iso });
-      /mastermind(persist-knowledge, topic: knowledge_topic, key: learning_contract, value: learning_contract);
+      /nixery(upsert-knowledge-page, topic: knowledge_topic, key: meta, value: { slug: knowledge_topic, intent: learning_contract.intent, created_at: now_iso });
+      /nixery(upsert-knowledge-page, topic: knowledge_topic, key: learning_contract, value: learning_contract);
 
   - contextMode: true
     contextKeys: [knowledge_topic, missionText]
@@ -200,9 +218,8 @@ stages:
       (() => ({
         knowledge_paths: {
           topic: context.context.knowledge_topic,
-          topicWorkspace: `~/knowledge/${context.context.knowledge_topic}`,
-          studyWorkspace: `~/knowledge/${context.context.knowledge_topic}/study`,
-          knowledgesPersistDir: `~/knowledges/${context.context.knowledge_topic}`,
+          topicWorkspace: `~/nixery/study/${context.context.knowledge_topic}`,
+          studyWorkspace: `~/nixery/study/${context.context.knowledge_topic}`,
           missionPath: '~/task-skills/task-mission/SKILL.md',
           taskSkillsDir: '~/task-skills',
           persisted: [],
@@ -210,57 +227,91 @@ stages:
         study_dialogue: { sources: [] },
       }))
 
+  - nixeryRun: list-knowledge-pages
+    nixeryInput:
+      topic: knowledge_topic
+      output: pages.md
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
+  - nixeryRun: search-knowledge
+    nixeryInput:
+      query: knowledge_topic
+      topic: knowledge_topic
+      output: gap-search.md
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, clarify_qa_log, missionText, knowledge_paths, rerun_intent, TCorpusAssessment]
     produceContextKeys: [corpus_assessment]
     updateContextKeys: [knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when corpus_assessment has topic, existingKeys array, sufficientFor array, and gaps array.
-      Pass when knowledge_paths.persisted includes meta and learning_contract paths after persist.
-      Fail when assessment missing or topic mismatch.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when corpus_assessment has topic, existingKeys array, sufficientFor array, and gaps array.
+        Pass when knowledge_paths.persisted includes meta and learning_contract paths after persist.
+        Fail when assessment missing or topic mismatch.
     logic: |
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys);
-      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
+      Read ~/nixery/list-knowledge-pages/pages.md from the session workspace.
+      If missing or empty, set pages to []; otherwise derive pages (page inventory array) from the file's markdown content.
+      const pagesRef = { absent: pages.length === 0, path: '~/nixery/list-knowledge-pages/pages.md' };
+      Read ~/nixery/search-knowledge/gap-search.md from the session workspace.
+      If missing or empty, set searchHits to []; otherwise derive search hits from the file's markdown content.
+      const searchRef = { absent: searchHits.length === 0, path: '~/nixery/search-knowledge/gap-search.md' };
+      const knowledge = { pages, searchHits };
       const corpus_assessment = *assess_corpus(knowledge, learning_contract, guideline: ~/task-skills/locate-knowledge/SKILL.md);
-      const metaPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: corpus_assessment, value: corpus_assessment);
+      const metaPersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: corpus_assessment, value: corpus_assessment);
       EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, metaPersist, key: corpus_assessment);
 
+  - nixeryRun: plan-study
+    nixeryInput:
+      topic: knowledge_topic
+      purpose: Build study plan and wiki structure for learning contract
+      goal: build study plan and wiki structure for learning_contract
+      learning_contract: learning_contract
+      corpus_assessment: corpus_assessment
+      mission: missionText
+      output: plan.json
+    contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, corpus_assessment, missionText, knowledge_paths, rerun_intent, TStudyPlan]
-    produceContextKeys: [study_plan]
+    produceContextKeys: [study_plan, wiki_structure]
     updateContextKeys: [knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when study_plan has non-empty researchQuestions, successCriteria, and sources array.
-      Pass when each source has url, priority, rounds (1-3), and rationale.
-      Pass when rounds align with depth (overview 1-2, deep_dive 2-3).
-      Fail when plan empty or contradicts learning_contract.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when study_plan has non-empty researchQuestions, successCriteria, and sources array.
+        Pass when each source has url, priority, rounds (1-3), and rationale.
+        Pass when rounds align with depth (overview 1-2, deep_dive 2-3).
+        Pass when wiki_structure includes overview with action populate.
+        Fail when plan empty or contradicts learning_contract.
     logic: |
-      const plan = /mastermind(
-        plan,
-        goal: build study plan for learning_contract,
-        mission: missionText,
-        facts: { learning_contract, corpus_assessment, mission: missionText, today },
-        guidelinePath: ~/task-skills/plan-study/SKILL.md,
-      );
-      const study_plan = *parse_study_plan(plan, depth: learning_contract.depth, corpus_assessment);
-      const planPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: study_plan, value: study_plan);
+      Read ~/nixery/plan-study/plan.json from the session workspace.
+      If missing or invalid JSON, fail the stage.
+      const study_plan = *parse_study_plan(raw.study_plan, depth: learning_contract.depth, corpus_assessment);
+      const wiki_structure = raw.wiki_structure;
+      const planPersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: study_plan, value: study_plan);
       EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, planPersist, key: study_plan);
+      const wikiStructurePersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: wiki_structure, value: wiki_structure);
+      EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, wikiStructurePersist, key: wiki_structure);
 
   - loopSetup: for each src of [study_plan.sources]
     contextKeys: [learning_contract, knowledge_topic, study_plan, corpus_assessment, missionText, knowledge_paths, study_dialogue, rerun_intent, TSource, TSourceStudy]
     updateContextKeys: [study_dialogue, sources, source_studies, knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when src is skipped via reuseExisting or has persisted study_{slug} with non-empty studyMd.
-      Pass when dialogue artifacts exist on disk for each round (mastermind + agent md) before persist.
-      Pass when study_dialogue.sources includes src with studyPersistPath after persist.
-      Fail when raw.md missing, round files missing, or studyMd empty.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when src is skipped via reuseExisting or has persisted study_{slug} with non-empty studyMd.
+        Pass when dialogue artifacts exist on disk for each round (research + agent md) before persist.
+        Pass when study_dialogue.sources includes src with studyPersistPath after persist.
+        Fail when raw.md missing, round files missing, or studyMd empty.
     logic: |
       IF: *source_in_reuse_list(src, study_plan.reuseExisting, corpus_assessment) && !*should_update_scope('studies', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
         // skip fetch — load from existing knowledges
@@ -272,18 +323,18 @@ stages:
         /stagehand(goto, url: src.url) → rawMd;
         for each round of [1..src.rounds];
           const priorPath = round === 1 ? rawMd : `${workspaceDir}/round-${round - 1}-agent.md`;
-          const mastermindMd = `${workspaceDir}/round-${round}-mastermind.md`;
+          const researchMd = `${workspaceDir}/round-${round}-research.md`;
           const agentMd = `${workspaceDir}/round-${round}-agent.md`;
-          /mastermind(
+          /nixery(
             research,
             source: priorPath,
             topic: study src for learning_contract,
             mission: missionText,
             facts: { learning_contract, study_plan, src, round, today, mission: missionText },
             guidelinePath: ~/task-skills/dialogue-round/SKILL.md,
-          ) → mastermindMd;
+          ) → researchMd;
           *agent_analyze_round(
-            mastermindMd,
+            researchMd,
             output: agentMd,
             guideline: ~/task-skills/dialogue-round/SKILL.md,
             learning_contract,
@@ -291,13 +342,13 @@ stages:
             src,
             round,
           );
-          EXTENDS: study_dialogue = *append_dialogue_round(study_dialogue, src, round, mastermindMd, agentMd, rawMd);
+          EXTENDS: study_dialogue = *append_dialogue_round(study_dialogue, src, round, researchMd, agentMd, rawMd);
         END:
         const finalMd = `${workspaceDir}/final.md`;
         *merge_dialogue_rounds(workspaceDir, src.rounds, output: finalMd);
         const studyMd = *read_capped(finalMd, maxBytes: 12000);
-        const studyPersist = /mastermind(
-          persist-knowledge,
+        const studyPersist = /nixery(
+          upsert-knowledge-page,
           topic: knowledge_topic,
           key: studyKey,
           value: { url: src.url, title: src.title || source_slug, studyMd, studiedAt: now_iso, trustTier: 'high' },
@@ -308,30 +359,40 @@ stages:
         EXTENDS: source_studies = *append_source_study(source_studies, src, studyMd, now_iso);
       END:
 
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load facts, key_facts_md, and study_* content for facts stage assessment
+      topic: knowledge_topic
+      output: facts.md
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
+
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, knowledge_paths, rerun_intent, TFacts]
     produceContextKeys: [facts, key_facts_md]
     updateContextKeys: [knowledge_paths, sources]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when facts.items is non-empty array with claim and sourceUrl per item.
-      Pass when sources is a non-empty array with unique studyKey values.
-      Fail when facts uncited or sources not an array.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when facts.items is non-empty array with claim and sourceUrl per item.
+        Pass when sources is a non-empty array with unique studyKey values.
+        Fail when facts uncited or sources not an array.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
       IF: !sources || !Array.isArray(sources) || sources.length === 0;
         const sources = *rebuild_sources_index(knowledge_topic);
-        /mastermind(persist-knowledge, topic: knowledge_topic, key: sources, value: sources);
+        /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources, value: sources);
       END:
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: facts, key_facts_md, study keys);
-      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
+      Read ~/nixery/get-knowledge/facts.md from the session workspace.
+      If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
+      const knowledgeExtractRef = { absent: knowledge === '<none>', path: '~/nixery/get-knowledge/facts.md' };
       const assessment = *assess_learning_stage(stage: facts, knowledge, learning_contract, study_plan, sources, source_studies, rerun_intent);
       IF: assessment.sufficient && !*should_update_scope('facts', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
         const facts = assessment.artifact.facts;
         const key_facts_md = assessment.artifact.key_facts_md;
       ELSE;
-        const extracted = /mastermind(
+        const extracted = /nixery(
           research,
           topic: extract structured facts from persisted studies,
           mission: missionText,
@@ -341,31 +402,50 @@ stages:
         const facts = *normalize_facts(extracted, as: TFacts);
         const key_facts_md = *facts_to_markdown(facts, study_plan);
       END:
-      const factsPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: facts, value: facts);
-      EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, factsPersist, key: facts);
-      /mastermind(persist-knowledge, topic: knowledge_topic, key: key_facts_md, value: { content: key_facts_md });
+      IF: !assessment.sufficient || *should_update_scope('facts', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        const factsPersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: facts, value: facts);
+        EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, factsPersist, key: facts);
+      END:
+
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load user-onboarding profile slice — communication_style, preferences, goals, identity
+      topic: user-onboarding
+      output: profile.md
+    logic: "(nixery)"
+
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load analysis and analysis_md for synthesis stage assessment
+      topic: knowledge_topic
+      output: synthesis.md
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
 
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, source_studies, facts, key_facts_md, rerun_intent, open_questions_qa, TAnalysis, userProfile]
     produceContextKeys: [analysis, analysis_md, userProfile]
     updateContextKeys: [knowledge_paths]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when analysis has themes, claims, and intentAlignment.
-      Pass when analysis_md is non-empty Markdown consistent with facts.
-      Fail when analysis contradicts facts or ignores intent.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when analysis has themes, claims, and intentAlignment.
+        Pass when analysis_md is non-empty Markdown consistent with facts.
+        Fail when analysis contradicts facts or ignores intent.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
-      const userProfileExtractRef = /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
-      const userProfile = userProfileExtractRef.absent ? '<none>' : (*read(userProfileExtractRef.path)).extracted;
-      const knowledgeExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: analysis, analysis_md);
-      const knowledge = knowledgeExtractRef.absent ? '<none>' : (*read(knowledgeExtractRef.path)).extracted;
+      Read ~/nixery/get-knowledge/profile.md from the session workspace.
+      If missing or empty after trim, set userProfile to '<none>'; otherwise set userProfile to the file's full markdown content.
+      const userProfileExtractRef = { absent: userProfile === '<none>', path: '~/nixery/get-knowledge/profile.md' };
+      Read ~/nixery/get-knowledge/synthesis.md from the session workspace.
+      If missing or empty after trim, set knowledge to '<none>'; otherwise set knowledge to the file's full markdown content.
+      const knowledgeExtractRef = { absent: knowledge === '<none>', path: '~/nixery/get-knowledge/synthesis.md' };
       const assessment = *assess_learning_stage(stage: synthesis, knowledge, learning_contract, study_plan, facts, sources, rerun_intent);
       IF: assessment.sufficient && !*should_update_scope('synthesis', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
         const synthesis_artifact = assessment.artifact;
       ELSE;
-        const synthesis = /mastermind(
+        const synthesis = /nixery(
           research,
           topic: cross-source synthesis,
           mission: missionText,
@@ -376,34 +456,43 @@ stages:
       END:
       const analysis = *merge_open_questions_into_analysis(synthesis_artifact.analysis, open_questions_qa, guideline: ~/task-skills/answer-open-questions/SKILL.md);
       const analysis_md = *refresh_analysis_md_open_questions(synthesis_artifact.analysis_md, analysis, guideline: ~/task-skills/answer-open-questions/SKILL.md);
-      const analysisPersist = /mastermind(persist-knowledge, topic: knowledge_topic, key: analysis, value: analysis);
-      EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, analysisPersist, key: analysis);
-      /mastermind(persist-knowledge, topic: knowledge_topic, key: analysis_md, value: { content: analysis_md });
+      IF: !assessment.sufficient || *should_update_scope('synthesis', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
+        const analysisPersist = /nixery(upsert-knowledge-page, topic: knowledge_topic, key: analysis, value: analysis);
+        EXTENDS: knowledge_paths = *append_persisted_path(knowledge_paths, analysisPersist, key: analysis);
+        /nixery(upsert-knowledge-page, topic: knowledge_topic, key: analysis_md, value: { content: analysis_md });
+      END:
+
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load summary corpus — summary, analysis, facts — for final brief stage
+      topic: knowledge_topic
+      output: summary.md
+    contextKeys: [knowledge_topic]
+    logic: "(nixery)"
 
   - contextKeys: [learning_contract, knowledge_topic, study_plan, sources, facts, analysis, analysis_md, userProfile, knowledge_paths, rerun_intent, open_questions_qa, TResult]
     produceContextKeys: [result]
-    verify: true
-    verifyAutoRetry: true
-    verifyMinScore: 0.75
-    verifyRubric: |
-      Pass when result.summaryMd and result.personalizedBriefMd are non-empty Markdown.
-      Pass when result.knowledgeTopic matches knowledge_topic and knowledgePaths lists persisted relative paths.
-      Fail when either brief missing or knowledgePaths empty.
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when result.summaryMd and result.personalizedBriefMd are non-empty Markdown.
+        Pass when result.knowledgeTopic matches knowledge_topic and knowledgePaths lists persisted relative paths.
+        Fail when either brief missing or knowledgePaths empty.
     logic: |
       const missionText = missionText || *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      Read ~/nixery/get-knowledge/summary.md from the session workspace.
+      If missing or empty after trim, set corpus to '<none>'; otherwise set corpus to the file's full markdown content.
+      const corpusExtractRef = { absent: corpus === '<none>', path: '~/nixery/get-knowledge/summary.md' };
       IF: rerun_intent && rerun_intent.proceedMode === 'update_selected' && !*should_update_scope('summary', rerun_intent, guideline: ~/task-skills/rerun-intent/SKILL.md);
-        const corpusExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: summary, analysis, facts);
-        const corpus = corpusExtractRef.absent ? '<none>' : (*read(corpusExtractRef.path)).extracted;
         const summaryMd = *load_summary_md_from_corpus(corpus);
         const personalizedBriefMd = *load_personalized_brief_from_corpus(corpus);
       ELSE;
-      const corpusExtractRef = /mastermind(extract-knowledge, topic: knowledge_topic, need: all keys in topic folder);
-      const corpus = corpusExtractRef.absent ? '<none>' : (*read(corpusExtractRef.path)).extracted;
-      const userProfileExtractRef = userProfile
-        ? { absent: true }
-        : /mastermind(extract-knowledge, topic: user-onboarding, need: communication_style, preferences, goals, identity);
-      const userProfile = userProfile || (userProfileExtractRef.absent ? '<none>' : (*read(userProfileExtractRef.path)).extracted);
-      const brief = /mastermind(
+      Read ~/nixery/get-knowledge/profile.md from the session workspace when userProfile is not already set.
+      If missing or empty after trim, set userProfile to '<none>'; otherwise set userProfile to the file's full markdown content.
+      const profileRef = { absent: userProfile === '<none>', path: '~/nixery/get-knowledge/profile.md' };
+      const brief = /nixery(
         research,
         topic: final knowledge brief and personalized summary,
         mission: missionText,
@@ -416,8 +505,8 @@ stages:
       const knowledgePaths = knowledge_paths.persisted.map(p => p.relativePath);
       const result = { knowledgeTopic: knowledge_topic, knowledgePaths, summaryMd, personalizedBriefMd };
       *echo('Call set_context with key result and the result object before ending this stage');
-      /mastermind(persist-knowledge, topic: knowledge_topic, key: summary, value: { summaryMd, personalizedBriefMd, completed_at: now_iso });
-      /mastermind(persist-knowledge, topic: knowledge_topic, key: meta, value: { slug: knowledge_topic, intent: learning_contract.intent, updated_at: now_iso });
+      /nixery(upsert-knowledge-page, topic: knowledge_topic, key: summary, value: { summaryMd, personalizedBriefMd, completed_at: now_iso });
+      /nixery(upsert-knowledge-page, topic: knowledge_topic, key: meta, value: { slug: knowledge_topic, intent: learning_contract.intent, updated_at: now_iso });
 
   - contextMode: true
     contextKeys: [knowledge_topic, knowledge_paths, result]

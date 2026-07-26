@@ -10,12 +10,14 @@ import {
 
 import { isInternalRequest } from './internal-auth.js';
 
+import {
+  buildRequestStatusPayload,
+  getActiveSkillActivity,
+  getRequestActivity,
+} from '../-activity/request-activity.js';
+import { runSelfCheck } from '../-activity/self-check.js';
 import { config } from '../config.js';
-import type { TMastermindAgent } from '../-sdk/agent.js';
-import { buildRequestStatusPayload, getActiveSkillActivity, getRequestActivity } from '../-sdk/request-activity.js';
-import { runSelfCheck } from '../-sdk/self-check.js';
 import { postProposal, runSkill, runListTopicPolicies, runPatchTopicPolicy } from '../-handlers/skills.js';
-import { rebuildPersistedPathsFromTopic } from '../-knowledge/index.js';
 
 const readJsonBody = async (req: http.IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = [];
@@ -39,18 +41,18 @@ const sendJson = (res: http.ServerResponse, status: number, body: unknown) => {
   res.end(JSON.stringify(body));
 };
 
-export const createApiServer = (agent: TMastermindAgent) => {
+export const createApiServer = () => {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
       const { pathname } = url;
 
       if (req.method === 'GET' && pathname === '/health') {
-        const ready = agent.status === 'ready';
-        sendJson(res, ready ? 200 : 503, {
-          agent: agent.status,
-          ok: ready,
+        const check = await runSelfCheck();
+        sendJson(res, check.ok ? 200 : 503, {
+          ok: check.ok,
           service: 'mastermind',
+          ...(check.error ? { error: check.error } : {}),
         });
         return;
       }
@@ -61,8 +63,7 @@ export const createApiServer = (agent: TMastermindAgent) => {
           return;
         }
 
-        const ping = url.searchParams.get('ping') === '1';
-        const result = await runSelfCheck(agent, { ping });
+        const result = await runSelfCheck();
         sendJson(res, result.ok ? 200 : 503, { ...result, service: 'mastermind' });
         return;
       }
@@ -84,31 +85,9 @@ export const createApiServer = (agent: TMastermindAgent) => {
           parsed.data.requestId,
           parsed.data.invocationId,
         );
-        const payload = buildRequestStatusPayload({
-          agent: agent.status,
-          request,
-        });
+        const payload = buildRequestStatusPayload({ request });
 
         sendJson(res, 200, payload);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/v1/internal/knowledges/persisted-index') {
-        if (!isInternalRequest(req)) {
-          sendJson(res, 403, { error: 'forbidden' });
-          return;
-        }
-
-        const body = await readJsonBody(req) as { topic?: string };
-        const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
-
-        if (!topic) {
-          sendJson(res, 400, { error: 'topic required' });
-          return;
-        }
-
-        const persisted = await rebuildPersistedPathsFromTopic(topic);
-        sendJson(res, 200, { ok: true, persisted });
         return;
       }
 
@@ -169,15 +148,12 @@ export const createApiServer = (agent: TMastermindAgent) => {
             && active.invocationId
             && active.invocationId !== parsed.data.invocationId?.trim()
           ) {
-            sendJson(res, 409, buildRequestStatusPayload({
-              agent: agent.status,
-              request: active,
-            }));
+            sendJson(res, 409, buildRequestStatusPayload({ request: active }));
             return;
           }
         }
 
-        const result = await runSkill(agent, name, parsed.data);
+        const result = await runSkill(name, parsed.data);
         sendJson(res, result.ok ? 200 : 500, result);
         return;
       }

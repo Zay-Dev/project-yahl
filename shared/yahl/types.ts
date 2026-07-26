@@ -1,3 +1,8 @@
+import type { TYahlVerifySpec } from './verify';
+
+export type { TYahlVerifySpec } from './verify';
+export { DEFAULT_VERIFY_DEF_ID } from './verify';
+
 export type TYahlAskUserOption = {
   description?: string;
   id: string;
@@ -11,23 +16,29 @@ export type TYahlAskUserEntry = {
   question: string;
 };
 
+export type TNixeryStageInput = Record<string, string | number | boolean>;
+
+export type TYahlAgentOverrides = {
+  bashTimeoutMs?: number;
+};
+
 export type TYahlStage = {
+  agentOverrides?: TYahlAgentOverrides;
   askUser?: TYahlAskUserEntry[];
   conditionMode?: boolean;
   contextKeys?: string[];
   contextMode?: boolean;
   logic: string;
   loopSetup?: string;
-  planMode?: boolean;
+  maxBashCalls?: number;
+  maxTurns?: number;
+  nixeryInput?: TNixeryStageInput;
+  nixeryRun?: string;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   temperature?: number;
   updateContextKeys?: string[];
-  verify?: boolean;
-  verifyAutoRetry?: boolean;
-  verifyMinScore?: number;
-  verifyResume?: boolean;
-  verifyRubric?: string;
+  verify?: TYahlVerifySpec;
   version?: number;
 };
 

@@ -20,7 +20,7 @@ stages:
     const update = pendingSessionUpdateDoc({
       isBackground: task.background === true,
       sessionId: 'sess-tidy',
-      taskId: 'knowledge_tidy',
+      taskId: 'auto_knowledge_refresh',
       taskYahl: yahl,
     });
 

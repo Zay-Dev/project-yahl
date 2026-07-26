@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   parseAskUserToolArguments,
+  parseNixeryToolArguments,
   parseRunBashToolArguments,
 } from "./stage-tools";
 
@@ -56,5 +57,18 @@ describe("parseAskUserToolArguments", () => {
       }),
     );
     assert.equal(parsed, null);
+  });
+});
+
+describe("parseNixeryToolArguments", () => {
+  it("accepts arbitrary defId string", () => {
+    const parsed = parseNixeryToolArguments(JSON.stringify({
+      args: { topic: "foo" },
+      defId: "custom-inline-def",
+    }));
+
+    assert.ok(parsed);
+    assert.equal(parsed!.defId, "custom-inline-def");
+    assert.deepEqual(parsed!.args, { topic: "foo" });
   });
 });

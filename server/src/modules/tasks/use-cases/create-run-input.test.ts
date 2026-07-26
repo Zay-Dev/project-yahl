@@ -19,13 +19,42 @@ describe('create run runInput validation', () => {
     const yahl = readFileSync(knowledgeRefreshPath, 'utf8');
     const keys = parseRunInputKeysFromYahl(yahl);
 
-    assert.deepEqual(keys, ['knowledge_topic']);
+    assert.deepEqual(keys, ['knowledge_topic', 'rerun_intent', 'additional_instruction']);
   });
 
   it('accepts declared runInput keys', () => {
     const result = validateRunInputPayload(
       { knowledge_topic: 'hk-weather' },
-      ['knowledge_topic'],
+      ['knowledge_topic', 'rerun_intent', 'additional_instruction'],
+    );
+
+    assert.equal(result.ok, true);
+  });
+
+  it('accepts additional_instruction string in runInput', () => {
+    const result = validateRunInputPayload(
+      {
+        knowledge_topic: 'hk-weather',
+        additional_instruction: 'all, try refresh from discussion https://example.com',
+      },
+      ['knowledge_topic', 'rerun_intent', 'additional_instruction'],
+    );
+
+    assert.equal(result.ok, true);
+  });
+
+  it('accepts nested rerun_intent object in runInput', () => {
+    const result = validateRunInputPayload(
+      {
+        knowledge_topic: 'hk-weather',
+        rerun_intent: {
+          isRerun: true,
+          proceedMode: 'update_selected',
+          updateScope: ['studies', 'facts'],
+          addressOpenQuestions: false,
+        },
+      },
+      ['knowledge_topic', 'rerun_intent', 'additional_instruction'],
     );
 
     assert.equal(result.ok, true);

@@ -3,6 +3,11 @@ export const API_BASE_URL = (
   "http://localhost:4000"
 ).replace(/\/$/, "");
 
+export const WIKI_PUBLIC_URL = (
+  import.meta.env.VITE_WIKI_PUBLIC_URL ||
+  "http://127.0.0.1:3001"
+).replace(/\/$/, "");
+
 export const RESOURCES = {
   sessions: "api/sessions",
   tasks: "api/tasks",
