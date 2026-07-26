@@ -1,5 +1,7 @@
 import { markPollSucceeded } from './-health/server.js';
 import { sendEmail, sendWhatsApp } from './-channels/outbound.js';
+import { initWhatsApp, isWhatsAppReady } from './-channels/whatsapp/client.js';
+import { whatsappConfig } from './-channels/whatsapp/config.js';
 import { startCronScheduler, type TCronJobDef } from './-cron/scheduler.js';
 import {
   applySettingProposal,
@@ -30,6 +32,14 @@ const processNotification = async (payload: Record<string, unknown>) => {
   };
 
   if (channel === 'whatsapp') {
+    if (whatsappConfig.enabled && !isWhatsAppReady()) {
+      console.log(
+        '[worker][whatsapp] skip approved notification: not logged in',
+        { to },
+      );
+      return { error: 'whatsapp not logged in', ok: false, skipped: true };
+    }
+
     return sendWhatsApp(params);
   }
 
@@ -46,6 +56,10 @@ const pollApprovedWork = async () => {
           const result = await processNotification(item.payload);
 
           if (!result.ok) {
+            if ('skipped' in result && result.skipped) {
+              continue;
+            }
+
             console.error('[worker] notification failed', item.id, result.error);
             continue;
           }
@@ -70,7 +84,13 @@ const pollApprovedWork = async () => {
 };
 
 const main = async () => {
-  console.log('[worker] starting (outbound-only: cron + platform poll)');
+  const mode = whatsappConfig.enabled
+    ? 'cron + platform poll + whatsapp'
+    : 'cron + platform poll';
+
+  console.log(`[worker] starting (${mode})`);
+
+  await initWhatsApp();
 
   startCronScheduler((job) => {
     void handleCronTick(job);

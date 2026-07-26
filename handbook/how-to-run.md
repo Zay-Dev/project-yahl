@@ -61,7 +61,7 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
 | **Mastermind** | `mastermind` container (4100) | Wiki.js GraphQL + read-only `data/knowledge_export`, workspace `/workspace`, HTTP skills | Side effects without approval — proposals go to server first |
 | **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
-| **Worker** | `worker` container | Cron (via server API), platform approvals | Does not spawn orchestrator or agent containers |
+| **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive | Does not spawn orchestrator or agent containers; WhatsApp in/out is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
 Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir; see [mastermind/decision-log.md](mastermind/decision-log.md)).
@@ -239,7 +239,22 @@ Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the
 }
 ```
 
-The task runs ~90 minutes of adaptive ETA polls (agent `run_bash sleep`); WhatsApp proposals use a dummy recipient until you change the skill. Approve outbound drafts at `/platform/approvals`.
+The task runs ~90 minutes of adaptive ETA polls (agent `run_bash sleep`); WhatsApp proposals use a dummy recipient until you change the skill. Approve outbound drafts at `/platform/approvals` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
+
+#### Example: WhatsApp wiki stack cron
+
+With `WHATSAPP_ENABLED=true`, scan the QR printed in the worker console once. Onboard a phone/group via task `whatsapp_channel_onboard`, then create:
+
+```json
+{
+  "enabled": true,
+  "schedule": "0 */4 * * *",
+  "timezone": "Asia/Hong_Kong",
+  "taskPath": "whatsapp_wiki_stack"
+}
+```
+
+Pending inbox text (onboarded chats only) is stacked into wiki under `whatsapp/{folder}/` and then cleared. Media is logged and skipped.
 
 Long poll stages (e.g. `hk_morning_traffic` monitor) set stage `agentOverrides.bashTimeoutMs` (e.g. `360000`) so a single `sleep 300` can finish. Shared agent default remains **60000** when unset — do not pin timeout in compose.
 

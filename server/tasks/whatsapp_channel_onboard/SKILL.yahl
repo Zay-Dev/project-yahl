@@ -1,0 +1,77 @@
+name: whatsapp-channel-onboard
+description: |
+  Onboard a WhatsApp phone DM or group for message capture and seed wiki under
+  whatsapp/{folder}/. Registers the channel so the worker starts persisting texts.
+  Run with task id whatsapp_channel_onboard.
+resultContextKey: result
+runInput:
+  - channelRef
+  - displayName
+
+types: |
+  type TChannelRecord = {
+    chatId: string;
+    folder: string;
+    displayName?: string;
+    onboardedAt: string;
+    wikiRoot: string;
+  };
+
+  type TResult = {
+    channel: TChannelRecord;
+    wikiPaths: string[];
+  };
+
+stages:
+  - contextKeys: [channelRef, displayName]
+    produceContextKeys: [register_result, channel]
+    logic: |
+      IF: !(channelRef && String(channelRef).trim());
+        const ask = /ask-user-batch(clarify-whatsapp-channel);
+        const channelRef = *pick_answer(ask, 'channelRef');
+        const displayName = *pick_answer(ask, 'displayName');
+      END:
+      const register_result = /nixery(
+        whatsapp-register-channel,
+        channelRef: channelRef,
+        displayName: displayName,
+        output: register.json,
+      );
+      const channel = register_result.channel;
+
+  - contextKeys: [channel, channelRef, displayName]
+    produceContextKeys: [overview_md, facts_md]
+    logic: |
+      const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      Read ~/task-skills/onboard-channel/SKILL.md for writing style.
+      Synthesize an observation-only background overview for this WhatsApp channel.
+      Do not invent private facts; note unknowns as open questions.
+      Prefer DM vs group framing from channel.chatId (@g.us => group).
+      const overview_md = markdown overview for the channel (title, who/what, purpose, open questions).
+      const facts_md = markdown bullet facts known so far (chatId, folder, wikiRoot, displayName).
+
+  - contextKeys: [channel, overview_md, facts_md]
+    produceContextKeys: [overview_upsert, facts_upsert, result]
+    logic: |
+      const overview_upsert = /nixery(
+        upsert-whatsapp-page,
+        chatFolder: channel.folder,
+        page: overview,
+        content: overview_md,
+        mode: replace,
+        title: Overview,
+        output: overview-upsert.json,
+      );
+      const facts_upsert = /nixery(
+        upsert-whatsapp-page,
+        chatFolder: channel.folder,
+        page: facts,
+        content: facts_md,
+        mode: replace,
+        title: Facts,
+        output: facts-upsert.json,
+      );
+      const result = {
+        channel,
+        wikiPaths: [overview_upsert.pagePath, facts_upsert.pagePath],
+      };

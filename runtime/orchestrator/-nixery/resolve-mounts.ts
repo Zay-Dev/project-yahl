@@ -34,6 +34,7 @@ const allowedDockerHostPrefixes = () => [
   resolveDockerHostWorkspacePath(),
   path.join(resolveDockerHostRepoRoot(), 'data', 'knowledge_export'),
   path.join(resolveDockerHostRepoRoot(), 'data', 'mastermind'),
+  path.join(resolveDockerHostRepoRoot(), 'data', 'whatsapp_inbox'),
   path.join(resolveDockerHostRepoRoot(), 'server', 'nixery'),
   path.join(resolveDockerHostRepoRoot(), 'server', 'nixery', '_lib'),
   path.join(resolveDockerHostRepoRoot(), 'shared', 'dist'),

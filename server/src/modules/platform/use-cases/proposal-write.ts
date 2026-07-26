@@ -4,6 +4,10 @@ import Joi from 'joi';
 
 import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
+import {
+  parseWhatsAppWhitelist,
+  recipientMatchesWhatsAppWhitelist,
+} from '@project-yahl/shared/whatsapp/whitelist';
 
 import type {
   TRequestCreateNotificationProposal,
@@ -35,6 +39,22 @@ const settingBodySchema = Joi.object<TRequestCreateSettingProposal>({
   userId: Joi.string().optional(),
 });
 
+const resolveNotificationStatus = (
+  body: TRequestCreateNotificationProposal,
+): 'approved' | 'pending' => {
+  if (body.channel !== 'whatsapp') {
+    return 'pending';
+  }
+
+  const whitelist = parseWhatsAppWhitelist(process.env.WHATSAPP_WHITELIST);
+
+  if (recipientMatchesWhatsAppWhitelist(body.to, whitelist)) {
+    return 'approved';
+  }
+
+  return 'pending';
+};
+
 export const createNotificationProposal = [
   Middlewares.Chainable
     .validate(({ req }) => ({
@@ -42,13 +62,15 @@ export const createNotificationProposal = [
     }))
     .next(async (express, { body }) => {
       const proposalId = randomUUID();
+      const status = resolveNotificationStatus(body);
 
       await modelPlatformProposal.create({
+        ...(status === 'approved' ? { approvedAt: new Date() } : {}),
         done: false,
         kind: 'notification',
         payload: body,
         proposalId,
-        status: 'pending',
+        status,
       });
 
       express.res.status(201);

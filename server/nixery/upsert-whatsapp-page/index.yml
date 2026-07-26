@@ -1,0 +1,54 @@
+id: upsert-whatsapp-page
+description: Upsert a Wiki.js page under whatsapp/{chatFolder}/ (not topics/)
+
+packages: [nodejs]
+
+env:
+  WIKI_GRAPHQL_URL: http://wiki:3000/graphql
+  WIKI_API_TOKEN: ""
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  chatFolder:
+    type: string
+    required: true
+  page:
+    type: string
+    required: true
+  content:
+    type: string
+    required: true
+  mode:
+    type: string
+    required: false
+  title:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+  /opt/nixery/knowledge-wiki:
+    host: lib/knowledge-wiki
+    mode: ro
+
+run:
+  entry: [node, /opt/nixery/def/run.mjs]
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: true

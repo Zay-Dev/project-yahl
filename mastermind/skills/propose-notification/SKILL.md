@@ -7,7 +7,7 @@ description: Draft an outbound email or WhatsApp notification for human approval
 
 Use `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` in stage logic.
 
-Creates a **pending** platform proposal. A human must approve at `/platform/approvals` before the worker sends.
+Creates a platform proposal. WhatsApp recipients on `WHATSAPP_WHITELIST` are **pre-approved**; others stay pending until a human approves at `/platform/approvals`. The worker sends after approval (or pre-approval) when WhatsApp Web is logged in.
 
 ## Tool
 
@@ -33,4 +33,4 @@ Creates a **pending** platform proposal. A human must approve at `/platform/appr
 
 `sessionId` is injected from the stage run when omitted.
 
-Returns `{ proposalId }` on success. Does not deliver — worker sends only after approval.
+Returns `{ proposalId }` on success. Does not deliver — worker sends when the proposal is approved (whitelist pre-approve or human) and WhatsApp is logged in.

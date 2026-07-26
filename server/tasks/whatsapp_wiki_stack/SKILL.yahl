@@ -1,0 +1,73 @@
+name: whatsapp-wiki-stack
+description: |
+  Background job: for each onboarded WhatsApp channel, stack pending inbox
+  messages into wiki under whatsapp/{folder}/, then clear processed messages.
+  Run with task id whatsapp_wiki_stack (cron every 4h).
+background: true
+resultContextKey: result
+
+types: |
+  type TStackChannelResult = {
+    folder: string;
+    skipped: boolean;
+    count?: number;
+    wikiPaths?: string[];
+    cleared?: boolean;
+  };
+
+  type TResult = {
+    channels: TStackChannelResult[];
+  };
+
+stages:
+  - nixeryRun: whatsapp-inbox
+    nixeryInput:
+      action: read
+      output: inbox-read.json
+    logic: "(nixery)"
+
+  - produceContextKeys: [stack_plan, inbox_read]
+    logic: |
+      Read ~/nixery/whatsapp-inbox/inbox-read.json (or inbox-batches.json) from the session workspace.
+      Parse batches; set inbox_read to the parsed object.
+      Build stack_plan as the list of batches where count > 0 (non-empty inbox).
+      If none, stack_plan is [].
+
+  - contextKeys: [stack_plan, inbox_read]
+    produceContextKeys: [result]
+    logic: |
+      const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      Read ~/task-skills/stack-channel/SKILL.md for merge style.
+      const channels = [];
+      IF: !stack_plan || stack_plan.length === 0;
+        const result = { channels: [] };
+      ELSE;
+        For each batch in stack_plan:
+          Read the batch markdown file under ~/nixery/whatsapp-inbox/{batch.markdown}.
+          Synthesize an updated overview merge and a digest page for this window (observation only).
+          Upsert overview with mode append or replace carefully — prefer appending a dated ## digest section via a digest page.
+          const overview_upsert = /nixery(
+            upsert-whatsapp-page,
+            chatFolder: batch.channel.folder,
+            page: overview,
+            content: synthesized_overview_md,
+            mode: replace,
+            title: Overview,
+          );
+          const digest_upsert = /nixery(
+            upsert-whatsapp-page,
+            chatFolder: batch.channel.folder,
+            page: digests/{yyyy-mm-dd-HH},
+            content: digest_md,
+            mode: replace,
+            title: Digest,
+          );
+          const clear_result = /nixery(
+            whatsapp-inbox,
+            action: clear,
+            folder: batch.channel.folder,
+            output: clear-{batch.channel.folder}.json,
+          );
+          Push { folder, skipped: false, count: batch.count, wikiPaths: [...], cleared: true } onto channels.
+        const result = { channels };
+      END:

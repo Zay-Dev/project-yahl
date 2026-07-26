@@ -4,12 +4,30 @@ import { WIKI_RAW_PREFIX } from './content-model.js';
 
 export const WIKI_TOPICS_ROOT = 'topics';
 
+export const WIKI_WHATSAPP_ROOT = 'whatsapp';
+
 export const WIKI_LOCALE = 'en';
 
 export const resolveTopicWikiPrefix = (canonical: string): string => {
   const slug = sanitizeSegment(canonical);
 
   return `${WIKI_TOPICS_ROOT}/${slug}`;
+};
+
+export const resolveWhatsAppWikiPrefix = (chatFolder: string): string => {
+  const folder = sanitizeSegment(chatFolder);
+
+  return `${WIKI_WHATSAPP_ROOT}/${folder}`;
+};
+
+export const resolveWhatsAppWikiPath = (chatFolder: string, page: string): string => {
+  const prefix = resolveWhatsAppWikiPrefix(chatFolder);
+  const normalizedPage = page
+    .trim()
+    .replace(/^\/+/, '')
+    .replace(new RegExp(`^${prefix}/`), '');
+
+  return `${prefix}/${normalizedPage}`;
 };
 
 export const resolveExportTopicsRoot = (): string => `${WIKI_LOCALE}/${WIKI_TOPICS_ROOT}`;

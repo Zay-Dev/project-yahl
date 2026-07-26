@@ -100,4 +100,28 @@ describe('resolveMounts', () => {
       },
     ]);
   });
+
+  it('allows data/whatsapp_inbox mounts', () => {
+    process.env.HOST_REPO_ROOT = hostRepoRoot;
+
+    const mounts = resolveMounts({
+      def: {
+        id: 'whatsapp-inbox',
+        packages: ['nodejs'],
+        mount: {
+          '/whatsapp/inbox': { host: 'data/whatsapp_inbox', mode: 'rw' },
+        },
+      },
+      defId: 'whatsapp-inbox',
+      sessionId: 'session-1',
+    });
+
+    assert.deepEqual(mounts, [
+      {
+        containerPath: '/whatsapp/inbox',
+        hostPath: path.join(hostRepoRoot, 'data/whatsapp_inbox'),
+        mode: 'rw',
+      },
+    ]);
+  });
 });
