@@ -4,7 +4,7 @@ description: Read a Wiki.js page under whatsapp/{chatFolder}/ into the session w
 packages: [nodejs]
 
 env:
-  WIKI_GRAPHQL_URL: http://wiki:3000/graphql
+  WIKI_GRAPHQL_URL: ""
   WIKI_API_TOKEN: ""
 
 nixery:
