@@ -1,7 +1,11 @@
-id: whatsapp-register-channel
-description: Register an onboarded WhatsApp chat for inbox capture (channels.json)
+id: get-whatsapp-page
+description: Read a Wiki.js page under whatsapp/{chatFolder}/ into the session workspace
 
 packages: [nodejs]
+
+env:
+  WIKI_GRAPHQL_URL: http://wiki:3000/graphql
+  WIKI_API_TOKEN: ""
 
 nixery:
   default: "true"
@@ -11,31 +15,25 @@ nixery:
       mode: "true"
 
 input:
-  channelRef:
+  chatFolder:
     type: string
     required: true
-  displayName:
+  page:
     type: string
-    required: false
-  agentPhone:
-    type: string
-    required: false
-  assistantName:
-    type: string
-    required: false
+    required: true
   output:
     type: string
     required: false
 
 mount:
-  /whatsapp/inbox:
-    host: data/whatsapp_inbox
-    mode: rw
   /workspace:
     host: session
     mode: rw
   /opt/nixery/def:
     host: def
+    mode: ro
+  /opt/nixery/knowledge-wiki:
+    host: lib/knowledge-wiki
     mode: ro
 
 run:

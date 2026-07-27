@@ -43,9 +43,22 @@ stages:
         const result = { channels: [] };
       ELSE;
         For each batch in stack_plan:
+          const overview_get = /nixery(
+            get-whatsapp-page,
+            chatFolder: batch.channel.folder,
+            page: overview,
+            output: wiki-{batch.channel.folder}-overview.json,
+          );
+          const facts_get = /nixery(
+            get-whatsapp-page,
+            chatFolder: batch.channel.folder,
+            page: facts,
+            output: wiki-{batch.channel.folder}-facts.json,
+          );
+          Read overview_get.markdown and facts_get.markdown under ~/nixery/get-whatsapp-page/ (or workspace paths from those results).
           Read the batch markdown file under ~/nixery/whatsapp-inbox/{batch.markdown}.
-          Synthesize an updated overview merge and a digest page for this window (observation only).
-          Upsert overview with mode append or replace carefully — prefer appending a dated ## digest section via a digest page.
+          Synthesize a merged overview from existing overview/facts + this inbox window (observation only). Never rewrite overview from the window alone.
+          Synthesize a window-only digest page (detail belongs here, not in overview).
           const overview_upsert = /nixery(
             upsert-whatsapp-page,
             chatFolder: batch.channel.folder,

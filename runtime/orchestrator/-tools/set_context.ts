@@ -14,6 +14,18 @@ export const createStorage = () => {
   return storage;
 };
 
+const resolveExtendValue = (current: unknown, value: unknown) => {
+  if (Array.isArray(current)) {
+    return Array.isArray(value) ? [...current, ...value] : [...current, value];
+  }
+
+  if (current === undefined) {
+    return Array.isArray(value) ? [...value] : [value];
+  }
+
+  return [current, value];
+};
+
 export const setContext = async (storage: TStorage, toolCall: TChatToolCall) => {
   const { type } = toolCall;
   const func = toolCall.function;
@@ -26,10 +38,10 @@ export const setContext = async (storage: TStorage, toolCall: TChatToolCall) => 
     JSON.parse(func.arguments) as SetContextToolCallEnvelope['arguments'];
 
   const bucket = scope === 'types' ? storage.types : storage.context;
-  const current = bucket.get(key) || {};
+  const current = bucket.get(key);
 
   const nextValue = operation === 'extend'
-    ? [current[key], value]
+    ? resolveExtendValue(current, value)
     : value;
 
   bucket.set(key, nextValue);

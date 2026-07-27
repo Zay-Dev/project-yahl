@@ -8,6 +8,12 @@ import {
 
 import { whatsappConfig } from './config.js';
 
+export type TPlatformIdentity = {
+  chatId: string;
+  displayName: string;
+  lid?: string;
+};
+
 export type TOnboardedChannel = {
   chatId: string;
   displayName?: string;
@@ -19,27 +25,59 @@ export type TOnboardedChannel = {
 
 type TChannelsFile = {
   channels: TOnboardedChannel[];
+  platform?: TPlatformIdentity;
 };
 
 const channelsPath = () => path.join(whatsappConfig.inboxRoot, 'channels.json');
 
-const writeChannels = async (channels: TOnboardedChannel[]): Promise<void> => {
+const readChannelsFile = async (): Promise<TChannelsFile> => {
+  try {
+    const raw = await readFile(channelsPath(), 'utf8');
+    const parsed = JSON.parse(raw) as TChannelsFile;
+    const channels = Array.isArray(parsed.channels) ? parsed.channels : [];
+    const platform = parsed.platform
+      && typeof parsed.platform === 'object'
+      && typeof parsed.platform.chatId === 'string'
+      ? {
+          chatId: parsed.platform.chatId,
+          displayName: typeof parsed.platform.displayName === 'string' && parsed.platform.displayName.trim()
+            ? parsed.platform.displayName.trim()
+            : 'YAHL',
+          lid: typeof parsed.platform.lid === 'string' ? parsed.platform.lid : undefined,
+        }
+      : undefined;
+
+    return { channels, platform };
+  } catch {
+    return { channels: [] };
+  }
+};
+
+const writeChannelsFile = async (file: TChannelsFile): Promise<void> => {
+  const payload: TChannelsFile = {
+    channels: file.channels,
+  };
+
+  if (file.platform) {
+    payload.platform = file.platform;
+  }
+
   await writeFile(
     channelsPath(),
-    `${JSON.stringify({ channels }, null, 2)}\n`,
-    'utf8',
+    `${JSON.stringify(payload, null, 2)}\n`,
   );
 };
 
 export const loadOnboardedChannels = async (): Promise<TOnboardedChannel[]> => {
-  try {
-    const raw = await readFile(channelsPath(), 'utf8');
-    const parsed = JSON.parse(raw) as TChannelsFile;
+  const file = await readChannelsFile();
 
-    return Array.isArray(parsed.channels) ? parsed.channels : [];
-  } catch {
-    return [];
-  }
+  return file.channels;
+};
+
+export const loadPlatformIdentity = async (): Promise<TPlatformIdentity | undefined> => {
+  const file = await readChannelsFile();
+
+  return file.platform;
 };
 
 export const findOnboardedChannel = async (
@@ -73,21 +111,43 @@ export const rememberChannelLid = async (
     return;
   }
 
-  const channels = await loadOnboardedChannels();
-  const index = channels.findIndex((channel) =>
+  const file = await readChannelsFile();
+  const index = file.channels.findIndex((channel) =>
     whatsAppChatIdsMatch(chatId, channel.chatId));
 
   if (index < 0) {
     return;
   }
 
-  const current = channels[index];
+  const current = file.channels[index];
 
   if (current.lid?.trim().toLowerCase() === trimmedLid.toLowerCase()) {
     return;
   }
 
-  channels[index] = { ...current, lid: trimmedLid };
-  await writeChannels(channels);
+  file.channels[index] = { ...current, lid: trimmedLid };
+  await writeChannelsFile(file);
   console.log(`[worker][whatsapp] remembered lid=${trimmedLid} for ${current.chatId}`);
+};
+
+export const rememberPlatformIdentity = async (from: string): Promise<void> => {
+  const trimmed = from.trim();
+
+  if (!trimmed.endsWith('@lid')) {
+    return;
+  }
+
+  const file = await readChannelsFile();
+
+  if (!file.platform?.chatId) {
+    return;
+  }
+
+  if (file.platform.lid?.trim().toLowerCase() === trimmed.toLowerCase()) {
+    return;
+  }
+
+  file.platform = { ...file.platform, lid: trimmed };
+  await writeChannelsFile(file);
+  console.log(`[worker][whatsapp] remembered platform lid=${trimmed}`);
 };

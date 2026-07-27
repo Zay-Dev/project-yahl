@@ -1,8 +1,10 @@
-import { markPollSucceeded } from './-health/server.js';
+import type { TCronJobDef } from './-cron/scheduler.js';
+
 import { sendEmail, sendWhatsApp } from './-channels/outbound.js';
 import { initWhatsApp, isWhatsAppReady } from './-channels/whatsapp/client.js';
 import { whatsappConfig } from './-channels/whatsapp/config.js';
-import { startCronScheduler, type TCronJobDef } from './-cron/scheduler.js';
+import { startCronScheduler } from './-cron/scheduler.js';
+import { configureWhatsAppHealth, markPollSucceeded, startHealthServer } from './-health/server.js';
 import {
   applySettingProposal,
   fetchPendingApproved,
@@ -11,6 +13,8 @@ import {
 } from './-queue/platform-api.js';
 
 import { config } from './config.js';
+
+let pollInFlight = false;
 
 const handleCronTick = async (job: TCronJobDef) => {
   await postTaskRun(job.taskPath);
@@ -47,6 +51,12 @@ const processNotification = async (payload: Record<string, unknown>) => {
 };
 
 const pollApprovedWork = async () => {
+  if (pollInFlight) {
+    return;
+  }
+
+  pollInFlight = true;
+
   try {
     const items = await fetchPendingApproved();
 
@@ -80,6 +90,8 @@ const pollApprovedWork = async () => {
     markPollSucceeded();
   } catch (error) {
     console.error('[worker] poll failed', error);
+  } finally {
+    pollInFlight = false;
   }
 };
 
@@ -89,6 +101,12 @@ const main = async () => {
     : 'cron + platform poll';
 
   console.log(`[worker] starting (${mode})`);
+
+  configureWhatsAppHealth(() => ({
+    enabled: whatsappConfig.enabled,
+    ready: isWhatsAppReady(),
+  }));
+  startHealthServer();
 
   await initWhatsApp();
 

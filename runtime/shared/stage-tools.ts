@@ -177,7 +177,7 @@ export const STAGE_TOOLS = [
             type: "string",
           },
           operation: {
-            description: "Context write strategy. set overwrites; extend stores [oldValue, newValue].",
+            description: "Context write strategy. set overwrites; extend appends onto arrays (or [old, new] for non-arrays).",
             enum: [...CONTEXT_SET_OPERATIONS],
             type: "string",
           },

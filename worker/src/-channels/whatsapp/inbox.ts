@@ -9,6 +9,7 @@ export type TInboxMessage = {
   body: string;
   chatId: string;
   from: string;
+  fromMe?: boolean;
   isGroup: boolean;
   lid?: string;
   messageId: string;

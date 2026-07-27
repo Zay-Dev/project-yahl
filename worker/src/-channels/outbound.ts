@@ -1,12 +1,40 @@
 import { toWhatsAppChatId } from '@project-yahl/shared/whatsapp/whitelist';
 
-import { getWhatsAppClient, isWhatsAppReady } from './whatsapp/client.js';
+import { config } from '../config.js';
+import {
+  getWhatsAppClient,
+  isWhatsAppReady,
+  scheduleWhatsAppReinit,
+} from './whatsapp/client.js';
 import { whatsappConfig } from './whatsapp/config.js';
 
 export type TSendResult = {
   error?: string;
   ok: boolean;
   skipped?: boolean;
+};
+
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 };
 
 export const sendEmail = async (params: {
@@ -55,7 +83,28 @@ export const sendWhatsApp = async (params: {
     return { ok: false, skipped: true, error: 'whatsapp client missing' };
   }
 
-  await client.sendMessage(chatId, params.body);
+  try {
+    await withTimeout(
+      client.sendMessage(chatId, params.body),
+      config.whatsappSendTimeoutMs,
+      'whatsapp sendMessage',
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[worker][whatsapp] send failed', chatId, message);
+
+    const shouldReinit = message.includes('timed out')
+      || /target closed|protocol error|session closed|browser has been closed/i.test(message);
+
+    if (shouldReinit) {
+      scheduleWhatsAppReinit(
+        message.includes('timed out') ? 'send_timeout' : 'send_browser_death',
+      );
+    }
+
+    return { ok: false, error: message };
+  }
+
   console.log('[worker][whatsapp] sent', params.fromIdentity ?? 'default', '→', chatId);
 
   return { ok: true };

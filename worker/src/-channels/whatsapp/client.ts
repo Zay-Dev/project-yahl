@@ -9,22 +9,33 @@ import { clearChromiumProfileLocks } from './clear-profile-locks.js';
 import { whatsappConfig } from './config.js';
 import { appendInboxMessage } from './inbox.js';
 import { logSkippedMediaFromMessage } from './media.js';
-import { rememberChannelLid } from './registry.js';
+import { rememberChannelLid, rememberPlatformIdentity } from './registry.js';
 import { resolveCanonicalChatId } from './resolve-chat-id.js';
 
 const { Client, LocalAuth } = wweb;
 
 let client: InstanceType<typeof Client> | null = null;
 let ready = false;
+let starting = false;
+let reinitTimer: ReturnType<typeof setTimeout> | null = null;
 
+const REINIT_DELAY_MS = 3000;
 const seenMessageIds = new Set<string>();
 const SEEN_MESSAGE_ID_CAP = 500;
 
-const rememberMessageId = (messageId: string): boolean => {
-  if (!messageId) {
-    return false;
+const messageDedupeKey = (msg: Message): string => {
+  const serialized = msg.id?._serialized?.trim() ?? '';
+
+  if (serialized) {
+    return serialized;
   }
 
+  const body = typeof msg.body === 'string' ? msg.body : '';
+
+  return `anon:${msg.from}|${msg.to}|${msg.timestamp}|${body}`;
+};
+
+const rememberMessageId = (messageId: string): boolean => {
   if (seenMessageIds.has(messageId)) {
     return true;
   }
@@ -62,14 +73,61 @@ export const isWhatsAppReady = (): boolean => ready && client !== null;
 
 export const getWhatsAppClient = (): InstanceType<typeof Client> | null => client;
 
+export const scheduleWhatsAppReinit = (reason: string): void => {
+  if (!whatsappConfig.enabled) {
+    return;
+  }
+
+  ready = false;
+
+  if (reinitTimer || starting) {
+    return;
+  }
+
+  console.warn(`[worker][whatsapp] schedule reinit in ${REINIT_DELAY_MS}ms (${reason})`);
+
+  reinitTimer = setTimeout(() => {
+    reinitTimer = null;
+    void reinitWhatsApp(reason);
+  }, REINIT_DELAY_MS);
+};
+
+const destroyWhatsAppClient = async (): Promise<void> => {
+  ready = false;
+  const prev = client;
+  client = null;
+
+  if (!prev) {
+    return;
+  }
+
+  try {
+    prev.removeAllListeners();
+    await prev.destroy();
+  } catch (error) {
+    console.warn('[worker][whatsapp] destroy failed', error);
+  }
+};
+
+export const reinitWhatsApp = async (reason: string): Promise<void> => {
+  if (!whatsappConfig.enabled || starting) {
+    return;
+  }
+
+  console.log(`[worker][whatsapp] reinit (${reason})`);
+  await destroyWhatsAppClient();
+  await initWhatsApp();
+};
+
 const handleIncomingMessage = async (msg: Message, event: string): Promise<void> => {
   try {
     logMessageEvent(event, msg);
 
+    const dedupeKey = messageDedupeKey(msg);
     const messageId = msg.id?._serialized ?? '';
 
-    if (rememberMessageId(messageId)) {
-      console.log(`[worker][whatsapp] skip duplicate id=${messageId}`);
+    if (rememberMessageId(dedupeKey)) {
+      console.log(`[worker][whatsapp] skip duplicate id=${dedupeKey}`);
       return;
     }
 
@@ -110,6 +168,7 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       body,
       chatId: resolved.canonical,
       from: msg.from,
+      fromMe: msg.fromMe === true,
       isGroup,
       lid: resolved.lid,
       messageId,
@@ -125,6 +184,10 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
 
     if (resolved.lid) {
       await rememberChannelLid(resolved.canonical, resolved.lid);
+    }
+
+    if (msg.fromMe) {
+      await rememberPlatformIdentity(msg.from);
     }
 
     try {
@@ -143,82 +206,94 @@ export const initWhatsApp = async (): Promise<void> => {
     return;
   }
 
-  if (client) {
+  if (client || starting) {
     return;
   }
 
-  const chromePath = process.env.CHROME_PATH?.trim() || undefined;
+  starting = true;
 
-  if (chromePath) {
-    console.log(`[worker][whatsapp] CHROME_PATH=${chromePath}`);
-  } else {
-    console.warn('[worker][whatsapp] CHROME_PATH unset — Puppeteer may fail to find Chrome');
-  }
+  try {
+    const chromePath = process.env.CHROME_PATH?.trim() || undefined;
 
-  const sessionDir = path.join(whatsappConfig.authPath, 'session');
-
-  await clearChromiumProfileLocks(sessionDir);
-
-  const next = new Client({
-    authStrategy: new LocalAuth({
-      dataPath: whatsappConfig.authPath,
-    }),
-    puppeteer: {
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      executablePath: chromePath,
-      headless: true,
-    },
-  });
-
-  next.on('qr', (qr) => {
-    console.log('[worker][whatsapp] scan QR to log in:');
-    qrcode.generate(qr, { small: true });
-  });
-
-  next.on('ready', () => {
-    ready = true;
-    console.log('[worker][whatsapp] client ready');
-  });
-
-  next.on('authenticated', () => {
-    console.log('[worker][whatsapp] authenticated');
-  });
-
-  next.on('auth_failure', (message) => {
-    ready = false;
-    console.error('[worker][whatsapp] auth_failure', message);
-  });
-
-  next.on('disconnected', (reason) => {
-    ready = false;
-    console.warn('[worker][whatsapp] disconnected', reason);
-  });
-
-  next.on('change_state', (state) => {
-    console.log(`[worker][whatsapp] change_state=${state}`);
-  });
-
-  next.on('message_ciphertext', (msg) => {
-    logMessageEvent('message_ciphertext', msg);
-  });
-
-  next.on('message_ciphertext_failed', (...args: unknown[]) => {
-    console.error('[worker][whatsapp] message_ciphertext_failed', ...args);
-  });
-
-  next.on('message', (msg) => {
-    if (msg.fromMe) {
-      return;
+    if (chromePath) {
+      console.log(`[worker][whatsapp] CHROME_PATH=${chromePath}`);
+    } else {
+      console.warn('[worker][whatsapp] CHROME_PATH unset — Puppeteer may fail to find Chrome');
     }
 
-    void handleIncomingMessage(msg, 'message');
-  });
+    const sessionDir = path.join(whatsappConfig.authPath, 'session');
 
-  next.on('message_create', (msg) => {
-    void handleIncomingMessage(msg, 'message_create');
-  });
+    await clearChromiumProfileLocks(sessionDir);
 
-  client = next;
+    const next = new Client({
+      authStrategy: new LocalAuth({
+        dataPath: whatsappConfig.authPath,
+      }),
+      puppeteer: {
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        executablePath: chromePath,
+        headless: true,
+      },
+    });
 
-  await next.initialize();
+    next.on('qr', (qr) => {
+      console.log('[worker][whatsapp] scan QR to log in:');
+      qrcode.generate(qr, { small: true });
+    });
+
+    next.on('ready', () => {
+      ready = true;
+      console.log('[worker][whatsapp] client ready');
+    });
+
+    next.on('authenticated', () => {
+      console.log('[worker][whatsapp] authenticated');
+    });
+
+    next.on('auth_failure', (message) => {
+      ready = false;
+      console.error('[worker][whatsapp] auth_failure', message);
+      scheduleWhatsAppReinit('auth_failure');
+    });
+
+    next.on('disconnected', (reason) => {
+      ready = false;
+      console.warn('[worker][whatsapp] disconnected', reason);
+      scheduleWhatsAppReinit(`disconnected:${reason}`);
+    });
+
+    next.on('change_state', (state) => {
+      console.log(`[worker][whatsapp] change_state=${state}`);
+    });
+
+    next.on('message_ciphertext', (msg) => {
+      logMessageEvent('message_ciphertext', msg);
+    });
+
+    next.on('message_ciphertext_failed', (...args: unknown[]) => {
+      console.error('[worker][whatsapp] message_ciphertext_failed', ...args);
+    });
+
+    next.on('message', (msg) => {
+      if (msg.fromMe) {
+        return;
+      }
+
+      void handleIncomingMessage(msg, 'message');
+    });
+
+    next.on('message_create', (msg) => {
+      void handleIncomingMessage(msg, 'message_create');
+    });
+
+    client = next;
+
+    await next.initialize();
+  } catch (error) {
+    console.error('[worker][whatsapp] initialize failed', error);
+    await destroyWhatsAppClient();
+    scheduleWhatsAppReinit('initialize_failed');
+  } finally {
+    starting = false;
+  }
 };

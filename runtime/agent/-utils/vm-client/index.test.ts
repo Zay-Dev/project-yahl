@@ -20,6 +20,7 @@ const y = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
   prev_routes: [],
   summary_notified: false,
   notifications: [],
+  miss_count: 0,
   day_page: \`raw/fetches-\${y}\`,
 }))
 `;
@@ -32,6 +33,7 @@ const y = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
     assert.deepEqual(output.prev_routes, []);
     assert.equal(output.summary_notified, false);
     assert.deepEqual(output.notifications, []);
+    assert.equal(output.miss_count, 0);
   });
 
   it('allows Intl Asia/Hong_Kong under the 1000ms VM timeout', async () => {

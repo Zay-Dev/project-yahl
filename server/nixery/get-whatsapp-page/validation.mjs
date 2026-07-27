@@ -23,8 +23,12 @@ export async function validateOutput(ctx) {
     return { ok: false, reason: 'invalid json gate file' };
   }
 
-  if (parsed.ok !== true || !parsed.pagePath) {
-    return { ok: false, reason: parsed.error ?? 'upsert failed' };
+  if (parsed.ok !== true || !parsed.pagePath || !parsed.markdown) {
+    return { ok: false, reason: parsed.error ?? 'get-whatsapp-page failed' };
+  }
+
+  if (typeof parsed.absent !== 'boolean') {
+    return { ok: false, reason: 'absent flag missing' };
   }
 
   return { ok: true };
