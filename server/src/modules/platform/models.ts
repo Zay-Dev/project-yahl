@@ -33,6 +33,7 @@ const cronJobSchema = new Schema<TDbCronJob>({
   id: model.d.requiredString(),
   orgId: model.d.optionalString(),
   orgUnitId: model.d.optionalString(),
+  runInput: model.d.mixed(),
   schedule: model.d.requiredString(),
   taskPath: model.d.requiredString(),
   timezone: model.d.optionalString(),

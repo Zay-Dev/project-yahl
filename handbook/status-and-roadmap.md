@@ -27,7 +27,7 @@ But more importantly — it does feel like patching in the right direction. No m
 | Knowledge store | Works | Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see the root README and [security.md](security.md). |
 | Topic governance | Works | Nixery `resolve-topic` + nixery `tidy-knowledge` audit; cron `auto_knowledge_refresh` → `knowledge_refresh`. |
 | Background sessions | Works | Cron/utility runs hidden by default on `/sessions` (toggle to show). |
-| Platform UI | Works | `/platform/approvals` for notification/settings proposals; `/platform/cron-jobs` for cron job create/edit/delete (worker ticks via `POST /api/runs`). Example morning job: `hk_morning_traffic` at `0 8 * * *` / `Asia/Hong_Kong` — see [how-to-run.md](how-to-run.md). |
+| Platform UI | Works | `/platform/approvals` for notification/settings proposals; `/platform/cron-jobs` for cron job create/edit/delete (worker ticks via `POST /api/runs`). Example morning job: `traffic_monitor` at `0 8 * * *` / `Asia/Hong_Kong` — see [how-to-run.md](how-to-run.md). |
 | Direct user ↔ mastermind chat | Planned | Deferred for v1; skills stay stateless for now. |
 | A2UI | Planned | Real structured UI payloads — earlier bolt-on attempt failed; avoid another half-measure. |
 | Go to stage | Planned | Today resume only picks up at the failed stage. Want Mastermind (or the UI) to restart a session at an earlier stage so you can fix poisoned context upstream instead of fork-and-pray at the failure point (`go to stage <id>`). |

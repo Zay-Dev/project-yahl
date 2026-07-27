@@ -17,7 +17,7 @@ import { config } from './config.js';
 let pollInFlight = false;
 
 const handleCronTick = async (job: TCronJobDef) => {
-  await postTaskRun(job.taskPath);
+  await postTaskRun(job.taskPath, job.runInput);
 };
 
 const processNotification = async (payload: Record<string, unknown>) => {

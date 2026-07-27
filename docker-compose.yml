@@ -1,6 +1,8 @@
 services:
   mongo:
     image: mongo:7
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
     ports:
       - "27017:27017"
     volumes:
@@ -8,6 +10,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
     ports:
       - "6379:6379"
     healthcheck:
@@ -97,6 +101,8 @@ services:
         OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
         VITE_API_BASE_URL: http://localhost:${SERVER_PORT:-4000}
         VITE_WIKI_PUBLIC_URL: http://127.0.0.1:${WIKI_PORT:-3001}
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
     ports:
       - "5173:80"
     depends_on:
@@ -164,6 +170,7 @@ services:
       - ./data/whatsapp_auth:/whatsapp/auth
       - ./data/whatsapp_inbox:/whatsapp/inbox
       - ./worker:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker
+      - ${SANITIZE_CHANNEL_MESSAGE:-./worker/sanitize-channel-message.mjs}:/sanitize/sanitize-channel-message.mjs:ro
     depends_on:
       server:
         condition: service_healthy

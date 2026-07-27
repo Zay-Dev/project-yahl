@@ -5,6 +5,7 @@ import path from 'node:path';
 import qrcode from 'qrcode-terminal';
 import wweb from 'whatsapp-web.js';
 
+import { applyChannelMessageSanitizer } from '../sanitize-channel-message.js';
 import { clearChromiumProfileLocks } from './clear-profile-locks.js';
 import { whatsappConfig } from './config.js';
 import { appendInboxMessage } from './inbox.js';
@@ -163,7 +164,7 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       );
     }
 
-    const persisted = await appendInboxMessage({
+    const draft = await applyChannelMessageSanitizer({
       author: msg.author ?? undefined,
       body,
       chatId: resolved.canonical,
@@ -173,6 +174,25 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       lid: resolved.lid,
       messageId,
       ts: new Date(msg.timestamp * 1000).toISOString(),
+    });
+
+    const sanitizedBody = typeof draft.body === 'string' ? draft.body : body;
+
+    if (!sanitizedBody.trim()) {
+      console.log(`[worker][whatsapp] skip empty body after sanitize raw=${rawChatId}`);
+      return;
+    }
+
+    const persisted = await appendInboxMessage({
+      author: typeof draft.author === 'string' ? draft.author : msg.author ?? undefined,
+      body: sanitizedBody,
+      chatId: resolved.canonical,
+      from: typeof draft.from === 'string' ? draft.from : msg.from,
+      fromMe: draft.fromMe === true,
+      isGroup: draft.isGroup === true,
+      lid: typeof draft.lid === 'string' ? draft.lid : resolved.lid,
+      messageId: typeof draft.messageId === 'string' ? draft.messageId : messageId,
+      ts: typeof draft.ts === 'string' ? draft.ts : new Date(msg.timestamp * 1000).toISOString(),
     });
 
     if (!persisted) {

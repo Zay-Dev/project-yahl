@@ -226,20 +226,28 @@ pnpm run orchestrate
 | PATCH | `/api/platform/cron/jobs/:id` | Update a cron job |
 | DELETE | `/api/platform/cron/jobs/:id` | Soft-delete a cron job |
 
-#### Example: morning traffic monitor cron
+#### Example: traffic monitor cron
 
-Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`hk_morning_traffic`](../server/tasks/hk_morning_traffic/SKILL.yahl) at 08:00 HKT:
+Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`traffic_monitor`](../server/tasks/traffic_monitor/SKILL.yahl) at 08:00 HKT:
 
 ```json
 {
   "enabled": true,
   "schedule": "0 8 * * *",
   "timezone": "Asia/Hong_Kong",
-  "taskPath": "hk_morning_traffic"
+  "taskPath": "traffic_monitor",
+  "runInput": {
+    "monitor_minutes": "60",
+    "notify_to": "91234567",
+    "origin": "Kowloon Tong",
+    "destination": "Hong Kong International Airport",
+    "city": "Hong_Kong",
+    "timezone": "Asia/Hong_Kong"
+  }
 }
 ```
 
-The task runs ~90 minutes of adaptive ETA polls (agent `run_bash sleep`); WhatsApp proposals go to the recipient configured in the task skill (`+85291234567`). Approve outbound drafts at `/platform/approvals` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
+The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_bash sleep`); WhatsApp proposals go to `notify_to` (default `91234567`). Approve outbound drafts at `/platform/approvals` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
 
 #### Example: WhatsApp wiki stack cron
 
@@ -256,7 +264,7 @@ With `WHATSAPP_ENABLED=true`, scan the QR printed in the worker console once. On
 
 Pending inbox text (onboarded chats only) is stacked into wiki under `whatsapp/{folder}/` and then cleared. Media is logged and skipped.
 
-Long poll stages (e.g. `hk_morning_traffic` monitor) set stage `agentOverrides.bashTimeoutMs` (e.g. `360000`) so a single `sleep 300` can finish. Shared agent default remains **60000** when unset — do not pin timeout in compose.
+Long poll stages (e.g. `traffic_monitor` monitor) set stage `agentOverrides.bashTimeoutMs` (e.g. `360000`) so a single `sleep 300` can finish. Shared agent default remains **60000** when unset — do not pin timeout in compose.
 
 SSE streams expose live run logs (`meta` / `log` / `status`) and session events for the web UI.
 

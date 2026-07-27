@@ -41,12 +41,18 @@ export const applySettingProposal = async (id: string) => {
   await fetch(url, { method: 'POST' });
 };
 
-export const postTaskRun = async (taskId: string): Promise<{ sessionId?: string; taskId?: string }> => {
+export const postTaskRun = async (
+  taskId: string,
+  runInput?: Record<string, string>,
+): Promise<{ sessionId?: string; taskId?: string }> => {
   const url = `${config.sessionApiBaseUrl}/api/runs`;
 
   try {
     const res = await fetch(url, {
-      body: JSON.stringify({ taskId }),
+      body: JSON.stringify({
+        taskId,
+        ...(runInput && Object.keys(runInput).length > 0 ? { runInput } : {}),
+      }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     });

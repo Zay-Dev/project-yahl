@@ -5,6 +5,7 @@ import { config } from '../config.js';
 export type TCronJobDef = {
   enabled: boolean;
   id: string;
+  runInput?: Record<string, string>;
   schedule: string;
   taskPath: string;
   timezone?: string;
@@ -20,7 +21,7 @@ const activeJobs = new Map<string, CronJob>();
 const activeDefs = new Map<string, TCronJobDef>();
 
 export const cronDefKey = (def: TCronJobDef) =>
-  `${def.schedule}|${def.timezone ?? ''}|${def.taskPath}`;
+  `${def.schedule}|${def.timezone ?? ''}|${def.taskPath}|${JSON.stringify(def.runInput ?? {})}`;
 
 const stopActiveJob = (id: string) => {
   const job = activeJobs.get(id);
