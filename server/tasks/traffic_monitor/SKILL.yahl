@@ -1,7 +1,7 @@
 name: traffic-monitor
 description: >
   Monitor driving traffic for a configurable origin → destination window (default 60 min);
-  multi-route ETAs, WhatsApp proposals, daily report vs city public holidays.
+  multi-route ETAs, WhatsApp proposals (initial / heartbeat / abnormal), daily report vs city public holidays.
 resultContextKey: result
 background: true
 runInput:
@@ -27,6 +27,7 @@ types: |
     routes: TRouteSample[];
     recommended?: string;
     notes?: string;
+    incident_note?: string;
   };
 
   type TTrafficSource = {
@@ -81,6 +82,32 @@ stages:
         };
       })
 
+  - nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load user-onboarding profile slice — communication_style, preferences, identity
+      topic: user-onboarding
+      output: profile.md
+    logic: "(nixery)"
+
+  - produceContextKeys: [userProfile]
+    logic: |
+      Read ~/nixery/get-knowledge/profile.md from the session workspace.
+      If missing or empty after trim, set userProfile to '<none>'; otherwise set userProfile to the file's full markdown content.
+
+  - contextKeys: [knowledge_topic, city_slug]
+    nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load sources-{city_slug} and source-ops-{city_slug} operational notes for this city
+      topic: knowledge_topic
+      output: source-knowledge.md
+    logic: "(nixery)"
+
+  - contextKeys: [city_slug]
+    produceContextKeys: [source_ops_md]
+    logic: |
+      Read ~/nixery/get-knowledge/source-knowledge.md from the session workspace.
+      If missing or empty after trim, set source_ops_md to '<none>'; otherwise set source_ops_md to the file's full markdown content (prefer the source-ops-{city_slug} section when present).
+
   - contextKeys: [origin, destination, city, holidays_topic, holidays_file_prefix, traffic_source_file]
     nixeryRun: plan
     nixeryInput:
@@ -127,13 +154,6 @@ stages:
         *save(~/data/{holidays_file_prefix}_{holidays_year}.md, holidays_md);
       ELSE IF: *exists(~/data/{holidays_file_prefix}_{holidays_year}.md) && *holidays_list_usable(*read(~/data/{holidays_file_prefix}_{holidays_year}.md), year: holidays_year);
         const holidays_md = *read(~/data/{holidays_file_prefix}_{holidays_year}.md);
-        /nixery(
-          upsert-knowledge-page,
-          topic: holidays_topic,
-          page: raw/holidays-{holidays_year},
-          mode: replace,
-          content: holidays_md,
-        );
       ELSE:
         const holidays_md = /nixery(
           research,
@@ -152,48 +172,70 @@ stages:
         );
       END:
 
-  - contextKeys: [origin, destination, city, traffic_source_file]
+  - contextKeys: [origin, destination, city, traffic_source_file, source_ops_md]
     produceContextKeys: [traffic_source]
     logic: |
       Read ~/nixery/plan/plan.md when helpful.
       Read ~/task-skills/task-mission/SKILL.md.
       if ( *exists(~/data/{traffic_source_file}) ) {
         const loaded = *normalize_traffic_source(*read(~/data/{traffic_source_file}), as: TTrafficSource);
-        const traffic_source = { ...loaded, city: city };
+        const traffic_source = {
+          ...loaded,
+          city: city,
+          url: String(loaded.url || '').includes('{origin}')
+            ? loaded.url
+            : 'https://www.google.com/maps/dir/{origin}/{destination}/',
+        };
       } else {
         const researched = *normalize_traffic_source(/nixery(
           research,
           topic: real-time driving traffic ETA origin to destination in city,
-          need: usable website or API that shows live travel time for private car driving and multiple alternate routes for this city only,
+          need: usable website or API that shows live travel time for private car driving and multiple alternate routes for this city only; url must keep {origin}/{destination} placeholders not a concrete A→B,
           prefer: Google Maps directions or local transport department live map,
           output_shape: TTrafficSource,
           howto_md_must_be_inline_markdown_not_a_path: true,
         ), as: TTrafficSource);
-        const traffic_source = { ...researched, city: city };
+        const traffic_source = {
+          ...researched,
+          city: city,
+          url: String(researched.url || '').includes('{origin}')
+            ? researched.url
+            : 'https://www.google.com/maps/dir/{origin}/{destination}/',
+        };
       }
 
-  - contextKeys: [traffic_source, origin, destination, city, city_slug, traffic_source_file, knowledge_topic, TTrafficSource, TTrafficFetch, TRouteSample]
+  - contextKeys: [traffic_source, origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, TTrafficSource, TTrafficFetch, TRouteSample]
     produceContextKeys: [traffic_source, probe_fetch]
+    maxTurns: 24
     verify:
       defId: stage-verify
       autoRetry: true
       minScore: 0.75
       rubric: |
         Pass when probe_fetch has at least 2 routes with numeric eta_min and a non-empty http(s) source_url,
-        and traffic_source.url is http(s) and traffic_source.howto_md is inline howto markdown
-        (length >= 80, not a path like ~/data/...). Fail when routes are missing, eta_min is not numeric,
-        howto is empty/path-only, or url is missing.
+        and traffic_source.url is http(s) with {origin}/{destination} placeholders (not a concrete prior A→B),
+        and traffic_source.howto_md is inline howto markdown (length >= 80, not a path like ~/data/...).
+        Fail when routes are missing, eta_min is not numeric, howto is empty/path-only, url is missing,
+        or the browser origin/destination chips do not match context origin/destination.
         On fail, set resumeAction: rerun.
     logic: |
-      Read ~/task-skills/monitor-loop/SKILL.md and ~/task-skills/route-analysis/SKILL.md.
+      Read ~/task-skills/route-analysis/SKILL.md.
+      At most 2 browser attempts per fetch_driving_routes call; on OD mismatch or blank page, fail that call — do not thrash.
       const normalized = *normalize_traffic_source(traffic_source, as: TTrafficSource);
-      const traffic_source = { ...normalized, city: city };
+      const traffic_source = {
+        ...normalized,
+        city: city,
+        url: String(normalized.url || '').includes('{origin}')
+          ? normalized.url
+          : 'https://www.google.com/maps/dir/{origin}/{destination}/',
+      };
       const probe_fetch = *fetch_driving_routes(
         origin: origin,
         destination: destination,
         mode: private_car_driving,
         max_routes: 3,
         source: traffic_source,
+        source_ops_md: source_ops_md,
         as: TTrafficFetch,
       );
       IF: !*probe_ok(probe_fetch);
@@ -204,13 +246,20 @@ stages:
           output_shape: TTrafficSource,
           howto_md_must_be_inline_markdown_not_a_path: true,
         ), as: TTrafficSource);
-        const traffic_source = { ...researched, city: city };
+        const traffic_source = {
+          ...researched,
+          city: city,
+          url: String(researched.url || '').includes('{origin}')
+            ? researched.url
+            : 'https://www.google.com/maps/dir/{origin}/{destination}/',
+        };
         const probe_fetch = *fetch_driving_routes(
           origin: origin,
           destination: destination,
           mode: private_car_driving,
           max_routes: 3,
           source: traffic_source,
+          source_ops_md: source_ops_md,
           as: TTrafficFetch,
         );
       END:
@@ -224,7 +273,7 @@ stages:
 
   - contextMode: true
     contextKeys: [timezone]
-    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page]
+    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note]
     logic: |
       const started_at = new Date().toISOString();
       const tz = String(context.context.timezone ?? 'Asia/Hong_Kong');
@@ -238,10 +287,13 @@ stages:
         notifications: [],
         miss_count: 0,
         day_page: `raw/fetches-${y}`,
+        last_heartbeat_at: '',
+        last_source_notes_at: '',
+        prev_incident_note: '',
       }))
 
-  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, traffic_source, holidays_md, origin, destination, notify_to, monitor_minutes, timezone, knowledge_topic, TTrafficFetch, TRouteSample, TMonitorResult]
-    produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor]
+  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, userProfile, holidays_md, origin, destination, notify_to, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
+    produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, last_source_notes_at, prev_incident_note, source_ops_md]
     agentOverrides:
       bashTimeoutMs: 360000
     maxBashCalls: 120
@@ -271,6 +323,10 @@ stages:
       let prev_routes = prev_routes;
       let summary_notified = summary_notified === true;
       let miss_count = miss_count || 0;
+      let last_heartbeat_at = last_heartbeat_at || '';
+      let last_source_notes_at = last_source_notes_at || '';
+      let prev_incident_note = prev_incident_note || '';
+      let source_ops_md = source_ops_md || '<none>';
 
       IF: (Date.now() - Date.parse(started_at)) >= window_ms;
         const monitor = {
@@ -291,6 +347,7 @@ stages:
             mode: private_car_driving,
             max_routes: 3,
             source: traffic_source,
+            source_ops_md: source_ops_md,
             as: TTrafficFetch,
           );
           IF: *fetch_failed(fetch);
@@ -304,8 +361,25 @@ stages:
               content: *format_miss_section(prev_routes, timezone: timezone),
             );
             const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180);
+
+            IF: (!last_source_notes_at ? (Date.now() - Date.parse(started_at)) : (Date.now() - Date.parse(last_source_notes_at))) >= 20 * 60 * 1000;
+              const candidates = *draft_source_ops_candidates(miss: true, fetch: fetch, source: traffic_source);
+              const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
+              IF: novel.length > 0;
+                /nixery(
+                  upsert-knowledge-page,
+                  topic: knowledge_topic,
+                  key: source-ops-{city_slug},
+                  mode: append,
+                  content: novel,
+                );
+                source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+              END:
+              last_source_notes_at = new Date().toISOString();
+              *set_context(last_source_notes_at, source_ops_md);
+            END:
           ELSE:
-            const analysis = *analyze_routes(fetch, prev_routes, holidays_md, ~/task-skills/route-analysis/SKILL.md);
+            const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, holidays_md, ~/task-skills/route-analysis/SKILL.md);
             const fetch_with_status = { ...fetch, ...analysis.patch };
             *set_context(fetches, operation: extend, value: fetch_with_status);
             prev_routes = fetch_with_status.routes;
@@ -317,11 +391,11 @@ stages:
               topic: knowledge_topic,
               page: day_page,
               mode: append,
-              content: *format_fetch_section(fetch_with_status, timezone: timezone),
+              content: *format_fetch_section(fetch_with_status, analysis, timezone: timezone),
             );
 
             IF: fetches.length === 2 && !summary_notified;
-              const body = *format_summary_notification(fetches, analysis, timezone: timezone);
+              const body = *format_summary_notification(fetches, analysis, timezone: timezone, userProfile: userProfile);
               const proposal = /mastermind(
                 propose-notification,
                 channel: whatsapp,
@@ -333,8 +407,28 @@ stages:
               notifications = [...notifications, proposal];
               summary_notified = true;
               *set_context(summary_notified, notifications);
-            ELSE IF: fetches.length > 2 && analysis.should_notify_abnormal;
-              const body = *format_abnormal_notification(fetch_with_status, analysis, timezone: timezone);
+            END:
+
+            const since_hb = !last_heartbeat_at
+              ? (Date.now() - Date.parse(started_at))
+              : (Date.now() - Date.parse(last_heartbeat_at));
+            IF: *proactivity_allows_heartbeat(userProfile) && since_hb >= 15 * 60 * 1000;
+              const body = *format_heartbeat_notification(fetch_with_status, analysis, timezone: timezone, userProfile: userProfile);
+              const proposal = /mastermind(
+                propose-notification,
+                channel: whatsapp,
+                direction: to_user,
+                to: notify_to,
+                body: body,
+                taskRef: traffic_monitor,
+              );
+              notifications = [...notifications, proposal];
+              last_heartbeat_at = new Date().toISOString();
+              *set_context(last_heartbeat_at, notifications);
+            END:
+
+            IF: fetches.length >= 2 && analysis.should_notify_abnormal;
+              const body = *format_abnormal_notification(fetch_with_status, analysis, timezone: timezone, userProfile: userProfile);
               const proposal = /mastermind(
                 propose-notification,
                 channel: whatsapp,
@@ -345,6 +439,26 @@ stages:
               );
               notifications = [...notifications, proposal];
               *set_context(notifications);
+            END:
+
+            prev_incident_note = analysis.incident_note || '';
+            *set_context(prev_incident_note);
+
+            IF: (!last_source_notes_at ? (Date.now() - Date.parse(started_at)) : (Date.now() - Date.parse(last_source_notes_at))) >= 20 * 60 * 1000;
+              const candidates = *draft_source_ops_candidates(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis);
+              const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
+              IF: novel.length > 0;
+                /nixery(
+                  upsert-knowledge-page,
+                  topic: knowledge_topic,
+                  key: source-ops-{city_slug},
+                  mode: append,
+                  content: novel,
+                );
+                source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+              END:
+              last_source_notes_at = new Date().toISOString();
+              *set_context(last_source_notes_at, source_ops_md);
             END:
 
             const sleep_sec = fetches.length === 1

@@ -4,21 +4,34 @@ How to fetch and compare multi-route driving ETAs for `origin` → `destination`
 
 ## Fetch
 
-Prefer Stagehand / `browser` against `traffic_source.url` using `traffic_source.howto_md`.
+Prefer Stagehand / `browser` against a **goto URL rebuilt every poll from context `origin` / `destination`**, using **core** `traffic_source.howto_md` plus retrieved `source_ops_md` (operational tricks). Do not paste ops history into `howto_md`.
 
 Only use `run_bash` + curl when `~/data/{traffic_source_file}` documents a JSON/HTTP API (same exception as HKO weather).
 
-Use the short canonical directions URL from `traffic_source.url` — do not paste Maps SPA `data=!…` address-bar URLs into `goto`.
+### Directions URL (mandatory)
 
-Per poll: at most **2** browser attempts (initial + 1 retry). If both fail (`ok: false`, timeout, blank page), stop retrying for this poll — leave `fetches` / `prev_routes` as-is and let monitor-loop skip with a day-page miss note. Do not open alternate tabs (runtime has a single page) or invent ETAs.
+1. Persist / reuse only **placeholder** templates in `traffic_source.url` (e.g. `https://www.google.com/maps/dir/{origin}/{destination}/`). Never save a concrete prior A→B pair into `~/data` or `sources-{city_slug}`.
+2. Before every `browser` `goto`, bind current context OD into that template with **deterministic** encoding — never hand-type percent-escapes:
+   ```bash
+   node -e 'const o=process.argv[1],d=process.argv[2],t=process.argv[3]; console.log(t.replaceAll("{origin}",encodeURIComponent(o)).replaceAll("{destination}",encodeURIComponent(d)))' -- "$ORIGIN" "$DESTINATION" "$TEMPLATE"
+   ```
+   Prefer English place names in the URL when Chinese geocoding is ambiguous (e.g. `Tsim Sha Tsui`, `Mong Kok`); keep Chinese for labels / day-page text.
+3. Use the short canonical directions URL — do not paste Maps SPA `data=!…` address-bar URLs into `goto`.
+4. After goto, check the origin/destination chips (or equivalent). If they do **not** match context `origin` / `destination` (or the English equivalents you encoded), treat the poll as a **fetch miss** — do not thrash with more gotos, edits, or alternate encodings.
+
+### Browser budget
+
+Per poll **and** per probe: at most **2** browser attempts (initial + 1 retry). If both fail (`ok: false`, timeout, blank page, **or OD mismatch**), stop retrying — leave `fetches` / `prev_routes` as-is (monitor-loop miss note) or fail the probe. Do not open alternate tabs (runtime has a single page) or invent ETAs.
 
 Capture up to **3** fastest private-car routes. For each route record:
 
-- `label` — short name (e.g. via tunnel / corridor)
-- `via` — tunnel / bridge / main corridor when visible
+- `label` — **iconic** geographic name when visible: tunnel, bridge, highway, estate, interchange, or main road (HK examples: Lion Rock Tunnel, Tate's Cairn Tunnel, West Kowloon Highway, Route 8, nearby estates). Never default to `Route 1` / `Route A` / `Route N` when a landmark is available. Fallback only: `Primary` / `Alt 1` / `Alt 2`.
+- `via` — secondary corridor if useful and not duplicated in `label`
 - `eta_min` — integer minutes
 - `distance_km` — when available
 - `status` — `ok` | `slow` | `abnormal` | `unknown`
+
+Also capture `incident_note` when the UI shows a crash, closure, or major disruption on a monitored corridor (short string; `''` if none).
 
 Primary route = lowest `eta_min` (or the UI’s recommended route when clearly marked).
 
@@ -26,32 +39,35 @@ Primary route = lowest `eta_min` (or the UI’s recommended route when clearly m
 
 Against the previous poll’s routes (same run window, in context):
 
+- Prefer matching routes by iconic `via` / `label` fuzzy match; if a prior route disappeared, note it and compare on primary ETA instead.
 - A route is **abnormal** when its `eta_min` is **> 120%** of that route’s previous ETA, or clearly worse than the same-morning baseline / “usual” when prior knowledge exists.
-- Prefer matching routes by `via` / `label` fuzzy match; if a prior route disappeared, note it and compare on primary ETA instead.
 
-## Notify
+## Abnormal / notify triggers
 
-Propose WhatsApp when:
+Set `should_notify_abnormal` (and related patch fields) when **any** of:
 
-1. Second fetch of the window — overall summary (all routes).
-2. Any route flips to abnormal **and** another route is meaningfully better — say which route is bad and which to take instead.
-3. Primary ETA is longer than usual versus same-day history even if all routes rose together.
+1. **ETA spike** — route `eta_min` **> 120%** of that route’s previous ETA, or primary clearly worse than same-morning baseline; prefer notifying when another route is meaningfully better.
+2. **New incident / disruption** — car crash / accident, lane closure, tunnel closed, major jam callout, police / tow, “incident reported”, flood, etc. visible for a monitored corridor. Put text in `incident_note`.
+3. **Incident cleared** — prior successful poll had non-empty `prev_incident_note` and the current poll no longer shows that disruption. Treat as a first-class abnormal reason (e.g. “Lion Rock crash no longer reported”). Include cleared text for day-page / WhatsApp.
+4. Primary ETA longer than usual versus same-day history even if all routes rose together.
 
-Do not spam: if the same abnormal condition was already notified on the previous poll and ETAs did not worsen further, skip.
+Heartbeats must **not** substitute for these. Do not spam: if the same active incident or ETA-abnormal was already notified last poll and did not worsen / change, skip. **Do** notify on incident cleared (distinct from the original crash alert).
 
 ## Day page section format
 
-Append one section per poll. `HH:MM` must be **`timezone`** wall clock — never label UTC as local.
+Append one section per poll. `HH:MM` must be **`timezone`** wall clock — never label UTC as local. Use iconic labels:
 
 ```markdown
 ## HH:MM
 
-- Route A (via …): N min — status
-- Route B (via …): N min — status
+- Lion Rock Tunnel: N min — status
+- Tate's Cairn Tunnel: N min — status
 - Recommended: …
+- Incident: …          (when new)
+- Incident cleared: … (previously: …)   (when cleared)
 - Notes: …
 ```
 
 ## Daily report
 
-After the window: classify the calendar day in `timezone` using `holidays_md` as `weekday` | `weekend` | `public_holiday`, summarize ETA series per route, note peaks and any diversion recommendations, persist under `traffic-monitor`.
+After the window: classify the calendar day in `timezone` using `holidays_md` as `weekday` | `weekend` | `public_holiday`, summarize ETA series per iconic route, note peaks, incidents, and diversion recommendations, persist under `traffic-monitor`.
