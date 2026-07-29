@@ -18,8 +18,10 @@ export type TOnboardedChannel = {
   chatId: string;
   displayName?: string;
   folder: string;
+  greetsEntity?: string;
   lid?: string;
   onboardedAt: string;
+  summary?: string;
   wikiRoot?: string;
 };
 

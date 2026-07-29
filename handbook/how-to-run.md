@@ -251,7 +251,7 @@ The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_b
 
 #### Example: WhatsApp wiki stack cron
 
-With `WHATSAPP_ENABLED=true`, scan the QR printed in the worker console once. Onboard a phone/group via task `whatsapp_channel_onboard`, then create:
+With `WHATSAPP_ENABLED=true`, scan the QR printed in the worker console once. Greet a phone/group via task `greets` (optionally `register_channel: true` to enable inbox capture), then create:
 
 ```json
 {

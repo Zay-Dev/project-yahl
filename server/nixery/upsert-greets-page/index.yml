@@ -1,7 +1,11 @@
-id: whatsapp-register-channel
-description: Register an onboarded WhatsApp chat for inbox capture (channels.json)
+id: upsert-greets-page
+description: Upsert a Wiki.js page under greets/{entity}/ (not topics/)
 
 packages: [nodejs]
+
+env:
+  WIKI_GRAPHQL_URL: ""
+  WIKI_API_TOKEN: ""
 
 nixery:
   default: "true"
@@ -11,22 +15,19 @@ nixery:
       mode: "true"
 
 input:
-  channelRef:
+  entity:
     type: string
     required: true
-  displayName:
+  page:
+    type: string
+    required: true
+  content:
+    type: string
+    required: true
+  mode:
     type: string
     required: false
-  summary:
-    type: string
-    required: false
-  greetsEntity:
-    type: string
-    required: false
-  agentPhone:
-    type: string
-    required: false
-  assistantName:
+  title:
     type: string
     required: false
   output:
@@ -34,14 +35,14 @@ input:
     required: false
 
 mount:
-  /whatsapp/inbox:
-    host: data/whatsapp_inbox
-    mode: rw
   /workspace:
     host: session
     mode: rw
   /opt/nixery/def:
     host: def
+    mode: ro
+  /opt/nixery/knowledge-wiki:
+    host: lib/knowledge-wiki
     mode: ro
 
 run:

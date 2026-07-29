@@ -77,6 +77,25 @@ const mergePlatform = (existing, agentPhone, assistantName) => {
   };
 };
 
+const mergeSummary = (existing, incoming) => {
+  const next = typeof incoming === 'string' ? incoming.trim() : '';
+  const prev = typeof existing === 'string' ? existing.trim() : '';
+
+  if (!next) {
+    return prev || undefined;
+  }
+
+  if (!prev || prev === next) {
+    return next;
+  }
+
+  if (prev.includes(next)) {
+    return prev;
+  }
+
+  return `${prev}\n${next}`;
+};
+
 const main = async () => {
   const workspace = '/workspace';
   const defRoot = '/opt/nixery/def';
@@ -87,6 +106,8 @@ const main = async () => {
     : 'result.json';
   const channelRef = String(input.channelRef ?? '').trim();
   const displayName = typeof input.displayName === 'string' ? input.displayName.trim() : '';
+  const summaryIn = typeof input.summary === 'string' ? input.summary.trim() : '';
+  const greetsEntityIn = typeof input.greetsEntity === 'string' ? input.greetsEntity.trim() : '';
   const agentPhone = typeof input.agentPhone === 'string' ? input.agentPhone.trim() : '';
   const assistantName = typeof input.assistantName === 'string' ? input.assistantName.trim() : '';
   const chatId = toChatId(channelRef);
@@ -107,11 +128,18 @@ const main = async () => {
   const existingIndex = channels.findIndex((item) =>
     String(item.chatId).toLowerCase() === chatId.toLowerCase()
     || item.folder === folder);
+  const existing = existingIndex >= 0 ? channels[existingIndex] : undefined;
+  const summary = mergeSummary(existing?.summary, summaryIn);
+  const greetsEntity = greetsEntityIn
+    || (typeof existing?.greetsEntity === 'string' ? existing.greetsEntity.trim() : '')
+    || undefined;
   const record = {
     chatId,
-    displayName: displayName || undefined,
+    displayName: displayName || existing?.displayName || undefined,
     folder,
+    greetsEntity,
     onboardedAt: new Date().toISOString(),
+    summary,
     wikiRoot: `whatsapp/${folder}`,
   };
 
@@ -119,6 +147,7 @@ const main = async () => {
     channels[existingIndex] = {
       ...channels[existingIndex],
       ...record,
+      lid: channels[existingIndex].lid,
       onboardedAt: channels[existingIndex].onboardedAt ?? record.onboardedAt,
     };
   } else {

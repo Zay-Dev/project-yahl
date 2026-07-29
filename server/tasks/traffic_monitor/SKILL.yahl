@@ -1,7 +1,8 @@
 name: traffic-monitor
 description: >
   Monitor driving traffic for a configurable origin → destination window (default 60 min);
-  multi-route ETAs, WhatsApp proposals (initial / heartbeat / abnormal), daily report vs city public holidays.
+  multi-route ETAs, notification proposals (initial / heartbeat / abnormal) tailored via resolve-notification-target,
+  daily report vs city public holidays.
 resultContextKey: result
 background: true
 runInput:
@@ -83,17 +84,18 @@ stages:
         };
       })
 
-  - nixeryRun: get-knowledge
+  - contextKeys: [notify_to]
+    nixeryRun: resolve-notification-target
     nixeryInput:
-      purpose: Load user-onboarding profile slice — communication_style, preferences, identity
-      topic: user-onboarding
-      output: profile.md
+      to: notify_to
+      output: notify-target.json
     logic: "(nixery)"
 
-  - produceContextKeys: [userProfile]
+  - contextKeys: [notify_to]
+    produceContextKeys: [notifyChannel, notifyTo, notifyName, notifyPreference, notifyIsUser]
     logic: |
-      Read ~/nixery/get-knowledge/profile.md from the session workspace.
-      If missing or empty after trim, set userProfile to '<none>'; otherwise set userProfile to the file's full markdown content.
+      Read ~/nixery/resolve-notification-target/notify-target.json (or result.json) from the session workspace.
+      Parse JSON. Set notifyChannel from channel (default whatsapp), notifyTo from to (fallback notify_to), notifyName from name (or ''), notifyPreference from preference (or ''), notifyIsUser from isUser (boolean; default false).
 
   - contextKeys: [knowledge_topic, city_slug]
     nixeryRun: get-knowledge
@@ -383,7 +385,7 @@ stages:
         prev_incident_note: '',
       }))
 
-  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, userProfile, holidays_md, origin, destination, notify_to, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
+  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
     produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, last_source_notes_at, prev_incident_note, source_ops_md]
     agentOverrides:
       bashTimeoutMs: 360000
@@ -486,12 +488,12 @@ stages:
             );
 
             IF: fetches.length === 2 && !summary_notified;
-              const body = *format_summary_notification(fetches, analysis, timezone: timezone, userProfile: userProfile);
+              const body = *format_summary_notification(fetches, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
               const proposal = /mastermind(
                 propose-notification,
-                channel: whatsapp,
+                channel: notifyChannel,
                 direction: to_user,
-                to: notify_to,
+                to: notifyTo,
                 body: body,
                 taskRef: traffic_monitor,
               );
@@ -503,13 +505,13 @@ stages:
             const since_hb = !last_heartbeat_at
               ? (Date.now() - Date.parse(started_at))
               : (Date.now() - Date.parse(last_heartbeat_at));
-            IF: *proactivity_allows_heartbeat(userProfile) && since_hb >= 15 * 60 * 1000;
-              const body = *format_heartbeat_notification(fetch_with_status, analysis, timezone: timezone, userProfile: userProfile);
+            IF: *proactivity_allows_heartbeat(notifyPreference) && since_hb >= 15 * 60 * 1000;
+              const body = *format_heartbeat_notification(fetch_with_status, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
               const proposal = /mastermind(
                 propose-notification,
-                channel: whatsapp,
+                channel: notifyChannel,
                 direction: to_user,
-                to: notify_to,
+                to: notifyTo,
                 body: body,
                 taskRef: traffic_monitor,
               );
@@ -519,12 +521,12 @@ stages:
             END:
 
             IF: fetches.length >= 2 && analysis.should_notify_abnormal;
-              const body = *format_abnormal_notification(fetch_with_status, analysis, timezone: timezone, userProfile: userProfile);
+              const body = *format_abnormal_notification(fetch_with_status, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
               const proposal = /mastermind(
                 propose-notification,
-                channel: whatsapp,
+                channel: notifyChannel,
                 direction: to_user,
-                to: notify_to,
+                to: notifyTo,
                 body: body,
                 taskRef: traffic_monitor,
               );

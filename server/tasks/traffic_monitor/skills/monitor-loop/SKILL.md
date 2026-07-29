@@ -63,16 +63,16 @@ When route fetch via `browser` fails (timeout, blank page, `ok: false`):
 
 ## Notifications
 
-Always use `to: notify_to` from context (default `91234567`) — never substitute a different recipient.
+Use `channel: notifyChannel` and `to: notifyTo` from `/nixery(resolve-notification-target)` — never invent a different recipient.
 
-Draft every body with `userProfile` (language, tone, detailLevel, boundaries/avoid). Heartbeats also require `*proactivity_allows_heartbeat(userProfile)`.
+Draft every body with `notifyPreference` (and `notifyName` when useful). Empty preference → neutral professional defaults. Heartbeats also require `*proactivity_allows_heartbeat(notifyPreference)`.
 
 ```text
 /mastermind(
   propose-notification,
-  channel: whatsapp,
+  channel: notifyChannel,
   direction: to_user,
-  to: notify_to,
+  to: notifyTo,
   body: <prefs-shaped status text>,
   taskRef: traffic_monitor,
 )
@@ -84,7 +84,7 @@ After successful fetch #2 when `!summary_notified`: full early picture of that d
 
 ### Kind B — Heartbeat (15 min)
 
-When `*proactivity_allows_heartbeat(userProfile)` and `(now - last_heartbeat_at || started_at) >= 15m`: short still-running pulse — task alive, primary/alts briefly, **minor** drift only. Set `last_heartbeat_at` to now ISO. Low/minimal proactivity skips this kind only.
+When `*proactivity_allows_heartbeat(notifyPreference)` and `(now - last_heartbeat_at || started_at) >= 15m`: short still-running pulse — task alive, primary/alts briefly, **minor** drift only. Set `last_heartbeat_at` to now ISO. Low/minimal proactivity skips this kind only.
 
 ### Kind C — Abnormal / incident
 
