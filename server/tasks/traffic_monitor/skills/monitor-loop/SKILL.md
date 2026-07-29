@@ -96,7 +96,7 @@ If A and B, or B and C, are due on the same poll, send separate proposals (do no
 
 When `(now - last_source_notes_at || started_at) >= 20m`:
 
-1. Draft 0–5 short candidate bullets from this window (tricks, brittle selectors, timeouts, URL quirks).
+1. Draft 0–5 short candidate bullets from this window (tricks, brittle selectors, timeouts, URL quirks). When `traffic_source.is_fallback` (Google Maps budget fallback), include novel Maps howto / prevent notes (encoding, OD chips, SPA URLs, UI quirks) — do not skip learning because the source is fallback.
 2. `novel = *filter_novel_ops_notes(candidates, against: source_ops_md)` — skip fuzzy/semantic duplicates already in knowledge.
 3. If `novel` non-empty: `/nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, content: novel)` and merge into in-context `source_ops_md`.
 4. Do **not** append into `traffic_source.howto_md` or save the local traffic_source file for ops.

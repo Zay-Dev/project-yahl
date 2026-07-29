@@ -35,6 +35,7 @@ types: |
     howto_md: string;
     kind: 'browser' | 'api';
     city?: string;
+    is_fallback: boolean;
   };
 
   type TMonitorResult = {
@@ -113,9 +114,11 @@ stages:
     nixeryInput:
       goal: Find or reuse a real-time driving traffic source for the run origin/destination and public holidays for the city/year
       stageLogic: |
-        Prefer ~/data/{traffic_source_file} and ~/data/{holidays_file_prefix}_{year}.md when present for this city.
+        Prefer ~/data/{traffic_source_file} and ~/data/{holidays_file_prefix}_{year}.md when present for this city
+        and the traffic source is usable with is_fallback not true.
         Do not reuse a traffic or holidays guideline from a different city.
-        Otherwise research usable live ETA sites and official public holiday lists for the city.
+        Otherwise research usable live multi-route private-car ETA sites and official public holiday lists for the city
+        (any working city-local site; Google Maps is budget fallback only during explore, not preferred).
       output: plan.md
     logic: "(nixery)"
 
@@ -172,41 +175,9 @@ stages:
         );
       END:
 
-  - contextKeys: [origin, destination, city, traffic_source_file, source_ops_md]
-    produceContextKeys: [traffic_source]
-    logic: |
-      Read ~/nixery/plan/plan.md when helpful.
-      Read ~/task-skills/task-mission/SKILL.md.
-      if ( *exists(~/data/{traffic_source_file}) ) {
-        const loaded = *normalize_traffic_source(*read(~/data/{traffic_source_file}), as: TTrafficSource);
-        const traffic_source = {
-          ...loaded,
-          city: city,
-          url: String(loaded.url || '').includes('{origin}')
-            ? loaded.url
-            : 'https://www.google.com/maps/dir/{origin}/{destination}/',
-        };
-      } else {
-        const researched = *normalize_traffic_source(/nixery(
-          research,
-          topic: real-time driving traffic ETA origin to destination in city,
-          need: usable website or API that shows live travel time for private car driving and multiple alternate routes for this city only; url must keep {origin}/{destination} placeholders not a concrete A→B,
-          prefer: Google Maps directions or local transport department live map,
-          output_shape: TTrafficSource,
-          howto_md_must_be_inline_markdown_not_a_path: true,
-        ), as: TTrafficSource);
-        const traffic_source = {
-          ...researched,
-          city: city,
-          url: String(researched.url || '').includes('{origin}')
-            ? researched.url
-            : 'https://www.google.com/maps/dir/{origin}/{destination}/',
-        };
-      }
-
-  - contextKeys: [traffic_source, origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, TTrafficSource, TTrafficFetch, TRouteSample]
-    produceContextKeys: [traffic_source, probe_fetch]
-    maxTurns: 24
+  - contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, TTrafficSource, TTrafficFetch, TRouteSample]
+    produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md]
+    maxTurns: 80
     verify:
       defId: stage-verify
       autoRetry: true
@@ -214,45 +185,48 @@ stages:
       rubric: |
         Pass when probe_fetch has at least 2 routes with numeric eta_min and a non-empty http(s) source_url,
         and traffic_source.url is http(s) with {origin}/{destination} placeholders (not a concrete prior A→B),
-        and traffic_source.howto_md is inline howto markdown (length >= 80, not a path like ~/data/...).
+        and traffic_source.howto_md is inline howto markdown (length >= 80, not a path like ~/data/...),
+        and traffic_source.is_fallback is boolean,
+        and explore_started_at is a non-empty ISO timestamp.
         Fail when routes are missing, eta_min is not numeric, howto is empty/path-only, url is missing,
-        or the browser origin/destination chips do not match context origin/destination.
+        is_fallback is missing, or the browser origin/destination chips do not match context origin/destination.
         On fail, set resumeAction: rerun.
     logic: |
+      Read ~/nixery/plan/plan.md when helpful.
+      Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
+      Budget: stop free research and use /google-maps-directions when about to hit maxTurns
+      (leave ~4 turns) OR when Date.now() - Date.parse(explore_started_at) > 30 * 60 * 1000.
+      Do not silently rewrite non-placeholder URLs to Google Maps outside that fallback branch.
       At most 2 browser attempts per fetch_driving_routes call; on OD mismatch or blank page, fail that call — do not thrash.
-      const normalized = *normalize_traffic_source(traffic_source, as: TTrafficSource);
-      const traffic_source = {
-        ...normalized,
-        city: city,
-        url: String(normalized.url || '').includes('{origin}')
-          ? normalized.url
-          : 'https://www.google.com/maps/dir/{origin}/{destination}/',
-      };
-      const probe_fetch = *fetch_driving_routes(
-        origin: origin,
-        destination: destination,
-        mode: private_car_driving,
-        max_routes: 3,
-        source: traffic_source,
-        source_ops_md: source_ops_md,
-        as: TTrafficFetch,
-      );
-      IF: !*probe_ok(probe_fetch);
-        const researched = *normalize_traffic_source(/nixery(
-          research,
-          topic: alternate real-time driving ETA source origin to destination in city,
-          need: working live multi-route travel times for private car in this city,
-          output_shape: TTrafficSource,
-          howto_md_must_be_inline_markdown_not_a_path: true,
-        ), as: TTrafficSource);
-        const traffic_source = {
-          ...researched,
-          city: city,
-          url: String(researched.url || '').includes('{origin}')
-            ? researched.url
-            : 'https://www.google.com/maps/dir/{origin}/{destination}/',
-        };
+
+      const explore_started_at = new Date().toISOString();
+      *set_context(explore_started_at);
+      let source_ops_md = source_ops_md || '<none>';
+      let locked = false;
+      const maps_template = 'https://www.google.com/maps/dir/{origin}/{destination}/';
+
+      let candidate = null;
+      IF: *exists(~/data/{traffic_source_file});
+        candidate = *normalize_traffic_source(*read(~/data/{traffic_source_file}), as: TTrafficSource);
+      ELSE:
+        const from_knowledge = *extract_sources_page(
+          ~/nixery/get-knowledge/source-knowledge.md,
+          key: sources-{city_slug},
+        );
+        IF: from_knowledge;
+          candidate = *normalize_traffic_source(from_knowledge, as: TTrafficSource);
+        END:
+      END:
+
+      const candidate_is_fallback =
+        !!candidate && (
+          candidate.is_fallback === true
+          || (String(candidate.url || '').includes('google.com/maps/dir/') && candidate.is_fallback !== false)
+        );
+
+      IF: candidate && !candidate_is_fallback && String(candidate.url || '').includes('{origin}');
+        const traffic_source = { ...candidate, city: city, is_fallback: false };
         const probe_fetch = *fetch_driving_routes(
           origin: origin,
           destination: destination,
@@ -262,14 +236,131 @@ stages:
           source_ops_md: source_ops_md,
           as: TTrafficFetch,
         );
+        IF: *probe_ok(probe_fetch);
+          *save(~/data/{traffic_source_file}, traffic_source);
+          /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: traffic_source);
+          *set_context(traffic_source, probe_fetch, source_ops_md);
+          locked = true;
+        ELSE:
+          const novel = *filter_novel_ops_notes(
+            *draft_source_ops_candidates(miss: true, source: traffic_source, fetch: probe_fetch),
+            against: source_ops_md,
+          );
+          IF: novel.length > 0;
+            /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, content: novel);
+            source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+            *set_context(source_ops_md);
+          END:
+        END:
       END:
-      *save(~/data/{traffic_source_file}, traffic_source);
-      /nixery(
-        upsert-knowledge-page,
-        topic: knowledge_topic,
-        key: sources-{city_slug},
-        value: traffic_source,
-      );
+
+      IF: !locked;
+        while (
+          !locked
+          && (Date.now() - Date.parse(explore_started_at)) <= 30 * 60 * 1000
+        ) {
+          IF: *about_to_hit_max_turns(remaining_le: 4) || (Date.now() - Date.parse(explore_started_at)) > 30 * 60 * 1000;
+            break;
+          END:
+          const researched = *normalize_traffic_source(/nixery(
+            research,
+            topic: real-time driving traffic ETA origin to destination in city,
+            need: usable website or API with live private-car multi-route travel times for this city only; url must keep {origin}/{destination} placeholders not a concrete A→B; prefer city-local live map or transport open data — do not prefer Google Maps,
+            output_shape: TTrafficSource,
+            howto_md_must_be_inline_markdown_not_a_path: true,
+          ), as: TTrafficSource);
+          const research_notes = *filter_novel_ops_notes(
+            *draft_source_ops_candidates(research: true, source: researched),
+            against: source_ops_md,
+          );
+          IF: research_notes.length > 0;
+            /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, content: research_notes);
+            source_ops_md = *merge_source_ops_md(source_ops_md, research_notes);
+            *set_context(source_ops_md);
+          END:
+          IF: String(researched.url || '').includes('google.com/maps/dir/');
+            break;
+          END:
+          IF: !String(researched.url || '').includes('{origin}');
+            continue;
+          END:
+          const traffic_source = { ...researched, city: city, is_fallback: false };
+          const probe_fetch = *fetch_driving_routes(
+            origin: origin,
+            destination: destination,
+            mode: private_car_driving,
+            max_routes: 3,
+            source: traffic_source,
+            source_ops_md: source_ops_md,
+            as: TTrafficFetch,
+          );
+          const try_notes = *filter_novel_ops_notes(
+            *draft_source_ops_candidates(miss: !*probe_ok(probe_fetch), source: traffic_source, fetch: probe_fetch),
+            against: source_ops_md,
+          );
+          IF: try_notes.length > 0;
+            /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, content: try_notes);
+            source_ops_md = *merge_source_ops_md(source_ops_md, try_notes);
+            *set_context(source_ops_md);
+          END:
+          IF: *probe_ok(probe_fetch);
+            *save(~/data/{traffic_source_file}, traffic_source);
+            /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: traffic_source);
+            *set_context(traffic_source, probe_fetch, source_ops_md);
+            locked = true;
+          END:
+        }
+      END:
+
+      IF: !locked;
+        Read /opt/skills/google-maps-directions/SKILL.md.
+        const maps_howto = [
+          '1. Bind template https://www.google.com/maps/dir/{origin}/{destination}/ with deterministic encodeURIComponent (node one-liner in skill).',
+          '2. /stagehand(goto, bound_url); confirm driving mode; verify OD chips match context.',
+          '3. Extract up to 3 private-car routes (iconic labels, eta_min, distance_km, status) and incident_note.',
+          '4. At most 2 browser attempts; never hand-type percent-encoding or paste SPA data=! URLs.',
+        ].join('\n');
+        const traffic_source = {
+          ...*normalize_traffic_source(/google-maps-directions(origin, destination), as: TTrafficSource),
+          city: city,
+          url: maps_template,
+          kind: 'browser',
+          howto_md: maps_howto,
+          is_fallback: true,
+        };
+        const fallback_prep_notes = *filter_novel_ops_notes(
+          *draft_source_ops_candidates(
+            fallback: true,
+            source: traffic_source,
+            note: 'google-maps budget fallback; persist howto and prevent notes',
+          ),
+          against: source_ops_md,
+        );
+        IF: fallback_prep_notes.length > 0;
+          /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, content: fallback_prep_notes);
+          source_ops_md = *merge_source_ops_md(source_ops_md, fallback_prep_notes);
+        END:
+        const probe_fetch = *fetch_driving_routes(
+          origin: origin,
+          destination: destination,
+          mode: private_car_driving,
+          max_routes: 3,
+          source: traffic_source,
+          source_ops_md: source_ops_md,
+          as: TTrafficFetch,
+        );
+        const fallback_fetch_notes = *filter_novel_ops_notes(
+          *draft_source_ops_candidates(fallback: true, source: traffic_source, fetch: probe_fetch),
+          against: source_ops_md,
+        );
+        IF: fallback_fetch_notes.length > 0;
+          /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, content: fallback_fetch_notes);
+          source_ops_md = *merge_source_ops_md(source_ops_md, fallback_fetch_notes);
+        END:
+        *save(~/data/{traffic_source_file}, traffic_source);
+        /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: traffic_source);
+        *set_context(traffic_source, probe_fetch, source_ops_md, explore_started_at);
+      END:
 
   - contextMode: true
     contextKeys: [timezone]

@@ -6,26 +6,28 @@ How to fetch and compare multi-route driving ETAs for `origin` → `destination`
 
 Prefer Stagehand / `browser` against a **goto URL rebuilt every poll from context `origin` / `destination`**, using **core** `traffic_source.howto_md` plus retrieved `source_ops_md` (operational tricks). Do not paste ops history into `howto_md`.
 
-Only use `run_bash` + curl when `~/data/{traffic_source_file}` documents a JSON/HTTP API (same exception as HKO weather).
+Only use `run_bash` + curl when `~/data/{traffic_source_file}` documents a JSON/HTTP API (documented HTTP API exception — not for HTML scrape).
+
+When `traffic_source.is_fallback` is true (or URL is the Google Maps directions template), follow `/opt/skills/google-maps-directions/SKILL.md` for bind + fetch + prevent rules.
 
 ### Directions URL (mandatory)
 
-1. Persist / reuse only **placeholder** templates in `traffic_source.url` (e.g. `https://www.google.com/maps/dir/{origin}/{destination}/`). Never save a concrete prior A→B pair into `~/data` or `sources-{city_slug}`.
+1. Persist / reuse only **placeholder** templates in `traffic_source.url` (e.g. `https://example.com/dir/{origin}/{destination}/`). Never save a concrete prior A→B pair into `~/data` or `sources-{city_slug}`.
 2. Before every `browser` `goto`, bind current context OD into that template with **deterministic** encoding — never hand-type percent-escapes:
    ```bash
    node -e 'const o=process.argv[1],d=process.argv[2],t=process.argv[3]; console.log(t.replaceAll("{origin}",encodeURIComponent(o)).replaceAll("{destination}",encodeURIComponent(d)))' -- "$ORIGIN" "$DESTINATION" "$TEMPLATE"
    ```
-   Prefer English place names in the URL when Chinese geocoding is ambiguous (e.g. `Tsim Sha Tsui`, `Mong Kok`); keep Chinese for labels / day-page text.
-3. Use the short canonical directions URL — do not paste Maps SPA `data=!…` address-bar URLs into `goto`.
-4. After goto, check the origin/destination chips (or equivalent). If they do **not** match context `origin` / `destination` (or the English equivalents you encoded), treat the poll as a **fetch miss** — do not thrash with more gotos, edits, or alternate encodings.
+   Prefer Latin/English place names in the URL when non-Latin geocoding is ambiguous; keep local-script names for labels / day-page text.
+3. Use the short canonical directions URL for the chosen site — do not paste SPA sessionful / `data=!…` address-bar URLs into `goto`.
+4. After goto, check the origin/destination chips (or equivalent). If they do **not** match context `origin` / `destination` (or the encoded equivalents), treat the poll as a **fetch miss** — do not thrash with more gotos, edits, or alternate encodings.
 
 ### Browser budget
 
-Per poll **and** per probe: at most **2** browser attempts (initial + 1 retry). If both fail (`ok: false`, timeout, blank page, **or OD mismatch**), stop retrying — leave `fetches` / `prev_routes` as-is (monitor-loop miss note) or fail the probe. Do not open alternate tabs (runtime has a single page) or invent ETAs.
+Per poll **and** per probe: at most **2** browser attempts (initial + 1 retry). If both fail (`ok: false`, timeout, blank page, **or OD mismatch**), stop retrying — leave `fetches` / `prev_routes` as-is (monitor-loop miss note) or fail that probe attempt. Do not open alternate tabs (runtime has a single page) or invent ETAs.
 
 Capture up to **3** fastest private-car routes. For each route record:
 
-- `label` — **iconic** geographic name when visible: tunnel, bridge, highway, estate, interchange, or main road (HK examples: Lion Rock Tunnel, Tate's Cairn Tunnel, West Kowloon Highway, Route 8, nearby estates). Never default to `Route 1` / `Route A` / `Route N` when a landmark is available. Fallback only: `Primary` / `Alt 1` / `Alt 2`.
+- `label` — **iconic** geographic name when visible: tunnel, bridge, highway, estate, interchange, or main road for **this city**. Never default to `Route 1` / `Route A` / `Route N` when a landmark is available. Fallback only: `Primary` / `Alt 1` / `Alt 2`.
 - `via` — secondary corridor if useful and not duplicated in `label`
 - `eta_min` — integer minutes
 - `distance_km` — when available
@@ -47,8 +49,8 @@ Against the previous poll’s routes (same run window, in context):
 Set `should_notify_abnormal` (and related patch fields) when **any** of:
 
 1. **ETA spike** — route `eta_min` **> 120%** of that route’s previous ETA, or primary clearly worse than same-morning baseline; prefer notifying when another route is meaningfully better.
-2. **New incident / disruption** — car crash / accident, lane closure, tunnel closed, major jam callout, police / tow, “incident reported”, flood, etc. visible for a monitored corridor. Put text in `incident_note`.
-3. **Incident cleared** — prior successful poll had non-empty `prev_incident_note` and the current poll no longer shows that disruption. Treat as a first-class abnormal reason (e.g. “Lion Rock crash no longer reported”). Include cleared text for day-page / WhatsApp.
+2. **New incident / disruption** — car crash / accident, lane closure, tunnel/bridge closed, major jam callout, police / tow, “incident reported”, flood, etc. visible for a monitored corridor. Put text in `incident_note`.
+3. **Incident cleared** — prior successful poll had non-empty `prev_incident_note` and the current poll no longer shows that disruption. Treat as a first-class abnormal reason (e.g. “prior crash no longer reported”). Include cleared text for day-page / WhatsApp.
 4. Primary ETA longer than usual versus same-day history even if all routes rose together.
 
 Heartbeats must **not** substitute for these. Do not spam: if the same active incident or ETA-abnormal was already notified last poll and did not worsen / change, skip. **Do** notify on incident cleared (distinct from the original crash alert).
@@ -60,8 +62,8 @@ Append one section per poll. `HH:MM` must be **`timezone`** wall clock — never
 ```markdown
 ## HH:MM
 
-- Lion Rock Tunnel: N min — status
-- Tate's Cairn Tunnel: N min — status
+- <Iconic corridor>: N min — status
+- <Alt corridor>: N min — status
 - Recommended: …
 - Incident: …          (when new)
 - Incident cleared: … (previously: …)   (when cleared)
