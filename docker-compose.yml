@@ -73,6 +73,7 @@ services:
       RUNTIME_SHARED_NETWORK: ${SHARED_DOCKER_NETWORK:-yahl_shared}
       SESSION_API_BASE_URL: http://server:4000
       WORKSPACE_ROOT: /workspace
+      EMAIL_WHITELIST: ${EMAIL_WHITELIST:-}
       WHATSAPP_WHITELIST: ${WHATSAPP_WHITELIST:-}
     ports:
       - "${SERVER_PORT:-4000}:4000"
@@ -165,6 +166,13 @@ services:
       WHATSAPP_INBOX_ROOT: /whatsapp/inbox
       WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-false}
       WHATSAPP_WHITELIST: ${WHATSAPP_WHITELIST:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-}
     volumes:
       - ./data/workspace:/workspace
       - ./data/whatsapp_auth:/whatsapp/auth

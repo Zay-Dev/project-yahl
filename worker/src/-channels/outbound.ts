@@ -1,3 +1,7 @@
+import type { Transporter } from 'nodemailer';
+
+import nodemailer from 'nodemailer';
+
 import { toWhatsAppChatId } from '@project-yahl/shared/whatsapp/whitelist';
 
 import { config } from '../config.js';
@@ -13,6 +17,58 @@ export type TSendResult = {
   error?: string;
   ok: boolean;
   skipped?: boolean;
+};
+
+let transporter: Transporter | null = null;
+
+export const isSmtpConfigured = (): boolean =>
+  Boolean(process.env.SMTP_HOST?.trim());
+
+export const getSystemAdminEmail = (): string =>
+  process.env.SYSTEM_ADMIN_EMAIL?.trim() ?? '';
+
+const getSmtpFrom = (): string => {
+  const from = process.env.SMTP_FROM?.trim();
+
+  if (from) {
+    return from;
+  }
+
+  const user = process.env.SMTP_USER?.trim();
+
+  if (user) {
+    return user;
+  }
+
+  return 'noreply@localhost';
+};
+
+const getTransporter = (): Transporter => {
+  if (transporter) {
+    return transporter;
+  }
+
+  const host = process.env.SMTP_HOST?.trim() ?? '';
+  const port = Number(process.env.SMTP_PORT?.trim() || '587');
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  const secure = process.env.SMTP_SECURE?.trim() === 'true';
+
+  transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    ...(user
+      ? {
+          auth: {
+            pass: pass ?? '',
+            user,
+          },
+        }
+      : {}),
+  });
+
+  return transporter;
 };
 
 const withTimeout = async <T>(
@@ -41,13 +97,28 @@ const withTimeout = async <T>(
 export const sendEmail = async (params: {
   body: string;
   fromIdentity?: string;
+  subject?: string;
   to: string;
 }): Promise<TSendResult> => {
-  const host = process.env.SMTP_HOST?.trim();
-
-  if (!host) {
+  if (!isSmtpConfigured()) {
     console.log('[worker][email:stub]', params.to, params.body.slice(0, 120));
     return { ok: true };
+  }
+
+  const subject = params.subject?.trim()
+    || (params.fromIdentity ? `Notification (${params.fromIdentity})` : 'Notification');
+
+  try {
+    await getTransporter().sendMail({
+      from: getSmtpFrom(),
+      subject,
+      text: params.body,
+      to: params.to,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[worker][email] send failed', params.to, message);
+    return { ok: false, error: message };
   }
 
   console.log('[worker][email]', params.fromIdentity ?? 'default', '→', params.to);

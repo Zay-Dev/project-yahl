@@ -5,6 +5,10 @@ import Joi from 'joi';
 import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 import {
+  parseEmailWhitelist,
+  recipientMatchesEmailWhitelist,
+} from '@project-yahl/shared/email/whitelist';
+import {
   parseWhatsAppWhitelist,
   recipientMatchesWhatsAppWhitelist,
 } from '@project-yahl/shared/whatsapp/whitelist';
@@ -42,14 +46,22 @@ const settingBodySchema = Joi.object<TRequestCreateSettingProposal>({
 const resolveNotificationStatus = (
   body: TRequestCreateNotificationProposal,
 ): 'approved' | 'pending' => {
-  if (body.channel !== 'whatsapp') {
+  if (body.channel === 'email') {
+    const whitelist = parseEmailWhitelist(process.env.EMAIL_WHITELIST);
+
+    if (recipientMatchesEmailWhitelist(body.to, whitelist)) {
+      return 'approved';
+    }
+
     return 'pending';
   }
 
-  const whitelist = parseWhatsAppWhitelist(process.env.WHATSAPP_WHITELIST);
+  if (body.channel === 'whatsapp') {
+    const whitelist = parseWhatsAppWhitelist(process.env.WHATSAPP_WHITELIST);
 
-  if (recipientMatchesWhatsAppWhitelist(body.to, whitelist)) {
-    return 'approved';
+    if (recipientMatchesWhatsAppWhitelist(body.to, whitelist)) {
+      return 'approved';
+    }
   }
 
   return 'pending';

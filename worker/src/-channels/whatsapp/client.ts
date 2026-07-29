@@ -20,6 +20,11 @@ let ready = false;
 let starting = false;
 let reinitInFlight = false;
 let reinitTimer: ReturnType<typeof setTimeout> | null = null;
+let onReadyListener: (() => void) | null = null;
+
+export const setWhatsAppReadyListener = (listener: (() => void) | null): void => {
+  onReadyListener = listener;
+};
 
 const REINIT_DELAY_MS = 3000;
 const LOGOUT_REINIT_DELAY_MS = 10_000;
@@ -303,6 +308,7 @@ export const initWhatsApp = async (): Promise<void> => {
     next.on('ready', () => {
       ready = true;
       console.log('[worker][whatsapp] client ready');
+      onReadyListener?.();
     });
 
     next.on('authenticated', () => {
