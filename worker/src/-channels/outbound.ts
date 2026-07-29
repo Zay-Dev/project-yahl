@@ -3,6 +3,7 @@ import { toWhatsAppChatId } from '@project-yahl/shared/whatsapp/whitelist';
 import { config } from '../config.js';
 import {
   getWhatsAppClient,
+  isWhatsAppBrowserDeathError,
   isWhatsAppReady,
   scheduleWhatsAppReinit,
 } from './whatsapp/client.js';
@@ -93,8 +94,7 @@ export const sendWhatsApp = async (params: {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[worker][whatsapp] send failed', chatId, message);
 
-    const shouldReinit = message.includes('timed out')
-      || /target closed|protocol error|session closed|browser has been closed/i.test(message);
+    const shouldReinit = message.includes('timed out') || isWhatsAppBrowserDeathError(error);
 
     if (shouldReinit) {
       scheduleWhatsAppReinit(

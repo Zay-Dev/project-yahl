@@ -45,6 +45,10 @@ import {
   writeProduceKeysDiagnostic,
 } from './produce-keys-retry';
 import { handleLoop } from './loop';
+import {
+  resolveStageWaitMaxMs,
+  StageWaitTimeoutError,
+} from './stage-wait-timeout';
 
 const AGENT_LOCAL_TOOLS = new Set(['browser', 'mastermind', 'run_bash']);
 
@@ -418,14 +422,32 @@ class YahlAgentRunner {
 
     const toolCallPromise = toolCallHandlers.wait();
     const waitStartedAt = Date.now();
+    const stageWaitMaxMs = resolveStageWaitMaxMs();
+    let stageWaitTimer: ReturnType<typeof setTimeout> | undefined;
 
-    console.log(`[orchestrator] stage wait start requestId=${this.requestId}`);
+    const stageWaitTimeoutPromise = stageWaitMaxMs == null
+      ? null
+      : new Promise<never>((_, reject) => {
+        stageWaitTimer = setTimeout(() => {
+          reject(new StageWaitTimeoutError(this.requestId, stageWaitMaxMs));
+        }, stageWaitMaxMs);
+      });
+
     console.log(
-      `[yahl-diag] race start requestId=${this.requestId} resumeStage=${Boolean(this.options.resumeStage)} pid=${process.pid}`,
+      `[orchestrator] stage wait start requestId=${this.requestId}`
+      + (stageWaitMaxMs == null ? '' : ` maxMs=${stageWaitMaxMs}`),
+    );
+    console.log(
+      `[yahl-diag] race start requestId=${this.requestId} resumeStage=${Boolean(this.options.resumeStage)} pid=${process.pid}`
+      + (stageWaitMaxMs == null ? '' : ` stageWaitMaxMs=${stageWaitMaxMs}`),
     );
 
     try {
-      await Promise.race([wait(), pausePromise]);
+      await Promise.race([
+        wait(),
+        pausePromise,
+        ...(stageWaitTimeoutPromise ? [stageWaitTimeoutPromise] : []),
+      ]);
     } catch (error) {
       disposeWait();
       toolCallHandlers.dispose();
@@ -445,6 +467,10 @@ class YahlAgentRunner {
       }
 
       throw error;
+    } finally {
+      if (stageWaitTimer) {
+        clearTimeout(stageWaitTimer);
+      }
     }
 
     toolCallHandlers.dispose();

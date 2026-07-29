@@ -1,7 +1,12 @@
 import type { TCronJobDef } from './-cron/scheduler.js';
 
 import { sendEmail, sendWhatsApp } from './-channels/outbound.js';
-import { initWhatsApp, isWhatsAppReady } from './-channels/whatsapp/client.js';
+import {
+  initWhatsApp,
+  isWhatsAppBrowserDeathError,
+  isWhatsAppReady,
+  scheduleWhatsAppReinit,
+} from './-channels/whatsapp/client.js';
 import { whatsappConfig } from './-channels/whatsapp/config.js';
 import { startCronScheduler } from './-cron/scheduler.js';
 import { configureWhatsAppHealth, markPollSucceeded, startHealthServer } from './-health/server.js';
@@ -15,6 +20,30 @@ import {
 import { config } from './config.js';
 
 let pollInFlight = false;
+
+const installProcessSafetyNet = (): void => {
+  process.on('unhandledRejection', (reason) => {
+    if (isWhatsAppBrowserDeathError(reason)) {
+      console.warn('[worker] swallowed WhatsApp browser-death rejection', reason);
+      scheduleWhatsAppReinit('unhandled_browser_death');
+      return;
+    }
+
+    console.error('[worker] unhandledRejection', reason);
+    process.exit(1);
+  });
+
+  process.on('uncaughtException', (error) => {
+    if (isWhatsAppBrowserDeathError(error)) {
+      console.warn('[worker] swallowed WhatsApp browser-death exception', error);
+      scheduleWhatsAppReinit('unhandled_browser_death');
+      return;
+    }
+
+    console.error('[worker] uncaughtException', error);
+    process.exit(1);
+  });
+};
 
 const handleCronTick = async (job: TCronJobDef) => {
   await postTaskRun(job.taskPath, job.runInput);
@@ -96,6 +125,8 @@ const pollApprovedWork = async () => {
 };
 
 const main = async () => {
+  installProcessSafetyNet();
+
   const mode = whatsappConfig.enabled
     ? 'cron + platform poll + whatsapp'
     : 'cron + platform poll';

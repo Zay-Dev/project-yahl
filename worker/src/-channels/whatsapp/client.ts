@@ -18,11 +18,30 @@ const { Client, LocalAuth } = wweb;
 let client: InstanceType<typeof Client> | null = null;
 let ready = false;
 let starting = false;
+let reinitInFlight = false;
 let reinitTimer: ReturnType<typeof setTimeout> | null = null;
 
 const REINIT_DELAY_MS = 3000;
+const LOGOUT_REINIT_DELAY_MS = 10_000;
 const seenMessageIds = new Set<string>();
 const SEEN_MESSAGE_ID_CAP = 500;
+
+const BROWSER_DEATH_RE = /target closed|protocol error|session closed|browser has been closed/i;
+
+export const isWhatsAppBrowserDeathError = (error: unknown): boolean => {
+  const name = error instanceof Error ? error.name : '';
+  const message = error instanceof Error ? error.message : String(error);
+
+  return name === 'TargetCloseError' || BROWSER_DEATH_RE.test(message);
+};
+
+const reinitDelayForReason = (reason: string): number => {
+  if (/LOGOUT|auth_failure/i.test(reason)) {
+    return LOGOUT_REINIT_DELAY_MS;
+  }
+
+  return REINIT_DELAY_MS;
+};
 
 const messageDedupeKey = (msg: Message): string => {
   const serialized = msg.id?._serialized?.trim() ?? '';
@@ -81,16 +100,30 @@ export const scheduleWhatsAppReinit = (reason: string): void => {
 
   ready = false;
 
-  if (reinitTimer || starting) {
+  if (reinitTimer) {
     return;
   }
 
-  console.warn(`[worker][whatsapp] schedule reinit in ${REINIT_DELAY_MS}ms (${reason})`);
+  const delayMs = reinitDelayForReason(reason);
+
+  console.warn(`[worker][whatsapp] schedule reinit in ${delayMs}ms (${reason})`);
 
   reinitTimer = setTimeout(() => {
     reinitTimer = null;
-    void reinitWhatsApp(reason);
-  }, REINIT_DELAY_MS);
+
+    if (starting || reinitInFlight) {
+      console.warn(`[worker][whatsapp] reinit deferred, still busy (${reason})`);
+      reinitTimer = setTimeout(() => {
+        reinitTimer = null;
+        scheduleWhatsAppReinit(reason);
+      }, REINIT_DELAY_MS);
+      return;
+    }
+
+    void reinitWhatsApp(reason).catch((error) => {
+      console.error('[worker][whatsapp] reinit failed', reason, error);
+    });
+  }, delayMs);
 };
 
 const destroyWhatsAppClient = async (): Promise<void> => {
@@ -111,13 +144,19 @@ const destroyWhatsAppClient = async (): Promise<void> => {
 };
 
 export const reinitWhatsApp = async (reason: string): Promise<void> => {
-  if (!whatsappConfig.enabled || starting) {
+  if (!whatsappConfig.enabled || starting || reinitInFlight) {
     return;
   }
 
-  console.log(`[worker][whatsapp] reinit (${reason})`);
-  await destroyWhatsAppClient();
-  await initWhatsApp();
+  reinitInFlight = true;
+
+  try {
+    console.log(`[worker][whatsapp] reinit (${reason})`);
+    await destroyWhatsAppClient();
+    await initWhatsApp();
+  } finally {
+    reinitInFlight = false;
+  }
 };
 
 const handleIncomingMessage = async (msg: Message, event: string): Promise<void> => {

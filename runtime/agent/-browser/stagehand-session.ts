@@ -129,7 +129,11 @@ const navigate = async (
   page: { goto: (url: string, options?: typeof GOTO_OPTIONS) => Promise<unknown> },
   url: string,
 ) => {
-  await page.goto(url, GOTO_OPTIONS);
+  await withTimeout(
+    page.goto(url, GOTO_OPTIONS),
+    BROWSER_TIMEOUT_MS,
+    "browser.goto",
+  );
 };
 
 export const closeStagehandSession = async () => {
@@ -228,8 +232,8 @@ const executeBrowserCommand = async (
   return { error: `browser: unsupported mode ${mode}`, ok: false };
 };
 
-const shouldResetBrowser = (args: BrowserToolArguments, error: string) => {
-  if (isTimeoutError(error) && (args.mode === "goto" || args.mode === "observe")) {
+const shouldResetBrowser = (_args: BrowserToolArguments, error: string) => {
+  if (isTimeoutError(error)) {
     return true;
   }
 
