@@ -39,7 +39,7 @@ Check the monitor-minutes exit condition again after each sleep returns.
    - `set_context` key `prev_routes` to that fetch’s `routes`.
    - `set_context` key `prev_incident_note` to the current analysis incident note (or `''` if none) **after** analysis used the prior value.
    - Never update `prev_routes` alone after a successful poll — `fetches` must grow every success.
-3. Only after those `set_context` calls succeed: append a markdown section to `day_page` via `/nixery(upsert-knowledge-page, page: day_page, mode: append, content: …)`. Do **not** write a success section unless `fetches` was already extended.
+3. Only after those `set_context` calls succeed: append a markdown section to `day_page` via `/nixery(upsert-knowledge-page, topic: knowledge_topic, page: day_page, mode: append, content: …)`. Section must include `## HH:MM {tz_label}`, `- Origin: …`, `- Destination: …`, then corridor ETAs (see route-analysis). Pass `origin` / `destination` into `*format_fetch_section`. Do **not** write a success section unless `fetches` was already extended. Never omit `topic: knowledge_topic`.
 4. Do not re-read the whole wiki every minute. Never write `null` into `prev_routes` / `fetches` / `notifications` / `miss_count` / heartbeat or notes timestamps.
 5. Run the three notification checks **independently** (see below), then the 20-min source-ops tick.
 6. Adaptive sleep as above until the window ends.
@@ -49,7 +49,7 @@ Check the monitor-minutes exit condition again after each sleep returns.
 When route fetch via `browser` fails (timeout, blank page, `ok: false`):
 
 - At most **2** browser attempts for that poll (initial + one retry), including OD-mismatch as failure. Do not burn turns on further `goto` / `agent` / `observe` retries.
-- After 2 consecutive failures for the same poll: **skip the poll**. Keep prior `fetches` / `prev_routes` / `prev_incident_note` unchanged. Increment `miss_count` via `set_context` (`miss_count = (miss_count || 0) + 1`). Append a day-page note like `## HH:MM` / `- Fetch missed: browser timeout` / `- Using previous routes`. Then run the 20-min source-ops tick if due (miss reasons may be novel ops notes). Then sleep with the adaptive schedule based on the last successful primary ETA (or `180` if none).
+- After 2 consecutive failures for the same poll: **skip the poll**. Keep prior `fetches` / `prev_routes` / `prev_incident_note` unchanged. Increment `miss_count` via `set_context` (`miss_count = (miss_count || 0) + 1`). Append a day-page note with `## HH:MM {tz_label}`, `- Origin: …`, `- Destination: …`, `- Fetch missed: …`, `- Using previous routes` via `*format_miss_section(…, origin, destination, timezone)`. Then run the 20-min source-ops tick if due (miss reasons may be novel ops notes). Then sleep with the adaptive schedule based on the last successful primary ETA (or `180` if none).
 - Never invent route ETAs when the browser failed.
 - Never write a success-shaped day-page section (route ETAs) for a missed poll.
 

@@ -57,11 +57,13 @@ Heartbeats must **not** substitute for these. Do not spam: if the same active in
 
 ## Day page section format
 
-Append one section per poll. `HH:MM` must be **`timezone`** wall clock — never label UTC as local. Use iconic labels:
+Append one section per poll. `HH:MM` must be **`timezone`** wall clock — never label UTC as local. Every section **must** include `Origin` and `Destination` from context (same-day multi-route runs share one day page). Use iconic labels:
 
 ```markdown
-## HH:MM
+## HH:MM {tz_label}
 
+- Origin: …
+- Destination: …
 - <Iconic corridor>: N min — status
 - <Alt corridor>: N min — status
 - Recommended: …
@@ -70,11 +72,17 @@ Append one section per poll. `HH:MM` must be **`timezone`** wall clock — never
 - Notes: …
 ```
 
+Miss sections use the same header + Origin/Destination lines, then `- Fetch missed: …` / `- Using previous routes` — never invent ETAs.
+
+`*format_fetch_section` / `*format_miss_section` must receive `origin` and `destination` from context.
+
 ## Daily report
 
-After the window: `*read(holidays_md)` (attend only — no `const holidays =` / full-blob `set_context`) then classify the calendar day in `timezone` using Input `holidays_md` as `weekday` | `weekend` | `public_holiday`, summarize ETA series per iconic route, note peaks, incidents, and diversion recommendations, persist under `traffic-monitor`.
+After the window: `*read(holidays_md)` (attend only — no `const holidays =` / full-blob `set_context`) then classify the calendar day in `timezone` using Input `holidays_md` as `weekday` | `weekend` | `public_holiday`, summarize ETA series per iconic route, note peaks, incidents, and diversion recommendations, persist under `traffic-monitor` (`topic: knowledge_topic` — never omit topic). Same-day reports **append** to `raw/report-YYYY-MM-DD` with a run header that includes window + origin → destination.
 
 Name the ETA **source** from context `traffic_source` only:
 
 - If `traffic_source.is_fallback` is true **or** `url` is the Google Maps directions template → say Google Maps (budget fallback).
 - Otherwise name the city source from `url` / howto (e.g. HKeMobility) — never claim Google Maps when a non-fallback city source was locked.
+
+`*format_report_run_append(summary_md, origin, destination, monitor, timezone)` wraps `summary_md` for day-page append: leading `## Run — {origin} → {destination}` (plus window times from `monitor` in `timezone`), then the report body, so multiple same-day OD windows stack on one `raw/report-YYYY-MM-DD` page.

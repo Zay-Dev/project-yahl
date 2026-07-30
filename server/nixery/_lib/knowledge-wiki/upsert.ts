@@ -236,6 +236,13 @@ export const runUpsertKnowledgePage = async (
     };
   }
 
+  if (!topic && !topicText) {
+    return {
+      error: 'upsert-knowledge-page requires topic or topicText',
+      ok: false,
+    };
+  }
+
   let normalizedValue: unknown;
 
   if (key) {

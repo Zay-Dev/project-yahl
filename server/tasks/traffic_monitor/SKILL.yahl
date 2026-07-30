@@ -515,9 +515,12 @@ stages:
         and monitor.day_page is non-empty.
         Prefer fetch_count >= 2 when the wall clock still allowed polling; if now - started_at >= monitor_minutes on entry, pass with whatever was already captured.
         Fail when started_at was reset or monitor is missing.
-        Fail when day-page `## HH:MM` section count is substantially greater than
-        monitor.fetch_count + monitor.miss_count (allow at most ±1). Intentional
-        `Fetch missed` sections count toward miss_count, not fetch_count.
+        Day page may already contain sections from earlier same-day runs — do NOT fail solely because
+        total `## HH:MM` count exceeds this run's fetch_count + miss_count. Pass when this run's
+        sections (matching context Origin/Destination) are present and each includes Origin and Destination
+        lines; count of this-run sections must be >= fetch_count + miss_count - 1 (allow at most one miss).
+        Fail when any this-run section lacks Origin or Destination.
+        Intentional `Fetch missed` sections count toward miss_count, not fetch_count.
         On fail, set resumeAction: rerun.
     logic: |
       Read ~/task-skills/task-mission/SKILL.md.
@@ -568,7 +571,7 @@ stages:
               topic: knowledge_topic,
               page: day_page,
               mode: append,
-              content: *format_miss_section(prev_routes, timezone: timezone),
+              content: *format_miss_section(prev_routes, origin: origin, destination: destination, timezone: timezone),
             );
             const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180);
 
@@ -611,7 +614,7 @@ stages:
               topic: knowledge_topic,
               page: day_page,
               mode: append,
-              content: *format_fetch_section(fetch_with_status, analysis, timezone: timezone),
+              content: *format_fetch_section(fetch_with_status, analysis, origin: origin, destination: destination, timezone: timezone),
             );
 
             IF: fetches.length === 2 && !summary_notified;
@@ -725,10 +728,14 @@ stages:
         and result.monitor.fetch_count matches monitor.fetch_count, and result.monitor.miss_count
         matches monitor.miss_count,
         and summary_md names the locked traffic_source (Google Maps only when traffic_source.is_fallback is true
-        or url is the Maps directions template; otherwise name the city source from traffic_source.url / howto).
+        or url is the Maps directions template; otherwise name the city source from traffic_source.url / howto),
+        and every report upsert returned ok:true with canonicalTopic equal to knowledge_topic
+        (path under topics/traffic-monitor/ — never topics/general/).
         Fail when day_kind or summary_md is missing.
-        Fail when day-page `## HH:MM` section count is substantially greater than
-        result.monitor.fetch_count + result.monitor.miss_count (allow at most ±1).
+        Fail when any report upsert omitted topic, returned ok:false, or landed outside traffic-monitor.
+        Day page may contain earlier same-day runs — do NOT fail solely because total `## HH:MM`
+        count exceeds this run's fetch_count + miss_count. Require this-run sections (Origin/Destination
+        matching context) to be present with Origin and Destination lines; count >= fetch+miss - 1.
         Fail when summary_md claims Google Maps but traffic_source.is_fallback is false and url is not Maps.
         On fail, set resumeAction: rerun.
     logic: |
@@ -746,25 +753,59 @@ stages:
         traffic_source: traffic_source,
       );
       const report_page = `raw/report-${day_page.replace('raw/fetches-', '')}`;
-      /nixery(
+      const report_append_md = *format_report_run_append(
+        summary_md,
+        origin: origin,
+        destination: destination,
+        monitor: monitor,
+        timezone: timezone,
+      );
+      const report_up = /nixery(
         upsert-knowledge-page,
         topic: knowledge_topic,
         page: report_page,
-        mode: replace,
-        content: summary_md,
+        mode: append,
+        content: report_append_md,
       );
-      /nixery(
+      IF: !*last_nixery_ok();
+        /nixery(
+          upsert-knowledge-page,
+          topic: knowledge_topic,
+          page: report_page,
+          mode: append,
+          content: report_append_md,
+        );
+      END:
+      const summary_up = /nixery(
         upsert-knowledge-page,
         topic: knowledge_topic,
         key: summary,
         value: summary_md,
       );
-      /nixery(
+      IF: !*last_nixery_ok();
+        /nixery(
+          upsert-knowledge-page,
+          topic: knowledge_topic,
+          key: summary,
+          value: summary_md,
+        );
+      END:
+      const analysis_up = /nixery(
         upsert-knowledge-page,
         topic: knowledge_topic,
         key: analysis_md,
         value: summary_md,
       );
+      IF: !*last_nixery_ok();
+        /nixery(
+          upsert-knowledge-page,
+          topic: knowledge_topic,
+          key: analysis_md,
+          value: summary_md,
+        );
+      END:
+      Keep report_up / summary_up / analysis_up data.canonicalTopic and data.path for verify —
+      they must equal knowledge_topic and paths under topics/traffic-monitor/ (never general).
       const result = {
         started_at,
         day_kind,
