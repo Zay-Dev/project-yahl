@@ -73,3 +73,8 @@ Append one section per poll. `HH:MM` must be **`timezone`** wall clock — never
 ## Daily report
 
 After the window: classify the calendar day in `timezone` using `holidays_md` as `weekday` | `weekend` | `public_holiday`, summarize ETA series per iconic route, note peaks, incidents, and diversion recommendations, persist under `traffic-monitor`.
+
+Name the ETA **source** from context `traffic_source` only:
+
+- If `traffic_source.is_fallback` is true **or** `url` is the Google Maps directions template → say Google Maps (budget fallback).
+- Otherwise name the city source from `url` / howto (e.g. HKeMobility) — never claim Google Maps when a non-fallback city source was locked.

@@ -11,6 +11,6 @@ Write canonical knowledge under `greets/{entity}/`, extract WhatsApp-facing page
 1. Prefer `runInput` when provided; otherwise ask via `clarify-greets`.
 2. `entity` is an iconic slug from `displayName` or the leading name in `summary` (e.g. `mary`, `john-doe`, `user`) — not the WhatsApp folder id.
 3. `slug` is the sanitized WhatsApp chat folder from `channelRef` (same as register-channel `folder`).
-4. Always upsert greets wiki + whatsapp wiki extract when `channelRef` is present.
-5. When `register_channel` is true (default), call `whatsapp-register-channel` with `summary` + `greetsEntity`. When false, skip registry write (do not remove an existing entry).
+4. Always upsert greets wiki + whatsapp wiki extract when `channelRef` is present. Use **only** `/nixery(upsert-greets-page, …)` and `/nixery(upsert-whatsapp-page, …)`. Never fall back to `upsert-knowledge-page` (that writes under `topics/`, not `greets/` / `whatsapp/`).
+5. When `register_channel` is true (default), call `whatsapp-register-channel` with `summary` + `greetsEntity`. When false, skip registry write (do not remove an existing entry) and set `platform` to `{}` — never `null` / omit (produce-keys treats null as missing).
 6. Keep prose factual; mark unknowns as open questions.

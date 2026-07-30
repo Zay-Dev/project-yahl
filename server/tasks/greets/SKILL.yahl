@@ -101,7 +101,7 @@ stages:
           onboardedAt: new Date().toISOString(),
           wikiRoot: `whatsapp/${slug}`,
         };
-        const platform = undefined;
+        const platform = {};
         const registered = false;
       END:
 

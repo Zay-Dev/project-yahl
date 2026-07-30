@@ -35,19 +35,22 @@ const loadModules = async () => {
   const prefix = '@project-yahl/server/modules/';
   const pathToModules = url.pathToFileURL(path.resolve(config.cwd, 'src/modules'));
 
-  try {
-    const modules = (await fs
-      .readdir(pathToModules, { withFileTypes: true }))
-      .filter((value) => value.isDirectory())
-      .map((value) => value.name);
+  const modules = (await fs
+    .readdir(pathToModules, { withFileTypes: true }))
+    .filter((value) => value.isDirectory())
+    .map((value) => value.name);
 
-    await Promise.all(
-      modules.map((module) => import(`${prefix}${module}`)),
-    );
-  } catch (ex: unknown) {
-    logger.warn('Load modules/* failed');
-    logger.debug('Load modules error', { error: ex as Error });
-  }
+  const results = await Promise.allSettled(
+    modules.map((module) => import(`${prefix}${module}`)),
+  );
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      logger.error(`Load module failed: ${modules[index]}`, {
+        error: result.reason as Error,
+      });
+    }
+  });
 };
 
 initialize().then(async () => {
