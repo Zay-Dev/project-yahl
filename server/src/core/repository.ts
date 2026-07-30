@@ -22,6 +22,10 @@ type TServices = {
   }) => Promise<void>;
   spawnOrchestrate: (sessionId: string, args: string[]) => Promise<ChildProcess>;
   validateSessionById: (sessionId: string) => Promise<TYahlDocument>;
+  validateTaskRunInput: (
+    taskId: string,
+    runInput?: Record<string, unknown>,
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
 };
 
 const _container = awilix.createContainer<TServices>();
@@ -38,4 +42,6 @@ export namespace Repository {
   export const registerSpawnOrchestrate = _asValue('spawnOrchestrate');
 
   export const registerValidateSessionById = _asValue('validateSessionById');
+
+  export const registerValidateTaskRunInput = _asValue('validateTaskRunInput');
 }

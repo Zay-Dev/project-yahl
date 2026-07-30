@@ -119,6 +119,14 @@
     "./nixery/load-validation": {
       "development": "./nixery/load-validation.ts",
       "import": "./dist/nixery/load-validation.js"
+    },
+    "./email/whitelist": {
+      "development": "./email/whitelist.ts",
+      "import": "./dist/email/whitelist.js"
+    },
+    "./whatsapp/whitelist": {
+      "development": "./whatsapp/whitelist.ts",
+      "import": "./dist/whatsapp/whitelist.js"
     }
   },
   "scripts": {

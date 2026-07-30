@@ -1,6 +1,8 @@
 services:
   mongo:
     image: mongo:7
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
     ports:
       - "27017:27017"
     volumes:
@@ -8,6 +10,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
     ports:
       - "6379:6379"
     healthcheck:
@@ -64,11 +68,14 @@ services:
       OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
       OMNIFLEX_BUILD_CONTEXT: /omniflex
       ONECLI_DASHBOARD_URL: http://onecli:10254
+      PLATFORM_APPROVAL_TOKEN: ${PLATFORM_APPROVAL_TOKEN:-}
       REDIS_URL: redis://redis:6379
       RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
       RUNTIME_SHARED_NETWORK: ${SHARED_DOCKER_NETWORK:-yahl_shared}
       SESSION_API_BASE_URL: http://server:4000
       WORKSPACE_ROOT: /workspace
+      EMAIL_WHITELIST: ${EMAIL_WHITELIST:-}
+      WHATSAPP_WHITELIST: ${WHATSAPP_WHITELIST:-}
     ports:
       - "${SERVER_PORT:-4000}:4000"
     depends_on:
@@ -96,6 +103,8 @@ services:
         OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
         VITE_API_BASE_URL: http://localhost:${SERVER_PORT:-4000}
         VITE_WIKI_PUBLIC_URL: http://127.0.0.1:${WIKI_PORT:-3001}
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
     ports:
       - "5173:80"
     depends_on:
@@ -151,18 +160,35 @@ services:
       TZ: ${TZ:-Asia/Hong_Kong}
       SESSION_API_BASE_URL: http://server:4000
       WORKER_POLL_INTERVAL_MS: "5000"
+      WORKER_HEALTH_PORT: "4091"
+      WORKER_WHATSAPP_SEND_TIMEOUT_MS: "45000"
       WORKSPACE_ROOT: /workspace
+      WHATSAPP_AUTH_PATH: /whatsapp/auth
+      WHATSAPP_INBOX_ROOT: /whatsapp/inbox
+      WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-false}
+      WHATSAPP_WHITELIST: ${WHATSAPP_WHITELIST:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-}
     volumes:
       - ./data/workspace:/workspace
+      - ./data/whatsapp_auth:/whatsapp/auth
+      - ./data/whatsapp_inbox:/whatsapp/inbox
+      - ./worker:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker
+      - ${SANITIZE_CHANNEL_MESSAGE:-./worker/sanitize-channel-message.mjs}:/sanitize/sanitize-channel-message.mjs:ro
     depends_on:
       server:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kill -0 1"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4091/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 90s
 
   wiki_postgres:
     image: postgres:16-alpine

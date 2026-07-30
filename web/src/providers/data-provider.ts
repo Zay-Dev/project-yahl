@@ -6,6 +6,25 @@ import { getSessionsSnapshot } from "@/providers/sessions-cache";
 
 const base = simpleRest(API_BASE_URL);
 
+const isHealthGetOne = (resource?: string, id?: string | number) =>
+  resource === "__" && String(id) === "health";
+
+const fetchHealthAllowingDegraded = async () => {
+  const res = await fetch(`${API_BASE_URL}/__/health`);
+  const body = await res.json() as unknown;
+
+  if (res.ok || (res.status === 503 && body && typeof body === "object")) {
+    return { data: body };
+  }
+
+  const message =
+    body && typeof body === "object" && "message" in body && typeof body.message === "string"
+      ? body.message
+      : `Health request failed (${res.status})`;
+
+  throw Object.assign(new Error(message), { statusCode: res.status });
+};
+
 export const dataProvider: DataProvider = {
   ...base,
   custom: async (params) => {
@@ -23,5 +42,12 @@ export const dataProvider: DataProvider = {
     }
 
     return base.getList(params);
+  },
+  getOne: async (params) => {
+    if (isHealthGetOne(params.resource, params.id)) {
+      return fetchHealthAllowingDegraded() as never;
+    }
+
+    return base.getOne(params);
   },
 };

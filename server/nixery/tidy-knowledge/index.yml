@@ -4,7 +4,7 @@ description: Deterministic wiki/export audit per topic — no LLM, audit-only
 packages: [nodejs]
 
 env:
-  WIKI_GRAPHQL_URL: http://wiki:3000/graphql
+  WIKI_GRAPHQL_URL: ""
   WIKI_API_TOKEN: ""
   TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export

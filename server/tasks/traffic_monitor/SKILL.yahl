@@ -1,0 +1,822 @@
+name: traffic-monitor
+description: >
+  Monitor driving traffic for a configurable origin → destination window (default 60 min);
+  multi-route ETAs, notification proposals (initial / heartbeat / abnormal) tailored via resolve-notification-target,
+  daily report vs city public holidays.
+resultContextKey: result
+background: true
+runInput:
+  - monitor_minutes
+  - notify_to
+  - origin
+  - destination
+  - city
+  - timezone
+
+types: |
+  type TRouteSample = {
+    label: string;
+    via?: string;
+    eta_min: number;
+    distance_km?: number;
+    status: 'ok' | 'slow' | 'abnormal' | 'unknown';
+  };
+
+  type TTrafficFetch = {
+    fetched_at: string;
+    source_url: string;
+    routes: TRouteSample[];
+    recommended?: string;
+    notes?: string;
+    incident_note?: string;
+  };
+
+  type TTrafficSource = {
+    url: string;
+    howto_md: string;
+    kind: 'browser' | 'api';
+    city?: string;
+    is_fallback: boolean;
+  };
+
+  type TTriedSource = {
+    name: string;
+    url: string;
+    what_tried: string;
+    outcome: 'ok' | 'failed' | 'skipped';
+    why: string;
+    at: string;
+  };
+
+  type TMonitorResult = {
+    started_at: string;
+    ended_at: string;
+    elapsed_min: number;
+    fetch_count: number;
+    miss_count: number;
+    day_page: string;
+    fetches: TTrafficFetch[];
+    notifications: unknown[];
+  };
+
+  type TResult = {
+    started_at: string;
+    day_kind: 'weekday' | 'weekend' | 'public_holiday';
+    day_page: string;
+    report_page?: string;
+    monitor: TMonitorResult;
+    summary_md: string;
+  };
+
+stages:
+  - contextMode: true
+    contextKeys: [monitor_minutes, notify_to, origin, destination, city, timezone]
+    produceContextKeys: [monitor_minutes, notify_to, origin, destination, city, timezone, holidays_topic, holidays_file_prefix, traffic_source_file, city_slug, knowledge_topic]
+    logic: |
+      (() => {
+        const cityRaw = String(context.context.city ?? '').trim() || 'Hong_Kong';
+        const slug = cityRaw.toLowerCase().replace(/[_\s]+/g, '-');
+        const slugUnderscored = slug.replace(/-/g, '_');
+        const isHk = cityRaw === 'Hong_Kong' || slug === 'hong-kong';
+        return {
+          monitor_minutes: String(context.context.monitor_minutes ?? '').trim() || '60',
+          notify_to: String(context.context.notify_to ?? '').trim() || '91234567',
+          origin: String(context.context.origin ?? '').trim() || 'Kowloon Tong',
+          destination: String(context.context.destination ?? '').trim() || 'Hong Kong International Airport',
+          city: cityRaw,
+          timezone: String(context.context.timezone ?? '').trim() || 'Asia/Hong_Kong',
+          holidays_topic: isHk ? 'hk-public-holidays' : `${slug}-public-holidays`,
+          holidays_file_prefix: isHk ? 'hk_public_holidays' : `${slugUnderscored}_public_holidays`,
+          traffic_source_file: isHk ? 'traffic_source.md' : `${slugUnderscored}_traffic_source.md`,
+          city_slug: slug,
+          knowledge_topic: 'traffic-monitor',
+        };
+      })
+
+  - contextKeys: [notify_to]
+    nixeryRun: resolve-notification-target
+    nixeryInput:
+      to: notify_to
+      output: notify-target.json
+    logic: "(nixery)"
+
+  - contextKeys: [notify_to]
+    produceContextKeys: [notifyChannel, notifyTo, notifyName, notifyPreference, notifyIsUser]
+    logic: |
+      Read ~/nixery/resolve-notification-target/notify-target.json (or result.json) from the session workspace.
+      Parse JSON. Set notifyChannel from channel (default whatsapp), notifyTo from to (fallback notify_to), notifyName from name (or ''), notifyPreference from preference (or ''), notifyIsUser from isUser (boolean; default false).
+
+  - contextKeys: [knowledge_topic, city_slug]
+    nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: Load sources-{city_slug} and source-ops-{city_slug} operational notes for this city
+      topic: knowledge_topic
+      output: source-knowledge.md
+    logic: "(nixery)"
+
+  - contextKeys: [city_slug]
+    produceContextKeys: [source_ops_md]
+    logic: |
+      Read ~/nixery/get-knowledge/source-knowledge.md from the session workspace.
+      If missing or empty after trim, set source_ops_md to '<none>'; otherwise set source_ops_md to the file's full markdown content (prefer the source-ops-{city_slug} section when present).
+
+  - contextKeys: [origin, destination, city, holidays_topic, holidays_file_prefix, traffic_source_file]
+    nixeryRun: plan
+    nixeryInput:
+      goal: Find or reuse a real-time driving traffic source for the run origin/destination and public holidays for the city/year
+      stageLogic: |
+        Prefer ~/data/{traffic_source_file} and ~/data/{holidays_file_prefix}_{year}.md when present for this city
+        and the traffic source is usable with is_fallback not true.
+        Do not reuse a traffic or holidays guideline from a different city.
+        Otherwise research usable live multi-route private-car ETA sites and official public holiday lists for the city
+        (any working city-local site; Google Maps is budget fallback only during explore, not preferred).
+      output: plan.md
+    logic: "(nixery)"
+
+  - contextKeys: [holidays_topic]
+    produceContextKeys: [holidays_fetch_note]
+    logic: |
+      Read ~/task-skills/task-mission/SKILL.md.
+      /nixery(
+        get-knowledge,
+        purpose: Read holidays topic for the current calendar year when present; write holidays.md,
+        topic: holidays_topic,
+        output: holidays.md,
+      );
+      const holidays_fetch_note = holidays_topic;
+
+  - contextKeys: [holidays_topic, holidays_file_prefix, city, timezone]
+    produceContextKeys: [holidays_md, holidays_year]
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when holidays_year is a 4-digit year and holidays_md is a usable dated holiday list
+        for that year (concrete dates / named public holidays). Fail when holidays_md is empty,
+        contains absent: true, is only an absent diagnostic, or has no dated rows for the year.
+        On fail, set resumeAction: rerun.
+    logic: |
+      Read ~/nixery/plan/plan.md when execution steps need clarification.
+      Read ~/task-skills/task-mission/SKILL.md for mission framing.
+      const holidays_year = *current_calendar_year_in_tz(timezone);
+      Read ~/nixery/get-knowledge/holidays.md from the session workspace.
+      If missing or empty after trim, set holidays_extract to '<none>'; otherwise set holidays_extract to the file's full markdown content.
+      const extract_usable = *holidays_list_usable(holidays_extract, year: holidays_year);
+      IF: extract_usable;
+        const holidays_md = holidays_extract;
+        *save(~/data/{holidays_file_prefix}_{holidays_year}.md, holidays_md);
+      ELSE IF: *exists(~/data/{holidays_file_prefix}_{holidays_year}.md) && *holidays_list_usable(*read(~/data/{holidays_file_prefix}_{holidays_year}.md), year: holidays_year);
+        const holidays_md = *read(~/data/{holidays_file_prefix}_{holidays_year}.md);
+      ELSE:
+        const holidays_md = /nixery(
+          research,
+          topic: city public holidays current year,
+          need: official list of public holidays for holidays_year for city (prefer government open data for that city/region),
+          format: markdown_dated_list,
+          official_source_only: true,
+        );
+        *save(~/data/{holidays_file_prefix}_{holidays_year}.md, holidays_md);
+        /nixery(
+          upsert-knowledge-page,
+          topic: holidays_topic,
+          page: raw/holidays-{holidays_year},
+          mode: replace,
+          content: holidays_md,
+        );
+      END:
+
+  - contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
+    produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources]
+    maxTurns: 80
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when probe_fetch has at least 2 routes with numeric eta_min and a non-empty http(s) source_url,
+        and traffic_source.url is http(s) with {origin}/{destination} placeholders (not a concrete prior A→B),
+        and traffic_source.howto_md is inline howto markdown (length >= 80, not a path like ~/data/...),
+        and traffic_source.is_fallback is boolean,
+        and explore_started_at is a non-empty ISO timestamp,
+        and tried_sources is a non-null array,
+        and city attempts in tried_sources (entries whose url is not the Google Maps directions template) are <= 2,
+        and every failed/skipped tried_sources entry has non-empty why and what_tried,
+        and when traffic_source.is_fallback is false the locked city source appears in tried_sources with outcome ok
+        (or the stage locked a successful cached probe recorded as ok).
+        Fail when routes are missing, eta_min is not numeric, howto is empty/path-only, url is missing,
+        is_fallback is missing, tried_sources missing/null, city attempts > 2, failed/skipped entries lack why/what_tried,
+        or the browser origin/destination chips do not match context origin/destination.
+        On fail, set resumeAction: rerun.
+    logic: |
+      Read ~/nixery/plan/plan.md when helpful.
+      Read ~/task-skills/task-mission/SKILL.md.
+      Read ~/task-skills/route-analysis/SKILL.md.
+      City-local probes: at most 2 distinct providers/domains (hard cap). Lock on first success.
+      After 2 failed/skipped city attempts OR budget exhausted → /google-maps-directions.
+      Budget hard-stop: about to hit maxTurns (leave ~4 turns) OR Date.now() - Date.parse(explore_started_at) > 30 * 60 * 1000.
+      Do not silently rewrite non-placeholder URLs to Google Maps outside that fallback branch.
+      At most 2 browser attempts per fetch_driving_routes call; on OD mismatch or blank page, fail that call — do not thrash.
+      Before picking a research candidate, *read(source_ops_md) (attend only — do not const/let-assign or set_context a copy of the full blob) and read tried_sources; do not re-probe a source whose skip/fail reason still applies — pick a different provider or record skipped without thrashing.
+      Before every browser probe, *read(source_ops_md) then use traffic_source.howto_md together with Input source_ops_md — never pass unread source_ops_md as a kwarg to a *func; never set_context the full ops blob unless novel merge changed it.
+      *upsert_ops_append(notes_md): prefer /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: notes_md as a markdown string).
+      If that gate returns ok:false, retry once with content: notes_md (omit value). If still false, set_context upsert_ops_error — still merge notes into source_ops_md.
+      *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean string like "city: …, kind: …, is_fallback: …, url: …" — never a nested object). On ok:false retry once with content: lean_md.
+
+      const explore_started_at = new Date().toISOString();
+      *set_context(explore_started_at);
+      let source_ops_md = source_ops_md || '<none>';
+      *read(source_ops_md);
+      let locked = false;
+      let tried_sources = [];
+      let city_attempts = 0;
+      const max_city_attempts = 2;
+      const maps_template = 'https://www.google.com/maps/dir/{origin}/{destination}/';
+
+      let candidate = null;
+      IF: *exists(~/data/{traffic_source_file});
+        candidate = *normalize_traffic_source(*read(~/data/{traffic_source_file}), as: TTrafficSource);
+      ELSE:
+        const from_knowledge = *extract_sources_page(
+          ~/nixery/get-knowledge/source-knowledge.md,
+          key: sources-{city_slug},
+        );
+        IF: from_knowledge;
+          candidate = *normalize_traffic_source(from_knowledge, as: TTrafficSource);
+        END:
+      END:
+
+      const candidate_is_fallback =
+        !!candidate && (
+          candidate.is_fallback === true
+          || (String(candidate.url || '').includes('google.com/maps/dir/') && candidate.is_fallback !== false)
+        );
+
+      IF: candidate && !candidate_is_fallback && String(candidate.url || '').includes('{origin}');
+        const traffic_source = { ...candidate, city: city, is_fallback: false };
+        const probe_fetch = *fetch_driving_routes(
+          origin: origin,
+          destination: destination,
+          mode: private_car_driving,
+          max_routes: 3,
+          source: traffic_source,
+          as: TTrafficFetch,
+        );
+        IF: *probe_ok(probe_fetch);
+          tried_sources = [...tried_sources, {
+            name: *source_display_name(traffic_source),
+            url: traffic_source.url,
+            what_tried: 'cached non-fallback probe',
+            outcome: 'ok',
+            why: 'probe returned usable multi-route ETAs',
+            at: new Date().toISOString(),
+          }];
+          *save(~/data/{traffic_source_file}, traffic_source);
+          *upsert_sources(*serialize_traffic_source_lean(traffic_source));
+          *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
+          locked = true;
+        ELSE:
+          city_attempts = city_attempts + 1;
+          const why = *probe_fail_reason(probe_fetch) || 'cached probe failed';
+          const what_tried = 'cached non-fallback probe via howto_md + source_ops_md; at most 2 browser attempts';
+          tried_sources = [...tried_sources, {
+            name: *source_display_name(traffic_source),
+            url: traffic_source.url,
+            what_tried,
+            outcome: 'failed',
+            why,
+            at: new Date().toISOString(),
+          }];
+          const miss_bullets = [
+            `- SKIP/FAIL ${*source_display_name(traffic_source)} (${traffic_source.url}): ${why}. Tried: ${what_tried}.`,
+            ...*draft_source_ops_candidates(miss: true, source: traffic_source, fetch: probe_fetch),
+          ];
+          const novel = *filter_novel_ops_notes(miss_bullets, against: source_ops_md);
+          IF: novel.length > 0;
+            *upsert_ops_append(*notes_to_md(novel));
+            source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+          END:
+          *set_context(source_ops_md, tried_sources);
+        END:
+      END:
+
+      IF: !locked;
+        while (
+          !locked
+          && city_attempts < max_city_attempts
+          && (Date.now() - Date.parse(explore_started_at)) <= 30 * 60 * 1000
+        ) {
+          IF: *about_to_hit_max_turns(remaining_le: 4) || (Date.now() - Date.parse(explore_started_at)) > 30 * 60 * 1000;
+            break;
+          END:
+          const researched = *normalize_traffic_source(/nixery(
+            research,
+            topic: real-time driving traffic ETA origin to destination in city,
+            need: usable website or API with live private-car multi-route travel times for this city only; url must keep {origin}/{destination} placeholders not a concrete A→B; prefer city-local live map or transport open data — do not prefer Google Maps; avoid providers already failed/skipped in source_ops_md or tried_sources,
+            output_shape: TTrafficSource,
+            howto_md_must_be_inline_markdown_not_a_path: true,
+          ), as: TTrafficSource);
+          IF: String(researched.url || '').includes('google.com/maps/dir/');
+            break;
+          END:
+          IF: *already_tried_or_known_failed(researched, tried_sources, source_ops_md);
+            city_attempts = city_attempts + 1;
+            tried_sources = [...tried_sources, {
+              name: *source_display_name(researched),
+              url: String(researched.url || ''),
+              what_tried: 'skipped re-probe; prior skip/fail still applies',
+              outcome: 'skipped',
+              why: *prior_skip_reason(researched, tried_sources, source_ops_md) || 'already failed/skipped in knowledge',
+              at: new Date().toISOString(),
+            }];
+            const skip_bullet = `- SKIP ${*source_display_name(researched)} (${researched.url}): prior skip/fail still applies; did not re-probe.`;
+            const skip_novel = *filter_novel_ops_notes([skip_bullet], against: source_ops_md);
+            IF: skip_novel.length > 0;
+              *upsert_ops_append(*notes_to_md(skip_novel));
+              source_ops_md = *merge_source_ops_md(source_ops_md, skip_novel);
+            END:
+            *set_context(source_ops_md, tried_sources);
+            continue;
+          END:
+          IF: !String(researched.url || '').includes('{origin}');
+            city_attempts = city_attempts + 1;
+            tried_sources = [...tried_sources, {
+              name: *source_display_name(researched),
+              url: String(researched.url || ''),
+              what_tried: 'research returned candidate without {origin}/{destination} placeholders',
+              outcome: 'skipped',
+              why: 'url missing placeholders; not probeable as browser directions template',
+              at: new Date().toISOString(),
+            }];
+            const ph_bullet = `- SKIP ${*source_display_name(researched)} (${researched.url || 'missing-url'}): no {origin}/{destination} placeholders.`;
+            const ph_novel = *filter_novel_ops_notes([ph_bullet], against: source_ops_md);
+            IF: ph_novel.length > 0;
+              *upsert_ops_append(*notes_to_md(ph_novel));
+              source_ops_md = *merge_source_ops_md(source_ops_md, ph_novel);
+            END:
+            *set_context(source_ops_md, tried_sources);
+            continue;
+          END:
+          const traffic_source = { ...researched, city: city, is_fallback: false };
+          const probe_fetch = *fetch_driving_routes(
+            origin: origin,
+            destination: destination,
+            mode: private_car_driving,
+            max_routes: 3,
+            source: traffic_source,
+            as: TTrafficFetch,
+          );
+          city_attempts = city_attempts + 1;
+          IF: *probe_ok(probe_fetch);
+            tried_sources = [...tried_sources, {
+              name: *source_display_name(traffic_source),
+              url: traffic_source.url,
+              what_tried: 'research + probe (howto_md + source_ops_md)',
+              outcome: 'ok',
+              why: 'probe returned usable multi-route ETAs',
+              at: new Date().toISOString(),
+            }];
+            const ok_notes = *filter_novel_ops_notes(
+              *draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch),
+              against: source_ops_md,
+            );
+            IF: ok_notes.length > 0;
+              *upsert_ops_append(*notes_to_md(ok_notes));
+              source_ops_md = *merge_source_ops_md(source_ops_md, ok_notes);
+            END:
+            *save(~/data/{traffic_source_file}, traffic_source);
+            *upsert_sources(*serialize_traffic_source_lean(traffic_source));
+            *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
+            locked = true;
+          ELSE:
+            const why = *probe_fail_reason(probe_fetch) || 'probe failed';
+            const what_tried = 'research + browser/API probe; at most 2 browser attempts';
+            tried_sources = [...tried_sources, {
+              name: *source_display_name(traffic_source),
+              url: traffic_source.url,
+              what_tried,
+              outcome: 'failed',
+              why,
+              at: new Date().toISOString(),
+            }];
+            const fail_bullets = [
+              `- SKIP/FAIL ${*source_display_name(traffic_source)} (${traffic_source.url}): ${why}. Tried: ${what_tried}.`,
+              ...*draft_source_ops_candidates(miss: true, source: traffic_source, fetch: probe_fetch),
+            ];
+            const try_notes = *filter_novel_ops_notes(fail_bullets, against: source_ops_md);
+            IF: try_notes.length > 0;
+              *upsert_ops_append(*notes_to_md(try_notes));
+              source_ops_md = *merge_source_ops_md(source_ops_md, try_notes);
+            END:
+            *set_context(source_ops_md, tried_sources);
+          END:
+        }
+      END:
+
+      IF: !locked;
+        Read /opt/skills/google-maps-directions/SKILL.md.
+        IF: city_attempts < max_city_attempts && (*about_to_hit_max_turns(remaining_le: 4) || (Date.now() - Date.parse(explore_started_at)) > 30 * 60 * 1000);
+          const budget_bullet = `- BUDGET: explore stopped after ${city_attempts} city attempt(s) (cap ${max_city_attempts}); falling back to Google Maps.`;
+          const budget_novel = *filter_novel_ops_notes([budget_bullet], against: source_ops_md);
+          IF: budget_novel.length > 0;
+            *upsert_ops_append(*notes_to_md(budget_novel));
+            source_ops_md = *merge_source_ops_md(source_ops_md, budget_novel);
+          END:
+        END:
+        const maps_howto = [
+          '1. Bind template https://www.google.com/maps/dir/{origin}/{destination}/ with deterministic encodeURIComponent (node one-liner in skill).',
+          '2. /stagehand(goto, bound_url); confirm driving mode; verify OD chips match context.',
+          '3. Extract up to 3 private-car routes (iconic labels, eta_min, distance_km, status) and incident_note.',
+          '4. At most 2 browser attempts; never hand-type percent-encoding or paste SPA data=! URLs.',
+        ].join('\n');
+        const traffic_source = {
+          ...*normalize_traffic_source(/google-maps-directions(origin, destination), as: TTrafficSource),
+          city: city,
+          url: maps_template,
+          kind: 'browser',
+          howto_md: maps_howto,
+          is_fallback: true,
+        };
+        const fallback_prep_notes = *filter_novel_ops_notes(
+          *draft_source_ops_candidates(
+            fallback: true,
+            source: traffic_source,
+            note: 'google-maps budget fallback after at most 2 city sources; persist howto and prevent notes',
+          ),
+          against: source_ops_md,
+        );
+        IF: fallback_prep_notes.length > 0;
+          *upsert_ops_append(*notes_to_md(fallback_prep_notes));
+          source_ops_md = *merge_source_ops_md(source_ops_md, fallback_prep_notes);
+        END:
+        const probe_fetch = *fetch_driving_routes(
+          origin: origin,
+          destination: destination,
+          mode: private_car_driving,
+          max_routes: 3,
+          source: traffic_source,
+          as: TTrafficFetch,
+        );
+        tried_sources = [...tried_sources, {
+          name: 'Google Maps',
+          url: maps_template,
+          what_tried: 'google-maps-directions budget fallback probe',
+          outcome: *probe_ok(probe_fetch) ? 'ok' : 'failed',
+          why: *probe_ok(probe_fetch) ? 'fallback probe returned usable multi-route ETAs' : (*probe_fail_reason(probe_fetch) || 'fallback probe failed'),
+          at: new Date().toISOString(),
+        }];
+        const fallback_fetch_notes = *filter_novel_ops_notes(
+          *draft_source_ops_candidates(fallback: true, source: traffic_source, fetch: probe_fetch),
+          against: source_ops_md,
+        );
+        IF: fallback_fetch_notes.length > 0;
+          *upsert_ops_append(*notes_to_md(fallback_fetch_notes));
+          source_ops_md = *merge_source_ops_md(source_ops_md, fallback_fetch_notes);
+        END:
+        *save(~/data/{traffic_source_file}, traffic_source);
+        *upsert_sources(*serialize_traffic_source_lean(traffic_source));
+        *set_context(traffic_source, probe_fetch, source_ops_md, explore_started_at, tried_sources);
+      END:
+
+  - contextMode: true
+    contextKeys: [timezone]
+    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note]
+    logic: |
+      const started_at = new Date().toISOString();
+      const tz = String(context.context.timezone ?? 'Asia/Hong_Kong');
+      const offsetMs = tz === 'Asia/Hong_Kong' ? 8 * 60 * 60 * 1000 : 0;
+      const y = new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
+      (() => ({
+        started_at,
+        fetches: [],
+        prev_routes: [],
+        summary_notified: false,
+        notifications: [],
+        miss_count: 0,
+        day_page: `raw/fetches-${y}`,
+        last_heartbeat_at: '',
+        last_source_notes_at: '',
+        prev_incident_note: '',
+      }))
+
+  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
+    produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, last_source_notes_at, prev_incident_note, source_ops_md]
+    agentOverrides:
+      bashTimeoutMs: 360000
+    maxBashCalls: 120
+    maxTurns: 200
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when started_at is unchanged from context, monitor.ended_at is set,
+        monitor.elapsed_min >= monitor_minutes OR (elapsed already past window on retry with fetch_count >= 0),
+        and monitor.day_page is non-empty.
+        Prefer fetch_count >= 2 when the wall clock still allowed polling; if now - started_at >= monitor_minutes on entry, pass with whatever was already captured.
+        Fail when started_at was reset or monitor is missing.
+        Day page may already contain sections from earlier same-day runs — do NOT fail solely because
+        total `## HH:MM` count exceeds this run's fetch_count + miss_count. Pass when this run's
+        sections (matching context Origin/Destination) are present and each includes Origin and Destination
+        lines; count of this-run sections must be >= fetch_count + miss_count - 1 (allow at most one miss).
+        Fail when any this-run section lacks Origin or Destination.
+        Intentional `Fetch missed` sections count toward miss_count, not fetch_count.
+        On fail, set resumeAction: rerun.
+    logic: |
+      Read ~/task-skills/task-mission/SKILL.md.
+      Read ~/task-skills/monitor-loop/SKILL.md.
+      Read ~/task-skills/route-analysis/SKILL.md.
+      Do not change started_at.
+      const window_ms = Number(monitor_minutes) * 60 * 1000;
+      const notifications = notifications || [];
+      const fetches = fetches || [];
+      let prev_routes = prev_routes;
+      let summary_notified = summary_notified === true;
+      let miss_count = miss_count || 0;
+      let last_heartbeat_at = last_heartbeat_at || '';
+      let last_source_notes_at = last_source_notes_at || '';
+      let prev_incident_note = prev_incident_note || '';
+      let source_ops_md = source_ops_md || '<none>';
+      *read(source_ops_md);
+      *read(holidays_md);
+      Do not const/let-assign or set_context a copy of full source_ops_md / holidays_md every poll — only *set_context(source_ops_md) when novel merge changed it.
+
+      IF: (Date.now() - Date.parse(started_at)) >= window_ms;
+        const monitor = {
+          started_at,
+          ended_at: new Date().toISOString(),
+          elapsed_min: Math.floor((Date.now() - Date.parse(started_at)) / 60000),
+          fetch_count: fetches.length,
+          miss_count,
+          day_page,
+          fetches,
+          notifications,
+        };
+      ELSE:
+        while ((Date.now() - Date.parse(started_at)) < window_ms) {
+          *read(source_ops_md);
+          const fetch = *fetch_driving_routes(
+            origin: origin,
+            destination: destination,
+            mode: private_car_driving,
+            max_routes: 3,
+            source: traffic_source,
+            as: TTrafficFetch,
+          );
+          IF: *fetch_failed(fetch);
+            miss_count = miss_count + 1;
+            *set_context(miss_count);
+            /nixery(
+              upsert-knowledge-page,
+              topic: knowledge_topic,
+              page: day_page,
+              mode: append,
+              content: *format_miss_section(prev_routes, origin: origin, destination: destination, timezone: timezone),
+            );
+            const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180);
+
+            IF: (!last_source_notes_at ? (Date.now() - Date.parse(started_at)) : (Date.now() - Date.parse(last_source_notes_at))) >= 20 * 60 * 1000;
+              const candidates = *draft_source_ops_candidates(miss: true, fetch: fetch, source: traffic_source);
+              const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
+              IF: novel.length > 0;
+                /nixery(
+                  upsert-knowledge-page,
+                  topic: knowledge_topic,
+                  key: source-ops-{city_slug},
+                  mode: append,
+                  value: *notes_to_md(novel),
+                );
+                IF: !*last_nixery_ok();
+                  /nixery(
+                    upsert-knowledge-page,
+                    topic: knowledge_topic,
+                    key: source-ops-{city_slug},
+                    mode: append,
+                    content: *notes_to_md(novel),
+                  );
+                END:
+                source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+              END:
+              last_source_notes_at = new Date().toISOString();
+              *set_context(last_source_notes_at, source_ops_md);
+            END:
+          ELSE:
+            *read(holidays_md);
+            const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, holidays_md, ~/task-skills/route-analysis/SKILL.md);
+            const fetch_with_status = { ...fetch, ...analysis.patch };
+            *set_context(fetches, operation: extend, value: fetch_with_status);
+            prev_routes = fetch_with_status.routes;
+            *set_context(prev_routes);
+            fetches = [...fetches, fetch_with_status];
+
+            /nixery(
+              upsert-knowledge-page,
+              topic: knowledge_topic,
+              page: day_page,
+              mode: append,
+              content: *format_fetch_section(fetch_with_status, analysis, origin: origin, destination: destination, timezone: timezone),
+            );
+
+            IF: fetches.length === 2 && !summary_notified;
+              const body = *format_summary_notification(fetches, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
+              const proposal = /mastermind(
+                propose-notification,
+                channel: notifyChannel,
+                direction: to_user,
+                to: notifyTo,
+                body: body,
+                taskRef: traffic_monitor,
+              );
+              notifications = [...notifications, proposal];
+              summary_notified = true;
+              *set_context(summary_notified, notifications);
+            END:
+
+            const since_hb = !last_heartbeat_at
+              ? (Date.now() - Date.parse(started_at))
+              : (Date.now() - Date.parse(last_heartbeat_at));
+            IF: *proactivity_allows_heartbeat(notifyPreference) && since_hb >= 15 * 60 * 1000;
+              const body = *format_heartbeat_notification(fetch_with_status, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
+              const proposal = /mastermind(
+                propose-notification,
+                channel: notifyChannel,
+                direction: to_user,
+                to: notifyTo,
+                body: body,
+                taskRef: traffic_monitor,
+              );
+              notifications = [...notifications, proposal];
+              last_heartbeat_at = new Date().toISOString();
+              *set_context(last_heartbeat_at, notifications);
+            END:
+
+            IF: fetches.length >= 2 && analysis.should_notify_abnormal;
+              const body = *format_abnormal_notification(fetch_with_status, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
+              const proposal = /mastermind(
+                propose-notification,
+                channel: notifyChannel,
+                direction: to_user,
+                to: notifyTo,
+                body: body,
+                taskRef: traffic_monitor,
+              );
+              notifications = [...notifications, proposal];
+              *set_context(notifications);
+            END:
+
+            prev_incident_note = analysis.incident_note || '';
+            *set_context(prev_incident_note);
+
+            IF: (!last_source_notes_at ? (Date.now() - Date.parse(started_at)) : (Date.now() - Date.parse(last_source_notes_at))) >= 20 * 60 * 1000;
+              const candidates = *draft_source_ops_candidates(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis);
+              const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
+              IF: novel.length > 0;
+                /nixery(
+                  upsert-knowledge-page,
+                  topic: knowledge_topic,
+                  key: source-ops-{city_slug},
+                  mode: append,
+                  value: *notes_to_md(novel),
+                );
+                IF: !*last_nixery_ok();
+                  /nixery(
+                    upsert-knowledge-page,
+                    topic: knowledge_topic,
+                    key: source-ops-{city_slug},
+                    mode: append,
+                    content: *notes_to_md(novel),
+                  );
+                END:
+                source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+              END:
+              last_source_notes_at = new Date().toISOString();
+              *set_context(last_source_notes_at, source_ops_md);
+            END:
+
+            const sleep_sec = fetches.length === 1
+              ? 300
+              : *adaptive_sleep_sec(fetch_with_status, prev_primary_eta: analysis.prev_primary_eta);
+          END:
+
+          IF: (Date.now() - Date.parse(started_at)) >= window_ms;
+            break;
+          END:
+
+          *run_bash(sleep ${sleep_sec});
+        }
+
+        const monitor = {
+          started_at,
+          ended_at: new Date().toISOString(),
+          elapsed_min: Math.floor((Date.now() - Date.parse(started_at)) / 60000),
+          fetch_count: fetches.length,
+          miss_count,
+          day_page,
+          fetches,
+          notifications,
+        };
+      END:
+
+  - contextKeys: [started_at, monitor, holidays_md, day_page, origin, destination, city, timezone, knowledge_topic, traffic_source, TResult, TMonitorResult]
+    produceContextKeys: [result]
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.75
+      rubric: |
+        Pass when result.day_kind is weekday|weekend|public_holiday, result.summary_md is non-empty,
+        and result.monitor.fetch_count matches monitor.fetch_count, and result.monitor.miss_count
+        matches monitor.miss_count,
+        and summary_md names the locked traffic_source (Google Maps only when traffic_source.is_fallback is true
+        or url is the Maps directions template; otherwise name the city source from traffic_source.url / howto),
+        and every report upsert returned ok:true with canonicalTopic equal to knowledge_topic
+        (path under topics/traffic-monitor/ — never topics/general/).
+        Fail when day_kind or summary_md is missing.
+        Fail when any report upsert omitted topic, returned ok:false, or landed outside traffic-monitor.
+        Day page may contain earlier same-day runs — do NOT fail solely because total `## HH:MM`
+        count exceeds this run's fetch_count + miss_count. Require this-run sections (Origin/Destination
+        matching context) to be present with Origin and Destination lines; count >= fetch+miss - 1.
+        Fail when summary_md claims Google Maps but traffic_source.is_fallback is false and url is not Maps.
+        On fail, set resumeAction: rerun.
+    logic: |
+      Read ~/task-skills/task-mission/SKILL.md.
+      Read ~/task-skills/route-analysis/SKILL.md.
+      *read(holidays_md);
+      const day_kind = *classify_day_kind(started_at, holidays_md, tz: timezone);
+      const summary_md = *write_daily_traffic_report(
+        monitor,
+        day_kind,
+        holidays_md,
+        route: origin to destination driving,
+        city: city,
+        tz: timezone,
+        traffic_source: traffic_source,
+      );
+      const report_page = `raw/report-${day_page.replace('raw/fetches-', '')}`;
+      const report_append_md = *format_report_run_append(
+        summary_md,
+        origin: origin,
+        destination: destination,
+        monitor: monitor,
+        timezone: timezone,
+      );
+      const report_up = /nixery(
+        upsert-knowledge-page,
+        topic: knowledge_topic,
+        page: report_page,
+        mode: append,
+        content: report_append_md,
+      );
+      IF: !*last_nixery_ok();
+        /nixery(
+          upsert-knowledge-page,
+          topic: knowledge_topic,
+          page: report_page,
+          mode: append,
+          content: report_append_md,
+        );
+      END:
+      const summary_up = /nixery(
+        upsert-knowledge-page,
+        topic: knowledge_topic,
+        key: summary,
+        value: summary_md,
+      );
+      IF: !*last_nixery_ok();
+        /nixery(
+          upsert-knowledge-page,
+          topic: knowledge_topic,
+          key: summary,
+          value: summary_md,
+        );
+      END:
+      const analysis_up = /nixery(
+        upsert-knowledge-page,
+        topic: knowledge_topic,
+        key: analysis_md,
+        value: summary_md,
+      );
+      IF: !*last_nixery_ok();
+        /nixery(
+          upsert-knowledge-page,
+          topic: knowledge_topic,
+          key: analysis_md,
+          value: summary_md,
+        );
+      END:
+      Keep report_up / summary_up / analysis_up data.canonicalTopic and data.path for verify —
+      they must equal knowledge_topic and paths under topics/traffic-monitor/ (never general).
+      const result = {
+        started_at,
+        day_kind,
+        day_page,
+        report_page,
+        monitor,
+        summary_md,
+      };
+
+  - contextMode: true
+    contextKeys: [result]
+    updateContextKeys: [result]
+    logic: |
+      (() => ({ result: context.context.result }))

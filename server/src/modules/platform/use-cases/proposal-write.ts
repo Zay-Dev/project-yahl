@@ -4,6 +4,14 @@ import Joi from 'joi';
 
 import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
+import {
+  parseEmailWhitelist,
+  recipientMatchesEmailWhitelist,
+} from '@project-yahl/shared/email/whitelist';
+import {
+  parseWhatsAppWhitelist,
+  recipientMatchesWhatsAppWhitelist,
+} from '@project-yahl/shared/whatsapp/whitelist';
 
 import type {
   TRequestCreateNotificationProposal,
@@ -35,6 +43,30 @@ const settingBodySchema = Joi.object<TRequestCreateSettingProposal>({
   userId: Joi.string().optional(),
 });
 
+const resolveNotificationStatus = (
+  body: TRequestCreateNotificationProposal,
+): 'approved' | 'pending' => {
+  if (body.channel === 'email') {
+    const whitelist = parseEmailWhitelist(process.env.EMAIL_WHITELIST);
+
+    if (recipientMatchesEmailWhitelist(body.to, whitelist)) {
+      return 'approved';
+    }
+
+    return 'pending';
+  }
+
+  if (body.channel === 'whatsapp') {
+    const whitelist = parseWhatsAppWhitelist(process.env.WHATSAPP_WHITELIST);
+
+    if (recipientMatchesWhatsAppWhitelist(body.to, whitelist)) {
+      return 'approved';
+    }
+  }
+
+  return 'pending';
+};
+
 export const createNotificationProposal = [
   Middlewares.Chainable
     .validate(({ req }) => ({
@@ -42,13 +74,15 @@ export const createNotificationProposal = [
     }))
     .next(async (express, { body }) => {
       const proposalId = randomUUID();
+      const status = resolveNotificationStatus(body);
 
       await modelPlatformProposal.create({
+        ...(status === 'approved' ? { approvedAt: new Date() } : {}),
         done: false,
         kind: 'notification',
         payload: body,
         proposalId,
-        status: 'pending',
+        status,
       });
 
       express.res.status(201);
@@ -109,6 +143,14 @@ export const approveProposal = [
       }), req.params),
     }))
     .next(async (express, { params }) => {
+      const expected = process.env.PLATFORM_APPROVAL_TOKEN?.trim() ?? '';
+      const provided = express.req.headers['x-approval-token'];
+      const token = typeof provided === 'string' ? provided.trim() : '';
+
+      if (!expected || token !== expected) {
+        throw errors.custom('invalid approval token', 401);
+      }
+
       const doc = await Queries.hasExactOne(modelPlatformProposal, {
         proposalId: params.proposalId,
       });

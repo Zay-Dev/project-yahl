@@ -26,6 +26,16 @@ With the tasks in `server/tasks/`, about 95% of runs follow the same path (as of
 
 But more importantly — it does feel like patching in the right direction. No more roll the dice and fingers crossed.
 
+And yes — the worker can actually talk WhatsApp now. Scan a QR in the console, run `greets` so a chat has a face and a wiki folder, let `whatsapp_wiki_stack` vacuum inbox text into the knowledge store on a cron. Morning traffic (`traffic_monitor`) takes a real `runInput` (origin, destination, who to nag) instead of a forever-dummy recipient. When WhatsApp ghosts you mid-send, SMTP can yell at the system admin. Setup and env knobs live in the handbook — this paragraph is just the victory dance.
+
+### Case study: `traffic_monitor` (and why debugging AI tasks finally feels sane)
+
+We landed `traffic_monitor` as a cron-friendly YAHL task, then spent a stretch of small commits actually *using* it — the boring kind of progress that used to be impossible when the whole job was one giant prompt.
+
+Recent polish included: readable report copy for humans, dropping accidental region bias, stopping the task from treating every `notify_to` as “the user,” capping probe sources (try a couple, then fall back to Google), making stages respect source-ops knowledge instead of inventing their own adventure, and tightening the knowledge format the monitor reads.
+
+The meta-win is the workflow. When something lied, we chopped the stage, re-ran *that* slice, fixed the skill or knowledge file, and moved on — no full-pipeline archaeology, no “re-roll and pray.” For an AI task of this size, that loop was weirdly easy and efficient: same failure at the same line, patch the offender, ship the next commit. That is the whole point of YAHL showing up in practice, not just in the pitch deck.
+
 What works / what’s next: [`handbook/status-and-roadmap.md`](handbook/status-and-roadmap.md).
 
 ## Why knowledge matters (and why we invest here)
@@ -88,7 +98,9 @@ curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
   -d '{"taskId":"who_am_i"}'
 ```
 
-Full compose, local flags, OneCLI, API, and ask-user recovery: [`handbook/how-to-run.md`](handbook/how-to-run.md).
+Optional: set `WHATSAPP_ENABLED=true` (and friends) in `.env`, restart worker, scan the QR — full channel setup in the handbook.
+
+Full compose, WhatsApp/SMTP, local flags, OneCLI, API, and ask-user recovery: [`handbook/how-to-run.md`](handbook/how-to-run.md).
 
 ## License
 

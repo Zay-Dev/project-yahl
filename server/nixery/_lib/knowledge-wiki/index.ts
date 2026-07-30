@@ -45,4 +45,17 @@ export {
   type TUpsertKnowledgePageInput,
   type TUpsertKnowledgePageResult,
 } from './upsert.js';
-export { wikiConfigured } from './wiki-client.js';
+export {
+  getWikiPageByPath,
+  upsertWikiPage,
+  wikiConfigured,
+  type TUpsertWikiMode,
+} from './wiki-client.js';
+export {
+  resolveGreetsWikiPath,
+  resolveGreetsWikiPrefix,
+  resolveWhatsAppWikiPath,
+  resolveWhatsAppWikiPrefix,
+  WIKI_GREETS_ROOT,
+  WIKI_WHATSAPP_ROOT,
+} from './wiki-paths.js';

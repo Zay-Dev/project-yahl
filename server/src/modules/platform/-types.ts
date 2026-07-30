@@ -25,6 +25,7 @@ export interface ICronJob extends TSoftDeletable, TWithTimestamps {
   id: string;
   orgId?: string;
   orgUnitId?: string;
+  runInput?: Record<string, string>;
   schedule: string;
   /** YAHL task id under server/tasks/ (e.g. hk_weather), not a filesystem path */
   taskPath: string;

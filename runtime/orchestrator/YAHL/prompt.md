@@ -20,7 +20,9 @@ Use the **`set_context`** tool when you need to persist data to runtime context 
 - `key` must be a non-empty string.
 - `value` can be any valid JSON value (string, number, object, array, boolean, null).
 - `operation` is optional: `"set"` or `"extend"`. Omitted means `"set"`.
-- `"extend"` always writes `[oldValue, newValue]` regardless of the value types.
+- `"extend"` on an **array** current value appends `value` (spreads when `value` is also an array).
+- `"extend"` when the key is missing starts a new array from `value`.
+- `"extend"` on a non-array current value writes `[oldValue, newValue]`.
 
 The stage agent exposes this as a **Chat Completions function tool** named `set_context`. Only this tool (or the legacy final JSON envelope) is consumed by the orchestrator for context mutation.
 
@@ -89,7 +91,7 @@ Read a prior ask-user answer from Input context without calling `ask_user` again
 - `set_context`: `scope=global`, `key=topic`, `value="AI agents"`
 - `set_context`: `scope=stage`, `key=search_results`, `value=["doc1","doc2"]`
 - `set_context`: `scope=global`, `key=user_profile`, `value={"name":"Zay","role":"developer"}`
-- `set_context`: `scope=global`, `key=records`, `operation=extend`, `value={"id":"2"}`
+- `set_context`: `scope=global`, `key=records`, `operation=extend`, `value={"id":"2"}` (appends onto array `records`)
 
 ### When to use set_context
 

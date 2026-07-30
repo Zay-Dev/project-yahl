@@ -7,6 +7,7 @@ export const toCronJobResponse = (doc: ICronJob): TResponseCronJob => ({
   id: doc.id,
   orgId: doc.orgId,
   orgUnitId: doc.orgUnitId,
+  runInput: doc.runInput,
   schedule: doc.schedule,
   taskPath: doc.taskPath,
   timezone: doc.timezone,

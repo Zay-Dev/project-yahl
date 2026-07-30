@@ -3,7 +3,11 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
-import { CronJobForm, type TCronJobFormValues } from "@/pages/platform/cron-job-form";
+import {
+  CronJobForm,
+  type TCronJobFormValues,
+  toCreateCronJobBody,
+} from "@/pages/platform/cron-job-form";
 import { deleteCronJob, getCronJob, updateCronJob } from "@/pages/platform/lib/platform-api";
 
 const toFormValues = (job: {
@@ -11,6 +15,7 @@ const toFormValues = (job: {
   id: string;
   orgId?: string;
   orgUnitId?: string;
+  runInput?: Record<string, string>;
   schedule: string;
   taskPath: string;
   timezone?: string;
@@ -20,6 +25,7 @@ const toFormValues = (job: {
   id: job.id,
   orgId: job.orgId ?? "",
   orgUnitId: job.orgUnitId ?? "",
+  runInput: job.runInput ?? {},
   schedule: job.schedule,
   taskPath: job.taskPath,
   timezone: job.timezone ?? "",
@@ -63,14 +69,17 @@ export function CronJobEditPage() {
     setError(null);
 
     try {
+      const body = toCreateCronJobBody(values);
+
       await updateCronJob(jobId, {
-        enabled: values.enabled,
-        orgId: values.orgId.trim() || undefined,
-        orgUnitId: values.orgUnitId.trim() || undefined,
-        schedule: values.schedule.trim(),
-        taskPath: values.taskPath.trim(),
-        timezone: values.timezone.trim() || undefined,
-        userId: values.userId.trim() || undefined,
+        enabled: body.enabled,
+        orgId: body.orgId,
+        orgUnitId: body.orgUnitId,
+        runInput: body.runInput ?? {},
+        schedule: body.schedule,
+        taskPath: body.taskPath,
+        timezone: body.timezone,
+        userId: body.userId,
       });
       navigate("/platform/cron-jobs");
     } catch (saveError) {

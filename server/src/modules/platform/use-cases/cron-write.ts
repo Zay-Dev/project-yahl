@@ -1,5 +1,7 @@
 import Joi from 'joi';
 
+import { Repository } from '@/core';
+
 import { Middlewares } from '@omni-infra/express';
 import { Queries } from '@omni-infra/mongoose';
 
@@ -16,11 +18,14 @@ const paramsSchema = Joi.object<TRequestCronJobParams>({
   id: Joi.string().trim().required(),
 });
 
+const runInputSchema = Joi.object().pattern(Joi.string(), Joi.string().allow('')).optional();
+
 const createBodySchema = Joi.object<TRequestCreateCronJobBody>({
   enabled: Joi.boolean().default(true),
   id: Joi.string().trim().required(),
   orgId: Joi.string().trim().optional(),
   orgUnitId: Joi.string().trim().optional(),
+  runInput: runInputSchema,
   schedule: Joi.string().trim().required(),
   taskPath: Joi.string().trim().required(),
   timezone: Joi.string().trim().optional(),
@@ -31,11 +36,23 @@ const updateBodySchema = Joi.object<TRequestUpdateCronJobBody>({
   enabled: Joi.boolean().optional(),
   orgId: Joi.string().trim().optional(),
   orgUnitId: Joi.string().trim().optional(),
+  runInput: runInputSchema,
   schedule: Joi.string().trim().optional(),
   taskPath: Joi.string().trim().optional(),
   timezone: Joi.string().trim().optional(),
   userId: Joi.string().trim().optional(),
 }).min(1);
+
+const assertTaskRunInput = async (
+  taskPath: string,
+  runInput: Record<string, string> | undefined,
+) => {
+  const validation = await Repository.resolve('validateTaskRunInput')(taskPath, runInput);
+
+  if (!validation.ok) {
+    throw errors.badRequest(validation.message);
+  }
+};
 
 export const createCronJob = [
   Middlewares.Chainable
@@ -43,6 +60,8 @@ export const createCronJob = [
       body: joi.getValidatedOrThrow(createBodySchema, req.body),
     }))
     .next(async (express, { body }) => {
+      await assertTaskRunInput(body.taskPath, body.runInput);
+
       const existing = await Queries.queryBy(modelCronJob, { id: body.id }).countDocuments();
 
       if (existing > 0) {
@@ -76,7 +95,11 @@ export const updateCronJob = [
       params: joi.getValidatedOrThrow(paramsSchema, req.params),
     }))
     .next(async (express, { body, params }) => {
-      await Queries.hasExactOne(modelCronJob, { id: params.id });
+      const existing = await Queries.hasExactOne(modelCronJob, { id: params.id });
+      const taskPath = body.taskPath ?? existing.taskPath;
+      const runInput = body.runInput !== undefined ? body.runInput : existing.runInput;
+
+      await assertTaskRunInput(taskPath, runInput);
 
       await modelCronJob.updateOne({ id: params.id }, { $set: body });
 

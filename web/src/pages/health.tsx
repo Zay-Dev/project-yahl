@@ -1,17 +1,17 @@
-import { useCustom } from "@refinedev/core"
+import { useOne } from "@refinedev/core"
 
 import type { TServerHealthResponse } from "@/lib/types"
 
 export function HealthPage() {
-  const { query, result } = useCustom<TServerHealthResponse>({
-    method: "get",
+  const { query, result } = useOne<TServerHealthResponse>({
+    id: "health",
     queryOptions: {
       queryKey: ["health"],
     },
-    url: "/__/health",
+    resource: "__",
   })
 
-  const health = result?.data
+  const health = result
   const error = query.error
   const isLoading = query.isLoading
 

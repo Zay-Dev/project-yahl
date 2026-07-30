@@ -1,6 +1,21 @@
-import { markPollSucceeded } from './-health/server.js';
-import { sendEmail, sendWhatsApp } from './-channels/outbound.js';
-import { startCronScheduler, type TCronJobDef } from './-cron/scheduler.js';
+import type { TCronJobDef } from './-cron/scheduler.js';
+
+import {
+  getSystemAdminEmail,
+  isSmtpConfigured,
+  sendEmail,
+  sendWhatsApp,
+} from './-channels/outbound.js';
+import {
+  initWhatsApp,
+  isWhatsAppBrowserDeathError,
+  isWhatsAppReady,
+  scheduleWhatsAppReinit,
+  setWhatsAppReadyListener,
+} from './-channels/whatsapp/client.js';
+import { whatsappConfig } from './-channels/whatsapp/config.js';
+import { startCronScheduler } from './-cron/scheduler.js';
+import { configureWhatsAppHealth, markPollSucceeded, startHealthServer } from './-health/server.js';
 import {
   applySettingProposal,
   fetchPendingApproved,
@@ -10,11 +25,90 @@ import {
 
 import { config } from './config.js';
 
-const handleCronTick = async (job: TCronJobDef) => {
-  await postTaskRun(job.taskPath);
+let pollInFlight = false;
+
+const whatsappDownAlertedIds = new Set<string>();
+
+const installProcessSafetyNet = (): void => {
+  process.on('unhandledRejection', (reason) => {
+    if (isWhatsAppBrowserDeathError(reason)) {
+      console.warn('[worker] swallowed WhatsApp browser-death rejection', reason);
+      scheduleWhatsAppReinit('unhandled_browser_death');
+      return;
+    }
+
+    console.error('[worker] unhandledRejection', reason);
+    process.exit(1);
+  });
+
+  process.on('uncaughtException', (error) => {
+    if (isWhatsAppBrowserDeathError(error)) {
+      console.warn('[worker] swallowed WhatsApp browser-death exception', error);
+      scheduleWhatsAppReinit('unhandled_browser_death');
+      return;
+    }
+
+    console.error('[worker] uncaughtException', error);
+    process.exit(1);
+  });
 };
 
-const processNotification = async (payload: Record<string, unknown>) => {
+const handleCronTick = async (job: TCronJobDef) => {
+  await postTaskRun(job.taskPath, job.runInput);
+};
+
+const alertWhatsAppDown = async (params: {
+  body: string;
+  proposalId: string;
+  to: string;
+}): Promise<void> => {
+  if (!isSmtpConfigured()) {
+    return;
+  }
+
+  const adminEmail = getSystemAdminEmail();
+
+  if (!adminEmail) {
+    return;
+  }
+
+  if (whatsappDownAlertedIds.has(params.proposalId)) {
+    return;
+  }
+
+  const snippet = params.body.slice(0, 500);
+  const result = await sendEmail({
+    body: [
+      'WhatsApp is disconnected or logged out.',
+      `Undelivered notification for: ${params.to}`,
+      `Proposal id: ${params.proposalId}`,
+      '',
+      'Original body:',
+      snippet,
+    ].join('\n'),
+    subject: `WhatsApp unavailable — undelivered to ${params.to}`,
+    to: adminEmail,
+  });
+
+  if (result.ok) {
+    whatsappDownAlertedIds.add(params.proposalId);
+    console.log(
+      '[worker][whatsapp] admin alerted for undelivered notification',
+      params.proposalId,
+    );
+  } else {
+    console.error(
+      '[worker][whatsapp] admin alert failed',
+      params.proposalId,
+      result.error,
+    );
+  }
+};
+
+const processNotification = async (
+  proposalId: string,
+  payload: Record<string, unknown>,
+) => {
   const channel = String(payload.channel ?? 'email');
   const to = String(payload.to ?? '');
   const body = String(payload.body ?? '');
@@ -30,6 +124,15 @@ const processNotification = async (payload: Record<string, unknown>) => {
   };
 
   if (channel === 'whatsapp') {
+    if (whatsappConfig.enabled && !isWhatsAppReady()) {
+      console.log(
+        '[worker][whatsapp] skip approved notification: not logged in',
+        { to },
+      );
+      await alertWhatsAppDown({ body, proposalId, to });
+      return { error: 'whatsapp not logged in', ok: false, skipped: true };
+    }
+
     return sendWhatsApp(params);
   }
 
@@ -37,15 +140,25 @@ const processNotification = async (payload: Record<string, unknown>) => {
 };
 
 const pollApprovedWork = async () => {
+  if (pollInFlight) {
+    return;
+  }
+
+  pollInFlight = true;
+
   try {
     const items = await fetchPendingApproved();
 
     for (const item of items) {
       try {
         if (item.kind === 'notification') {
-          const result = await processNotification(item.payload);
+          const result = await processNotification(item.id, item.payload);
 
           if (!result.ok) {
+            if ('skipped' in result && result.skipped) {
+              continue;
+            }
+
             console.error('[worker] notification failed', item.id, result.error);
             continue;
           }
@@ -66,11 +179,31 @@ const pollApprovedWork = async () => {
     markPollSucceeded();
   } catch (error) {
     console.error('[worker] poll failed', error);
+  } finally {
+    pollInFlight = false;
   }
 };
 
 const main = async () => {
-  console.log('[worker] starting (outbound-only: cron + platform poll)');
+  installProcessSafetyNet();
+
+  const mode = whatsappConfig.enabled
+    ? 'cron + platform poll + whatsapp'
+    : 'cron + platform poll';
+
+  console.log(`[worker] starting (${mode})`);
+
+  configureWhatsAppHealth(() => ({
+    enabled: whatsappConfig.enabled,
+    ready: isWhatsAppReady(),
+  }));
+  startHealthServer();
+
+  setWhatsAppReadyListener(() => {
+    whatsappDownAlertedIds.clear();
+  });
+
+  await initWhatsApp();
 
   startCronScheduler((job) => {
     void handleCronTick(job);

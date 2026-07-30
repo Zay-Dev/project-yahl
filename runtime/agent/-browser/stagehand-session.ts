@@ -16,12 +16,20 @@ const STAGEHAND_CLOSE_TIMEOUT_MS = 30_000;
 const AGENT_TIMEOUT_MS = 300_000;
 const BROWSER_TIMEOUT_MS = 120_000;
 
+const CONSECUTIVE_FAILURES_BEFORE_RESET = 2;
+
+const GOTO_OPTIONS = {
+  timeoutMs: BROWSER_TIMEOUT_MS,
+  waitUntil: "domcontentloaded" as const,
+};
+
 type TBrowserResult =
   | { data: unknown; ok: true }
   | { error: string; ok: false };
 
 let stagehand: Stagehand | null = null;
 let initPromise: Promise<Stagehand> | null = null;
+let consecutiveBrowserFailures = 0;
 
 const chromiumArgs = () => {
   const args = [
@@ -80,7 +88,13 @@ const resolveStagehand = async (): Promise<Stagehand> => {
     return instance;
   })();
 
-  return initPromise;
+  try {
+    return await initPromise;
+  } catch (error) {
+    initPromise = null;
+    stagehand = null;
+    throw error;
+  }
 };
 
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string) => {
@@ -108,11 +122,26 @@ const schemaFromJson = (schema: Record<string, unknown>) => {
   }
 };
 
+const isTimeoutError = (message: string) =>
+  /timed out/i.test(message) || /TimeoutError/i.test(message);
+
+const navigate = async (
+  page: { goto: (url: string, options?: typeof GOTO_OPTIONS) => Promise<unknown> },
+  url: string,
+) => {
+  await withTimeout(
+    page.goto(url, GOTO_OPTIONS),
+    BROWSER_TIMEOUT_MS,
+    "browser.goto",
+  );
+};
+
 export const closeStagehandSession = async () => {
   const current = stagehand;
 
   stagehand = null;
   initPromise = null;
+  consecutiveBrowserFailures = 0;
 
   if (!current) return;
 
@@ -129,82 +158,132 @@ export const closeStagehandSession = async () => {
   }
 };
 
+const executeBrowserCommand = async (
+  args: BrowserToolArguments,
+): Promise<TBrowserResult> => {
+  const sh = await resolveStagehand();
+  const page = sh.context.pages()[0];
+
+  if (!page) {
+    return { error: "browser: no page available", ok: false };
+  }
+
+  const mode = args.mode;
+
+  if (mode === "goto") {
+    if (!args.url?.trim()) {
+      return { error: "browser: url is required for goto mode", ok: false };
+    }
+
+    await navigate(page, args.url);
+
+    return {
+      data: { mode, url: args.url },
+      ok: true,
+    };
+  }
+
+  if (args.url?.trim()) {
+    await navigate(page, args.url);
+  }
+
+  if (mode === "act") {
+    const result = await withTimeout(
+      sh.act(args.instruction),
+      BROWSER_TIMEOUT_MS,
+      "browser.act",
+    );
+
+    return { data: result, ok: true };
+  }
+
+  if (mode === "extract") {
+    const extractPromise = args.schema
+      ? sh.extract(args.instruction, schemaFromJson(args.schema))
+      : sh.extract(args.instruction);
+
+    const result = await withTimeout(extractPromise, BROWSER_TIMEOUT_MS, "browser.extract");
+
+    return { data: result, ok: true };
+  }
+
+  if (mode === "observe") {
+    const result = await withTimeout(
+      sh.observe(args.instruction),
+      BROWSER_TIMEOUT_MS,
+      "browser.observe",
+    );
+
+    return { data: result, ok: true };
+  }
+
+  if (mode === "agent") {
+    const maxSteps = args.maxSteps ?? DEFAULT_AGENT_MAX_STEPS;
+    const agent = sh.agent();
+    const result = await withTimeout(
+      agent.execute({ instruction: args.instruction, maxSteps }),
+      AGENT_TIMEOUT_MS,
+      "browser.agent",
+    );
+
+    return { data: result, ok: true };
+  }
+
+  return { error: `browser: unsupported mode ${mode}`, ok: false };
+};
+
+const shouldResetBrowser = (_args: BrowserToolArguments, error: string) => {
+  if (isTimeoutError(error)) {
+    return true;
+  }
+
+  return consecutiveBrowserFailures >= CONSECUTIVE_FAILURES_BEFORE_RESET;
+};
+
 export const runBrowserCommand = async (
   args: BrowserToolArguments,
 ): Promise<TBrowserResult> => {
+  let result: TBrowserResult;
+
   try {
-    const sh = await resolveStagehand();
-    const page = sh.context.pages()[0];
-
-    if (!page) {
-      return { error: "browser: no page available", ok: false };
-    }
-
-    const mode = args.mode;
-
-    if (mode === "goto") {
-      if (!args.url?.trim()) {
-        return { error: "browser: url is required for goto mode", ok: false };
-      }
-
-      await withTimeout(page.goto(args.url), BROWSER_TIMEOUT_MS, "browser.goto");
-
-      return {
-        data: { mode, url: args.url },
-        ok: true,
-      };
-    }
-
-    if (args.url?.trim()) {
-      await withTimeout(page.goto(args.url), BROWSER_TIMEOUT_MS, "browser.goto");
-    }
-
-    if (mode === "act") {
-      const result = await withTimeout(
-        sh.act(args.instruction),
-        BROWSER_TIMEOUT_MS,
-        "browser.act",
-      );
-
-      return { data: result, ok: true };
-    }
-
-    if (mode === "extract") {
-      const extractPromise = args.schema
-        ? sh.extract(args.instruction, schemaFromJson(args.schema))
-        : sh.extract(args.instruction);
-
-      const result = await withTimeout(extractPromise, BROWSER_TIMEOUT_MS, "browser.extract");
-
-      return { data: result, ok: true };
-    }
-
-    if (mode === "observe") {
-      const result = await withTimeout(
-        sh.observe(args.instruction),
-        BROWSER_TIMEOUT_MS,
-        "browser.observe",
-      );
-
-      return { data: result, ok: true };
-    }
-
-    if (mode === "agent") {
-      const maxSteps = args.maxSteps ?? DEFAULT_AGENT_MAX_STEPS;
-      const agent = sh.agent();
-      const result = await withTimeout(
-        agent.execute({ instruction: args.instruction, maxSteps }),
-        AGENT_TIMEOUT_MS,
-        "browser.agent",
-      );
-
-      return { data: result, ok: true };
-    }
-
-    return { error: `browser: unsupported mode ${mode}`, ok: false };
+    result = await executeBrowserCommand(args);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    return { error: message, ok: false };
+    result = { error: message, ok: false };
   }
+
+  if (result.ok) {
+    consecutiveBrowserFailures = 0;
+
+    return result;
+  }
+
+  consecutiveBrowserFailures += 1;
+
+  if (!shouldResetBrowser(args, result.error)) {
+    return result;
+  }
+
+  console.error(
+    `[stagehand] resetting browser after failure (mode=${args.mode}, consecutive=${consecutiveBrowserFailures}): ${result.error}\n`,
+  );
+
+  await closeStagehandSession();
+
+  try {
+    result = await executeBrowserCommand(args);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    result = { error: message, ok: false };
+  }
+
+  if (result.ok) {
+    consecutiveBrowserFailures = 0;
+  } else {
+    consecutiveBrowserFailures += 1;
+  }
+
+  return result;
 };

@@ -1,0 +1,169 @@
+name: greets
+description: |
+  Greet a person or group: write canonical knowledge under greets/{entity},
+  extract WhatsApp-facing wiki under whatsapp/{slug}, optionally register the
+  chat for inbox capture. Run with task id greets.
+resultContextKey: result
+runInput:
+  - channelRef
+  - summary
+  - displayName
+  - register_channel
+  - agentPhone
+  - assistantName
+
+types: |
+  type TPlatformIdentity = {
+    chatId: string;
+    displayName: string;
+    lid?: string;
+  };
+
+  type TChannelRecord = {
+    chatId: string;
+    folder: string;
+    displayName?: string;
+    summary?: string;
+    greetsEntity?: string;
+    onboardedAt: string;
+    wikiRoot: string;
+  };
+
+  type TResult = {
+    entity: string;
+    slug: string;
+    registered: boolean;
+    channel?: TChannelRecord;
+    platform?: TPlatformIdentity;
+    greetsPaths: string[];
+    whatsappPaths: string[];
+  };
+
+stages:
+  - contextKeys: [channelRef, summary, displayName, register_channel, agentPhone, assistantName]
+    produceContextKeys: [channelRef, summary, displayName, register_channel, agentPhone, assistantName, entity, slug]
+    logic: |
+      IF: !(channelRef && String(channelRef).trim()) || !(summary && String(summary).trim());
+        const ask = /ask-user-batch(clarify-greets);
+        const channelRef = *pick_answer(ask, 'channelRef') || channelRef;
+        const summary = *pick_answer(ask, 'summary') || summary;
+        const displayName = *pick_answer(ask, 'displayName') || displayName;
+        const register_channel = *pick_answer(ask, 'register_channel') || register_channel;
+        const agentPhone = *pick_answer(ask, 'agentPhone') || agentPhone;
+        const assistantName = *pick_answer(ask, 'assistantName') || assistantName;
+      END:
+      const channelRef = String(channelRef ?? '').trim();
+      const summary = String(summary ?? '').trim();
+      const displayName = String(displayName ?? '').trim();
+      const registerRaw = String(register_channel ?? '').trim().toLowerCase();
+      const register_channel = (registerRaw === 'false' || registerRaw === '0' || registerRaw === 'no')
+        ? 'false'
+        : 'true';
+      const agentPhone = String(agentPhone ?? '').trim();
+      const assistantName = String(assistantName ?? '').trim();
+      const entitySource = displayName || summary.split(/[,.\n]/)[0] || 'entity';
+      const entity = String(entitySource)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 64) || 'entity';
+      const chatId = channelRef.includes('@')
+        ? channelRef.toLowerCase()
+        : (channelRef.replace(/\D/g, '') ? `${channelRef.replace(/\D/g, '')}@c.us` : 'unknown');
+      const slug = chatId.replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
+
+  - contextKeys: [channelRef, summary, displayName, register_channel, agentPhone, assistantName, entity, slug]
+    produceContextKeys: [register_result, channel, platform, registered]
+    logic: |
+      IF: register_channel === 'true';
+        const register_result = /nixery(
+          whatsapp-register-channel,
+          channelRef: channelRef,
+          displayName: displayName,
+          summary: summary,
+          greetsEntity: entity,
+          agentPhone: agentPhone,
+          assistantName: assistantName,
+          output: register.json,
+        );
+        const channel = register_result.channel;
+        const platform = register_result.platform;
+        const registered = true;
+      ELSE:
+        const register_result = { ok: true, skipped: true };
+        const channel = {
+          chatId: channelRef.includes('@') ? channelRef : `${String(channelRef).replace(/\D/g, '')}@c.us`,
+          folder: slug,
+          displayName: displayName || undefined,
+          summary: summary,
+          greetsEntity: entity,
+          onboardedAt: new Date().toISOString(),
+          wikiRoot: `whatsapp/${slug}`,
+        };
+        const platform = {};
+        const registered = false;
+      END:
+
+  - contextKeys: [channel, channelRef, displayName, summary, entity, slug, platform, assistantName, registered]
+    produceContextKeys: [greets_overview_md, greets_facts_md, whatsapp_overview_md, whatsapp_facts_md]
+    logic: |
+      const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      Read ~/task-skills/greet-entity/SKILL.md for writing style.
+      Synthesize observation-only greets overview + facts for entity from summary / displayName.
+      Do not invent private facts; note unknowns as open questions.
+      Prefer DM vs group framing from channel.chatId (@g.us => group).
+      Treat platform (agent phone / assistantName) as the YAHL WhatsApp session — not a third-party bot.
+      const greets_overview_md = markdown overview for the person/group under greets (title, relationship, prefs from summary, open questions).
+      const greets_facts_md = markdown bullets: entity, displayName, summary, link to whatsapp/{slug}.
+      const whatsapp_overview_md = WhatsApp extract overview (peer vs group, greets entity link, purpose, open questions).
+      const whatsapp_facts_md = markdown bullets: chatId, folder/slug, wikiRoot, displayName, greetsEntity, onboardedAt when known; Platform agent section from platform when present.
+
+  - contextKeys: [channel, platform, entity, slug, greets_overview_md, greets_facts_md, whatsapp_overview_md, whatsapp_facts_md, registered]
+    produceContextKeys: [result]
+    logic: |
+      const greets_overview_upsert = /nixery(
+        upsert-greets-page,
+        entity: entity,
+        page: overview,
+        content: greets_overview_md,
+        mode: replace,
+        title: Overview,
+        output: greets-overview-upsert.json,
+      );
+      const greets_facts_upsert = /nixery(
+        upsert-greets-page,
+        entity: entity,
+        page: facts,
+        content: greets_facts_md,
+        mode: replace,
+        title: Facts,
+        output: greets-facts-upsert.json,
+      );
+      const whatsapp_overview_upsert = /nixery(
+        upsert-whatsapp-page,
+        chatFolder: slug,
+        page: overview,
+        content: whatsapp_overview_md,
+        mode: replace,
+        title: Overview,
+        output: whatsapp-overview-upsert.json,
+      );
+      const whatsapp_facts_upsert = /nixery(
+        upsert-whatsapp-page,
+        chatFolder: slug,
+        page: facts,
+        content: whatsapp_facts_md,
+        mode: replace,
+        title: Facts,
+        output: whatsapp-facts-upsert.json,
+      );
+      const result = {
+        entity,
+        slug,
+        registered,
+        channel,
+        platform,
+        greetsPaths: [greets_overview_upsert.pagePath, greets_facts_upsert.pagePath],
+        whatsappPaths: [whatsapp_overview_upsert.pagePath, whatsapp_facts_upsert.pagePath],
+      };

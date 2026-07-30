@@ -236,14 +236,25 @@ export const runUpsertKnowledgePage = async (
     };
   }
 
+  if (!topic && !topicText) {
+    return {
+      error: 'upsert-knowledge-page requires topic or topicText',
+      ok: false,
+    };
+  }
+
   let normalizedValue: unknown;
 
   if (key) {
-    if (args.value === undefined) {
+    const rawValue = args.value !== undefined
+      ? args.value
+      : (content !== undefined ? content : undefined);
+
+    if (rawValue === undefined) {
       return { ok: false, error: 'upsert-knowledge-page requires value when key is set' };
     }
 
-    normalizedValue = normalizePersistKnowledgeValue(key, args.value);
+    normalizedValue = normalizePersistKnowledgeValue(key, rawValue);
     const shapeError = validatePersistKnowledgeValue(key, normalizedValue);
 
     if (shapeError) {

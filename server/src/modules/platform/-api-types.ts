@@ -4,6 +4,7 @@ export type TResponseCronJobListItem = {
   id: string;
   orgId?: string;
   orgUnitId?: string;
+  runInput?: Record<string, string>;
   schedule: string;
   taskPath: string;
   timezone?: string;
@@ -26,6 +27,7 @@ export type TRequestCreateCronJobBody = {
   id: string;
   orgId?: string;
   orgUnitId?: string;
+  runInput?: Record<string, string>;
   schedule: string;
   taskPath: string;
   timezone?: string;
@@ -36,6 +38,7 @@ export type TRequestUpdateCronJobBody = {
   enabled?: boolean;
   orgId?: string;
   orgUnitId?: string;
+  runInput?: Record<string, string>;
   schedule?: string;
   taskPath?: string;
   timezone?: string;

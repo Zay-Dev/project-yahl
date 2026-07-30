@@ -307,7 +307,32 @@ export const runStageSession = async (
           }
 
           browserCalls += 1;
+
+          const urlPreview = browserArgs.url?.trim()
+            ? (browserArgs.url.length > 200
+              ? `${browserArgs.url.slice(0, 200)}…`
+              : browserArgs.url)
+            : undefined;
+          const instructionPreview = browserArgs.instruction?.trim()
+            ? (browserArgs.instruction.length > 120
+              ? `${browserArgs.instruction.slice(0, 120)}…`
+              : browserArgs.instruction)
+            : undefined;
+
+          console.log(
+            `[BROWSER] start mode=${browserArgs.mode}`
+            + (urlPreview ? ` url=${urlPreview}` : "")
+            + (instructionPreview ? ` instruction=${JSON.stringify(instructionPreview)}` : ""),
+          );
+
+          const browserStartedAt = Date.now();
           const browserResult = await runBrowserCommand(browserArgs);
+          const browserDurationMs = Date.now() - browserStartedAt;
+
+          console.log(
+            `[BROWSER] done mode=${browserArgs.mode} durationMs=${browserDurationMs} ok=${browserResult.ok}`
+            + (browserResult.ok ? "" : ` error=${JSON.stringify(browserResult.error)}`),
+          );
 
           if (config.debug) {
             console.log(`[DEBUG] [BROWSER] ${browserArgs.mode}: ${JSON.stringify(browserResult)}\n`);

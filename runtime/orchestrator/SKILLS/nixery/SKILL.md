@@ -19,7 +19,7 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 
 | Call | Result |
 |------|--------|
-| `/nixery(upsert-knowledge-page, topic: …, key: …, value: …)` | `{ data: { ok, path } }` |
+| `/nixery(upsert-knowledge-page, topic: …, key: …, value: …)` | `{ data: { ok, path, canonicalTopic } }` — **requires** non-empty `topic` or `topicText` (empty topic no longer falls through to `general`) |
 | `/nixery(dedup-knowledge, topic: …, purpose: …)` | review JSON under `~/nixery/dedup-knowledge/` |
 
 ## LLM helpers (inline)

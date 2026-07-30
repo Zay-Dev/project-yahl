@@ -33,7 +33,22 @@ export function PlatformApprovalsPage() {
   }, []);
 
   const approve = async (proposalId: string) => {
-    await fetch(`${apiBase}/api/platform/proposals/${proposalId}/approve`, { method: 'POST' });
+    const token = window.prompt('Approval token');
+
+    if (!token?.trim()) {
+      return;
+    }
+
+    const res = await fetch(`${apiBase}/api/platform/proposals/${proposalId}/approve`, {
+      headers: { 'X-Approval-Token': token.trim() },
+      method: 'POST',
+    });
+
+    if (!res.ok) {
+      window.alert(`Approve failed (${res.status})`);
+      return;
+    }
+
     await load();
   };
 

@@ -43,7 +43,7 @@ Image build context is the **Omniflex monorepo root** (`..` from project-yahl). 
 
 The agent compose file sets `MASTERMIND_API_URL=http://mastermind:4100` for stage agents.
 
-**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind, workspace session files), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
+**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
 
 **Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (built on the host when orchestrator runs).
 
@@ -61,7 +61,7 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
 | **Mastermind** | `mastermind` container (4100) | Wiki.js GraphQL + read-only `data/knowledge_export`, workspace `/workspace`, HTTP skills | Side effects without approval — proposals go to server first |
 | **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
-| **Worker** | `worker` container | Cron (via server API), platform approvals | Does not spawn orchestrator or agent containers |
+| **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive, SMTP outbound | Does not spawn orchestrator or agent containers; WhatsApp/email I/O is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
 Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir; see [mastermind/decision-log.md](mastermind/decision-log.md)).
@@ -78,7 +78,7 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See OneCLI setup below for vault rules.
-- **Mastermind is HTTP** — agent calls `MASTERMIND_API_URL` with named skills (policies, dispatch, notifications). Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals`. Cursor credentials are not injected into mastermind.
+- **Mastermind is HTTP** — agent calls `MASTERMIND_API_URL` with named skills (policies, dispatch, notifications). Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN`. Cursor credentials are not injected into mastermind.
 - **VM control flow off-agent** — `CONTEXT` / `IF` blocks run in `isolated-vm` on the orchestrator process, not inside the agent.
 
 `docker.sock` on **server** only: the server spawns orchestrator/agent containers per run. It is not mounted into agent or worker containers.
@@ -148,6 +148,39 @@ Example: `pnpm run orchestrate -- --session-id my-debug-session`
 6. Run one orchestrator session to bootstrap shared override files under `runtime/.onecli/`
 7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` as placeholders only. Browser automation uses Stagehand (local Chromium in the agent container; see [`runtime/orchestrator/SKILLS/stagehand/SKILL.md`](runtime/orchestrator/SKILLS/stagehand/SKILL.md)).
 
+### WhatsApp + outbound channels
+
+WhatsApp send/receive and SMTP live on the **worker** only — not in stage agents, not in Mastermind. YAHL tasks (`greets`, `whatsapp_wiki_stack`, `traffic_monitor`, …) propose notifications or tidy wiki; the worker does the actual delivery.
+
+From [`.env.example`](../.env.example):
+
+| Variable | Purpose |
+|----------|---------|
+| `WHATSAPP_ENABLED` | Set `true` to start `whatsapp-web.js` in the worker |
+| `WHATSAPP_WHITELIST` | Comma-separated phones / chat ids; matching propose recipients are pre-approved |
+| `WHATSAPP_AUTH_PATH` / `WHATSAPP_INBOX_ROOT` | In-container paths (compose defaults: `/whatsapp/auth`, `/whatsapp/inbox`) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_SECURE` | Outbound email |
+| `SYSTEM_ADMIN_EMAIL` | Alert target when WhatsApp is unavailable mid-send |
+| `EMAIL_WHITELIST` | Comma-separated emails; matching propose recipients are pre-approved |
+| `PLATFORM_APPROVAL_TOKEN` | Required for human approve at `/platform/approvals` (`X-Approval-Token`); empty disables approve |
+| `SANITIZE_CHANNEL_MESSAGE` | Optional host path mounted into worker as `/sanitize/sanitize-channel-message.mjs` |
+
+Compose mounts host `data/whatsapp_auth` and `data/whatsapp_inbox` into the worker (outside the agent workspace). Worker health listens on `127.0.0.1:${WORKER_HEALTH_PORT}` inside the container (default **4091**; compose healthcheck only — not published to the host).
+
+**First login**
+
+1. Set `WHATSAPP_ENABLED=true` (and `PLATFORM_APPROVAL_TOKEN` / whitelists as needed) in `.env`.
+2. `pnpm run compose:up` (or restart the `worker` service).
+3. Scan the QR printed in the **worker** console once; session persists under `data/whatsapp_auth`.
+
+**Operator flow**
+
+1. Run task `greets` with a phone/group `channelRef` (and optional `register_channel: true` so inbox capture starts).
+2. Create a cron for `whatsapp_wiki_stack` (e.g. every 4h) — see API examples below.
+3. Optional morning `traffic_monitor` cron with `runInput` (origin, destination, `notify_to`, …).
+
+Inbound text for onboarded chats lands in `data/whatsapp_inbox`; stack clears processed messages after wiki upsert. Media is logged and skipped.
+
 ### Smoke tests
 
 ```bash
@@ -162,6 +195,9 @@ curl -sf http://127.0.0.1:4100/health
 
 # Server aggregated health (mongo + mastermind)
 curl -sf http://127.0.0.1:4000/__/health
+
+# Worker health (in-container loopback; compose healthcheck uses this)
+docker compose exec worker node -e "fetch('http://127.0.0.1:4091/health').then(r=>process.exit(r.ok?0:1))"
 
 # Full stack doctor (host)
 pnpm run doctor
@@ -215,7 +251,7 @@ pnpm run orchestrate
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/platform/proposals/pending` | List pending proposals |
-| POST | `/api/platform/proposals/:proposalId/approve` | Approve a proposal |
+| POST | `/api/platform/proposals/:proposalId/approve` | Approve a proposal (`X-Approval-Token` must match `PLATFORM_APPROVAL_TOKEN`) |
 | POST | `/api/platform/proposals/:proposalId/reject` | Reject a proposal |
 | POST | `/api/platform/proposals/notifications` | Draft notification proposal |
 | POST | `/api/platform/proposals/settings` | Draft settings proposal |
@@ -226,22 +262,45 @@ pnpm run orchestrate
 | PATCH | `/api/platform/cron/jobs/:id` | Update a cron job |
 | DELETE | `/api/platform/cron/jobs/:id` | Soft-delete a cron job |
 
-#### Example: morning traffic monitor cron
+#### Example: traffic monitor cron
 
-Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`hk_morning_traffic`](../server/tasks/hk_morning_traffic/SKILL.yahl) at 08:00 HKT:
+Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`traffic_monitor`](../server/tasks/traffic_monitor/SKILL.yahl) at 08:00 HKT:
 
 ```json
 {
   "enabled": true,
   "schedule": "0 8 * * *",
   "timezone": "Asia/Hong_Kong",
-  "taskPath": "hk_morning_traffic"
+  "taskPath": "traffic_monitor",
+  "runInput": {
+    "monitor_minutes": "60",
+    "notify_to": "91234567",
+    "origin": "Kowloon Tong",
+    "destination": "Hong Kong International Airport",
+    "city": "Hong_Kong",
+    "timezone": "Asia/Hong_Kong"
+  }
 }
 ```
 
-The task runs ~90 minutes of adaptive ETA polls (agent `run_bash sleep`); WhatsApp proposals use a dummy recipient until you change the skill. Approve outbound drafts at `/platform/approvals`.
+The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_bash sleep`); WhatsApp proposals go to `notify_to` (default `91234567`). Approve outbound drafts at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
 
-Long poll stages (e.g. `hk_morning_traffic` monitor) set stage `agentOverrides.bashTimeoutMs` (e.g. `360000`) so a single `sleep 300` can finish. Shared agent default remains **60000** when unset — do not pin timeout in compose.
+#### Example: WhatsApp wiki stack cron
+
+With `WHATSAPP_ENABLED=true`, scan the QR printed in the worker console once. Greet a phone/group via task `greets` (optionally `register_channel: true` to enable inbox capture), then create:
+
+```json
+{
+  "enabled": true,
+  "schedule": "0 */4 * * *",
+  "timezone": "Asia/Hong_Kong",
+  "taskPath": "whatsapp_wiki_stack"
+}
+```
+
+Pending inbox text (onboarded chats only) is stacked into wiki under `whatsapp/{folder}/` and then cleared. Media is logged and skipped.
+
+Long poll stages (e.g. `traffic_monitor` monitor) set stage `agentOverrides.bashTimeoutMs` (e.g. `360000`) so a single `sleep 300` can finish. Shared agent default remains **60000** when unset — do not pin timeout in compose.
 
 SSE streams expose live run logs (`meta` / `log` / `status`) and session events for the web UI.
 

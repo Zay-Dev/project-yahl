@@ -25,6 +25,13 @@ sequenceDiagram
 - **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on nixery `research` get an explicit untrusted-content banner in the prompt.
 - **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `get-knowledge` = curated wiki corpus via export mirror. Different defs, different trust boundary.
 
+### Outbound channels
+
+- **Worker-only volumes** — WhatsApp auth (`data/whatsapp_auth`) and inbox (`data/whatsapp_inbox`) mount into the worker container only. Stage agents never see them.
+- **Proposals stay on the server** — Mastermind never sends WhatsApp or email. Outbound goes through platform proposals; humans approve at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN` (`X-Approval-Token`).
+- **Whitelist pre-approve** — `WHATSAPP_WHITELIST` / `EMAIL_WHITELIST` matching recipients skip the approval queue for that channel.
+- **SMTP admin alert** — when WhatsApp is unavailable mid-send and SMTP is configured, the worker may email `SYSTEM_ADMIN_EMAIL`; it does not open a side channel for agents.
+
 Read pattern in stage logic:
 
 ```text

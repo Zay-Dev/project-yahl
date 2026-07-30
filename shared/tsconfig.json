@@ -13,10 +13,12 @@
     "declaration": true
   },
   "include": [
+    "email/**/*.ts",
     "knowledge-qa/**/*.ts",
     "nixery/**/*.ts",
     "request-activity/**/*.ts",
     "verify/**/*.ts",
+    "whatsapp/**/*.ts",
     "yahl/**/*.ts"
   ],
   "exclude": ["dist", "node_modules", "**/*.test.ts"],
