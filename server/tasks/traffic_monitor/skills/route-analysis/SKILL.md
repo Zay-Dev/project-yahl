@@ -4,7 +4,7 @@ How to fetch and compare multi-route driving ETAs for `origin` → `destination`
 
 ## Fetch
 
-Prefer Stagehand / `browser` against a **goto URL rebuilt every poll from context `origin` / `destination`**, using **core** `traffic_source.howto_md` plus retrieved `source_ops_md` (operational tricks). Do not paste ops history into `howto_md`.
+Prefer Stagehand / `browser` against a **goto URL rebuilt every poll from context `origin` / `destination`**, using **core** `traffic_source.howto_md` plus `*read(source_ops_md)` (attend Input ops — do not `const`-assign/`set_context` a full-blob copy). Do not bury unread `source_ops_md` as a `*func` kwarg. Do not paste ops history into `howto_md`.
 
 Only use `run_bash` + curl when `~/data/{traffic_source_file}` documents a JSON/HTTP API (documented HTTP API exception — not for HTML scrape).
 
@@ -72,7 +72,7 @@ Append one section per poll. `HH:MM` must be **`timezone`** wall clock — never
 
 ## Daily report
 
-After the window: classify the calendar day in `timezone` using `holidays_md` as `weekday` | `weekend` | `public_holiday`, summarize ETA series per iconic route, note peaks, incidents, and diversion recommendations, persist under `traffic-monitor`.
+After the window: `*read(holidays_md)` (attend only — no `const holidays =` / full-blob `set_context`) then classify the calendar day in `timezone` using Input `holidays_md` as `weekday` | `weekend` | `public_holiday`, summarize ETA series per iconic route, note peaks, incidents, and diversion recommendations, persist under `traffic-monitor`.
 
 Name the ETA **source** from context `traffic_source` only:
 

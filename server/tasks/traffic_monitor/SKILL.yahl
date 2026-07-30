@@ -217,7 +217,8 @@ stages:
       Budget hard-stop: about to hit maxTurns (leave ~4 turns) OR Date.now() - Date.parse(explore_started_at) > 30 * 60 * 1000.
       Do not silently rewrite non-placeholder URLs to Google Maps outside that fallback branch.
       At most 2 browser attempts per fetch_driving_routes call; on OD mismatch or blank page, fail that call — do not thrash.
-      Before picking a research candidate, read source_ops_md + tried_sources; do not re-probe a source whose skip/fail reason still applies — pick a different provider or record skipped without thrashing.
+      Before picking a research candidate, *read(source_ops_md) (attend only — do not const/let-assign or set_context a copy of the full blob) and read tried_sources; do not re-probe a source whose skip/fail reason still applies — pick a different provider or record skipped without thrashing.
+      Before every browser probe, *read(source_ops_md) then use traffic_source.howto_md together with Input source_ops_md — never pass unread source_ops_md as a kwarg to a *func; never set_context the full ops blob unless novel merge changed it.
       *upsert_ops_append(notes_md): prefer /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: notes_md as a markdown string).
       If that gate returns ok:false, retry once with content: notes_md (omit value). If still false, set_context upsert_ops_error — still merge notes into source_ops_md.
       *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean string like "city: …, kind: …, is_fallback: …, url: …" — never a nested object). On ok:false retry once with content: lean_md.
@@ -225,6 +226,7 @@ stages:
       const explore_started_at = new Date().toISOString();
       *set_context(explore_started_at);
       let source_ops_md = source_ops_md || '<none>';
+      *read(source_ops_md);
       let locked = false;
       let tried_sources = [];
       let city_attempts = 0;
@@ -258,7 +260,6 @@ stages:
           mode: private_car_driving,
           max_routes: 3,
           source: traffic_source,
-          source_ops_md: source_ops_md,
           as: TTrafficFetch,
         );
         IF: *probe_ok(probe_fetch);
@@ -363,7 +364,6 @@ stages:
             mode: private_car_driving,
             max_routes: 3,
             source: traffic_source,
-            source_ops_md: source_ops_md,
             as: TTrafficFetch,
           );
           city_attempts = city_attempts + 1;
@@ -455,7 +455,6 @@ stages:
           mode: private_car_driving,
           max_routes: 3,
           source: traffic_source,
-          source_ops_md: source_ops_md,
           as: TTrafficFetch,
         );
         tried_sources = [...tried_sources, {
@@ -535,6 +534,9 @@ stages:
       let last_source_notes_at = last_source_notes_at || '';
       let prev_incident_note = prev_incident_note || '';
       let source_ops_md = source_ops_md || '<none>';
+      *read(source_ops_md);
+      *read(holidays_md);
+      Do not const/let-assign or set_context a copy of full source_ops_md / holidays_md every poll — only *set_context(source_ops_md) when novel merge changed it.
 
       IF: (Date.now() - Date.parse(started_at)) >= window_ms;
         const monitor = {
@@ -549,13 +551,13 @@ stages:
         };
       ELSE:
         while ((Date.now() - Date.parse(started_at)) < window_ms) {
+          *read(source_ops_md);
           const fetch = *fetch_driving_routes(
             origin: origin,
             destination: destination,
             mode: private_car_driving,
             max_routes: 3,
             source: traffic_source,
-            source_ops_md: source_ops_md,
             as: TTrafficFetch,
           );
           IF: *fetch_failed(fetch);
@@ -596,6 +598,7 @@ stages:
               *set_context(last_source_notes_at, source_ops_md);
             END:
           ELSE:
+            *read(holidays_md);
             const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, holidays_md, ~/task-skills/route-analysis/SKILL.md);
             const fetch_with_status = { ...fetch, ...analysis.patch };
             *set_context(fetches, operation: extend, value: fetch_with_status);
@@ -731,6 +734,7 @@ stages:
     logic: |
       Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
+      *read(holidays_md);
       const day_kind = *classify_day_kind(started_at, holidays_md, tz: timezone);
       const summary_md = *write_daily_traffic_report(
         monitor,

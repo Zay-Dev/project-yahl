@@ -11,7 +11,7 @@ Monitor private-car driving traffic from `origin` to `destination` (empty runInp
 1. Test existing knowledge’s recommended source (`sources-{city_slug}` / `~/data/{traffic_source_file}`) when present and `is_fallback` is not true.
 2. If missing, unusable, probe fails, or `is_fallback: true` → search and try other live map / ETA sites for this city — **at most 2** distinct city-local providers/domains (hard cap). Lock on the first successful probe. Do **not** keep researching a 3rd city source.
 2a. Maintain `tried_sources` (array of `{ name, url, what_tried, outcome: 'ok'|'failed'|'skipped', why, at }`). After every failed/skipped city attempt, persist a structured `source-ops-{city_slug}` bullet with **name + why + what was tried** (not only howto tips). Prefer `/nixery(upsert-knowledge-page, …, mode: append, value: markdown_string)`; on `ok: false` retry once with `content:` instead of `value`.
-2b. Before researching a candidate, read `source_ops_md` + `tried_sources`. Do **not** re-probe a source whose skip/fail reason still applies — pick a different provider, or record `outcome: 'skipped'` (still counts toward the cap of 2) without thrashing the browser.
+2b. Before researching a candidate, `*read(source_ops_md)` (attend only — do not `const`/`set_context` a full-blob copy) and read `tried_sources`. Do **not** re-probe a source whose skip/fail reason still applies — pick a different provider, or record `outcome: 'skipped'` (still counts toward the cap of 2) without thrashing the browser.
 2c. Fall back to `/google-maps-directions(origin, destination)` (Read `/opt/skills/google-maps-directions/SKILL.md`) when **2 city attempts** have failed/skipped, **or** about to hit explore `maxTurns`, **or** research elapsed `> 30min` from `explore_started_at`. Budget may cut off before 2 attempts — still fall back and persist a BUDGET ops note; never invent a 3rd city try to fill a quota.
 2d. If fallback used → set `traffic_source.is_fallback: true` so the **next** run keeps researching; do not treat Maps as the permanent recommended city source.
 2e. Fallback **must not** block persisting how to use Google Maps and what to prevent into `source-ops-{city_slug}`. Record the Maps attempt in `tried_sources` (Maps entry does not count toward the city cap of 2).
@@ -29,7 +29,7 @@ Monitor private-car driving traffic from `origin` to `destination` (empty runInp
 8. Before any breaking change to stage procedure (sleep protocol, window length, thresholds, editing task skills / `SKILL.yahl`), call `/nixery(consult-breaking-change, …)`. If `agree: false`, follow `alternatives` — do not proceed.
 9. Every `produceContextKeys` / `set_context` value must be **non-null** JSON (use `[]` / `{}` / `false` / `''` — never `null`).
 10. Knowledge pages for traffic polls/reports use topic `knowledge_topic` (`traffic-monitor`). Holidays use `holidays_topic` derived from `city`. Lean traffic sources upsert under `sources-{city_slug}`. Operational notes upsert under `source-ops-{city_slug}` (novel-only append). When `get-knowledge` already returned a usable holidays list for the year, use it and **do not** research or `upsert` replace that page.
-11. Before probing or polling the traffic website, load `source_ops_md` via nixery get-knowledge and use it together with core `howto_md`. Do not paste ops history into `howto_md`.
+11. Before probing or polling the traffic website, `*read(source_ops_md)` (seeded earlier via nixery get-knowledge → context) and use Input `source_ops_md` together with core `howto_md`. Do not `const`/`let`-assign or `set_context` a copy of the full ops blob unless novel merge changed it. Never pass unread `source_ops_md` as a `*func` kwarg. Do not paste ops history into `howto_md`.
 12. Do not silently rewrite a non-placeholder URL to Google Maps outside the explicit budget-fallback branch. Prefer any working city-local live multi-route private-car ETA site; Maps is budget fallback only via `/google-maps-directions`.
 13. Daily report / `summary_md` must name the **locked** `traffic_source` (Maps only when `is_fallback: true` or URL is the Maps directions template).
 
@@ -72,7 +72,7 @@ Explore produce key. City attempts (non-Maps URLs) must be **≤ 2**. Every `fai
 
 ## Source ops (`source_ops_md`)
 
-- Retrieved before site use; refreshed in context when novel notes are upserted.
+- Attend before site use via `*read(source_ops_md)` (Input already holds the blob — do not re-`set_context` the full markdown every poll). Refresh context only when novel notes are upserted (`*set_context(source_ops_md)` after merge).
 - During explore and every 20 min in monitor: draft candidate bullets → `*filter_novel_ops_notes` against `source_ops_md` → upsert only novel markdown to `source-ops-{city_slug}` (`mode: append`, prefer `value:` string; retry `content:` once on `ok: false`). If none novel, still bump `last_source_notes_at` in monitor (no empty upsert).
 - Explore failure/skip bullets are mandatory even when fuzzy-novel filter would drop tips — always include the SKIP/FAIL line with why + what was tried when the outcome is new for that URL/name.
 - Include Google Maps howto / prevent notes when Maps is in use — `is_fallback` does not suppress those writes.
