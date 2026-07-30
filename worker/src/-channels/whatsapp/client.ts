@@ -12,6 +12,10 @@ import { appendInboxMessage } from './inbox.js';
 import { logSkippedMediaFromMessage } from './media.js';
 import { rememberChannelLid, rememberPlatformIdentity } from './registry.js';
 import { resolveCanonicalChatId } from './resolve-chat-id.js';
+import {
+  matchOutboundFlight,
+  messageSnapshot,
+} from './send-observe.js';
 
 const { Client, LocalAuth } = wweb;
 
@@ -80,17 +84,18 @@ const rememberMessageId = (messageId: string): boolean => {
 
 const logMessageEvent = (event: string, msg: Message): void => {
   const body = typeof msg.body === 'string' ? msg.body : '';
-  const id = msg.id?._serialized ?? '';
+  const snap = messageSnapshot(msg);
 
   console.log(
     `[worker][whatsapp] event=${event}`
     + ` fromMe=${msg.fromMe}`
-    + ` type=${msg.type}`
-    + ` from=${msg.from}`
-    + ` to=${msg.to}`
+    + ` type=${snap.type || msg.type}`
+    + ` from=${snap.from || msg.from}`
+    + ` to=${snap.to || msg.to}`
     + ` hasMedia=${msg.hasMedia}`
     + ` bodyLen=${body.length}`
-    + ` id=${id}`,
+    + ` id=${snap.id}`
+    + ` ack=${snap.ack || '(none)'}`,
   );
 };
 
@@ -208,6 +213,40 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       );
     }
 
+    if (msg.fromMe === true) {
+      const snap = messageSnapshot(msg);
+      const matched = matchOutboundFlight({
+        bodyLen: body.length,
+        chatId: resolved.canonical,
+        lid: resolved.lid ?? (rawChatId.endsWith('@lid') ? rawChatId : undefined),
+      });
+
+      if (matched) {
+        const ageMs = Date.now() - matched.startedAt;
+
+        console.log(
+          `[worker][whatsapp] fromMe echo matched outbound`
+          + ` chat=${resolved.canonical}`
+          + ` lid=${resolved.lid ?? rawChatId}`
+          + ` bodyLen=${body.length}`
+          + ` ageMs=${ageMs}`
+          + ` outboundTo=${matched.chatId}`
+          + ` channelLid=${matched.channelLid ?? '(none)'}`
+          + ` echoId=${snap.id || '(none)'}`
+          + ` echoAck=${snap.ack || '(none)'}`,
+        );
+      } else {
+        console.log(
+          `[worker][whatsapp] fromMe echo unmatched`
+          + ` chat=${resolved.canonical}`
+          + ` lid=${resolved.lid ?? rawChatId}`
+          + ` bodyLen=${body.length}`
+          + ` echoId=${snap.id || '(none)'}`
+          + ` echoAck=${snap.ack || '(none)'}`,
+        );
+      }
+    }
+
     const draft = await applyChannelMessageSanitizer({
       author: msg.author ?? undefined,
       body,
@@ -241,6 +280,11 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
 
     if (!persisted) {
       console.log('[worker][whatsapp] skip not onboarded', resolved.canonical);
+
+      if (msg.fromMe) {
+        console.log(`[worker][whatsapp] sendSeen skipped fromMe chat=${resolved.canonical} reason=not_onboarded`);
+      }
+
       return;
     }
 
@@ -252,12 +296,14 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
 
     if (msg.fromMe) {
       await rememberPlatformIdentity(msg.from);
-    }
-
-    try {
-      await client.sendSeen(rawChatId);
-    } catch (error) {
-      console.warn('[worker][whatsapp] sendSeen failed', rawChatId, error);
+      console.log(`[worker][whatsapp] sendSeen skipped fromMe chat=${resolved.canonical}`);
+    } else {
+      try {
+        await client.sendSeen(rawChatId);
+        console.log(`[worker][whatsapp] sendSeen called chat=${resolved.canonical}`);
+      } catch (error) {
+        console.warn('[worker][whatsapp] sendSeen failed', rawChatId, error);
+      }
     }
   } catch (error) {
     console.error('[worker][whatsapp] message handler failed', error);
