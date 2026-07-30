@@ -68,6 +68,7 @@ services:
       OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
       OMNIFLEX_BUILD_CONTEXT: /omniflex
       ONECLI_DASHBOARD_URL: http://onecli:10254
+      PLATFORM_APPROVAL_TOKEN: ${PLATFORM_APPROVAL_TOKEN:-}
       REDIS_URL: redis://redis:6379
       RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
       RUNTIME_SHARED_NETWORK: ${SHARED_DOCKER_NETWORK:-yahl_shared}

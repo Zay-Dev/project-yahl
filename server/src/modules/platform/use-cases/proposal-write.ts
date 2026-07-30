@@ -143,6 +143,14 @@ export const approveProposal = [
       }), req.params),
     }))
     .next(async (express, { params }) => {
+      const expected = process.env.PLATFORM_APPROVAL_TOKEN?.trim() ?? '';
+      const provided = express.req.headers['x-approval-token'];
+      const token = typeof provided === 'string' ? provided.trim() : '';
+
+      if (!expected || token !== expected) {
+        throw errors.custom('invalid approval token', 401);
+      }
+
       const doc = await Queries.hasExactOne(modelPlatformProposal, {
         proposalId: params.proposalId,
       });

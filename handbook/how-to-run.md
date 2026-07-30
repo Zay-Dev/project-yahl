@@ -78,7 +78,7 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See OneCLI setup below for vault rules.
-- **Mastermind is HTTP** — agent calls `MASTERMIND_API_URL` with named skills (policies, dispatch, notifications). Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals`. Cursor credentials are not injected into mastermind.
+- **Mastermind is HTTP** — agent calls `MASTERMIND_API_URL` with named skills (policies, dispatch, notifications). Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN`. Cursor credentials are not injected into mastermind.
 - **VM control flow off-agent** — `CONTEXT` / `IF` blocks run in `isolated-vm` on the orchestrator process, not inside the agent.
 
 `docker.sock` on **server** only: the server spawns orchestrator/agent containers per run. It is not mounted into agent or worker containers.
@@ -215,7 +215,7 @@ pnpm run orchestrate
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/platform/proposals/pending` | List pending proposals |
-| POST | `/api/platform/proposals/:proposalId/approve` | Approve a proposal |
+| POST | `/api/platform/proposals/:proposalId/approve` | Approve a proposal (`X-Approval-Token` must match `PLATFORM_APPROVAL_TOKEN`) |
 | POST | `/api/platform/proposals/:proposalId/reject` | Reject a proposal |
 | POST | `/api/platform/proposals/notifications` | Draft notification proposal |
 | POST | `/api/platform/proposals/settings` | Draft settings proposal |
@@ -247,7 +247,7 @@ Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the
 }
 ```
 
-The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_bash sleep`); WhatsApp proposals go to `notify_to` (default `91234567`). Approve outbound drafts at `/platform/approvals` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
+The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_bash sleep`); WhatsApp proposals go to `notify_to` (default `91234567`). Approve outbound drafts at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
 
 #### Example: WhatsApp wiki stack cron
 
