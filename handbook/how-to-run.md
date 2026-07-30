@@ -43,7 +43,7 @@ Image build context is the **Omniflex monorepo root** (`..` from project-yahl). 
 
 The agent compose file sets `MASTERMIND_API_URL=http://mastermind:4100` for stage agents.
 
-**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind, workspace session files), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
+**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
 
 **Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (built on the host when orchestrator runs).
 
@@ -61,7 +61,7 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
 | **Mastermind** | `mastermind` container (4100) | Wiki.js GraphQL + read-only `data/knowledge_export`, workspace `/workspace`, HTTP skills | Side effects without approval — proposals go to server first |
 | **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
-| **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive | Does not spawn orchestrator or agent containers; WhatsApp in/out is pure runtime (no YAHL) |
+| **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive, SMTP outbound | Does not spawn orchestrator or agent containers; WhatsApp/email I/O is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
 Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir; see [mastermind/decision-log.md](mastermind/decision-log.md)).
@@ -148,6 +148,39 @@ Example: `pnpm run orchestrate -- --session-id my-debug-session`
 6. Run one orchestrator session to bootstrap shared override files under `runtime/.onecli/`
 7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` as placeholders only. Browser automation uses Stagehand (local Chromium in the agent container; see [`runtime/orchestrator/SKILLS/stagehand/SKILL.md`](runtime/orchestrator/SKILLS/stagehand/SKILL.md)).
 
+### WhatsApp + outbound channels
+
+WhatsApp send/receive and SMTP live on the **worker** only — not in stage agents, not in Mastermind. YAHL tasks (`greets`, `whatsapp_wiki_stack`, `traffic_monitor`, …) propose notifications or tidy wiki; the worker does the actual delivery.
+
+From [`.env.example`](../.env.example):
+
+| Variable | Purpose |
+|----------|---------|
+| `WHATSAPP_ENABLED` | Set `true` to start `whatsapp-web.js` in the worker |
+| `WHATSAPP_WHITELIST` | Comma-separated phones / chat ids; matching propose recipients are pre-approved |
+| `WHATSAPP_AUTH_PATH` / `WHATSAPP_INBOX_ROOT` | In-container paths (compose defaults: `/whatsapp/auth`, `/whatsapp/inbox`) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_SECURE` | Outbound email |
+| `SYSTEM_ADMIN_EMAIL` | Alert target when WhatsApp is unavailable mid-send |
+| `EMAIL_WHITELIST` | Comma-separated emails; matching propose recipients are pre-approved |
+| `PLATFORM_APPROVAL_TOKEN` | Required for human approve at `/platform/approvals` (`X-Approval-Token`); empty disables approve |
+| `SANITIZE_CHANNEL_MESSAGE` | Optional host path mounted into worker as `/sanitize/sanitize-channel-message.mjs` |
+
+Compose mounts host `data/whatsapp_auth` and `data/whatsapp_inbox` into the worker (outside the agent workspace). Worker health listens on `127.0.0.1:${WORKER_HEALTH_PORT}` inside the container (default **4091**; compose healthcheck only — not published to the host).
+
+**First login**
+
+1. Set `WHATSAPP_ENABLED=true` (and `PLATFORM_APPROVAL_TOKEN` / whitelists as needed) in `.env`.
+2. `pnpm run compose:up` (or restart the `worker` service).
+3. Scan the QR printed in the **worker** console once; session persists under `data/whatsapp_auth`.
+
+**Operator flow**
+
+1. Run task `greets` with a phone/group `channelRef` (and optional `register_channel: true` so inbox capture starts).
+2. Create a cron for `whatsapp_wiki_stack` (e.g. every 4h) — see API examples below.
+3. Optional morning `traffic_monitor` cron with `runInput` (origin, destination, `notify_to`, …).
+
+Inbound text for onboarded chats lands in `data/whatsapp_inbox`; stack clears processed messages after wiki upsert. Media is logged and skipped.
+
 ### Smoke tests
 
 ```bash
@@ -162,6 +195,9 @@ curl -sf http://127.0.0.1:4100/health
 
 # Server aggregated health (mongo + mastermind)
 curl -sf http://127.0.0.1:4000/__/health
+
+# Worker health (in-container loopback; compose healthcheck uses this)
+docker compose exec worker node -e "fetch('http://127.0.0.1:4091/health').then(r=>process.exit(r.ok?0:1))"
 
 # Full stack doctor (host)
 pnpm run doctor

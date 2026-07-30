@@ -46,6 +46,20 @@ Structured `rerun_intent` still works for auto dispatch:
 }
 ```
 
+## Greets / WhatsApp
+
+Register the chat before you expect inbox stacking — run `greets` with `register_channel: true` (default when you leave it blank-ish), then cron `whatsapp_wiki_stack`. Unregistered chats never enter `data/whatsapp_inbox`.
+
+Whitelist entries are comma-separated digits or `+852…` (or full `@c.us` / `@g.us` ids). Matching propose recipients skip `/platform/approvals`.
+
+Wiki roots matter:
+
+- `greets/{entity}/` — person/group knowledge from the greet task
+- `whatsapp/{slug}/` — channel extract + stacked inbox
+- `topics/{slug}/` — curated subject knowledge (different tree; don’t mix them)
+
+Send/receive still live on the worker (`WHATSAPP_ENABLED=true`, QR in worker logs). YAHL only greets, stacks, and proposes.
+
 ## Novel tasks (`novel_*`)
 
 Novels reuse `topics/{slug}/` via `resolve-topic` / `get-knowledge` / `upsert-knowledge-page` with **`page` + `content`** (do not add novel keys to the knowledge key map). Pass `novel` in `runInput` or the first stage asks.
