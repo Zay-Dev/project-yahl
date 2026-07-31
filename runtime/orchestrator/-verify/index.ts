@@ -15,6 +15,7 @@ export type TVerifyGateResult = {
   pass: true;
 } | {
   askUserRef?: string;
+  failedChecks?: { id: string; reason: string }[];
   feedback: string;
   pass: false;
   resumeAction?: 'edit_answer' | 'follow_up' | 'reask' | 'rerun';
@@ -194,6 +195,7 @@ export const runVerifyGate = async (params: {
 
   const failure: TVerifyGateResult = {
     ...(result.askUserRef ? { askUserRef: result.askUserRef } : {}),
+    ...(result.failedChecks?.length ? { failedChecks: result.failedChecks } : {}),
     feedback: result.feedback,
     pass: false,
     ...(result.resumeAction ? { resumeAction: result.resumeAction } : {}),

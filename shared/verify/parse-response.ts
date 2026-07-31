@@ -1,4 +1,4 @@
-import type { TVerifyResumeAction } from './types.js';
+import type { TVerifyFailedCheck, TVerifyResumeAction } from './types.js';
 
 export type TParseVerifyResponseInput = {
   classifyResume: boolean;
@@ -8,10 +8,35 @@ export type TParseVerifyResponseInput = {
 
 export type TParseVerifyResponseResult = {
   askUserRef?: string;
+  failedChecks?: TVerifyFailedCheck[];
   feedback: string;
   pass: boolean;
   resumeAction?: TVerifyResumeAction;
   score: number;
+};
+
+const parseFailedChecks = (value: unknown): TVerifyFailedCheck[] | undefined => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+
+  const checks = value.flatMap((item) => {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+
+    const row = item as { id?: unknown; reason?: unknown };
+    const id = typeof row.id === 'string' ? row.id.trim() : '';
+    const reason = typeof row.reason === 'string' ? row.reason.trim() : '';
+
+    if (!id || !reason) {
+      return [];
+    }
+
+    return [{ id, reason }];
+  });
+
+  return checks.length > 0 ? checks : undefined;
 };
 
 export const parseVerifyResponse = (
@@ -21,6 +46,7 @@ export const parseVerifyResponse = (
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   const parsed = JSON.parse(jsonMatch?.[0] ?? text) as {
     askUserRef?: string;
+    failedChecks?: unknown;
     feedback?: string;
     pass?: boolean;
     resumeAction?: string;
@@ -45,9 +71,11 @@ export const parseVerifyResponse = (
     || resumeAction === 'follow_up'
     ? (typeof parsed.askUserRef === 'string' ? parsed.askUserRef.trim() : undefined)
     : undefined;
+  const failedChecks = !pass ? parseFailedChecks(parsed.failedChecks) : undefined;
 
   return {
     ...(askUserRef ? { askUserRef } : {}),
+    ...(failedChecks ? { failedChecks } : {}),
     feedback: parsed.feedback ?? text,
     pass,
     ...(resumeAction ? { resumeAction } : {}),

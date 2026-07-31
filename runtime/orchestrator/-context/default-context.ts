@@ -1,10 +1,19 @@
 import type { TStorage } from '@/shared/transports/-types';
 
-export const PLATFORM_CONTEXT_KEYS = ['today', 'now_iso'] as const;
+export const SEEDED_PLATFORM_CONTEXT_KEYS = ['today', 'now_iso'] as const;
+
+export const PLATFORM_CONTEXT_KEYS = [
+  ...SEEDED_PLATFORM_CONTEXT_KEYS,
+  'verify_feedback',
+  'verify_failed_checks',
+  'verify_rebuttal',
+  'verify_rebuttal_count',
+] as const;
 
 export type TPlatformContextKey = typeof PLATFORM_CONTEXT_KEYS[number];
+export type TSeededPlatformContextKey = typeof SEEDED_PLATFORM_CONTEXT_KEYS[number];
 
-export const defaultContextValues = (): Record<TPlatformContextKey, string> => {
+export const defaultContextValues = (): Record<TSeededPlatformContextKey, string> => {
   const now = new Date();
 
   return {

@@ -2,9 +2,20 @@
 
 How to fetch and compare multi-route driving ETAs for `origin` → `destination`.
 
+## Place resolution (before first probe)
+
+Do **not** paste raw brand/abbrev OD strings into map sites as if they were unique addresses.
+
+1. Resolve ambiguous places first (`*resolve_place` / research): cinema chains, malls, building nicknames (e.g. `MCL, Kowloon Tong` → **Festival Walk MCL**, not Telford Plaza MCL in Kowloon Bay).
+2. Produce `origin_resolved` / `destination_resolved` (canonical name + district; optional latlng). Prefer these for every bind/goto.
+3. After goto, check origin/destination chips against **resolved** places (district + landmark), not only the raw runInput string.
+4. Never accept autocomplete that changes district/landmark identity. Treat as **geocode fail** — do not reinterpret as “short trip, source only returns 1 route.”
+5. If returned distance is implausible for the stated districts, fail the probe as geocode mismatch and upsert a SKIP/FAIL / place note — do not burn a city attempt as a multi-route source deficiency.
+6. Persist disambiguation notes into `source-ops-{city_slug}` so later runs do not re-confuse the same brand.
+
 ## Fetch
 
-Prefer Stagehand / `browser` against a **goto URL rebuilt every poll from context `origin` / `destination`**, using **core** `traffic_source.howto_md` plus `*read(source_ops_md)` (attend Input ops — do not `const`-assign/`set_context` a full-blob copy). Do not bury unread `source_ops_md` as a `*func` kwarg. Do not paste ops history into `howto_md`.
+Prefer Stagehand / `browser` against a **goto URL rebuilt every poll from context `origin_resolved` / `destination_resolved` (fallback to `origin` / `destination`)**, using **core** `traffic_source.howto_md` plus `*read(source_ops_md)` (attend Input ops — do not `const`-assign/`set_context` a full-blob copy). Do not bury unread `source_ops_md` as a `*func` kwarg. Do not paste ops history into `howto_md`.
 
 Only use `run_bash` + curl when `~/data/{traffic_source_file}` documents a JSON/HTTP API (documented HTTP API exception — not for HTML scrape).
 
@@ -12,14 +23,14 @@ When `traffic_source.is_fallback` is true (or URL is the Google Maps directions 
 
 ### Directions URL (mandatory)
 
-1. Persist / reuse only **placeholder** templates in `traffic_source.url` (e.g. `https://example.com/dir/{origin}/{destination}/`). Never save a concrete prior A→B pair into `~/data` or `sources-{city_slug}`.
-2. Before every `browser` `goto`, bind current context OD into that template with **deterministic** encoding — never hand-type percent-escapes:
+1. Persist / reuse only **placeholder** templates in `traffic_source.url` when the site supports URL binding (e.g. `https://example.com/dir/{origin}/{destination}/`). Form-fill sites may document a base entry URL in howto while still keeping a placeholder template in `url` when query params work. Never save a concrete prior A→B pair into `~/data` or `sources-{city_slug}`.
+2. Before every `browser` `goto`, bind current resolved OD into that template with **deterministic** encoding — never hand-type percent-escapes:
    ```bash
    node -e 'const o=process.argv[1],d=process.argv[2],t=process.argv[3]; console.log(t.replaceAll("{origin}",encodeURIComponent(o)).replaceAll("{destination}",encodeURIComponent(d)))' -- "$ORIGIN" "$DESTINATION" "$TEMPLATE"
    ```
    Prefer Latin/English place names in the URL when non-Latin geocoding is ambiguous; keep local-script names for labels / day-page text.
 3. Use the short canonical directions URL for the chosen site — do not paste SPA sessionful / `data=!…` address-bar URLs into `goto`.
-4. After goto, check the origin/destination chips (or equivalent). If they do **not** match context `origin` / `destination` (or the encoded equivalents), treat the poll as a **fetch miss** — do not thrash with more gotos, edits, or alternate encodings.
+4. After goto, check the origin/destination chips (or equivalent). If they do **not** match resolved origin/destination (district + landmark), treat the poll as a **fetch miss** / geocode fail — do not thrash with more gotos, edits, or alternate encodings.
 
 ### Browser budget
 

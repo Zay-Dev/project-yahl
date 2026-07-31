@@ -8,6 +8,7 @@ const DEFAULT_RUBRIC =
   'Score completeness, correctness, and adherence to produceContextKeys.';
 
 const RESUME_ACTIONS = new Set(['rerun', 'edit_answer', 'reask', 'follow_up']);
+const MAX_REBUTTALS = 2;
 
 const readJson = async (filePath) => {
   const raw = await fs.readFile(filePath, 'utf8');
@@ -79,10 +80,37 @@ const buildSystemPrompt = (params) => {
 
   return [
     'You are a YAHL stage output verifier.',
-    `Return JSON only: {"score":0-1,"pass":boolean,"feedback":"..."${resumeFields}}`,
+    `Return JSON only: {"score":0-1,"pass":boolean,"feedback":"...","failedChecks":[{"id":"<short-id>","reason":"..."}]${resumeFields}}`,
     `Minimum score to pass: ${params.minScore}`,
+    'When pass is false, failedChecks must list each failed rubric item with a stable id and reason.',
+    'When pass is true, omit failedChecks or use [].',
+    'If context includes verify_rebuttal and prior verify_failed_checks, reconsider those checks when the rebuttal supplies concrete evidence.',
+    `Allow at most ${MAX_REBUTTALS} rebuttal reconsiderations per stage (see verify_rebuttal_count). Do not invent evidence.`,
     resumeGuidance,
   ].filter(Boolean).join('\n\n');
+};
+
+const parseFailedChecks = (value) => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+
+  const checks = value.flatMap((item) => {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    const reason = typeof item.reason === 'string' ? item.reason.trim() : '';
+
+    if (!id || !reason) {
+      return [];
+    }
+
+    return [{ id, reason }];
+  });
+
+  return checks.length > 0 ? checks : undefined;
 };
 
 const parseVerifyContent = (params) => {
@@ -102,14 +130,36 @@ const parseVerifyContent = (params) => {
     || resumeAction === 'follow_up'
     ? (typeof parsed.askUserRef === 'string' ? parsed.askUserRef.trim() : undefined)
     : undefined;
+  const failedChecks = !pass ? parseFailedChecks(parsed.failedChecks) : undefined;
 
   return {
     ...(askUserRef ? { askUserRef } : {}),
+    ...(failedChecks ? { failedChecks } : {}),
     feedback: typeof parsed.feedback === 'string' ? parsed.feedback : params.text,
     pass,
     ...(resumeAction ? { resumeAction } : {}),
     score,
   };
+};
+
+const buildRebuttalSection = (contextSnapshot) => {
+  const ctx = contextSnapshot?.context && typeof contextSnapshot.context === 'object'
+    ? contextSnapshot.context
+    : {};
+  const rebuttal = ctx.verify_rebuttal;
+  const priorChecks = ctx.verify_failed_checks;
+  const count = Number(ctx.verify_rebuttal_count ?? 0);
+
+  if (!rebuttal && !(Array.isArray(priorChecks) && priorChecks.length)) {
+    return '';
+  }
+
+  return [
+    '\n## Prior verify fail / agent rebuttal\n',
+    `verify_rebuttal_count: ${Number.isFinite(count) ? count : 0} (max ${MAX_REBUTTALS})`,
+    priorChecks ? `\nprior verify_failed_checks:\n${JSON.stringify(priorChecks, null, 2)}` : '',
+    rebuttal ? `\nverify_rebuttal:\n${JSON.stringify(rebuttal, null, 2)}` : '',
+  ].join('\n');
 };
 
 const main = async () => {
@@ -162,6 +212,7 @@ const main = async () => {
             stageSnapshot
               ? `\n## Stage snapshot\n${JSON.stringify(stageSnapshot, null, 2)}`
               : '',
+            buildRebuttalSection(contextSnapshot),
           ].join('\n'),
           role: 'user',
         },

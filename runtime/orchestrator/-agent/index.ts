@@ -252,13 +252,9 @@ class YahlAgentRunner {
         missingKeys: diagnostic.missingKeys,
       });
 
-      if (this.systemAppendParts.length > 0) {
-        this.systemAppendParts.length = 1;
-        this.systemAppendParts[0] = this.systemAppendParts[0]!;
-      } else {
-        this.systemAppendParts.length = 0;
-      }
-
+      this.systemAppendParts = this.systemAppendParts.filter(
+        (part) => !part.includes('The previous stage run did not produce required context keys.'),
+      );
       this.systemAppendParts.push(retryAppend);
       return 'continue';
     }
@@ -586,6 +582,7 @@ class YahlAgentRunner {
 
       applyVerifyRecoveryToStorage({
         askUserRef: verifyResult.askUserRef,
+        failedChecks: verifyResult.failedChecks,
         feedback: verifyResult.feedback,
         resumeAction,
         storage: this.storage,
@@ -617,6 +614,7 @@ class YahlAgentRunner {
       this.resumeStage = undefined;
       this.produceKeysAttempt = 0;
       this.systemAppendParts.push(buildVerifyRecoverySystemAppend({
+        failedChecks: verifyResult.failedChecks,
         feedback: verifyResult.feedback,
         produceContextKeys: this.activeStage.produceContextKeys ?? this.activeStage.spec.produceContextKeys,
         resumeAction,

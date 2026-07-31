@@ -37,4 +37,14 @@ describe('parseVerifyResponse', () => {
     assert.equal(result.resumeAction, 'edit_answer');
     assert.equal(result.askUserRef, 'q1');
   });
+
+  it('parses failedChecks on fail', () => {
+    const result = parseVerifyResponse({
+      classifyResume: false,
+      minScore: 0.75,
+      text: '{"score":0.2,"pass":false,"feedback":"bad","failedChecks":[{"id":"routes","reason":"need 2"}]}',
+    });
+
+    assert.deepEqual(result.failedChecks, [{ id: 'routes', reason: 'need 2' }]);
+  });
 });

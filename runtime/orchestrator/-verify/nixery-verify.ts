@@ -22,6 +22,9 @@ const readVerifyResult = async (
     pass: parsed.pass,
     score: parsed.score,
     ...(typeof parsed.askUserRef === 'string' ? { askUserRef: parsed.askUserRef } : {}),
+    ...(Array.isArray(parsed.failedChecks) && parsed.failedChecks.length > 0
+      ? { failedChecks: parsed.failedChecks }
+      : {}),
     ...(parsed.resumeAction ? { resumeAction: parsed.resumeAction } : {}),
     ...(parsed.unavailable === true ? { unavailable: true } : {}),
   };

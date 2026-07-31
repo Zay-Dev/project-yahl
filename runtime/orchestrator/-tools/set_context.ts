@@ -26,6 +26,26 @@ const resolveExtendValue = (current: unknown, value: unknown) => {
   return [current, value];
 };
 
+export const unwrapDoubleEncodedString = (value: unknown): unknown => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length < 2 || !trimmed.startsWith('"') || !trimmed.endsWith('"')) {
+    return value;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+
+    return typeof parsed === 'string' ? parsed : value;
+  } catch {
+    return value;
+  }
+};
+
 export const setContext = async (storage: TStorage, toolCall: TChatToolCall) => {
   const { type } = toolCall;
   const func = toolCall.function;
@@ -39,10 +59,20 @@ export const setContext = async (storage: TStorage, toolCall: TChatToolCall) => 
 
   const bucket = scope === 'types' ? storage.types : storage.context;
   const current = bucket.get(key);
+  const normalizedValue = unwrapDoubleEncodedString(value);
 
   const nextValue = operation === 'extend'
-    ? resolveExtendValue(current, value)
-    : value;
+    ? resolveExtendValue(current, normalizedValue)
+    : normalizedValue;
 
   bucket.set(key, nextValue);
+
+  if (key === 'verify_rebuttal' && scope !== 'types' && normalizedValue != null) {
+    const prior = Number(storage.context.get('verify_rebuttal_count') ?? 0);
+
+    storage.context.set(
+      'verify_rebuttal_count',
+      Number.isFinite(prior) ? prior + 1 : 1,
+    );
+  }
 };

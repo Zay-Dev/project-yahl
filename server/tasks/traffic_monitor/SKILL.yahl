@@ -104,7 +104,9 @@ stages:
     produceContextKeys: [notifyChannel, notifyTo, notifyName, notifyPreference, notifyIsUser]
     logic: |
       Read ~/nixery/resolve-notification-target/notify-target.json (or result.json) from the session workspace.
-      Parse JSON. Set notifyChannel from channel (default whatsapp), notifyTo from to (fallback notify_to), notifyName from name (or ''), notifyPreference from preference (or ''), notifyIsUser from isUser (boolean; default false).
+      Parse JSON once. When a string value is itself a JSON-encoded string (starts and ends with quotes), unwrap with JSON.parse once so values are bare scalars (whatsapp not "whatsapp").
+      Set notifyChannel from channel (default whatsapp), notifyTo from to (fallback notify_to), notifyName from name (or ''), notifyPreference from preference (or ''), notifyIsUser from isUser (boolean; default false).
+      Never JSON.stringify scalars before set_context.
 
   - contextKeys: [knowledge_topic, city_slug]
     nixeryRun: get-knowledge
@@ -187,26 +189,35 @@ stages:
       END:
 
   - contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
-    produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources]
+    produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources, origin_resolved, destination_resolved]
     maxTurns: 80
     verify:
       defId: stage-verify
       autoRetry: true
       minScore: 0.75
       rubric: |
-        Pass when probe_fetch has at least 2 routes with numeric eta_min and a non-empty http(s) source_url,
-        and traffic_source.url is http(s) with {origin}/{destination} placeholders (not a concrete prior A→B),
+        Pass when origin_resolved and destination_resolved are non-empty (canonical place name; include district when raw OD was a brand/abbrev/mall/cinema),
+        and probe_fetch has at least 2 routes with numeric eta_min and a non-empty http(s) source_url
+        OR probe documented an OD geocode/district mismatch (not accepted as a short-trip multi-route source fail),
+        and traffic_source.url is http(s) that either (a) includes {origin} and {destination} placeholders
+        OR (b) kind is browser and howto_md documents form-fill/autocomplete binding of origin/destination with probe chips matching resolved places
+        (prefer keeping a placeholder template in url when the site supports query params, even if howto navigates a form base URL),
         and traffic_source.howto_md is inline howto markdown (length >= 80, not a path like ~/data/...),
         and traffic_source.is_fallback is boolean,
         and explore_started_at is a non-empty ISO timestamp,
         and tried_sources is a non-null array,
         and city attempts in tried_sources (entries whose url is not the Google Maps directions template) are <= 2,
         and every failed/skipped tried_sources entry has non-empty why and what_tried,
-        and when traffic_source.is_fallback is false the locked city source appears in tried_sources with outcome ok
-        (or the stage locked a successful cached probe recorded as ok).
-        Fail when routes are missing, eta_min is not numeric, howto is empty/path-only, url is missing,
-        is_fallback is missing, tried_sources missing/null, city attempts > 2, failed/skipped entries lack why/what_tried,
-        or the browser origin/destination chips do not match context origin/destination.
+        and every failed/skipped city attempt has a durable SKIP/FAIL bullet in source_ops_md (name + why + what was tried)
+        matching that entry,
+        and when traffic_source.is_fallback is false the locked city source appears in tried_sources with outcome ok,
+        and when traffic_source.is_fallback is true Maps was NOT persisted as the reusable city sources-{city_slug} or ~/data/{traffic_source_file} lock.
+        Fail when routes are missing without a geocode-fail record, eta_min is not numeric, howto is empty/path-only,
+        url is missing, is_fallback is missing, tried_sources missing/null, city attempts > 2,
+        failed/skipped entries lack why/what_tried or lack a matching SKIP/FAIL line in source_ops_md,
+        Maps was upserted/saved as the permanent city source, origin_resolved/destination_resolved missing,
+        autocomplete accepted a different district/landmark than the stated OD without a geocode-fail,
+        or browser chips do not match resolved places.
         On fail, set resumeAction: rerun.
     logic: |
       Read ~/nixery/plan/plan.md when helpful.
@@ -217,11 +228,12 @@ stages:
       Budget hard-stop: about to hit maxTurns (leave ~4 turns) OR Date.now() - Date.parse(explore_started_at) > 30 * 60 * 1000.
       Do not silently rewrite non-placeholder URLs to Google Maps outside that fallback branch.
       At most 2 browser attempts per fetch_driving_routes call; on OD mismatch or blank page, fail that call — do not thrash.
-      Before picking a research candidate, *read(source_ops_md) (attend only — do not const/let-assign or set_context a copy of the full blob) and read tried_sources; do not re-probe a source whose skip/fail reason still applies — pick a different provider or record skipped without thrashing.
-      Before every browser probe, *read(source_ops_md) then use traffic_source.howto_md together with Input source_ops_md — never pass unread source_ops_md as a kwarg to a *func; never set_context the full ops blob unless novel merge changed it.
+      Before picking a research candidate, *read(source_ops_md) (attend only) and read tried_sources; do not re-probe a source whose skip/fail reason still applies.
+      Before every browser probe, *read(source_ops_md) then use traffic_source.howto_md together with Input source_ops_md.
       *upsert_ops_append(notes_md): prefer /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: notes_md as a markdown string).
       If that gate returns ok:false, retry once with content: notes_md (omit value). If still false, set_context upsert_ops_error — still merge notes into source_ops_md.
-      *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean string like "city: …, kind: …, is_fallback: …, url: …" — never a nested object). On ok:false retry once with content: lean_md.
+      *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean string like "city: …, kind: …, is_fallback: false, url: …" — never nested object; never upsert Maps / is_fallback:true as the city source). On ok:false retry once with content: lean_md.
+      *filter_novel_ops_notes: never treat a new SKIP/FAIL {name|url} bullet as a duplicate of a success/howto tip; only dedupe against an existing SKIP/FAIL for the same provider/url+reason class. Fail notes are equal priority to success tips — always upsert new SKIP/FAIL lines (if filter drops them, still upsert the SKIP/FAIL line).
 
       const explore_started_at = new Date().toISOString();
       *set_context(explore_started_at);
@@ -232,6 +244,14 @@ stages:
       let city_attempts = 0;
       const max_city_attempts = 2;
       const maps_template = 'https://www.google.com/maps/dir/{origin}/{destination}/';
+
+      const origin_resolved = *resolve_place(origin, city: city, role: origin);
+      const destination_resolved = *resolve_place(destination, city: city, role: destination);
+      *set_context(origin_resolved, destination_resolved);
+      When brand/abbrev OD was disambiguated, upsert a short place note to source-ops (e.g. MCL Kowloon Tong → Festival Walk MCL, not Telford Plaza).
+      Use origin_resolved / destination_resolved for every probe bind — not raw ambiguous brands alone.
+      Never accept autocomplete that changes district/landmark identity (Kowloon Tong ≠ Telford / Kowloon Bay) — treat as geocode fail, not a short-trip source fail.
+      If probe distance is implausible for the stated districts, record geocode fail and do not burn the attempt as "source only returns 1 route for short trips."
 
       let candidate = null;
       IF: *exists(~/data/{traffic_source_file});
@@ -252,17 +272,21 @@ stages:
           || (String(candidate.url || '').includes('google.com/maps/dir/') && candidate.is_fallback !== false)
         );
 
-      IF: candidate && !candidate_is_fallback && String(candidate.url || '').includes('{origin}');
+      IF: candidate_is_fallback;
+        candidate = null;
+      END:
+
+      IF: candidate && String(candidate.url || '').includes('{origin}');
         const traffic_source = { ...candidate, city: city, is_fallback: false };
         const probe_fetch = *fetch_driving_routes(
-          origin: origin,
-          destination: destination,
+          origin: origin_resolved,
+          destination: destination_resolved,
           mode: private_car_driving,
           max_routes: 3,
           source: traffic_source,
           as: TTrafficFetch,
         );
-        IF: *probe_ok(probe_fetch);
+        IF: *probe_ok(probe_fetch) && !*od_geocode_failed(probe_fetch, origin_resolved, destination_resolved);
           tried_sources = [...tried_sources, {
             name: *source_display_name(traffic_source),
             url: traffic_source.url,
@@ -277,7 +301,9 @@ stages:
           locked = true;
         ELSE:
           city_attempts = city_attempts + 1;
-          const why = *probe_fail_reason(probe_fetch) || 'cached probe failed';
+          const why = *od_geocode_failed(probe_fetch, origin_resolved, destination_resolved)
+            ? (*geocode_fail_reason(probe_fetch, origin_resolved, destination_resolved) || 'OD geocode/district mismatch')
+            : (*probe_fail_reason(probe_fetch) || 'cached probe failed');
           const what_tried = 'cached non-fallback probe via howto_md + source_ops_md; at most 2 browser attempts';
           tried_sources = [...tried_sources, {
             name: *source_display_name(traffic_source),
@@ -295,6 +321,9 @@ stages:
           IF: novel.length > 0;
             *upsert_ops_append(*notes_to_md(novel));
             source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+          ELSE:
+            *upsert_ops_append(miss_bullets[0]);
+            source_ops_md = *merge_source_ops_md(source_ops_md, [miss_bullets[0]]);
           END:
           *set_context(source_ops_md, tried_sources);
         END:
@@ -312,7 +341,7 @@ stages:
           const researched = *normalize_traffic_source(/nixery(
             research,
             topic: real-time driving traffic ETA origin to destination in city,
-            need: usable website or API with live private-car multi-route travel times for this city only; url must keep {origin}/{destination} placeholders not a concrete A→B; prefer city-local live map or transport open data — do not prefer Google Maps; avoid providers already failed/skipped in source_ops_md or tried_sources,
+            need: usable website or API with live private-car multi-route travel times for this city only; prefer {origin}/{destination} placeholders when URL binding works, else document form-fill in howto_md; prefer city-local live map — do not prefer Google Maps; avoid providers already failed/skipped in source_ops_md or tried_sources; ignore OD-specific howto bleed from other origin/destination pairs,
             output_shape: TTrafficSource,
             howto_md_must_be_inline_markdown_not_a_path: true,
           ), as: TTrafficSource);
@@ -334,40 +363,49 @@ stages:
             IF: skip_novel.length > 0;
               *upsert_ops_append(*notes_to_md(skip_novel));
               source_ops_md = *merge_source_ops_md(source_ops_md, skip_novel);
+            ELSE:
+              *upsert_ops_append(skip_bullet);
+              source_ops_md = *merge_source_ops_md(source_ops_md, [skip_bullet]);
             END:
             *set_context(source_ops_md, tried_sources);
             continue;
           END:
-          IF: !String(researched.url || '').includes('{origin}');
+          IF: !String(researched.url || '').includes('{origin}') && !*howto_documents_form_fill(researched.howto_md);
             city_attempts = city_attempts + 1;
             tried_sources = [...tried_sources, {
               name: *source_display_name(researched),
               url: String(researched.url || ''),
-              what_tried: 'research returned candidate without {origin}/{destination} placeholders',
+              what_tried: 'research returned candidate without placeholders and without form-fill howto',
               outcome: 'skipped',
-              why: 'url missing placeholders; not probeable as browser directions template',
+              why: 'url missing placeholders and howto lacks form-fill binding steps',
               at: new Date().toISOString(),
             }];
-            const ph_bullet = `- SKIP ${*source_display_name(researched)} (${researched.url || 'missing-url'}): no {origin}/{destination} placeholders.`;
+            const ph_bullet = `- SKIP ${*source_display_name(researched)} (${researched.url || 'missing-url'}): no {origin}/{destination} placeholders and no form-fill howto.`;
             const ph_novel = *filter_novel_ops_notes([ph_bullet], against: source_ops_md);
             IF: ph_novel.length > 0;
               *upsert_ops_append(*notes_to_md(ph_novel));
               source_ops_md = *merge_source_ops_md(source_ops_md, ph_novel);
+            ELSE:
+              *upsert_ops_append(ph_bullet);
+              source_ops_md = *merge_source_ops_md(source_ops_md, [ph_bullet]);
             END:
             *set_context(source_ops_md, tried_sources);
             continue;
           END:
+          IF: !String(researched.url || '').includes('{origin}') && *howto_documents_form_fill(researched.howto_md);
+            Prefer rewriting researched.url to a placeholder template when the site supports query params (e.g. ?from={origin}&to={destination}) while howto keeps form-fill steps for the base entry URL.
+          END:
           const traffic_source = { ...researched, city: city, is_fallback: false };
           const probe_fetch = *fetch_driving_routes(
-            origin: origin,
-            destination: destination,
+            origin: origin_resolved,
+            destination: destination_resolved,
             mode: private_car_driving,
             max_routes: 3,
             source: traffic_source,
             as: TTrafficFetch,
           );
           city_attempts = city_attempts + 1;
-          IF: *probe_ok(probe_fetch);
+          IF: *probe_ok(probe_fetch) && !*od_geocode_failed(probe_fetch, origin_resolved, destination_resolved);
             tried_sources = [...tried_sources, {
               name: *source_display_name(traffic_source),
               url: traffic_source.url,
@@ -389,7 +427,9 @@ stages:
             *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
             locked = true;
           ELSE:
-            const why = *probe_fail_reason(probe_fetch) || 'probe failed';
+            const why = *od_geocode_failed(probe_fetch, origin_resolved, destination_resolved)
+              ? (*geocode_fail_reason(probe_fetch, origin_resolved, destination_resolved) || 'OD geocode/district mismatch')
+              : (*probe_fail_reason(probe_fetch) || 'probe failed');
             const what_tried = 'research + browser/API probe; at most 2 browser attempts';
             tried_sources = [...tried_sources, {
               name: *source_display_name(traffic_source),
@@ -407,6 +447,9 @@ stages:
             IF: try_notes.length > 0;
               *upsert_ops_append(*notes_to_md(try_notes));
               source_ops_md = *merge_source_ops_md(source_ops_md, try_notes);
+            ELSE:
+              *upsert_ops_append(fail_bullets[0]);
+              source_ops_md = *merge_source_ops_md(source_ops_md, [fail_bullets[0]]);
             END:
             *set_context(source_ops_md, tried_sources);
           END:
@@ -421,6 +464,9 @@ stages:
           IF: budget_novel.length > 0;
             *upsert_ops_append(*notes_to_md(budget_novel));
             source_ops_md = *merge_source_ops_md(source_ops_md, budget_novel);
+          ELSE:
+            *upsert_ops_append(budget_bullet);
+            source_ops_md = *merge_source_ops_md(source_ops_md, [budget_bullet]);
           END:
         END:
         const maps_howto = [
@@ -430,7 +476,7 @@ stages:
           '4. At most 2 browser attempts; never hand-type percent-encoding or paste SPA data=! URLs.',
         ].join('\n');
         const traffic_source = {
-          ...*normalize_traffic_source(/google-maps-directions(origin, destination), as: TTrafficSource),
+          ...*normalize_traffic_source(/google-maps-directions(origin_resolved, destination_resolved), as: TTrafficSource),
           city: city,
           url: maps_template,
           kind: 'browser',
@@ -441,7 +487,7 @@ stages:
           *draft_source_ops_candidates(
             fallback: true,
             source: traffic_source,
-            note: 'google-maps budget fallback after at most 2 city sources; persist howto and prevent notes',
+            note: 'google-maps budget fallback after at most 2 city sources; persist howto and prevent notes; do not lock Maps as city sources-{city_slug}',
           ),
           against: source_ops_md,
         );
@@ -450,8 +496,8 @@ stages:
           source_ops_md = *merge_source_ops_md(source_ops_md, fallback_prep_notes);
         END:
         const probe_fetch = *fetch_driving_routes(
-          origin: origin,
-          destination: destination,
+          origin: origin_resolved,
+          destination: destination_resolved,
           mode: private_car_driving,
           max_routes: 3,
           source: traffic_source,
@@ -473,9 +519,11 @@ stages:
           *upsert_ops_append(*notes_to_md(fallback_fetch_notes));
           source_ops_md = *merge_source_ops_md(source_ops_md, fallback_fetch_notes);
         END:
-        *save(~/data/{traffic_source_file}, traffic_source);
-        *upsert_sources(*serialize_traffic_source_lean(traffic_source));
-        *set_context(traffic_source, probe_fetch, source_ops_md, explore_started_at, tried_sources);
+        Do NOT *save(~/data/{traffic_source_file}) or *upsert_sources for Maps fallback — keep traffic_source in-session only so the next run researches city-local sources again.
+        IF: *exists(~/data/{traffic_source_file}) && *file_is_maps_fallback(~/data/{traffic_source_file});
+          *delete(~/data/{traffic_source_file});
+        END:
+        *set_context(traffic_source, probe_fetch, source_ops_md, explore_started_at, tried_sources, origin_resolved, destination_resolved);
       END:
 
   - contextMode: true
@@ -499,7 +547,7 @@ stages:
         prev_incident_note: '',
       }))
 
-  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
+  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, origin_resolved, destination_resolved, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
     produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, last_source_notes_at, prev_incident_note, source_ops_md]
     agentOverrides:
       bashTimeoutMs: 360000
@@ -511,10 +559,15 @@ stages:
       minScore: 0.75
       rubric: |
         Pass when started_at is unchanged from context, monitor.ended_at is set,
-        monitor.elapsed_min >= monitor_minutes OR (elapsed already past window on retry with fetch_count >= 0),
-        and monitor.day_page is non-empty.
-        Prefer fetch_count >= 2 when the wall clock still allowed polling; if now - started_at >= monitor_minutes on entry, pass with whatever was already captured.
-        Fail when started_at was reset or monitor is missing.
+        monitor.elapsed_min >= monitor_minutes OR (elapsed already past window on retry),
+        and monitor.day_page is non-empty,
+        and monitor.fetches is an array whose length equals monitor.fetch_count and equals context fetches length
+        (same entries — do not invent fetches; reject round-second fabricated timestamps when wall time allowed polling),
+        and monitor.notifications is a subset of real propose-notification outcomes tied to actual polls.
+        When elapsed wall time from started_at allowed at least 2 polls (roughly monitor_minutes >= 10 or elapsed >= 10),
+        require fetch_count + miss_count >= 2 with recorded miss sections covering gaps; fail under-poll with fabricated timelines.
+        Fail when started_at was reset, monitor is missing, fetches were invented, or fetch_count < 2 without enough miss sections
+        when the window allowed multiple polls.
         Day page may already contain sections from earlier same-day runs — do NOT fail solely because
         total `## HH:MM` count exceeds this run's fetch_count + miss_count. Pass when this run's
         sections (matching context Origin/Destination) are present and each includes Origin and Destination
@@ -540,6 +593,9 @@ stages:
       *read(source_ops_md);
       *read(holidays_md);
       Do not const/let-assign or set_context a copy of full source_ops_md / holidays_md every poll — only *set_context(source_ops_md) when novel merge changed it.
+      Never invent fetches or notifications — only append after a real browser/API poll.
+      const bind_origin = origin_resolved || origin;
+      const bind_destination = destination_resolved || destination;
 
       IF: (Date.now() - Date.parse(started_at)) >= window_ms;
         const monitor = {
@@ -556,8 +612,8 @@ stages:
         while ((Date.now() - Date.parse(started_at)) < window_ms) {
           *read(source_ops_md);
           const fetch = *fetch_driving_routes(
-            origin: origin,
-            destination: destination,
+            origin: bind_origin,
+            destination: bind_destination,
             mode: private_car_driving,
             max_routes: 3,
             source: traffic_source,
@@ -571,7 +627,7 @@ stages:
               topic: knowledge_topic,
               page: day_page,
               mode: append,
-              content: *format_miss_section(prev_routes, origin: origin, destination: destination, timezone: timezone),
+              content: *format_miss_section(prev_routes, origin: bind_origin, destination: bind_destination, timezone: timezone),
             );
             const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180);
 
@@ -614,7 +670,7 @@ stages:
               topic: knowledge_topic,
               page: day_page,
               mode: append,
-              content: *format_fetch_section(fetch_with_status, analysis, origin: origin, destination: destination, timezone: timezone),
+              content: *format_fetch_section(fetch_with_status, analysis, origin: bind_origin, destination: bind_destination, timezone: timezone),
             );
 
             IF: fetches.length === 2 && !summary_notified;

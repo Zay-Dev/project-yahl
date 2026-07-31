@@ -1,5 +1,10 @@
 export type TVerifyResumeAction = 'rerun' | 'edit_answer' | 'reask' | 'follow_up';
 
+export type TVerifyFailedCheck = {
+  id: string;
+  reason: string;
+};
+
 export type TVerifyStageSnapshot = {
   askUser?: Record<string, unknown>[];
   contextKeys?: string[];
@@ -22,6 +27,7 @@ export type TVerifyRequest = {
 
 export type TVerifyResponse = {
   askUserRef?: string;
+  failedChecks?: TVerifyFailedCheck[];
   feedback: string;
   pass: boolean;
   resumeAction?: TVerifyResumeAction;

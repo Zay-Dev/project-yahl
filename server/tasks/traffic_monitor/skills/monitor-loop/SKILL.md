@@ -9,7 +9,8 @@ Rules for the configurable-length traffic poll stage (`monitor_minutes`, default
 - `day_page` / calendar day use **`timezone`** from context (default Asia/Hong_Kong). For Asia/Hong_Kong the VM clock stage uses UTC+8; otherwise prefer timezone-aware formatting in this stage.
 - Display times and wiki sections `## HH:MM {tz_label}` must use `timezone` wall clock — never label a UTC clock as local.
 - At loop head and after every sleep: if `Date.now() - Date.parse(started_at) >= monitor_minutes * 60 * 1000`, finish the stage and write `monitor`.
-- On verify auto-retry after the window has elapsed, skip polling and emit `monitor` from existing `fetches` / notifications.
+- On verify auto-retry after the window has elapsed, skip polling and emit `monitor` from existing **real** `fetches` / notifications. Never invent fetches or round-second timestamps to pad `fetch_count`.
+- `monitor.fetches` must be the same array as context `fetches` (same length as `fetch_count`). Under-poll when the window allowed ≥2 polls fails verify unless miss sections cover the gap.
 
 ## Sleep via `run_bash`
 
@@ -33,9 +34,9 @@ Check the monitor-minutes exit condition again after each sleep returns.
 
 ## Poll sequence
 
-1. `*read(source_ops_md)` every poll (attend only — do **not** `const`/`let`-assign or `set_context` a copy of the full blob; Input already has `source_ops_md`). Fetch top 2–3 driving routes (see route-analysis) for `origin` → `destination` using core `traffic_source.howto_md` **plus** Input `source_ops_md`. Rebuild the goto URL from placeholders + context OD with deterministic encoding every poll.
+1. `*read(source_ops_md)` every poll (attend only — do **not** `const`/`let`-assign or `set_context` a copy of the full blob; Input already has `source_ops_md`). Fetch top 2–3 driving routes (see route-analysis) for `origin_resolved`/`destination_resolved` (fallback to `origin`/`destination`) using core `traffic_source.howto_md` **plus** Input `source_ops_md`. Rebuild the goto URL from placeholders + resolved OD with deterministic encoding every poll.
 2. On **success**: update context **before** the day-page write:
-   - `set_context` key `fetches` with `operation: extend` and `value` = the **one** new fetch object (do not rewrite the whole array).
+   - `set_context` key `fetches` with `operation: extend` and `value` = the **one** new fetch object from the real poll (do not rewrite the whole array; do not invent polls).
    - `set_context` key `prev_routes` to that fetch’s `routes`.
    - `set_context` key `prev_incident_note` to the current analysis incident note (or `''` if none) **after** analysis used the prior value.
    - Never update `prev_routes` alone after a successful poll — `fetches` must grow every success.
@@ -96,8 +97,8 @@ If A and B, or B and C, are due on the same poll, send separate proposals (do no
 
 When `(now - last_source_notes_at || started_at) >= 20m`:
 
-1. Draft 0–5 short candidate bullets from this window (tricks, brittle selectors, timeouts, URL quirks). When `traffic_source.is_fallback` (Google Maps budget fallback), include novel Maps howto / prevent notes (encoding, OD chips, SPA URLs, UI quirks) — do not skip learning because the source is fallback.
-2. `*read(source_ops_md)` then `novel = *filter_novel_ops_notes(candidates, against: source_ops_md)` — skip fuzzy/semantic duplicates already in knowledge.
+1. Draft 0–5 short candidate bullets from this window (tricks, brittle selectors, timeouts, URL quirks, **and miss/fail reasons**). When `traffic_source.is_fallback` (Google Maps budget fallback), include novel Maps howto / prevent notes (encoding, OD chips, SPA URLs, UI quirks) — do not skip learning because the source is fallback. Fail notes are equal priority to success tips.
+2. `*read(source_ops_md)` then `novel = *filter_novel_ops_notes(candidates, against: source_ops_md)` — skip fuzzy/semantic duplicates already in knowledge; never treat a new SKIP/FAIL as a duplicate of a success tip.
 3. If `novel` non-empty: `/nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: novel_md_string)`, merge into context `source_ops_md`, then `*set_context(source_ops_md)` only because content changed. Prefer `value:` (markdown string). On `ok: false`, retry once with `content:` instead of `value`.
 4. Do **not** append into `traffic_source.howto_md` or save the local traffic_source file for ops.
 5. Always set `last_source_notes_at` to now ISO (even when nothing novel — no empty upsert spam).

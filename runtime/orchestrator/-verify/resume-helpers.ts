@@ -41,6 +41,7 @@ export const stripProduceKeysFromStorage = (
 
 export const buildVerifyRecoverySystemAppend = (
   params: {
+    failedChecks?: { id: string; reason: string }[];
     feedback: string;
     produceContextKeys?: string[];
     resumeAction: TVerifyResumeAction;
@@ -52,6 +53,18 @@ export const buildVerifyRecoverySystemAppend = (
     `Stage verification failed (score ${params.score}).`,
     params.feedback,
   ];
+
+  if (params.failedChecks?.length) {
+    parts.push(
+      `Failed checks:\n${params.failedChecks.map((c) => `- ${c.id}: ${c.reason}`).join('\n')}`,
+    );
+  }
+
+  parts.push(
+    'If a check is wrong because of evidence the rubric missed, set_context verify_rebuttal '
+    + 'to { checkId, evidence, claim } (at most 2 rebuttals per stage via verify_rebuttal_count) '
+    + 'before finishing so the next verifier pass can reconsider that check.',
+  );
 
   if (params.resumeAction === 'rerun') {
     const writeKeys = [
@@ -155,6 +168,7 @@ export const resolveActiveStageForVerifyRecoveryBound = (params: {
 export const applyVerifyRecoveryToStorage = (params: {
   askUserRef?: string;
   editedAnswerValue?: number | string | string[];
+  failedChecks?: { id: string; reason: string }[];
   feedback: string;
   resumeAction: TVerifyResumeAction;
   storage: TStorage;
@@ -174,6 +188,11 @@ export const applyVerifyRecoveryToStorage = (params: {
   }
 
   params.storage.context.set('verify_feedback', params.feedback);
+  params.storage.context.set(
+    'verify_failed_checks',
+    params.failedChecks?.length ? params.failedChecks : [],
+  );
+  params.storage.context.delete('verify_rebuttal');
 
   if (params.resumeAction === 'edit_answer' && params.editedAnswerValue != null && params.askUserRef) {
     const answerKey = `ask_user_${params.askUserRef}_answer`;
