@@ -278,12 +278,13 @@ Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the
     "origin": "Kowloon Tong",
     "destination": "Hong Kong International Airport",
     "city": "Hong_Kong",
-    "timezone": "Asia/Hong_Kong"
+    "timezone": "Asia/Hong_Kong",
+    "source_instruction": ""
   }
 }
 ```
 
-The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_bash sleep`); WhatsApp proposals go to `notify_to` (default `91234567`). Approve outbound drafts at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
+The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_bash sleep`); WhatsApp proposals go to `notify_to` (default `91234567`). Optional `source_instruction` is a this-run free-text override (leave blank for normal durable ops — see [tricks.md](tricks.md)). Approve outbound drafts at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN` (or set `WHATSAPP_WHITELIST` so matching recipients are pre-approved).
 
 #### Example: WhatsApp wiki stack cron
 

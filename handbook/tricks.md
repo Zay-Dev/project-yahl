@@ -27,6 +27,34 @@ curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
   }'
 ```
 
+## `source_instruction` on `traffic_monitor`
+
+Optional free-text **this-run** operator override for explore / source selection. Use it for one-offs (e.g. allow revisiting a source that durable `source-ops-*` still marks SKIP/FAIL) — do **not** patch wiki knowledge for a single run.
+
+A `conditionMode` VM stage sets `instruction_active` from a trimmed blank check:
+
+- blank / missing → `instruction_active: false` → normal durable known-failed auto-skip
+- non-blank → `instruction_active: true` → explore must apply the free text (no blind “did not re-probe”)
+
+Example:
+
+```bash
+curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "taskId": "traffic_monitor",
+    "runInput": {
+      "monitor_minutes": "20",
+      "notify_to": "91234567",
+      "origin": "Kowloon Tong",
+      "destination": "Hong Kong International Airport",
+      "source_instruction": "one off allow revisit HKeMobility",
+      "city": "Hong_Kong",
+      "timezone": "Asia/Hong_Kong"
+    }
+  }'
+```
+
 ## Fuzzy topic vs exact policy
 
 - **Ambiguous names** (e.g. `project yahl`) → nixery `resolve-topic` (+ agent `pick-canonical-topic` when `suggestMerge` is present) → exact slug such as `project-yahl-develop`.

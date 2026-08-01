@@ -96,6 +96,8 @@ Runs in isolated-vm — **not** the agent. Prior context keys are **not** bare v
 
 AI stages (no `contextMode`) may use bare names listed in `contextKeys` — the agent sees them in Input.
 
+On AI stages, `IF:` / `ELSE:` / `END:` are **agent scaffolding** (soft). Only `conditionMode: true` evaluates conditions in isolated-vm (hard). Do not nest `IF:` inside a `conditionMode` stage body during arm picking.
+
 The runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF:` branches, and brace-wrapped AI blocks). Agent-facing language lives under `runtime/orchestrator/YAHL/` (every file in that folder is concatenated into the agent system prompt). Keep orchestrator/author schema in this handbook — not in that folder.
 
 ## Authoring tasks

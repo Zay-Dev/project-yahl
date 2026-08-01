@@ -35,7 +35,6 @@ export type {
 
 const LOGIC_PREVIEW_LINES = 5;
 const LOGIC_PREVIEW_MAX_CHARS = 600;
-const CONTENT_PREVIEW_MAX = 280;
 
 const sessionParamsSchema = Joi.object({
   sessionId: Joi.string().trim().required(),
@@ -95,21 +94,11 @@ const extractContentPreview = (response: Record<string, unknown>) => {
   const content = first?.message?.content;
 
   if (typeof content === 'string') {
-    if (content.length <= CONTENT_PREVIEW_MAX) {
-      return content;
-    }
-
-    return `${content.slice(0, CONTENT_PREVIEW_MAX)}…`;
+    return content;
   }
 
   if (content !== undefined) {
-    const serialized = JSON.stringify(content);
-
-    if (serialized.length <= CONTENT_PREVIEW_MAX) {
-      return serialized;
-    }
-
-    return `${serialized.slice(0, CONTENT_PREVIEW_MAX)}…`;
+    return JSON.stringify(content);
   }
 
   return '';

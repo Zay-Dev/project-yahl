@@ -32,7 +32,7 @@ And yes — the worker can actually talk WhatsApp now. Scan a QR in the console,
 
 We landed `traffic_monitor` as a cron-friendly YAHL task, then spent a stretch of small commits actually *using* it — the boring kind of progress that used to be impossible when the whole job was one giant prompt.
 
-Recent polish included: readable report copy for humans, dropping accidental region bias, stopping the task from treating every `notify_to` as “the user,” capping probe sources (try a couple, then fall back to Google), making stages respect source-ops knowledge instead of inventing their own adventure, and tightening the knowledge format the monitor reads.
+Recent polish included: readable report copy for humans, dropping accidental region bias, stopping the task from treating every `notify_to` as “the user,” capping probe sources (try a couple, then fall back to Google), making stages respect source-ops knowledge instead of inventing their own adventure, and tightening the knowledge format the monitor reads. Optional `source_instruction` is a this-run free-text override (e.g. one-off revisit) so you need not patch durable ops knowledge — see [`handbook/tricks.md`](handbook/tricks.md).
 
 The meta-win is the workflow. When something lied, we chopped the stage, re-ran *that* slice, fixed the skill or knowledge file, and moved on — no full-pipeline archaeology, no “re-roll and pray.” For an AI task of this size, that loop was weirdly easy and efficient: same failure at the same line, patch the offender, ship the next commit. That is the whole point of YAHL showing up in practice, not just in the pitch deck.
 

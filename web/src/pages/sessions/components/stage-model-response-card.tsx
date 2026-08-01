@@ -6,7 +6,26 @@ type TStageModelResponseCardProps = {
   response: TResponseStageModelResponseItem;
 };
 
+const contentFromResponse = (response: TResponseStageModelResponseItem) => {
+  const raw = response.response as
+    | { choices?: Array<{ message?: { content?: unknown } }> }
+    | undefined;
+  const content = raw?.choices?.[0]?.message?.content;
+
+  if (typeof content === "string" && content.length > 0) {
+    return content;
+  }
+
+  if (content !== undefined && content !== null) {
+    return JSON.stringify(content);
+  }
+
+  return response.contentPreview || "";
+};
+
 export function StageModelResponseCard({ response }: TStageModelResponseCardProps) {
+  const content = contentFromResponse(response);
+
   return (
     <li className="rounded-md border bg-background p-2">
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -29,9 +48,9 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
           <TokenStatsRow totals={response.usage} />
         </div>
       ) : null}
-      {response.contentPreview ? (
-        <pre className="mt-2 overflow-auto rounded border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
-          {response.contentPreview}
+      {content ? (
+        <pre className="mt-2 max-h-[min(70vh,40rem)] overflow-auto rounded border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
+          {content}
         </pre>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">No preview</p>

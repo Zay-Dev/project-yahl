@@ -10,6 +10,7 @@ runInput:
   - notify_to
   - origin
   - destination
+  - source_instruction
   - city
   - timezone
 
@@ -111,7 +112,11 @@ stages:
   - contextKeys: [knowledge_topic, city_slug]
     nixeryRun: get-knowledge
     nixeryInput:
-      purpose: Load sources-{city_slug} and source-ops-{city_slug} operational notes for this city
+      purpose: |
+        Load lean sources-{city_slug} and source-ops-{city_slug} for this city only.
+        Prefer raw page bullets over synthesizing budget/exhausted/quota objects.
+        Do not invent budget.exhausted, city_attempts totals, or "Research quota" status —
+        prior BUDGET/HISTORY lines are avoid-list history, not a live research stop.
       topic: knowledge_topic
       output: source-knowledge.md
     logic: "(nixery)"
@@ -188,7 +193,17 @@ stages:
         );
       END:
 
-  - contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
+  - conditionMode: true
+    contextKeys: [source_instruction]
+    produceContextKeys: [instruction_active]
+    logic: |
+      IF: !!(context.context.source_instruction && String(context.context.source_instruction).trim());
+        (() => ({ instruction_active: true }));
+      ELSE:
+        (() => ({ instruction_active: false }));
+      END:
+
+  - contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, source_instruction, instruction_active, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
     produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources, origin_resolved, destination_resolved]
     maxTurns: 80
     verify:
@@ -206,39 +221,41 @@ stages:
         and traffic_source.is_fallback is boolean,
         and explore_started_at is a non-empty ISO timestamp,
         and tried_sources is a non-null array,
-        and city attempts in tried_sources (entries whose url is not the Google Maps directions template) are <= 2,
+        and city attempts in tried_sources (entries whose url is not the Google Maps directions template
+        AND whose what_tried is not a known-broken cached decline) are <= 2,
         and every failed/skipped tried_sources entry has non-empty why and what_tried,
         and every failed/skipped city attempt has a durable SKIP/FAIL bullet in source_ops_md (name + why + what was tried)
         matching that entry,
         and when traffic_source.is_fallback is false the locked city source appears in tried_sources with outcome ok,
-        and when traffic_source.is_fallback is true Maps was NOT persisted as the reusable city sources-{city_slug} or ~/data/{traffic_source_file} lock.
+        and when traffic_source.is_fallback is true Maps was NOT persisted as the reusable city sources-{city_slug} or ~/data/{traffic_source_file} lock,
+        and when instruction_active is true the run applied Input source_instruction (free-text this-run override) —
+        do not pass a blind known-failed skip whose what_tried/why is only prior skip/fail / did not re-probe
+        while ignoring source_instruction.
         Fail when routes are missing without a geocode-fail record, eta_min is not numeric, howto is empty/path-only,
         url is missing, is_fallback is missing, tried_sources missing/null, city attempts > 2,
         failed/skipped entries lack why/what_tried or lack a matching SKIP/FAIL line in source_ops_md,
         Maps was upserted/saved as the permanent city source, origin_resolved/destination_resolved missing,
         autocomplete accepted a different district/landmark than the stated OD without a geocode-fail,
-        or browser chips do not match resolved places.
+        browser chips do not match resolved places,
+        or instruction_active is true and explore only blind-skipped known-failed sources without applying source_instruction.
         On fail, set resumeAction: rerun.
     logic: |
       Read ~/nixery/plan/plan.md when helpful.
       Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
-      City-local probes: at most 2 distinct providers/domains (hard cap). Lock on first success.
-      After 2 failed/skipped city attempts OR budget exhausted → /google-maps-directions.
-      Budget hard-stop: about to hit maxTurns (leave ~4 turns) OR Date.now() - Date.parse(explore_started_at) > 30 * 60 * 1000.
-      Do not silently rewrite non-placeholder URLs to Google Maps outside that fallback branch.
-      At most 2 browser attempts per fetch_driving_routes call; on OD mismatch or blank page, fail that call — do not thrash.
-      Before picking a research candidate, *read(source_ops_md) (attend only) and read tried_sources; do not re-probe a source whose skip/fail reason still applies.
-      Before every browser probe, *read(source_ops_md) then use traffic_source.howto_md together with Input source_ops_md.
-      *upsert_ops_append(notes_md): prefer /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: notes_md as a markdown string).
-      If that gate returns ok:false, retry once with content: notes_md (omit value). If still false, set_context upsert_ops_error — still merge notes into source_ops_md.
-      *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean string like "city: …, kind: …, is_fallback: false, url: …" — never nested object; never upsert Maps / is_fallback:true as the city source). On ok:false retry once with content: lean_md.
-      *filter_novel_ops_notes: never treat a new SKIP/FAIL {name|url} bullet as a duplicate of a success/howto tip; only dedupe against an existing SKIP/FAIL for the same provider/url+reason class. Fail notes are equal priority to success tips — always upsert new SKIP/FAIL lines (if filter drops them, still upsert the SKIP/FAIL line).
+      *upsert_ops_append(notes_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: notes_md); on ok:false retry once with content: notes_md; still merge into source_ops_md.
+      *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean_md string); on ok:false retry once with content: lean_md; never upsert Maps / is_fallback:true.
 
       const explore_started_at = new Date().toISOString();
       *set_context(explore_started_at);
+
       let source_ops_md = source_ops_md || '<none>';
       *read(source_ops_md);
+      *read(instruction_active);
+      IF: instruction_active;
+        *read(source_instruction);
+      END:
+
       let locked = false;
       let tried_sources = [];
       let city_attempts = 0;
@@ -248,10 +265,9 @@ stages:
       const origin_resolved = *resolve_place(origin, city: city, role: origin);
       const destination_resolved = *resolve_place(destination, city: city, role: destination);
       *set_context(origin_resolved, destination_resolved);
-      When brand/abbrev OD was disambiguated, upsert a short place note to source-ops (e.g. MCL Kowloon Tong → Festival Walk MCL, not Telford Plaza).
-      Use origin_resolved / destination_resolved for every probe bind — not raw ambiguous brands alone.
-      Never accept autocomplete that changes district/landmark identity (Kowloon Tong ≠ Telford / Kowloon Bay) — treat as geocode fail, not a short-trip source fail.
-      If probe distance is implausible for the stated districts, record geocode fail and do not burn the attempt as "source only returns 1 route for short trips."
+      IF: *place_was_disambiguated(origin, origin_resolved) || *place_was_disambiguated(destination, destination_resolved);
+        *upsert_ops_append(*place_disambiguation_note(origin, origin_resolved, destination, destination_resolved));
+      END:
 
       let candidate = null;
       IF: *exists(~/data/{traffic_source_file});
@@ -275,6 +291,43 @@ stages:
       IF: candidate_is_fallback;
         candidate = null;
       END:
+
+      IF: candidate && *already_tried_or_known_failed(candidate, tried_sources, source_ops_md) && !instruction_active;
+        tried_sources = [...tried_sources, {
+          name: *source_display_name(candidate),
+          url: String(candidate.url || ''),
+          what_tried: 'declined known-broken cached recommend; did not re-probe; does not burn city_attempts',
+          outcome: 'skipped',
+          why: *prior_skip_reason(candidate, tried_sources, source_ops_md) || 'prior skip/fail still applies in source_ops',
+          at: new Date().toISOString(),
+        }];
+        const decline_bullet = `- SKIP ${*source_display_name(candidate)} (${candidate.url}): declined known-broken cached recommend; research continues (no attempt burn).`;
+        const decline_novel = *filter_novel_ops_notes([decline_bullet], against: source_ops_md);
+        IF: decline_novel.length > 0;
+          *upsert_ops_append(*notes_to_md(decline_novel));
+          source_ops_md = *merge_source_ops_md(source_ops_md, decline_novel);
+        ELSE:
+          *upsert_ops_append(decline_bullet);
+          source_ops_md = *merge_source_ops_md(source_ops_md, [decline_bullet]);
+        END:
+        *set_context(source_ops_md, tried_sources);
+        candidate = null;
+      END:
+
+      IF: candidate && *already_tried_or_known_failed(candidate, tried_sources, source_ops_md) && instruction_active;
+        IF: *instruction_blocks_probe(source_instruction, candidate);
+          tried_sources = [...tried_sources, {
+            name: *source_display_name(candidate),
+            url: String(candidate.url || ''),
+            what_tried: 'declined per source_instruction; did not re-probe; does not burn city_attempts',
+            outcome: 'skipped',
+            why: *instruction_skip_reason(source_instruction, candidate) || 'source_instruction forbids this candidate',
+            at: new Date().toISOString(),
+          }];
+          *set_context(tried_sources);
+          candidate = null;
+        END:
+      END;
 
       IF: candidate && String(candidate.url || '').includes('{origin}');
         const traffic_source = { ...candidate, city: city, is_fallback: false };
@@ -338,17 +391,24 @@ stages:
           IF: *about_to_hit_max_turns(remaining_le: 4) || (Date.now() - Date.parse(explore_started_at)) > 30 * 60 * 1000;
             break;
           END:
+          const research_need = *research_need_for_explore(
+            city,
+            tried_sources,
+            source_ops_md,
+            instruction_active,
+            source_instruction,
+          );
           const researched = *normalize_traffic_source(/nixery(
             research,
             topic: real-time driving traffic ETA origin to destination in city,
-            need: usable website or API with live private-car multi-route travel times for this city only; prefer {origin}/{destination} placeholders when URL binding works, else document form-fill in howto_md; prefer city-local live map — do not prefer Google Maps; avoid providers already failed/skipped in source_ops_md or tried_sources; ignore OD-specific howto bleed from other origin/destination pairs,
+            need: research_need,
             output_shape: TTrafficSource,
             howto_md_must_be_inline_markdown_not_a_path: true,
           ), as: TTrafficSource);
           IF: String(researched.url || '').includes('google.com/maps/dir/');
             break;
           END:
-          IF: *already_tried_or_known_failed(researched, tried_sources, source_ops_md);
+          IF: *already_tried_or_known_failed(researched, tried_sources, source_ops_md) && !instruction_active;
             city_attempts = city_attempts + 1;
             tried_sources = [...tried_sources, {
               name: *source_display_name(researched),
@@ -369,6 +429,21 @@ stages:
             END:
             *set_context(source_ops_md, tried_sources);
             continue;
+          END:
+          IF: *already_tried_or_known_failed(researched, tried_sources, source_ops_md) && instruction_active;
+            IF: *instruction_blocks_probe(source_instruction, researched);
+              city_attempts = city_attempts + 1;
+              tried_sources = [...tried_sources, {
+                name: *source_display_name(researched),
+                url: String(researched.url || ''),
+                what_tried: 'skipped per source_instruction',
+                outcome: 'skipped',
+                why: *instruction_skip_reason(source_instruction, researched) || 'source_instruction forbids this candidate',
+                at: new Date().toISOString(),
+              }];
+              *set_context(tried_sources);
+              continue;
+            END:
           END:
           IF: !String(researched.url || '').includes('{origin}') && !*howto_documents_form_fill(researched.howto_md);
             city_attempts = city_attempts + 1;
@@ -459,7 +534,7 @@ stages:
       IF: !locked;
         Read /opt/skills/google-maps-directions/SKILL.md.
         IF: city_attempts < max_city_attempts && (*about_to_hit_max_turns(remaining_le: 4) || (Date.now() - Date.parse(explore_started_at)) > 30 * 60 * 1000);
-          const budget_bullet = `- BUDGET: explore stopped after ${city_attempts} city attempt(s) (cap ${max_city_attempts}); falling back to Google Maps.`;
+          const budget_bullet = `- HISTORY: this explore hard-stopped after ${city_attempts} city attempt(s) (cap ${max_city_attempts}) and fell back to Google Maps; next run resets city_attempts to 0 and must re-research — not a durable Research quota.`;
           const budget_novel = *filter_novel_ops_notes([budget_bullet], against: source_ops_md);
           IF: budget_novel.length > 0;
             *upsert_ops_append(*notes_to_md(budget_novel));
