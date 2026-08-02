@@ -468,7 +468,7 @@ stages:
             continue;
           END:
           IF: !String(researched.url || '').includes('{origin}') && *howto_documents_form_fill(researched.howto_md);
-            Prefer rewriting researched.url to a placeholder template when the site supports query params (e.g. ?from={origin}&to={destination}) while howto keeps form-fill steps for the base entry URL.
+            researched = *prefer_placeholder_url(researched);
           END:
           const traffic_source = { ...researched, city: city, is_fallback: false };
           const probe_fetch = *fetch_driving_routes(
@@ -594,10 +594,9 @@ stages:
           *upsert_ops_append(*notes_to_md(fallback_fetch_notes));
           source_ops_md = *merge_source_ops_md(source_ops_md, fallback_fetch_notes);
         END:
-        Do NOT *save(~/data/{traffic_source_file}) or *upsert_sources for Maps fallback — keep traffic_source in-session only so the next run researches city-local sources again.
         IF: *exists(~/data/{traffic_source_file}) && *file_is_maps_fallback(~/data/{traffic_source_file});
           *delete(~/data/{traffic_source_file});
-        END:
+        END;
         *set_context(traffic_source, probe_fetch, source_ops_md, explore_started_at, tried_sources, origin_resolved, destination_resolved);
       END:
 
@@ -654,7 +653,6 @@ stages:
       Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/monitor-loop/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
-      Do not change started_at.
       const window_ms = Number(monitor_minutes) * 60 * 1000;
       const notifications = notifications || [];
       const fetches = fetches || [];
@@ -667,8 +665,6 @@ stages:
       let source_ops_md = source_ops_md || '<none>';
       *read(source_ops_md);
       *read(holidays_md);
-      Do not const/let-assign or set_context a copy of full source_ops_md / holidays_md every poll — only *set_context(source_ops_md) when novel merge changed it.
-      Never invent fetches or notifications — only append after a real browser/API poll.
       const bind_origin = origin_resolved || origin;
       const bind_destination = destination_resolved || destination;
 
@@ -935,8 +931,7 @@ stages:
           value: summary_md,
         );
       END:
-      Keep report_up / summary_up / analysis_up data.canonicalTopic and data.path for verify —
-      they must equal knowledge_topic and paths under topics/traffic-monitor/ (never general).
+      *assert_upsert_topic(report_up, summary_up, analysis_up, topic: knowledge_topic);
       const result = {
         started_at,
         day_kind,
