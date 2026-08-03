@@ -47,6 +47,8 @@ Check the monitor-minutes exit condition again after each sleep returns.
 
 ## Browser fetch failures
 
+`browser` / Stagehand is **CU-only** (clicks, observe, extract). It cannot `set_context`, `nixery`, or `mastermind`. YAHL owns knowledge: after every browser poll (**success or miss**), draft novel ops candidates from the **browser tool result JSON** (not “the agent said…” narration), then run `*filter_novel_ops_notes` → section upsert when due. Put OD/howto tips the CU loop needs into the stage Input / instruction — the runtime injects a short browse brief only (no full stage chat history).
+
 When route fetch via `browser` fails (timeout, blank page, `ok: false`):
 
 - At most **2** browser attempts for that poll (initial + one retry), including OD-mismatch as failure. Do not burn turns on further `goto` / `agent` / `observe` retries.

@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 
 import type OpenAI from "openai";
 
-import type { ChatApiMessage } from "@/shared/stage-tools";
+import type { TModelResponse } from "@/shared/transports/-types";
 
 import {
   chatCompletionForStagehandProxy,
@@ -11,14 +11,11 @@ import {
 } from "../-utils/llm-client";
 import config from "../config";
 
-const HISTORY_SEPARATOR =
-  "--- Stagehand request begins. Follow the Stagehand messages and tools below; use YAHL stage history above only as context. ---";
-
 const CONTEXT_PREAMBLE =
-  "You are answering a Stagehand browser-automation LLM request. YAHL stage conversation history appears first for context. Then complete the Stagehand task using only the tools Stagehand provided.";
+  "You are answering a Stagehand browser-automation LLM request. A short YAHL browse brief may appear first. Complete the Stagehand task using only the tools Stagehand provided — do not invent bash, mastermind, set_context, or nixery.";
 
 type TProxyState = {
-  history: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+  brief: string | null;
   port: number;
   server: Server;
 };
@@ -27,90 +24,57 @@ type TCompletionFn = (
   input: TStagehandProxyCompletionInput,
 ) => Promise<OpenAI.Chat.Completions.ChatCompletion>;
 
+export type TStagehandProxyReporter = {
+  onModelResponse: (response: TModelResponse) => Promise<void>;
+};
+
 let proxyState: TProxyState | null = null;
 let startPromise: Promise<TProxyState> | null = null;
 let completionFn: TCompletionFn = chatCompletionForStagehandProxy;
+let proxyReporter: TStagehandProxyReporter | null = null;
 
 export const setStagehandProxyCompletionFnForTests = (fn: TCompletionFn | null) => {
   completionFn = fn ?? chatCompletionForStagehandProxy;
 };
 
-export const mergeStagehandProxyMessages = (
-  stageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-  stagehandMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-): OpenAI.Chat.Completions.ChatCompletionMessageParam[] => [
-  { content: CONTEXT_PREAMBLE, role: "system" },
-  ...stageHistory,
-  { content: HISTORY_SEPARATOR, role: "system" },
-  ...stagehandMessages,
-];
-
-export const sanitizeStageHistoryForProxy = (
-  messages: ChatApiMessage[],
-): OpenAI.Chat.Completions.ChatCompletionMessageParam[] => {
-  const out: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
-
-  for (const message of messages) {
-    if (message.role === "system" || message.role === "user") {
-      const content = typeof message.content === "string" ? message.content : "";
-
-      if (!content.trim()) continue;
-
-      out.push({ content, role: message.role });
-      continue;
-    }
-
-    if (message.role === "tool") {
-      const content = typeof message.content === "string" ? message.content : "";
-      const clipped = clipText(content, 4_000);
-
-      out.push({
-        content: `Prior tool result (${message.tool_call_id}): ${clipped}`,
-        role: "user",
-      });
-      continue;
-    }
-
-    if (message.role === "assistant") {
-      const parts: string[] = [];
-      const content = typeof message.content === "string" ? message.content.trim() : "";
-
-      if (content) parts.push(content);
-
-      const toolCalls = "tool_calls" in message ? message.tool_calls : undefined;
-
-      if (toolCalls?.length) {
-        const calls = toolCalls.map((call) => {
-          const args = clipText(call.function.arguments, 800);
-
-          return `${call.function.name}(${args})`;
-        });
-
-        parts.push(`Tool calls: ${calls.join("; ")}`);
-      }
-
-      const reasoning =
-        "reasoning_content" in message && typeof message.reasoning_content === "string"
-          ? message.reasoning_content.trim()
-          : "";
-
-      if (reasoning) {
-        parts.push(`Reasoning: ${clipText(reasoning, 1_200)}`);
-      }
-
-      if (!parts.length) continue;
-
-      out.push({ content: parts.join("\n"), role: "assistant" });
-    }
-  }
-
-  return out;
+export const setStagehandProxyReporter = (reporter: TStagehandProxyReporter | null) => {
+  proxyReporter = reporter;
 };
 
-export const setStagehandProxyHistory = (messages: ChatApiMessage[]) => {
+export const clearStagehandProxyReporter = () => {
+  proxyReporter = null;
+};
+
+export const mergeStagehandProxyMessages = (
+  brief: string | null | undefined,
+  stagehandMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+): OpenAI.Chat.Completions.ChatCompletionMessageParam[] => {
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { content: CONTEXT_PREAMBLE, role: "system" },
+  ];
+  const trimmed = typeof brief === "string" ? brief.trim() : "";
+
+  if (trimmed) {
+    messages.push({ content: trimmed, role: "system" });
+  }
+
+  messages.push(...stagehandMessages);
+
+  return messages;
+};
+
+export const setStagehandProxyBrief = (brief: string | null | undefined) => {
   if (!proxyState) return;
 
-  proxyState.history = sanitizeStageHistoryForProxy(messages);
+  const trimmed = typeof brief === "string" ? brief.trim() : "";
+
+  proxyState.brief = trimmed || null;
+};
+
+export const clearStagehandProxyBrief = () => {
+  if (!proxyState) return;
+
+  proxyState.brief = null;
 };
 
 export const getStagehandProxyBaseUrl = () => {
@@ -156,12 +120,6 @@ export const stopStagehandLlmProxy = async () => {
   });
 };
 
-const clipText = (value: string, max: number) => {
-  if (value.length <= max) return value;
-
-  return `${value.slice(0, max)}…`;
-};
-
 const readJsonBody = async (req: IncomingMessage) => {
   const chunks: Buffer[] = [];
 
@@ -200,15 +158,16 @@ const handleChatCompletions = async (req: IncomingMessage, res: ServerResponse) 
       | undefined;
     const temperature = typeof body.temperature === "number" ? body.temperature : undefined;
     const model = typeof body.model === "string" ? body.model : undefined;
-    const history = proxyState?.history ?? [];
-    const messages = mergeStagehandProxyMessages(history, stagehandMessages);
+    const brief = proxyState?.brief ?? null;
+    const messages = mergeStagehandProxyMessages(brief, stagehandMessages);
 
     if (config.debug) {
       console.log(
-        `[stagehand-llm-proxy] chat/completions history=${history.length} stagehand=${stagehandMessages.length} tools=${tools?.length ?? 0}\n`,
+        `[stagehand-llm-proxy] chat/completions briefChars=${brief?.length ?? 0} stagehand=${stagehandMessages.length} tools=${tools?.length ?? 0}\n`,
       );
     }
 
+    const startedAt = Date.now();
     const completion = await completionFn({
       messages,
       model,
@@ -216,6 +175,23 @@ const handleChatCompletions = async (req: IncomingMessage, res: ServerResponse) 
       tool_choice,
       tools,
     });
+    const durationMs = Date.now() - startedAt;
+
+    if (proxyReporter) {
+      try {
+        await proxyReporter.onModelResponse({
+          ...completion,
+          durationMs,
+          tags: ["stagehand"],
+          thinkingMode: false,
+        });
+      } catch (reportError) {
+        const reportMessage =
+          reportError instanceof Error ? reportError.message : String(reportError);
+
+        console.error(`[stagehand-llm-proxy] onModelResponse failed: ${reportMessage}\n`);
+      }
+    }
 
     writeJson(res, 200, completion);
   } catch (error) {
@@ -262,7 +238,7 @@ const startProxyServer = async (): Promise<TProxyState> =>
 
       console.log(`[stagehand-llm-proxy] listening on 127.0.0.1:${address.port}\n`);
       resolve({
-        history: [],
+        brief: null,
         port: address.port,
         server,
       });

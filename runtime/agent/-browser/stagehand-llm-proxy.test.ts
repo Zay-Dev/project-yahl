@@ -5,71 +5,86 @@ import type OpenAI from "openai";
 
 import type { TStagehandProxyCompletionInput } from "../-utils/llm-client";
 
+import { buildBrowserProxyBrief } from "./browser-proxy-brief";
 import {
+  clearStagehandProxyBrief,
+  clearStagehandProxyReporter,
   ensureStagehandLlmProxy,
   mergeStagehandProxyMessages,
-  sanitizeStageHistoryForProxy,
+  setStagehandProxyBrief,
   setStagehandProxyCompletionFnForTests,
-  setStagehandProxyHistory,
+  setStagehandProxyReporter,
   stopStagehandLlmProxy,
 } from "./stagehand-llm-proxy";
 
+describe("browser-proxy-brief", () => {
+  it("builds a capped brief from mode/url and optional extraBrief", () => {
+    const brief = buildBrowserProxyBrief({
+      args: {
+        instruction: "Click the submit button",
+        mode: "agent",
+        url: "https://example.com/form",
+      },
+      extraBrief: "Prefer the primary CTA in the main landmark.",
+    });
+
+    assert.match(brief, /Stagehand tools only/);
+    assert.match(brief, /mode: agent/);
+    assert.match(brief, /https:\/\/example\.com\/form/);
+    assert.match(brief, /primary CTA/);
+    assert.doesNotMatch(brief, /origin_resolved|traffic_source|source_ops_md|howto_excerpt/);
+    assert.doesNotMatch(brief, /run_bash\(|Prior tool result|Tool calls:/);
+    assert.ok(brief.length <= 4_000);
+  });
+
+  it("omits extraBrief when not provided", () => {
+    const brief = buildBrowserProxyBrief({
+      args: {
+        instruction: "goto only",
+        mode: "goto",
+        url: "https://example.com",
+      },
+    });
+
+    assert.match(brief, /mode: goto/);
+    assert.match(brief, /https:\/\/example\.com/);
+    assert.equal(brief.includes("\n\n\n"), false);
+  });
+});
+
 describe("stagehand-llm-proxy", () => {
   after(async () => {
+    clearStagehandProxyBrief();
+    clearStagehandProxyReporter();
     setStagehandProxyCompletionFnForTests(null);
     await stopStagehandLlmProxy();
   });
 
-  it("sanitizes stage history tool turns into plain context messages", () => {
-    const sanitized = sanitizeStageHistoryForProxy([
-      { content: "You are the stage agent.", role: "system" },
-      { content: "Use stage context notes when choosing the next browser step.", role: "user" },
-      {
-        content: null,
-        role: "assistant",
-        tool_calls: [
-          {
-            function: {
-              arguments: JSON.stringify({ mode: "goto", url: "https://example.com" }),
-              name: "browser",
-            },
-            id: "call_1",
-            type: "function",
-          },
-        ],
-      },
-      {
-        content: JSON.stringify({ ok: true, data: { mode: "goto" } }),
-        role: "tool",
-        tool_call_id: "call_1",
-      },
-    ]);
-
-    assert.equal(sanitized[0]?.role, "system");
-    assert.equal(sanitized[1]?.role, "user");
-    assert.match(String((sanitized[2] as { content: string }).content), /browser\(/);
-    assert.equal(sanitized[3]?.role, "user");
-    assert.match(String((sanitized[3] as { content: string }).content), /Prior tool result/);
-  });
-
-  it("merges stage history before Stagehand messages with separators", () => {
+  it("merges optional brief before Stagehand messages", () => {
     const merged = mergeStagehandProxyMessages(
-      [{ content: "stage context note: prefer the listed option", role: "user" }],
+      "mode: agent\norigin: Alpha",
       [{ content: "Click the matching list option", role: "user" }],
     );
 
-    assert.equal(merged.length, 4);
+    assert.equal(merged.length, 3);
     assert.equal(merged[0]?.role, "system");
     assert.match(String((merged[0] as { content: string }).content), /Stagehand browser-automation/);
-    assert.equal(merged[1]?.role, "user");
-    assert.match(String((merged[1] as { content: string }).content), /stage context note/);
-    assert.equal(merged[2]?.role, "system");
-    assert.match(String((merged[2] as { content: string }).content), /Stagehand request begins/);
-    assert.equal(merged[3]?.role, "user");
-    assert.match(String((merged[3] as { content: string }).content), /matching list option/);
+    assert.equal(merged[1]?.role, "system");
+    assert.match(String((merged[1] as { content: string }).content), /origin: Alpha/);
+    assert.equal(merged[2]?.role, "user");
+    assert.match(String((merged[2] as { content: string }).content), /matching list option/);
   });
 
-  it("listens on 127.0.0.1 and merges history into nested completion input", async () => {
+  it("omits brief message when brief is empty", () => {
+    const merged = mergeStagehandProxyMessages("", [
+      { content: "observe", role: "user" },
+    ]);
+
+    assert.equal(merged.length, 2);
+    assert.equal(merged[1]?.role, "user");
+  });
+
+  it("listens on 127.0.0.1 and injects brief into nested completion input", async () => {
     process.env.STAGEHAND_LLM_PROXY_PORT = "0";
 
     let nestedInput: TStagehandProxyCompletionInput | null = null;
@@ -104,9 +119,7 @@ describe("stagehand-llm-proxy", () => {
     assert.match(baseURL, /^http:\/\/127\.0\.0\.1:\d+\/v1$/);
     assert.ok(port > 0);
 
-    setStagehandProxyHistory([
-      { content: "Prior stage context: target label Alpha Site", role: "user" },
-    ]);
+    setStagehandProxyBrief("mode: agent\norigin: Alpha Site");
 
     const health = await fetch(`http://127.0.0.1:${port}/health`);
 
@@ -145,7 +158,7 @@ describe("stagehand-llm-proxy", () => {
     assert.ok(
       nestedInput.messages.some(
         (message) =>
-          message.role === "user"
+          message.role === "system"
           && String((message as { content?: string }).content || "").includes("Alpha Site"),
       ),
     );
@@ -156,6 +169,133 @@ describe("stagehand-llm-proxy", () => {
           && String((message as { content?: string }).content || "").includes("observe available click targets"),
       ),
     );
+    assert.ok(
+      !nestedInput.messages.some(
+        (message) =>
+          String((message as { content?: string }).content || "").includes("run_bash")
+          || String((message as { content?: string }).content || "").includes("Prior tool result"),
+      ),
+    );
+  });
+
+  it("posts onModelResponse with usage and stagehand tag after each completion", async () => {
+    process.env.STAGEHAND_LLM_PROXY_PORT = "0";
+
+    const reported: Array<Record<string, unknown>> = [];
+
+    setStagehandProxyCompletionFnForTests(async () => {
+      const completion: OpenAI.Chat.Completions.ChatCompletion = {
+        choices: [
+          {
+            finish_reason: "stop",
+            index: 0,
+            logprobs: null,
+            message: {
+              content: "ok",
+              role: "assistant",
+              refusal: null,
+            },
+          },
+        ],
+        created: Math.floor(Date.now() / 1000),
+        id: "chatcmpl-usage",
+        model: "deepseek-v4-flash",
+        object: "chat.completion",
+        usage: {
+          completion_tokens: 3,
+          prompt_tokens: 42,
+          total_tokens: 45,
+        },
+      };
+
+      return completion;
+    });
+
+    setStagehandProxyReporter({
+      onModelResponse: async (response) => {
+        reported.push(response as unknown as Record<string, unknown>);
+      },
+    });
+
+    const { port } = await ensureStagehandLlmProxy();
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      body: JSON.stringify({
+        messages: [{ content: "act", role: "user" }],
+        model: "openai/deepseek-v4-flash",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(reported.length, 1);
+    assert.equal(reported[0]?.thinkingMode, false);
+    assert.deepEqual(reported[0]?.tags, ["stagehand"]);
+    assert.equal(
+      (reported[0]?.usage as { prompt_tokens?: number } | undefined)?.prompt_tokens,
+      42,
+    );
+    assert.equal(typeof reported[0]?.durationMs, "number");
+
+    clearStagehandProxyReporter();
+  });
+
+  it("still returns completion when onModelResponse throws", async () => {
+    process.env.STAGEHAND_LLM_PROXY_PORT = "0";
+
+    setStagehandProxyCompletionFnForTests(async () => {
+      const completion: OpenAI.Chat.Completions.ChatCompletion = {
+        choices: [
+          {
+            finish_reason: "stop",
+            index: 0,
+            logprobs: null,
+            message: {
+              content: "still-ok",
+              role: "assistant",
+              refusal: null,
+            },
+          },
+        ],
+        created: Math.floor(Date.now() / 1000),
+        id: "chatcmpl-reporter-fail",
+        model: "deepseek-v4-flash",
+        object: "chat.completion",
+        usage: {
+          completion_tokens: 1,
+          prompt_tokens: 2,
+          total_tokens: 3,
+        },
+      };
+
+      return completion;
+    });
+
+    setStagehandProxyReporter({
+      onModelResponse: async () => {
+        throw new Error("reporter boom");
+      },
+    });
+
+    const { port } = await ensureStagehandLlmProxy();
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      body: JSON.stringify({
+        messages: [{ content: "act", role: "user" }],
+        model: "openai/deepseek-v4-flash",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    assert.equal(res.status, 200);
+
+    const payload = await res.json() as OpenAI.Chat.Completions.ChatCompletion;
+
+    assert.equal(payload.choices[0]?.message?.content, "still-ok");
+
+    clearStagehandProxyReporter();
   });
 });
 

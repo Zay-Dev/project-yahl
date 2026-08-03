@@ -102,6 +102,7 @@ Prefer **section-targeted** upserts — never key-append a value that starts wit
 
 - Attend before site use via `*read(source_ops_md)` (Input already holds the blob — do not re-`set_context` the full markdown every poll). Refresh context only when novel notes are upserted (`*set_context(source_ops_md)` after merge).
 - During explore and every 20 min in monitor: draft candidates → `*filter_novel_ops_notes` against `source_ops_md` → partition into HOWTO / PLACE / Q&A / ops-log → upsert each via the shape above. If none novel, still bump `last_source_notes_at` in monitor (no empty upsert). Prefer promoting recurring miss/FIX patterns into `## Q&A` rather than only one-off FAIL lines.
+- **Stagehand is CU-only.** Nested browser LLM cannot persist wiki knowledge. After each `browser` success or miss, YAHL must draft novel ops from the **tool result** (actions / errors / OD chips) and upsert — do not wait for Stagehand to “remember” howto.
 
 ### Section rules
 

@@ -1,6 +1,6 @@
 import config from "./config";
 
-import type { TAskUserResumeFrom } from '@/shared/transports/-types';
+import type { TAskUserResumeFrom, TModelResponse } from '@/shared/transports/-types';
 
 import {
   parseStageEnvelope,
@@ -21,6 +21,7 @@ import {
 import { callMastermindSkill, fetchMastermindRequestStatus } from "@/shared/mastermind-client";
 
 import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
+import { buildBrowserProxyBrief } from "./-browser/browser-proxy-brief";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
 import { isOrchestratorHandledTool } from "./-utils/orchestrator-handled-tools";
 
@@ -53,6 +54,7 @@ type StageSessionOptions = {
   maxTurns?: number;
   onLocalToolCall?: (record: TLocalToolCallRecord) => Promise<void>;
   onLocalToolStart?: (record: TLocalToolStartRecord) => Promise<void>;
+  onModelResponse?: (response: TModelResponse) => Promise<void>;
   requestId?: string;
   resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
@@ -327,7 +329,8 @@ export const runStageSession = async (
 
           const browserStartedAt = Date.now();
           const browserResult = await runBrowserCommand(browserArgs, {
-            stageMessages: stageMessages.slice(),
+            onModelResponse: options.onModelResponse,
+            proxyBrief: buildBrowserProxyBrief({ args: browserArgs }),
           });
           const browserDurationMs = Date.now() - browserStartedAt;
 

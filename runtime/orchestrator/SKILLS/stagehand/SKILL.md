@@ -152,7 +152,7 @@ Then:
 ## Notes
 
 - Chromium runs locally in the agent container (headless unless live view).
-- Stagehand’s LLM calls go through a **localhost-only OpenAI-compatible proxy** in the agent runtime. The proxy answers with a nested completion that includes the current **YAHL stage message history** plus Stagehand’s act/observe/extract/agent prompt — thinking is forced off so provider `tool_choice` works. Do not treat Stagehand as a separate history-blind model.
+- Stagehand’s LLM calls go through a **localhost-only OpenAI-compatible proxy** in the agent runtime. The proxy answers with a nested completion that includes a short **YAHL browse brief** (mode/url + optional opaque text) plus Stagehand’s act/observe/extract/agent prompt — not the full stage chat history. Thinking is forced off so provider `tool_choice` works. Stagehand is CU-only; YAHL persists knowledge after browser tool results.
 - `mode: "agent"` is supported for multi-step browse / search / form-fill tasks when a single instruction is clearer than many discrete `act` calls.
 - Reuse the same browser session within a stage; multiple `browser` calls share one Chromium instance.
 - For large page text saved to `~/tmp/`, follow up with `/nixery(extract-info, source: ~/tmp/…, need: …)` per `/opt/skills/nixery/SKILL.md`.

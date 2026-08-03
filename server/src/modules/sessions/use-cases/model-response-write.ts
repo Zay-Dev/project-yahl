@@ -10,7 +10,7 @@ import { modelModelResponse, modelStage } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
 
-const BASE_MODEL_RESPONSE_TAGS = ['browse', 'bash', 'tool', 'chat', 'unknown'] as const;
+const BASE_MODEL_RESPONSE_TAGS = ['browse', 'stagehand', 'bash', 'tool', 'chat', 'unknown'] as const;
 
 const isModelResponseTag = (value: unknown): value is TModelResponseTag => {
   if (typeof value !== 'string' || !value.trim()) {

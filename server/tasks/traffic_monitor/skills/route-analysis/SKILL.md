@@ -15,7 +15,7 @@ Do **not** paste raw brand/abbrev OD strings into map sites as if they were uniq
 
 ## Fetch
 
-Prefer Stagehand / `browser` against a **goto URL rebuilt every poll from context `origin_resolved` / `destination_resolved` (fallback to `origin` / `destination`)**, using **core** `traffic_source.howto_md` plus `*read(source_ops_md)` (attend Input ops — do not `const`-assign/`set_context` a full-blob copy). Do not bury unread `source_ops_md` as a `*func` kwarg. Core `howto_md` must stay OD-generic (no run POI literals); novel UI tricks go to source-ops `## HOWTO` / PLACE — never paste ops history or OD bleed into `howto_md`.
+Prefer Stagehand / `browser` against a **goto URL rebuilt every poll from context `origin_resolved` / `destination_resolved` (fallback to `origin` / `destination`)**, using **core** `traffic_source.howto_md` plus `*read(source_ops_md)` (attend Input ops — do not `const`-assign/`set_context` a full-blob copy). Do not bury unread `source_ops_md` as a `*func` kwarg. Core `howto_md` must stay OD-generic (no run POI literals); novel UI tricks go to source-ops `## HOWTO` / PLACE — never paste ops history or OD bleed into `howto_md`. Put OD/howto tips in the browser `instruction` — the runtime brief is mode/url only; YAHL persists learnings after each browser result.
 
 Only use `run_bash` + curl when `~/data/{traffic_source_file}` documents a JSON/HTTP API (documented HTTP API exception — not for HTML scrape).
 

@@ -3,11 +3,15 @@ import config from "../config";
 import { jsonSchemaToZod, Stagehand } from "@browserbasehq/stagehand";
 import { z } from "zod";
 
-import type { BrowserToolArguments, ChatApiMessage } from "@/shared/stage-tools";
+import type { BrowserToolArguments } from "@/shared/stage-tools";
+import type { TModelResponse } from "@/shared/transports/-types";
 
 import {
+  clearStagehandProxyBrief,
+  clearStagehandProxyReporter,
   ensureStagehandLlmProxy,
-  setStagehandProxyHistory,
+  setStagehandProxyBrief,
+  setStagehandProxyReporter,
   stopStagehandLlmProxy,
 } from "./stagehand-llm-proxy";
 import { resolveChromiumExecutablePath } from "./chromium-executable";
@@ -31,7 +35,8 @@ type TBrowserResult =
   | { error: string; ok: false };
 
 export type TRunBrowserCommandOptions = {
-  stageMessages?: ChatApiMessage[];
+  onModelResponse?: (response: TModelResponse) => Promise<void>;
+  proxyBrief?: string;
 };
 
 let stagehand: Stagehand | null = null;
@@ -258,57 +263,70 @@ export const runBrowserCommand = async (
 ): Promise<TBrowserResult> => {
   await ensureStagehandLlmProxy();
 
-  if (options?.stageMessages) {
-    setStagehandProxyHistory(options.stageMessages);
+  if (options?.onModelResponse) {
+    setStagehandProxyReporter({ onModelResponse: options.onModelResponse });
   }
 
-  let result: TBrowserResult;
-
-  try {
-    result = await executeBrowserCommand(args);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    result = { error: message, ok: false };
-  }
-
-  if (result.ok) {
-    consecutiveBrowserFailures = 0;
-
-    return result;
-  }
-
-  consecutiveBrowserFailures += 1;
-
-  if (!shouldResetBrowser(args, result.error)) {
-    return result;
-  }
-
-  console.error(
-    `[stagehand] resetting browser after failure (mode=${args.mode}, consecutive=${consecutiveBrowserFailures}): ${result.error}\n`,
-  );
-
-  await closeStagehandSession();
-
-  await ensureStagehandLlmProxy();
-
-  if (options?.stageMessages) {
-    setStagehandProxyHistory(options.stageMessages);
+  if (options?.proxyBrief !== undefined) {
+    setStagehandProxyBrief(options.proxyBrief);
   }
 
   try {
-    result = await executeBrowserCommand(args);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    let result: TBrowserResult;
 
-    result = { error: message, ok: false };
-  }
+    try {
+      result = await executeBrowserCommand(args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
 
-  if (result.ok) {
-    consecutiveBrowserFailures = 0;
-  } else {
+      result = { error: message, ok: false };
+    }
+
+    if (result.ok) {
+      consecutiveBrowserFailures = 0;
+
+      return result;
+    }
+
     consecutiveBrowserFailures += 1;
-  }
 
-  return result;
+    if (!shouldResetBrowser(args, result.error)) {
+      return result;
+    }
+
+    console.error(
+      `[stagehand] resetting browser after failure (mode=${args.mode}, consecutive=${consecutiveBrowserFailures}): ${result.error}\n`,
+    );
+
+    await closeStagehandSession();
+
+    await ensureStagehandLlmProxy();
+
+    if (options?.onModelResponse) {
+      setStagehandProxyReporter({ onModelResponse: options.onModelResponse });
+    }
+
+    if (options?.proxyBrief !== undefined) {
+      setStagehandProxyBrief(options.proxyBrief);
+    }
+
+    try {
+      result = await executeBrowserCommand(args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      result = { error: message, ok: false };
+    }
+
+    if (result.ok) {
+      consecutiveBrowserFailures = 0;
+    } else {
+      consecutiveBrowserFailures += 1;
+    }
+
+    return result;
+  } finally {
+    clearStagehandProxyBrief();
+    clearStagehandProxyReporter();
+  }
 };

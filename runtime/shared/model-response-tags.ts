@@ -1,10 +1,17 @@
-export const MODEL_RESPONSE_TAGS = ["browse", "bash", "tool", "chat", "unknown"] as const;
+export const MODEL_RESPONSE_TAGS = ["browse", "stagehand", "bash", "tool", "chat", "unknown"] as const;
 
 export type TModelResponseTag =
   | (typeof MODEL_RESPONSE_TAGS)[number]
   | `mastermind:${string}`;
 
-const TAG_ORDER: Array<TModelResponseTag | `mastermind:${string}`> = ["browse", "bash", "tool", "chat", "unknown"];
+const TAG_ORDER: Array<TModelResponseTag | `mastermind:${string}`> = [
+  "browse",
+  "stagehand",
+  "bash",
+  "tool",
+  "chat",
+  "unknown",
+];
 
 const TOOL_NAME_TAGS: Record<string, TModelResponseTag> = {
   ask_user: "tool",

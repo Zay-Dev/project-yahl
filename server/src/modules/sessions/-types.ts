@@ -150,6 +150,7 @@ export interface IStage extends TWithTimestamps {
 
 export type TModelResponseTag =
   | 'browse'
+  | 'stagehand'
   | 'bash'
   | 'chat'
   | 'tool'
