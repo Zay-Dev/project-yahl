@@ -188,7 +188,11 @@ export const createSessionEventTracker = () => {
 
   const patchSession = (
     sessionId: string,
-    body: { liveViewVncPort?: number | null; result?: unknown },
+    body: {
+      liveViewVncPort?: number | null;
+      result?: unknown;
+      runCursor?: { kind: 'pipeline'; stageIndex: number; loopMeta?: unknown };
+    },
   ) => {
     enqueue(async () => {
       if (!baseUrl) return;
@@ -198,6 +202,7 @@ export const createSessionEventTracker = () => {
       await _patch(url, {
         ...('result' in body ? { result: body.result } : {}),
         ...('liveViewVncPort' in body ? { liveViewVncPort: body.liveViewVncPort } : {}),
+        ...('runCursor' in body ? { runCursor: body.runCursor } : {}),
       });
     });
   };

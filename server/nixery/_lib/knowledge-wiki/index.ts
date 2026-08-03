@@ -21,6 +21,7 @@ export {
   type TResolveTopicResult,
 } from './topic-registry.js';
 export {
+  appendWikiSection,
   collapseDuplicateWikiSections,
   isJsonFenceOnlyContent,
   mergeWikiSection,

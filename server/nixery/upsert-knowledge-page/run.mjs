@@ -92,6 +92,7 @@ const main = async () => {
       ? input.mode
       : undefined,
     page: typeof input.page === 'string' ? input.page : undefined,
+    section: typeof input.section === 'string' ? input.section : undefined,
     seedUrls: parseSeedUrls(input.seedUrls),
     title: typeof input.title === 'string' ? input.title : undefined,
     topic: typeof input.topic === 'string' ? input.topic : undefined,

@@ -13,6 +13,12 @@ import { seedRunInputContext } from '@/orchestrator/-context/default-context';
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
+import {
+  buildGotoSystemAppend,
+  clearStageGotoContext,
+  handleGotoStageToolCall,
+  type TGotoStageTransfer,
+} from '@/orchestrator/-goto';
 import { runVerifyGate, isVerifyRubricFailure } from '@/orchestrator/-verify';
 import {
   applyVerifyRecoveryToStorage,
@@ -100,6 +106,12 @@ class YahlAgentRunner {
 
   private temperature: number | undefined;
 
+  private pendingGotoTransfer: TGotoStageTransfer | null = null;
+
+  private gotoCount = 0;
+
+  private enteredViaGoto = false;
+
   constructor(
     yahl: string,
     {
@@ -133,7 +145,9 @@ class YahlAgentRunner {
   }
 
   async run() {
-    for (let stageIndex = this.startIndex; stageIndex < this.stages.length; stageIndex += 1) {
+    let stageIndex = this.startIndex;
+
+    while (stageIndex < this.stages.length) {
       const stage = this.stages[stageIndex]!;
 
       this.pipelineStageIndex = this.options.pipelineStageIndex != null
@@ -150,6 +164,7 @@ class YahlAgentRunner {
       });
 
       if (stage.type === 'loop' && !this.options.contextAfter && !isResumingThisStage) {
+        this.enteredViaGoto = false;
         await handleLoop(
           stage,
           this.storage,
@@ -158,6 +173,7 @@ class YahlAgentRunner {
           this.pipelineStageIndex,
           this.options.recoveryStages ?? this.stages,
         );
+        stageIndex += 1;
         continue;
       }
 
@@ -165,11 +181,13 @@ class YahlAgentRunner {
         seedTypesPreamble(this.storage.types, stage.spec.logic);
         this.resetStageContext(stage, stageIndex, false);
         await this.finishOrchestratorDirectStage();
+        stageIndex += 1;
         continue;
       }
 
       this.resetStageContext(stage, stageIndex, isResumingThisStage);
-      await this.runOneStage();
+      const nextStageIndex = await this.runOneStage();
+      stageIndex = nextStageIndex ?? stageIndex + 1;
     }
 
     return {
@@ -190,6 +208,13 @@ class YahlAgentRunner {
     this.boundStage = stage;
     this.boundSourceStartLine = stage.sourceStartLine;
     this.stageDocSourceStartLine = undefined;
+    this.pendingGotoTransfer = null;
+
+    if (!this.enteredViaGoto) {
+      clearStageGotoContext(this.storage);
+    }
+
+    this.enteredViaGoto = false;
 
     const resumedStage = this.resumeStage?.stage;
 
@@ -212,6 +237,12 @@ class YahlAgentRunner {
     if (this.options.systemAppend) {
       this.systemAppendParts.push(this.options.systemAppend);
     }
+
+    const gotoAppend = buildGotoSystemAppend(this.activeStage);
+
+    if (gotoAppend) {
+      this.systemAppendParts.push(gotoAppend);
+    }
   }
 
   private async runStageBody() {
@@ -222,6 +253,10 @@ class YahlAgentRunner {
 
     while (true) {
       await this.runStageAttempt();
+
+      if (this.pendingGotoTransfer) {
+        break;
+      }
 
       if ((await this.resolveProduceKeysRetry()) === 'break') {
         break;
@@ -358,6 +393,27 @@ class YahlAgentRunner {
               ? {}
               : { stageIndex: this.pipelineStageIndex }),
           });
+        }
+
+        if (toolCall.function.name === 'goto_stage') {
+          const gotoResult = handleGotoStageToolCall({
+            currentParsedStageIndex: this.boundParsedStageIndex,
+            gotoCount: this.gotoCount,
+            stages: this.options.recoveryStages ?? this.stages,
+            stage: this.activeStage,
+            storage: this.storage,
+            toolCall,
+          });
+
+          if (gotoResult.transfer) {
+            this.pendingGotoTransfer = gotoResult.transfer;
+            this.gotoCount += 1;
+          }
+
+          return {
+            hasError: gotoResult.hasError,
+            result: gotoResult.result,
+          };
         }
 
         if (toolCall.function.name === 'nixery') {
@@ -505,7 +561,7 @@ class YahlAgentRunner {
     await globalThis.sessionTracker?.flush?.();
   }
 
-  private async runOneStage() {
+  private async runOneStage(): Promise<number | undefined> {
     const nixeryRun = this.activeStage.spec.nixeryRun;
 
     if (nixeryRun) {
@@ -526,7 +582,7 @@ class YahlAgentRunner {
 
       await this.finishOrchestratorDirectStage();
       await teardownNixeryContainer(containerName, this.sessionId, nixeryRun);
-      return;
+      return undefined;
     }
 
     const maxVerifyRetries = verifyAutoRetryMaxIterations();
@@ -536,6 +592,29 @@ class YahlAgentRunner {
       await this.runStageBody();
 
       const finishContextAfter = this.options.contextAfterRecord ?? this.storage;
+      const gotoTransfer = this.pendingGotoTransfer;
+
+      if (gotoTransfer) {
+        this.pendingGotoTransfer = null;
+        this.enteredViaGoto = true;
+
+        console.log(
+          `[yahl-diag] stage goto skip-verify requestId=${this.requestId}`
+          + ` target=${gotoTransfer.stageId} index=${gotoTransfer.targetStageIndex} pid=${process.pid}`,
+        );
+
+        publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
+
+        globalThis.sessionTracker?.patchSession?.(this.sessionId, {
+          runCursor: {
+            kind: 'pipeline',
+            stageIndex: gotoTransfer.targetStageIndex,
+          },
+        });
+
+        await globalThis.sessionTracker?.flush?.();
+        return gotoTransfer.targetStageIndex;
+      }
 
       console.log(
         `[yahl-diag] verify gate start requestId=${this.requestId} stageIndex=${this.pipelineStageIndex} pid=${process.pid}`,
@@ -565,15 +644,15 @@ class YahlAgentRunner {
 
         publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
         await globalThis.sessionTracker?.flush?.();
-        return;
+        return undefined;
       }
 
       if (!verifyAutoRetry || this.verifyRetryAttempt >= maxVerifyRetries) {
-        return;
+        return undefined;
       }
 
       if (!isVerifyRubricFailure(verifyResult)) {
-        return;
+        return undefined;
       }
 
       this.verifyRetryAttempt += 1;

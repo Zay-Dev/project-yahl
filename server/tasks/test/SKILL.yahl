@@ -23,12 +23,23 @@ stages:
         c: context.context.c + context.context.i,
       }));
 
-  - temperature: 0.2
+  - id: step_loop
+    temperature: 0.2
     loopSetup: for each i of [1..5,+2]
     contextKeys: [c]
     updateContextKeys: [c]
     logic: |
       c += i;
+
+  - temperature: 0
+    contextKeys: [c]
+    goto:
+      - command: '/stage(step_loop)'
+        description: 'when c is less than 30 — re-run the stepped loop then continue'
+    logic: |
+      IF: c < 30;
+        /stage(step_loop);
+      END:
 
   - conditionMode: true
     contextKeys: [c]
@@ -50,7 +61,7 @@ stages:
     logic: |
       c += /ask-user(1);
 
-  - temperature: 2
+  - temperature: 0.5
     contextKeys: [a, b, c]
     produceContextKeys: [result]
     logic: |

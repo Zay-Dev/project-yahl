@@ -79,8 +79,8 @@ export function CronJobsPage() {
       {items.length === 0 ? (
         <p className="text-sm">No cron jobs configured.</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="min-w-[640px] w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
                 <th className="p-3 text-left font-medium">ID</th>

@@ -82,16 +82,6 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
         <ListIcon
         />
       ),
-      items: [
-        {
-          title: "Pending questions",
-          url: "/sessions/pending-questions",
-        },
-        ...sessions.slice(0, 6).map((session) => ({
-          title: session.taskId?.trim() || "Unknown task",
-          url: `/sessions/${encodeURIComponent(session.sessionId)}`,
-        })),
-      ],
     },
     {
       title: "Health",

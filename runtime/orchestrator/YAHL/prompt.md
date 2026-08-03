@@ -86,6 +86,15 @@ Read a prior ask-user answer from Input context without calling `ask_user` again
 - populated on resume by the orchestrator before the agent runs
 - use at the top of logic to branch resume vs first-pass paths
 
+## goto_stage (API tool)
+
+Use the **`goto_stage`** tool when this stage's `goto` list declares a transfer (logic `/stage(id)`).
+
+- Arguments: `{ "stageId": "<id>", "reason": "<non-empty>" }`.
+- `stageId` must match a declared `/stage(id)` entry on the current stage.
+- On success: this stage ends immediately (no verify); orchestrator jump-and-continues from the target stage; `reason` is injected as platform context `stage_goto_reason` (also `stage_goto_from`).
+- On failure (undeclared target, max transfers, etc.): tool error — continue the stage.
+
 ### Examples (conceptual tool arguments)
 
 - `set_context`: `scope=global`, `key=topic`, `value="AI agents"`

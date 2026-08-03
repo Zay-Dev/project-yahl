@@ -46,7 +46,13 @@ describe("filterStageBucket", () => {
   });
 
   it("always includes platform context keys", () => {
-    const records = { foo: 1, today: "2026-06-22", now_iso: "2026-06-22T00:00:00.000Z" };
+    const records = {
+      foo: 1,
+      today: "2026-06-22",
+      now_iso: "2026-06-22T00:00:00.000Z",
+      stage_goto_reason: "cache dead",
+      stage_goto_from: "monitor",
+    };
     const filtered = filterStageBucket(
       "x = foo;",
       records,
@@ -56,6 +62,8 @@ describe("filterStageBucket", () => {
     assert.equal(filtered.foo, 1);
     assert.equal(filtered.today, "2026-06-22");
     assert.equal(filtered.now_iso, "2026-06-22T00:00:00.000Z");
+    assert.equal(filtered.stage_goto_reason, "cache dead");
+    assert.equal(filtered.stage_goto_from, "monitor");
   });
 });
 

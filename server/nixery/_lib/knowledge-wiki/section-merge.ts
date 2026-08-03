@@ -34,6 +34,47 @@ export const mergeWikiSection = (
   return `${content}\n\n${sectionBlock}\n`;
 };
 
+export const appendWikiSection = (
+  existingContent: string,
+  sectionTitle: string,
+  sectionBody: string,
+): string => {
+  const heading = `## ${sectionTitle}`;
+  const trimmedBody = sectionBody.trim();
+  const content = existingContent.trim();
+
+  if (!trimmedBody) {
+    return content ? `${content}\n` : '';
+  }
+
+  if (!content) {
+    return `${heading}\n\n${trimmedBody}\n`;
+  }
+
+  const sectionPattern = sectionBlockPattern(heading);
+  const match = content.match(sectionPattern);
+
+  if (!match) {
+    return `${content}\n\n${heading}\n\n${trimmedBody}\n`;
+  }
+
+  const matchedBlock = match[0];
+  const lead = match[1] ?? '';
+  const existingBlock = matchedBlock.startsWith('\n')
+    ? matchedBlock.slice(1)
+    : matchedBlock;
+  const existingBody = existingBlock
+    .replace(new RegExp(`^${escapeRegExp(heading)}\\r?\\n?`), '')
+    .trim();
+  const nextBody = existingBody
+    ? `${existingBody}\n\n${trimmedBody}`
+    : trimmedBody;
+  const sectionBlock = `${heading}\n\n${nextBody}`.trim();
+  const replaced = content.replace(sectionPattern, `${lead}${sectionBlock}`);
+
+  return `${replaced.trim()}\n`;
+};
+
 const collapseLegacyKeyFactsBlocks = (content: string): string => {
   const blocks = content.split(/(?=^# [^\n]+\n)/m).filter((block) => block.trim());
 

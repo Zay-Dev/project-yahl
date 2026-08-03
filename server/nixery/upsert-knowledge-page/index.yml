@@ -32,6 +32,9 @@ input:
   page:
     type: string
     required: false
+  section:
+    type: string
+    required: false
   content:
     type: string
     required: false

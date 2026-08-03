@@ -8,6 +8,8 @@ export const PLATFORM_CONTEXT_KEYS = [
   'verify_failed_checks',
   'verify_rebuttal',
   'verify_rebuttal_count',
+  'stage_goto_reason',
+  'stage_goto_from',
 ] as const;
 
 export type TPlatformContextKey = typeof PLATFORM_CONTEXT_KEYS[number];

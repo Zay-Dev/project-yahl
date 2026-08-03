@@ -19,18 +19,24 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 
 | Call | Result |
 |------|--------|
-| `/nixery(upsert-knowledge-page, topic: …, key: …, value: …)` | `{ data: { ok, path, canonicalTopic } }` — **requires** non-empty `topic` or `topicText` (empty topic no longer falls through to `general`) |
+| `/nixery(upsert-knowledge-page, topic: …, key: …, value: …, mode?: …)` | `{ data: { ok, path, canonicalTopic } }` — **requires** non-empty `topic` or `topicText` (empty topic no longer falls through to `general`). Key→page map is a **suggestion** only. |
+| `/nixery(upsert-knowledge-page, topic: …, page: …, content: …, section?: …, mode?: …)` | Open write for **any** page / `##` section under the topic. `section` or `page: "foo#Section Title"`; `mode: append` appends inside that section (or whole page if no section); `replace` replaces the section body or page. |
 | `/nixery(dedup-knowledge, topic: …, purpose: …)` | review JSON under `~/nixery/dedup-knowledge/` |
 
-## LLM helpers (inline)
+Topics and wiki sections are open — task skills recommend shapes; agents may write any page/section.
 
-| Call | Use `data` field |
-|------|------------------|
-| `/nixery(extract-info, source: ~/…, need: …)` | `text` |
-| `/nixery(media-to-text, file: ~/…)` | `text` |
-| `/nixery(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `batches` |
-| `/nixery(research, topic: …, source: ~/…, mission: …, guidelinePath: …)` | `markdown` |
-| `/nixery(consult-breaking-change, proposedChange: …, reason: …, context?: …)` | `{ agree, reasons, alternatives }` |
+```json
+{
+  "defId": "upsert-knowledge-page",
+  "args": {
+    "topic": "traffic-monitor",
+    "page": "source-ops-hong-kong",
+    "section": "Q&A",
+    "mode": "append",
+    "content": "**Q:** empty result table\\n**A:** reload entry URL and re-fill"
+  }
+}
+```
 
 ```json
 {
@@ -42,6 +48,16 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
   }
 }
 ```
+
+## LLM helpers (inline)
+
+| Call | Use `data` field |
+|------|------------------|
+| `/nixery(extract-info, source: ~/…, need: …)` | `text` |
+| `/nixery(media-to-text, file: ~/…)` | `text` |
+| `/nixery(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `batches` |
+| `/nixery(research, topic: …, source: ~/…, mission: …, guidelinePath: …)` | `markdown` |
+| `/nixery(consult-breaking-change, proposedChange: …, reason: …, context?: …)` | `{ agree, reasons, alternatives }` |
 
 ## Rules
 

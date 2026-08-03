@@ -37,6 +37,9 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
             {tag}
           </span>
         ))}
+        {response.createdAt ? (
+          <span>{new Date(response.createdAt).toLocaleString()}</span>
+        ) : null}
         {response.model ? <span>{response.model}</span> : null}
         {typeof response.durationMs === "number" ? (
           <span>{response.durationMs}ms</span>

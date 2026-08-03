@@ -428,6 +428,29 @@ export const runStageSession = async (
         });
       }
 
+      const gotoCall = toolCalls.find((call) => call.function.name === "goto_stage");
+
+      if (gotoCall) {
+        const gotoResult = [...stageMessages].reverse().find(
+          (message) => message.role === "tool" && message.tool_call_id === gotoCall.id,
+        );
+        const content = gotoResult && "content" in gotoResult
+          ? String(gotoResult.content)
+          : "";
+
+        try {
+          const parsed = JSON.parse(content) as { ok?: unknown; transfer?: unknown };
+
+          if (parsed.ok === true && parsed.transfer === true) {
+            console.log(`[agent-daemon] stage finalize turn=${turns} goto_stage transfer\n`);
+
+            return finalizeEnvelope("");
+          }
+        } catch {
+          // fall through — invalid/error result continues the stage
+        }
+      }
+
       if (toolCalls.length > 0) continue;
 
       console.log(`[agent-daemon] stage finalize turn=${turns} toolCalls=0\n`);

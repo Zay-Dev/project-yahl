@@ -1,4 +1,5 @@
 import { parseRunInputContextKeys } from './run-input-keys';
+import { assertDocumentStageIdsAndGoto } from './assert-stage-goto-graph';
 
 import type { TYahlStage } from './types';
 import { validateYahlStage } from './validate-stage';
@@ -48,11 +49,14 @@ export const validateYahlDocument = (raw: unknown): TYahlDocument => {
   }
 
   const runInput = parseRunInputContextKeys(doc.runInput);
+  const stages = doc.stages.map((stage, index) => validateYahlStage(stage, index));
+
+  assertDocumentStageIdsAndGoto(stages);
 
   return {
     description: doc.description.trim(),
     name: doc.name.trim(),
-    stages: doc.stages.map((stage, index) => validateYahlStage(stage, index)),
+    stages,
     ...(resultContextKey ? { resultContextKey } : {}),
     ...(runInput ? { runInput } : {}),
     ...(typeof doc.types === 'string' && doc.types.trim()

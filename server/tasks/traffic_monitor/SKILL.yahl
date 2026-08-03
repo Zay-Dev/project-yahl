@@ -203,7 +203,8 @@ stages:
         (() => ({ instruction_active: false }));
       END:
 
-  - contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, source_instruction, instruction_active, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
+  - id: explorer
+    contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, source_instruction, instruction_active, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
     produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources, origin_resolved, destination_resolved]
     maxTurns: 80
     verify:
@@ -212,12 +213,14 @@ stages:
       minScore: 0.75
       rubric: |
         Pass when origin_resolved and destination_resolved are non-empty (canonical place name; include district when raw OD was a brand/abbrev/mall/cinema),
-        and probe_fetch has at least 2 routes with numeric eta_min and a non-empty http(s) source_url
-        OR probe documented an OD geocode/district mismatch (not accepted as a short-trip multi-route source fail),
         and traffic_source.url is http(s) that either (a) includes {origin} and {destination} placeholders
-        OR (b) kind is browser and howto_md documents form-fill/autocomplete binding of origin/destination with probe chips matching resolved places
+        OR (b) kind is browser and howto_md documents form-fill/autocomplete binding of origin/destination
         (prefer keeping a placeholder template in url when the site supports query params, even if howto navigates a form base URL),
         and traffic_source.howto_md is inline howto markdown (length >= 80, not a path like ~/data/...),
+        and when kind is browser, howto_md does NOT embed concrete run origin/destination/resolved POI autocomplete literals
+        (use generic {resolved origin} / pick-matching-autocomplete wording; OD strings belong in PLACE ops only),
+        and when traffic_source.is_fallback is false, source_ops_md contains a reusable ## HOWTO section for the locked provider
+        (city-reusable UI steps — entry URL, form-fill, search button, SPA quirks — not PLACE-only),
         and traffic_source.is_fallback is boolean,
         and explore_started_at is a non-empty ISO timestamp,
         and tried_sources is a non-null array,
@@ -230,13 +233,22 @@ stages:
         and when traffic_source.is_fallback is true Maps was NOT persisted as the reusable city sources-{city_slug} or ~/data/{traffic_source_file} lock,
         and when instruction_active is true the run applied Input source_instruction (free-text this-run override) —
         do not pass a blind known-failed skip whose what_tried/why is only prior skip/fail / did not re-probe
-        while ignoring source_instruction.
-        Fail when routes are missing without a geocode-fail record, eta_min is not numeric, howto is empty/path-only,
+        while ignoring source_instruction,
+        and ONE of:
+        (Trust path — cold start only) probe_fetch.trusted_cache === true with non-empty http(s) probe_fetch.source_url matching traffic_source.url,
+        traffic_source.is_fallback is false, and tried_sources has an outcome ok entry whose what_tried is 'trusted durable cache; no re-probe'
+        (do NOT require live routes or browser chips on this path);
+        OR (Live probe path) probe_fetch has at least 2 routes with numeric eta_min and a non-empty http(s) source_url
+        OR probe documented an OD geocode/district mismatch (not accepted as a short-trip multi-route source fail),
+        and when kind is browser form-fill, probe chips match resolved places.
+        Fail when neither trust path nor live probe path is satisfied,
+        routes are missing without a geocode-fail record on the live path, eta_min is not numeric on the live path, howto is empty/path-only,
+        browser howto_md embeds run OD / resolved POI literals, non-fallback lock lacks a ## HOWTO block in source_ops_md,
         url is missing, is_fallback is missing, tried_sources missing/null, city attempts > 2,
         failed/skipped entries lack why/what_tried or lack a matching SKIP/FAIL line in source_ops_md,
         Maps was upserted/saved as the permanent city source, origin_resolved/destination_resolved missing,
-        autocomplete accepted a different district/landmark than the stated OD without a geocode-fail,
-        browser chips do not match resolved places,
+        on the live path autocomplete accepted a different district/landmark than the stated OD without a geocode-fail
+        or browser chips do not match resolved places,
         or instruction_active is true and explore only blind-skipped known-failed sources without applying source_instruction.
         On fail, set resumeAction: rerun.
     logic: |
@@ -245,6 +257,8 @@ stages:
       Read ~/task-skills/route-analysis/SKILL.md.
       *upsert_ops_append(notes_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: notes_md); on ok:false retry once with content: notes_md; still merge into source_ops_md.
       *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean_md string); on ok:false retry once with content: lean_md; never upsert Maps / is_fallback:true.
+      *strip_od_bleed(howto_md, origin, destination, origin_resolved, destination_resolved): rewrite howto_md so it has no concrete run OD / POI autocomplete literals; keep generic form-fill steps with {resolved origin}/{resolved destination}.
+      *ensure_provider_howto_ops(source, source_ops_md): if source_ops_md already has a ## HOWTO section for this provider, return []; else draft markdown starting with ## HOWTO ({provider}) covering entry URL, Driving tab, form-fill From/To + click autocomplete (not ArrowDown), Search button label, SPA spinner→miss+reload, must re-enter form each poll; promote any city-reusable tips already in get-knowledge extract that are missing from source_ops_md.
 
       const explore_started_at = new Date().toISOString();
       *set_context(explore_started_at);
@@ -254,6 +268,11 @@ stages:
       *read(instruction_active);
       IF: instruction_active;
         *read(source_instruction);
+      END:
+      IF: stage_goto_reason;
+        *read(stage_goto_reason);
+        *read(stage_goto_from);
+        # re-entered from monitor via /stage(explorer) — fresh city_attempts; re-lock then finish
       END:
 
       let locked = false;
@@ -327,10 +346,56 @@ stages:
           *set_context(tried_sources);
           candidate = null;
         END:
-      END;
+      END:
 
-      IF: candidate && String(candidate.url || '').includes('{origin}');
-        const traffic_source = { ...candidate, city: city, is_fallback: false };
+      const candidate_usable =
+        !!candidate && (
+          String(candidate.url || '').includes('{origin}')
+          || (String(candidate.kind || '') === 'browser' && String(candidate.howto_md || '').length >= 80)
+        );
+
+      IF: candidate_usable && !stage_goto_reason;
+        let traffic_source = { ...candidate, city: city, is_fallback: false };
+        traffic_source.howto_md = *strip_od_bleed(
+          traffic_source.howto_md,
+          origin,
+          destination,
+          origin_resolved,
+          destination_resolved,
+        );
+        const probe_fetch = {
+          trusted_cache: true,
+          source_url: String(traffic_source.url || ''),
+          routes: [],
+        };
+        tried_sources = [...tried_sources, {
+          name: *source_display_name(traffic_source),
+          url: traffic_source.url,
+          what_tried: 'trusted durable cache; no re-probe',
+          outcome: 'ok',
+          why: 'cold-start non-fallback cache present and not known-failed',
+          at: new Date().toISOString(),
+        }];
+        *save(~/data/{traffic_source_file}, traffic_source);
+        *upsert_sources(*serialize_traffic_source_lean(traffic_source));
+        const howto_ops = *ensure_provider_howto_ops(traffic_source, source_ops_md);
+        IF: howto_ops.length > 0;
+          *upsert_ops_append(*notes_to_md(howto_ops));
+          source_ops_md = *merge_source_ops_md(source_ops_md, howto_ops);
+        END:
+        *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
+        locked = true;
+      END:
+
+      IF: !locked && candidate_usable;
+        let traffic_source = { ...candidate, city: city, is_fallback: false };
+        traffic_source.howto_md = *strip_od_bleed(
+          traffic_source.howto_md,
+          origin,
+          destination,
+          origin_resolved,
+          destination_resolved,
+        );
         const probe_fetch = *fetch_driving_routes(
           origin: origin_resolved,
           destination: destination_resolved,
@@ -350,6 +415,15 @@ stages:
           }];
           *save(~/data/{traffic_source_file}, traffic_source);
           *upsert_sources(*serialize_traffic_source_lean(traffic_source));
+          const ok_howto = *ensure_provider_howto_ops(traffic_source, source_ops_md);
+          const ok_notes = *filter_novel_ops_notes(
+            [...ok_howto, ...*draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch)],
+            against: source_ops_md,
+          );
+          IF: ok_notes.length > 0;
+            *upsert_ops_append(*notes_to_md(ok_notes));
+            source_ops_md = *merge_source_ops_md(source_ops_md, ok_notes);
+          END:
           *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
           locked = true;
         ELSE:
@@ -470,7 +544,18 @@ stages:
           IF: !String(researched.url || '').includes('{origin}') && *howto_documents_form_fill(researched.howto_md);
             researched = *prefer_placeholder_url(researched);
           END:
-          const traffic_source = { ...researched, city: city, is_fallback: false };
+          const traffic_source = {
+            ...researched,
+            city: city,
+            is_fallback: false,
+            howto_md: *strip_od_bleed(
+              researched.howto_md,
+              origin,
+              destination,
+              origin_resolved,
+              destination_resolved,
+            ),
+          };
           const probe_fetch = *fetch_driving_routes(
             origin: origin_resolved,
             destination: destination_resolved,
@@ -489,8 +574,9 @@ stages:
               why: 'probe returned usable multi-route ETAs',
               at: new Date().toISOString(),
             }];
+            const lock_howto = *ensure_provider_howto_ops(traffic_source, source_ops_md);
             const ok_notes = *filter_novel_ops_notes(
-              *draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch),
+              [...lock_howto, ...*draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch)],
               against: source_ops_md,
             );
             IF: ok_notes.length > 0;
@@ -601,27 +687,48 @@ stages:
       END:
 
   - contextMode: true
-    contextKeys: [timezone]
+    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note]
     produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note]
     logic: |
-      const started_at = new Date().toISOString();
-      const tz = String(context.context.timezone ?? 'Asia/Hong_Kong');
-      const offsetMs = tz === 'Asia/Hong_Kong' ? 8 * 60 * 60 * 1000 : 0;
-      const y = new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
-      (() => ({
-        started_at,
-        fetches: [],
-        prev_routes: [],
-        summary_notified: false,
-        notifications: [],
-        miss_count: 0,
-        day_page: `raw/fetches-${y}`,
-        last_heartbeat_at: '',
-        last_source_notes_at: '',
-        prev_incident_note: '',
-      }))
+      (() => {
+        const existing = context.context.started_at;
+        if (existing && String(existing).trim()) {
+          return {
+            started_at: context.context.started_at,
+            fetches: Array.isArray(context.context.fetches) ? context.context.fetches : [],
+            prev_routes: Array.isArray(context.context.prev_routes) ? context.context.prev_routes : [],
+            summary_notified: context.context.summary_notified === true,
+            notifications: Array.isArray(context.context.notifications) ? context.context.notifications : [],
+            miss_count: Number(context.context.miss_count) || 0,
+            day_page: String(context.context.day_page || ''),
+            last_heartbeat_at: String(context.context.last_heartbeat_at || ''),
+            last_source_notes_at: String(context.context.last_source_notes_at || ''),
+            prev_incident_note: String(context.context.prev_incident_note || ''),
+          };
+        }
+        const started_at = new Date().toISOString();
+        const tz = String(context.context.timezone ?? 'Asia/Hong_Kong');
+        const offsetMs = tz === 'Asia/Hong_Kong' ? 8 * 60 * 60 * 1000 : 0;
+        const y = new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
+        return {
+          started_at,
+          fetches: [],
+          prev_routes: [],
+          summary_notified: false,
+          notifications: [],
+          miss_count: 0,
+          day_page: `raw/fetches-${y}`,
+          last_heartbeat_at: '',
+          last_source_notes_at: '',
+          prev_incident_note: '',
+        };
+      });
 
-  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, origin_resolved, destination_resolved, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
+  - id: monitor
+    goto:
+      - command: '/stage(explorer)'
+        description: 'when the cached/locked traffic source is no longer available or usable'
+    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, origin_resolved, destination_resolved, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
     produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, last_source_notes_at, prev_incident_note, source_ops_md]
     agentOverrides:
       bashTimeoutMs: 360000
@@ -917,21 +1024,7 @@ stages:
           value: summary_md,
         );
       END:
-      const analysis_up = /nixery(
-        upsert-knowledge-page,
-        topic: knowledge_topic,
-        key: analysis_md,
-        value: summary_md,
-      );
-      IF: !*last_nixery_ok();
-        /nixery(
-          upsert-knowledge-page,
-          topic: knowledge_topic,
-          key: analysis_md,
-          value: summary_md,
-        );
-      END:
-      *assert_upsert_topic(report_up, summary_up, analysis_up, topic: knowledge_topic);
+      *assert_upsert_topic(report_up, summary_up, topic: knowledge_topic);
       const result = {
         started_at,
         day_kind,

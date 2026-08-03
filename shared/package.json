@@ -88,6 +88,14 @@
       "development": "./yahl/types-preamble.ts",
       "import": "./dist/yahl/types-preamble.js"
     },
+    "./yahl/stage-goto": {
+      "development": "./yahl/stage-goto.ts",
+      "import": "./dist/yahl/stage-goto.js"
+    },
+    "./yahl/assert-stage-goto-graph": {
+      "development": "./yahl/assert-stage-goto-graph.ts",
+      "import": "./dist/yahl/assert-stage-goto-graph.js"
+    },
     "./nixery/types": {
       "development": "./nixery/types.ts",
       "import": "./dist/nixery/types.js"

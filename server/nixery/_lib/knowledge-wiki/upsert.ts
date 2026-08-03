@@ -1,6 +1,7 @@
 import { mapKnowledgeKeyToPage } from './knowledge-key-map.js';
 import { rawReferenceToMarkdown } from './raw-reference.js';
 import {
+  appendWikiSection,
   isJsonFenceOnlyContent,
   mergeWikiSection,
   parseWikiPageRef,
@@ -34,6 +35,7 @@ export type TUpsertKnowledgePageInput = {
   key?: string;
   mode?: TUpsertWikiMode;
   page?: string;
+  section?: string;
   seedUrls?: string[];
   title?: string;
   topic?: string;
@@ -116,22 +118,30 @@ const upsertWikiPageWithSection = async (input: {
   section?: string;
   title?: string;
 }): Promise<{ pagePath: string; wikiPath: string }> => {
-  const { page, section } = parseWikiPageRef(input.page);
-  let content = input.content;
-  let mode = input.mode ?? 'replace';
+  const parsed = parseWikiPageRef(input.page);
+  const page = parsed.page;
+  const sectionTitle = (input.section?.trim() || parsed.section?.trim() || '');
+  const requestedMode = input.mode ?? 'replace';
 
-  if (section) {
-    const existing = await loadWikiPageContent(input.canonical, page);
-    const sectionTitle = input.section ?? section;
-
-    content = mergeWikiSection(existing ?? '', sectionTitle, content);
-    mode = 'replace';
+  if (!sectionTitle) {
+    return upsertKnowledgeWikiPage({
+      canonical: input.canonical,
+      content: input.content,
+      mode: requestedMode,
+      page,
+      title: input.title,
+    });
   }
+
+  const existing = await loadWikiPageContent(input.canonical, page);
+  const content = requestedMode === 'append'
+    ? appendWikiSection(existing ?? '', sectionTitle, input.content)
+    : mergeWikiSection(existing ?? '', sectionTitle, input.content);
 
   return upsertKnowledgeWikiPage({
     canonical: input.canonical,
     content,
-    mode,
+    mode: 'replace',
     page,
     title: input.title,
   });
@@ -140,6 +150,7 @@ const upsertWikiPageWithSection = async (input: {
 const upsertKnowledgeKey = async (input: {
   canonical: string;
   key: string;
+  mode?: TUpsertWikiMode;
   value: unknown;
 }): Promise<{
   key: string;
@@ -150,6 +161,7 @@ const upsertKnowledgeKey = async (input: {
   wikiPath: string;
 }> => {
   const mapping = mapKnowledgeKeyToPage(input.key);
+  const narrativeMode = input.mode ?? mapping.mode;
   let pagePath = '';
   let wikiPath = '';
   let quality: string | undefined;
@@ -163,7 +175,7 @@ const upsertKnowledgeKey = async (input: {
       const result = await upsertWikiPageWithSection({
         canonical: input.canonical,
         content: narrative,
-        mode: mapping.mode,
+        mode: narrativeMode,
         page: mapping.section ? `${mapping.page}#${sectionTitle}` : mapping.page,
         section: mapping.section ? sectionTitle : undefined,
       });
@@ -224,6 +236,7 @@ export const runUpsertKnowledgePage = async (
     : undefined;
   const key = typeof args.key === 'string' ? args.key.trim() : '';
   const page = typeof args.page === 'string' ? args.page.trim() : '';
+  const section = typeof args.section === 'string' ? args.section.trim() : '';
   const content = typeof args.content === 'string' ? args.content : undefined;
   const mode = args.mode === 'append' || args.mode === 'create' || args.mode === 'replace'
     ? args.mode
@@ -278,6 +291,7 @@ export const runUpsertKnowledgePage = async (
       const written = await upsertKnowledgeKey({
         canonical: canonicalTopic,
         key,
+        mode,
         value: normalizedValue,
       });
 
@@ -297,11 +311,13 @@ export const runUpsertKnowledgePage = async (
       };
     }
 
-    const written = await upsertKnowledgeWikiPage({
+    const parsedPage = parseWikiPageRef(page);
+    const written = await upsertWikiPageWithSection({
       canonical: canonicalTopic,
       content: toPageContent(content, args.value),
       mode,
-      page,
+      page: parsedPage.page,
+      section: section || parsedPage.section,
       title: typeof args.title === 'string' ? args.title : undefined,
     });
 
@@ -309,7 +325,7 @@ export const runUpsertKnowledgePage = async (
       absolutePath: written.pagePath,
       canonicalTopic,
       ok: true,
-      page,
+      page: parsedPage.page,
       pagePath: written.pagePath,
       path: written.pagePath,
       relativePath: written.pagePath,

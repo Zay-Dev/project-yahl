@@ -44,12 +44,19 @@ export type TYahlAgentOverrides = {
   bashTimeoutMs?: number;
 };
 
+export type TYahlGotoEntry = {
+  command: string;
+  description: string;
+};
+
 export type TYahlStage = {
   agentOverrides?: TYahlAgentOverrides;
   askUser?: TYahlAskUserEntry[];
   conditionMode?: boolean;
   contextKeys?: string[];
   contextMode?: boolean;
+  goto?: TYahlGotoEntry[];
+  id?: string;
   logic: string;
   loopSetup?: string;
   maxBashCalls?: number;

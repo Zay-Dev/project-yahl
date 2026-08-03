@@ -29,14 +29,12 @@ Under `topics/{slug}/raw/{key}/`:
 
 Nixery **dual-writes** on `upsert-knowledge-page` with `key` + `value`: narrative → wiki page; structured value → `raw/{key}`.
 
-Known keys in the static map are **suggestions**; unknown keys soft-default to a slug page. Prefer documented keys for knowledge tasks. Novel tasks use **`page` + `content`** (see `novel-wiki-style`).
-
-Overview may link to raw refs: `[[topics/{slug}/raw/open_questions_qa]]`.
+Known keys in the static map are **suggestions**; unknown keys soft-default to a slug page. Prefer documented keys for knowledge tasks. Topics and `##` sections are open — any page/section is allowed.
 
 ## Agent API
 
-- **Write:** `/nixery(upsert-knowledge-page, topic: …, key: …, value: …)` — nixery def picks wiki + raw targets.
-- **Write (explicit page):** `/nixery(upsert-knowledge-page, topic: …, page: …, content: …)` — bypasses key map for nested paths.
+- **Write (key suggestion):** `/nixery(upsert-knowledge-page, topic: …, key: …, value: …, mode?: …)` — nixery may dual-write wiki + raw; caller `mode` is honored for narrative pages.
+- **Write (open page/section):** `/nixery(upsert-knowledge-page, topic: …, page: …, content: …, section?: …, mode?: …)` — any page under the topic; optional `section` (or `page: "foo#Section"`) targets a `##` heading; `append` stacks inside that section or at page end.
 - **Read (preferred):** `nixeryRun: get-knowledge` + read `~/nixery/get-knowledge/{output}` — see `~/task-skills/nixery-get-knowledge/SKILL.md` when mounted via `_shared`.
 - **Read (legacy):** `/mastermind(get-knowledge, topic: …, need: …)` — deprecated; do not add new usages.
 

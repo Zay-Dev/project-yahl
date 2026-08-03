@@ -1,10 +1,15 @@
 import type {
   TYahlAgentOverrides,
   TYahlAskUserEntry,
+  TYahlGotoEntry,
   TYahlStage,
   TYahlVerifySpec,
 } from './types';
 import { DEFAULT_VERIFY_DEF_ID } from './verify';
+import {
+  parseStageGotoCommand,
+  STAGE_ID_PATTERN,
+} from './stage-goto';
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
 
@@ -163,6 +168,50 @@ const validateAgentOverrides = (
   return { bashTimeoutMs };
 };
 
+const validateGotoEntries = (
+  raw: unknown,
+  label: string,
+  stage: Record<string, unknown>,
+): TYahlGotoEntry[] | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(`${label}.goto: must be a non-empty array when present`);
+  }
+
+  if (stage.contextMode === true || stage.conditionMode === true) {
+    throw new Error(`${label}.goto: cannot combine with contextMode or conditionMode`);
+  }
+
+  if (typeof stage.nixeryRun === 'string' && stage.nixeryRun.trim()) {
+    throw new Error(`${label}.goto: cannot combine with nixeryRun`);
+  }
+
+  return raw.map((entry, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new Error(`${label}.goto[${index}]: expected an object`);
+    }
+
+    const item = entry as Record<string, unknown>;
+    const command = typeof item.command === 'string' ? item.command.trim() : '';
+    const description = typeof item.description === 'string' ? item.description.trim() : '';
+
+    if (!command || !parseStageGotoCommand(command)) {
+      throw new Error(
+        `${label}.goto[${index}].command: must match /stage(<id>)`,
+      );
+    }
+
+    if (!description) {
+      throw new Error(`${label}.goto[${index}].description: required non-empty string`);
+    }
+
+    return { command, description };
+  });
+};
+
 const normalizeVerifySpec = (
   raw: unknown,
   label: string,
@@ -309,6 +358,18 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     throw new Error(`${label}: conditionMode logic must contain IF:`);
   }
 
+  let stageId: string | undefined;
+
+  if (stage.id !== undefined) {
+    if (typeof stage.id !== 'string' || !STAGE_ID_PATTERN.test(stage.id.trim())) {
+      throw new Error(`${label}.id: must match ${STAGE_ID_PATTERN}`);
+    }
+
+    stageId = stage.id.trim();
+  }
+
+  const goto = validateGotoEntries(stage.goto, label, stage);
+
   let askUser: TYahlAskUserEntry[] | undefined;
 
   if (stage.askUser !== undefined) {
@@ -342,6 +403,8 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
       : {}),
     ...(askUser ? { askUser } : {}),
     ...(agentOverrides ? { agentOverrides } : {}),
+    ...(stageId ? { id: stageId } : {}),
+    ...(goto ? { goto } : {}),
     ...(stage.contextMode === true ? { contextMode: true } : {}),
     ...(stage.conditionMode === true ? { conditionMode: true } : {}),
     ...(typeof stage.loopSetup === 'string' ? { loopSetup: stage.loopSetup.trim() } : {}),

@@ -32,6 +32,8 @@ export type AskUserBatchAnswerInput = {
   questionRef: string;
 };
 
+const ASK_USER_BATCH_VERSION = 'askUserBatch.v1' as const;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -86,6 +88,101 @@ const parseBatchQuestion = (raw: unknown): AskUserBatchQuestion | null => {
   };
 };
 
+const explainBatchQuestionFailure = (raw: unknown, index: number): string | null => {
+  if (!isRecord(raw)) {
+    return `question[${index}] must be an object`;
+  }
+
+  const questionRef = typeof raw.questionRef === 'string' ? raw.questionRef.trim() : '';
+  const title = typeof raw.title === 'string' ? raw.title.trim() : '';
+  const kind = raw.kind === 'text' || raw.kind === 'multipleChoice' ? raw.kind : null;
+
+  if (!questionRef) {
+    return `question[${index}] missing questionRef`;
+  }
+
+  if (!title) {
+    return `question[${index}] missing title`;
+  }
+
+  if (!kind) {
+    return `question[${index}] kind must be "text" or "multipleChoice"`;
+  }
+
+  if (kind === 'multipleChoice') {
+    const options = Array.isArray(raw.options)
+      ? raw.options.map(parseQuestionOption).filter((item): item is AskUserBatchQuestionOption => !!item)
+      : [];
+
+    if (options.length < 2) {
+      return `question[${index}] multipleChoice needs at least 2 valid options`;
+    }
+  }
+
+  return null;
+};
+
+export const explainAskUserBatchParseFailure = (raw: string): string => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return 'ask_user: arguments must be valid JSON';
+  }
+
+  if (!isRecord(parsed)) {
+    return 'ask_user: arguments must be an object';
+  }
+
+  if (
+    parsed.version !== undefined
+    && parsed.version !== ASK_USER_BATCH_VERSION
+  ) {
+    return `ask_user: version must be "${ASK_USER_BATCH_VERSION}"`;
+  }
+
+  const batchId = typeof parsed.batchId === 'string' ? parsed.batchId.trim() : '';
+  const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
+
+  if (!batchId) {
+    return 'ask_user: batchId is required';
+  }
+
+  if (!title) {
+    return 'ask_user: title is required';
+  }
+
+  if (!Array.isArray(parsed.questions) || parsed.questions.length < 1) {
+    return 'ask_user: questions must be a non-empty array';
+  }
+
+  const refs = new Set<string>();
+
+  for (let index = 0; index < parsed.questions.length; index += 1) {
+    const questionRaw = parsed.questions[index];
+    const questionError = explainBatchQuestionFailure(questionRaw, index);
+
+    if (questionError) {
+      return `ask_user: ${questionError}`;
+    }
+
+    const question = parseBatchQuestion(questionRaw);
+
+    if (!question) {
+      return `ask_user: question[${index}] is invalid`;
+    }
+
+    if (refs.has(question.questionRef)) {
+      return `ask_user: duplicate questionRef "${question.questionRef}"`;
+    }
+
+    refs.add(question.questionRef);
+  }
+
+  return 'ask_user: invalid arguments';
+};
+
 export const parseAskUserBatchToolArguments = (
   raw: string,
 ): AskUserBatchToolArguments | null => {
@@ -98,7 +195,13 @@ export const parseAskUserBatchToolArguments = (
   }
 
   if (!isRecord(parsed)) return null;
-  if (parsed.version !== 'askUserBatch.v1') return null;
+
+  if (
+    parsed.version !== undefined
+    && parsed.version !== ASK_USER_BATCH_VERSION
+  ) {
+    return null;
+  }
 
   const batchId = typeof parsed.batchId === 'string' ? parsed.batchId.trim() : '';
   const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
@@ -124,7 +227,7 @@ export const parseAskUserBatchToolArguments = (
     description: typeof parsed.description === 'string' ? parsed.description : undefined,
     questions,
     title,
-    version: 'askUserBatch.v1',
+    version: ASK_USER_BATCH_VERSION,
   };
 };
 

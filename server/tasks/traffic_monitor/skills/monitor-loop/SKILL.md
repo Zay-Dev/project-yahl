@@ -4,7 +4,7 @@ Rules for the configurable-length traffic poll stage (`monitor_minutes`, default
 
 ## Clock
 
-- `started_at` is set once in a prior VM stage. Never overwrite it.
+- `started_at` is set once in a prior VM stage. Never overwrite it. After a `/stage(explorer)` transfer, the clock-seed stage is **idempotent** — it keeps existing `started_at` / counters when already set.
 - Seed context uses `prev_routes: []`, `last_heartbeat_at: ''`, `last_source_notes_at: ''`, `prev_incident_note: ''` (never `null`) — produce-keys rejects null allowlisted keys.
 - `day_page` / calendar day use **`timezone`** from context (default Asia/Hong_Kong). For Asia/Hong_Kong the VM clock stage uses UTC+8; otherwise prefer timezone-aware formatting in this stage.
 - Display times and wiki sections `## HH:MM {tz_label}` must use `timezone` wall clock — never label a UTC clock as local.
@@ -34,7 +34,7 @@ Check the monitor-minutes exit condition again after each sleep returns.
 
 ## Poll sequence
 
-1. `*read(source_ops_md)` every poll (attend only — do **not** `const`/`let`-assign or `set_context` a copy of the full blob; Input already has `source_ops_md`). Fetch top 2–3 driving routes (see route-analysis) for `origin_resolved`/`destination_resolved` (fallback to `origin`/`destination`) using core `traffic_source.howto_md` **plus** Input `source_ops_md`. Rebuild the goto URL from placeholders + resolved OD with deterministic encoding every poll.
+1. `*read(source_ops_md)` every poll (attend only — do **not** `const`/`let`-assign or `set_context` a copy of the full blob; Input already has `source_ops_md`). Fetch top 2–3 driving routes (see route-analysis) for `origin_resolved`/`destination_resolved` (fallback to `origin`/`destination`) using core OD-generic `traffic_source.howto_md` **plus** Input `source_ops_md` (including durable `## HOWTO`). Rebuild the goto URL from placeholders + resolved OD with deterministic encoding every poll. Never rewrite `howto_md` with this poll’s POI strings.
 2. On **success**: update context **before** the day-page write:
    - `set_context` key `fetches` with `operation: extend` and `value` = the **one** new fetch object from the real poll (do not rewrite the whole array; do not invent polls).
    - `set_context` key `prev_routes` to that fetch’s `routes`.
@@ -53,6 +53,7 @@ When route fetch via `browser` fails (timeout, blank page, `ok: false`):
 - After 2 consecutive failures for the same poll: **skip the poll**. Keep prior `fetches` / `prev_routes` / `prev_incident_note` unchanged. Increment `miss_count` via `set_context` (`miss_count = (miss_count || 0) + 1`). Append a day-page note with `## HH:MM {tz_label}`, `- Origin: …`, `- Destination: …`, `- Fetch missed: …`, `- Using previous routes` via `*format_miss_section(…, origin, destination, timezone)`. Then run the 20-min source-ops tick if due (miss reasons may be novel ops notes). Then sleep with the adaptive schedule based on the last successful primary ETA (or `180` if none).
 - Never invent route ETAs when the browser failed.
 - Never write a success-shaped day-page section (route ETAs) for a missed poll.
+- When the locked source is **no longer usable** (site permanently broken, howto invalid, sustained misses that show the source itself is dead — not a one-off flake): call **`goto_stage`** with `stageId: "explorer"` and a concrete `reason` (do not keep sleeping forever on a dead source). Orchestrator ends this monitor stage without verify and jump-and-continues at explorer; clock-seed later preserves `started_at`.
 
 ## Adaptive sleep helper
 
@@ -97,8 +98,8 @@ If A and B, or B and C, are due on the same poll, send separate proposals (do no
 
 When `(now - last_source_notes_at || started_at) >= 20m`:
 
-1. Draft 0–5 short candidate bullets from this window (tricks, brittle selectors, timeouts, URL quirks, **and miss/fail reasons**). When `traffic_source.is_fallback` (Google Maps budget fallback), include novel Maps howto / prevent notes (encoding, OD chips, SPA URLs, UI quirks) — do not skip learning because the source is fallback. Fail notes are equal priority to success tips.
+1. Draft 0–5 short candidate notes from this window (tricks, brittle selectors, timeouts, URL quirks, miss/fail reasons, and recoverable **Q&A** problem→fix pairs). When `traffic_source.is_fallback` (Google Maps budget fallback), include novel Maps howto / prevent notes (encoding, OD chips, SPA URLs, UI quirks) — do not skip learning because the source is fallback. Fail notes are equal priority to success tips. Prefer `## Q&A` entries for recurring FIX patterns; one-off misses may stay as `- SKIP/FAIL` / `- TRICK` ops-log bullets.
 2. `*read(source_ops_md)` then `novel = *filter_novel_ops_notes(candidates, against: source_ops_md)` — skip fuzzy/semantic duplicates already in knowledge; never treat a new SKIP/FAIL as a duplicate of a success tip.
-3. If `novel` non-empty: `/nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: novel_md_string)`, merge into context `source_ops_md`, then `*set_context(source_ops_md)` only because content changed. Prefer `value:` (markdown string). On `ok: false`, retry once with `content:` instead of `value`.
-4. Do **not** append into `traffic_source.howto_md` or save the local traffic_source file for ops.
+3. If `novel` non-empty: `/nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: novel_md_string)`, merge into context `source_ops_md`, then `*set_context(source_ops_md)` only because content changed. Prefer `value:` (markdown string). On `ok: false`, retry once with `content:` instead of `value`. Append only — never replace the whole source-ops page.
+4. Do **not** append into `traffic_source.howto_md` or save the local traffic_source file for ops. Novel city-reusable UI tips belong under source-ops `## HOWTO`; OD-specific autocomplete → `## PLACE`; recurring problem→fix → `## Q&A`.
 5. Always set `last_source_notes_at` to now ISO (even when nothing novel — no empty upsert spam).

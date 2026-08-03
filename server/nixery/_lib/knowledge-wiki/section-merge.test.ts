@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   collapseDuplicateWikiSections,
+  appendWikiSection,
   mergeWikiSection,
 } from './section-merge.js';
 
@@ -127,5 +128,43 @@ describe('mergeWikiSection', () => {
     assert.doesNotMatch(merged, /\[object Object\]/);
     assert.doesNotMatch(merged, /old theme/);
     assert.match(merged, /## Key facts/);
+  });
+});
+
+describe('appendWikiSection', () => {
+  it('appends into an existing section body and leaves siblings', () => {
+    const existing = [
+      '## HOWTO',
+      '',
+      'step 1',
+      '',
+      '## Q&A',
+      '',
+      'old answer',
+    ].join('\n');
+
+    const appended = appendWikiSection(existing, 'Q&A', 'new answer');
+
+    assert.match(appended, /old answer/);
+    assert.match(appended, /new answer/);
+    assert.equal((appended.match(/^## Q&A$/gm) ?? []).length, 1);
+    assert.match(appended, /## HOWTO/);
+    assert.match(appended, /step 1/);
+  });
+
+  it('creates a missing section at the end of the page', () => {
+    const existing = '## HOWTO\n\nstep 1\n';
+    const appended = appendWikiSection(existing, 'PLACE', '- note');
+
+    assert.match(appended, /## HOWTO/);
+    assert.match(appended, /## PLACE/);
+    assert.match(appended, /- note/);
+  });
+
+  it('creates the section on an empty page', () => {
+    const appended = appendWikiSection('', 'Q&A', '**Q:** x\n**A:** y');
+
+    assert.match(appended, /^## Q&A/);
+    assert.match(appended, /\*\*Q:\*\* x/);
   });
 });
