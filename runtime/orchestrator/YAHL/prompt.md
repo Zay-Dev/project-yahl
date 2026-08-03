@@ -39,7 +39,7 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 ## browser (API tool)
 
-Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details.
+Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details. Stagehand’s internal LLM is answered via a localhost proxy that includes this stage’s message history (thinking disabled).
 
 Use the **`mastermind`** tool for `/mastermind(...)` platform skills (list-topic-policies, resolve-topic-policy, patch-topic-policy, evaluate-knowledge-refresh, dispatch-task-run, propose-notification). Read `/opt/skills/mastermind/SKILL.md`. Use **`nixery`** for media-to-text and LLM helpers. **Do not use mastermind for verify** — stages with a `verify:` object (or `verify: true`) are scored by the orchestrator via nixery `verify.defId` after the stage finishes.
 

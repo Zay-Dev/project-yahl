@@ -12,11 +12,59 @@ import { effectiveApiKey, openAiFetch } from "../llm-transport";
 
 import * as Utils from "./-utils";
 
+export type TStagehandProxyCompletionInput = {
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+  model?: string;
+  temperature?: number;
+  tool_choice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption;
+  tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
+};
+
+export const resolveNestedModelForStagehandProxy = (requested?: string) => {
+  const raw = (requested || config.model).trim();
+
+  if (!raw) return config.model;
+
+  const withoutProvider = raw.includes("/") ? raw.slice(raw.indexOf("/") + 1) : raw;
+
+  return withoutProvider || config.model;
+};
+
+export const buildStagehandProxyLlmCreateParams = (
+  input: TStagehandProxyCompletionInput,
+) => ({
+  messages: input.messages,
+  model: resolveNestedModelForStagehandProxy(input.model),
+  stream: false as const,
+  thinking: { type: "disabled" as const },
+  ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
+  ...(input.tools?.length
+    ? {
+        tool_choice: input.tool_choice ?? "auto",
+        tools: input.tools,
+      }
+    : {}),
+});
+
 export const chatWithTools = async (
   messages: ChatApiMessage[],
   options?: { temperature?: number },
 ): Promise<ChatAssistantMessage> => {
   return await _chat(messages, { allowTools: true, ...options });
+};
+
+export const chatCompletionForStagehandProxy = async (
+  input: TStagehandProxyCompletionInput,
+): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
+  const response = await _client.chat.completions.create(
+    buildStagehandProxyLlmCreateParams(input) as any,
+  );
+
+  if (!response.choices?.[0]?.message) {
+    throw new Error("LLM API returned no message");
+  }
+
+  return response;
 };
 
 const _chat = async (

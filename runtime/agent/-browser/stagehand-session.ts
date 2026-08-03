@@ -3,10 +3,13 @@ import config from "../config";
 import { jsonSchemaToZod, Stagehand } from "@browserbasehq/stagehand";
 import { z } from "zod";
 
-import type { BrowserToolArguments } from "@/shared/stage-tools";
+import type { BrowserToolArguments, ChatApiMessage } from "@/shared/stage-tools";
 
-import { effectiveApiKey } from "../-utils/llm-transport";
-
+import {
+  ensureStagehandLlmProxy,
+  setStagehandProxyHistory,
+  stopStagehandLlmProxy,
+} from "./stagehand-llm-proxy";
 import { resolveChromiumExecutablePath } from "./chromium-executable";
 
 const DEFAULT_AGENT_MAX_STEPS = 15;
@@ -26,6 +29,10 @@ const GOTO_OPTIONS = {
 type TBrowserResult =
   | { data: unknown; ok: true }
   | { error: string; ok: false };
+
+export type TRunBrowserCommandOptions = {
+  stageMessages?: ChatApiMessage[];
+};
 
 let stagehand: Stagehand | null = null;
 let initPromise: Promise<Stagehand> | null = null;
@@ -59,8 +66,11 @@ const resolveStagehand = async (): Promise<Stagehand> => {
     const chromePath = resolveChromiumExecutablePath();
     process.env.CHROME_PATH = chromePath;
 
+    const proxy = await ensureStagehandLlmProxy();
+
     if (config.debug) {
       console.log(`[stagehand] CHROME_PATH=${chromePath}\n`);
+      console.log(`[stagehand] llm proxy baseURL=${proxy.baseURL}\n`);
     }
 
     const instance = new Stagehand({
@@ -74,8 +84,8 @@ const resolveStagehand = async (): Promise<Stagehand> => {
         headless: !config.stagehandLiveview,
       },
       model: {
-        apiKey: effectiveApiKey(config.apiKey),
-        baseURL: config.apiBaseUrl,
+        apiKey: "stagehand-proxy",
+        baseURL: proxy.baseURL,
         modelName: config.stagehandModel,
       },
       sessionId,
@@ -142,6 +152,8 @@ export const closeStagehandSession = async () => {
   stagehand = null;
   initPromise = null;
   consecutiveBrowserFailures = 0;
+
+  await stopStagehandLlmProxy();
 
   if (!current) return;
 
@@ -242,7 +254,14 @@ const shouldResetBrowser = (_args: BrowserToolArguments, error: string) => {
 
 export const runBrowserCommand = async (
   args: BrowserToolArguments,
+  options?: TRunBrowserCommandOptions,
 ): Promise<TBrowserResult> => {
+  await ensureStagehandLlmProxy();
+
+  if (options?.stageMessages) {
+    setStagehandProxyHistory(options.stageMessages);
+  }
+
   let result: TBrowserResult;
 
   try {
@@ -270,6 +289,12 @@ export const runBrowserCommand = async (
   );
 
   await closeStagehandSession();
+
+  await ensureStagehandLlmProxy();
+
+  if (options?.stageMessages) {
+    setStagehandProxyHistory(options.stageMessages);
+  }
 
   try {
     result = await executeBrowserCommand(args);

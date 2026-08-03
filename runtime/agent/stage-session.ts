@@ -326,7 +326,9 @@ export const runStageSession = async (
           );
 
           const browserStartedAt = Date.now();
-          const browserResult = await runBrowserCommand(browserArgs);
+          const browserResult = await runBrowserCommand(browserArgs, {
+            stageMessages: stageMessages.slice(),
+          });
           const browserDurationMs = Date.now() - browserStartedAt;
 
           console.log(
