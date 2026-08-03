@@ -56,3 +56,7 @@ The agent may write supporting files (notes, markdown) alongside the primary art
 | summary bundle | `summary.md` | Summary corpus for final brief |
 
 Prefer fewer, broader `purpose` values when one extract serves multiple downstream stages.
+
+## Prefer raw page bodies
+
+When `purpose` asks for a named wiki page (e.g. `source-ops-{city_slug}`), prefer `cat` of that page’s markdown body over synthesizing Overview/History essays or multi-run scrapbooks. Keep section headings (`## HOWTO` / `## PLACE` / `## Q&A`) intact so downstream context can attend them.

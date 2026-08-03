@@ -113,10 +113,12 @@ stages:
     nixeryRun: get-knowledge
     nixeryInput:
       purpose: |
-        Load lean sources-{city_slug} and source-ops-{city_slug} for this city only.
-        Prefer raw page bullets over synthesizing budget/exhausted/quota objects.
-        Do not invent budget.exhausted, city_attempts totals, or "Research quota" status —
-        prior BUDGET/HISTORY lines are avoid-list history, not a live research stop.
+        Seed from raw page bodies only — prefer cat of
+        topics/{topic}/source-ops-{city_slug}.md (full markdown body after frontmatter)
+        and lean sources-{city_slug}.md bullets when present.
+        Do NOT synthesize Overview/History essays, multi-OD scrapbooks, or budget/exhausted/quota objects.
+        Write the source-ops page body first in source-knowledge.md (verbatim sections HOWTO/PLACE/Q&A/ops-log).
+        Prior BUDGET/HISTORY lines are avoid-list history, not a live research stop.
       topic: knowledge_topic
       output: source-knowledge.md
     logic: "(nixery)"
@@ -125,7 +127,10 @@ stages:
     produceContextKeys: [source_ops_md]
     logic: |
       Read ~/nixery/get-knowledge/source-knowledge.md from the session workspace.
-      If missing or empty after trim, set source_ops_md to '<none>'; otherwise set source_ops_md to the file's full markdown content (prefer the source-ops-{city_slug} section when present).
+      If missing or empty after trim, set source_ops_md to '<none>'.
+      Otherwise set source_ops_md to the source-ops-{city_slug} page body only
+      (strip any Overview/History/sources preamble the extract may have added; keep HOWTO/PLACE/Q&A/ops-log).
+      Do not keep a multi-OD essay scrapbook — prefer the raw wiki page body.
 
   - contextKeys: [origin, destination, city, holidays_topic, holidays_file_prefix, traffic_source_file]
     nixeryRun: plan
@@ -255,10 +260,15 @@ stages:
       Read ~/nixery/plan/plan.md when helpful.
       Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
-      *upsert_ops_append(notes_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: notes_md); on ok:false retry once with content: notes_md; still merge into source_ops_md.
+      *strip_ops_heading(body_md): strip leading ## HOWTO / ## PLACE / ## Q&A lines from body_md; return section body only.
+      *upsert_ops_section(section, body_md): body = *strip_ops_heading(body_md); /nixery(upsert-knowledge-page, topic: knowledge_topic, page: source-ops-{city_slug}, section: section, mode: append, content: body); on ok:false retry once with same page/section/mode/content (flat args only — never nest defId inside args); merge body under that section into source_ops_md.
+      *upsert_ops_log(notes_md): body = *strip_ops_heading(notes_md); if body has no ## headings, /nixery(upsert-knowledge-page, topic: knowledge_topic, page: source-ops-{city_slug}, mode: append, content: body); on ok:false retry once; merge into source_ops_md. Never key-append ## heading blocks.
+      *upsert_ops_notes(notes): partition notes into HOWTO ({provider}) / PLACE / Q&A / ops-log; one *upsert_ops_section per section body and *upsert_ops_log for loose bullets; one upsert per novel partition — do not triple-retry the same note.
+      *upsert_ops_append(notes_md): alias of *upsert_ops_notes(notes_md) — routes HOWTO/PLACE/Q&A via section; ops-log via page append.
       *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean_md string); on ok:false retry once with content: lean_md; never upsert Maps / is_fallback:true.
       *strip_od_bleed(howto_md, origin, destination, origin_resolved, destination_resolved): rewrite howto_md so it has no concrete run OD / POI autocomplete literals; keep generic form-fill steps with {resolved origin}/{resolved destination}.
-      *ensure_provider_howto_ops(source, source_ops_md): if source_ops_md already has a ## HOWTO section for this provider, return []; else draft markdown starting with ## HOWTO ({provider}) covering entry URL, Driving tab, form-fill From/To + click autocomplete (not ArrowDown), Search button label, SPA spinner→miss+reload, must re-enter form each poll; promote any city-reusable tips already in get-knowledge extract that are missing from source_ops_md.
+      *ensure_provider_howto_ops(source, source_ops_md): if source_ops_md already has a ## HOWTO section for this provider, return []; else draft body WITHOUT a ## heading (section title is HOWTO ({provider})) covering entry URL, Driving tab, form-fill From/To + click autocomplete (not ArrowDown), Search button label, SPA spinner→miss+reload, must re-enter form each poll; promote any city-reusable tips already in get-knowledge extract that are missing from source_ops_md.
+      *place_this_run_note(origin, origin_resolved, destination, destination_resolved): short PLACE body (no ## heading) with this-run Origin/Destination → resolved POI literals.
 
       const explore_started_at = new Date().toISOString();
       *set_context(explore_started_at);
@@ -284,9 +294,13 @@ stages:
       const origin_resolved = *resolve_place(origin, city: city, role: origin);
       const destination_resolved = *resolve_place(destination, city: city, role: destination);
       *set_context(origin_resolved, destination_resolved);
-      IF: *place_was_disambiguated(origin, origin_resolved) || *place_was_disambiguated(destination, destination_resolved);
-        *upsert_ops_append(*place_disambiguation_note(origin, origin_resolved, destination, destination_resolved));
-      END:
+      const place_body = *place_this_run_note(origin, origin_resolved, destination, destination_resolved);
+      const place_novel = *filter_novel_ops_notes([place_body], against: source_ops_md);
+      IF: place_novel.length > 0;
+        *upsert_ops_section('PLACE', place_novel[0] || place_body);
+        source_ops_md = *merge_source_ops_md(source_ops_md, place_novel);
+        *set_context(source_ops_md);
+      END;
 
       let candidate = null;
       IF: *exists(~/data/{traffic_source_file});
@@ -380,7 +394,7 @@ stages:
         *upsert_sources(*serialize_traffic_source_lean(traffic_source));
         const howto_ops = *ensure_provider_howto_ops(traffic_source, source_ops_md);
         IF: howto_ops.length > 0;
-          *upsert_ops_append(*notes_to_md(howto_ops));
+          *upsert_ops_section(`HOWTO (${*source_display_name(traffic_source)})`, *notes_to_md(howto_ops));
           source_ops_md = *merge_source_ops_md(source_ops_md, howto_ops);
         END:
         *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
@@ -416,12 +430,16 @@ stages:
           *save(~/data/{traffic_source_file}, traffic_source);
           *upsert_sources(*serialize_traffic_source_lean(traffic_source));
           const ok_howto = *ensure_provider_howto_ops(traffic_source, source_ops_md);
+          IF: ok_howto.length > 0;
+            *upsert_ops_section(`HOWTO (${*source_display_name(traffic_source)})`, *notes_to_md(ok_howto));
+            source_ops_md = *merge_source_ops_md(source_ops_md, ok_howto);
+          END:
           const ok_notes = *filter_novel_ops_notes(
-            [...ok_howto, ...*draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch)],
+            *draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch),
             against: source_ops_md,
           );
           IF: ok_notes.length > 0;
-            *upsert_ops_append(*notes_to_md(ok_notes));
+            *upsert_ops_notes(ok_notes);
             source_ops_md = *merge_source_ops_md(source_ops_md, ok_notes);
           END:
           *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
@@ -575,12 +593,16 @@ stages:
               at: new Date().toISOString(),
             }];
             const lock_howto = *ensure_provider_howto_ops(traffic_source, source_ops_md);
+            IF: lock_howto.length > 0;
+              *upsert_ops_section(`HOWTO (${*source_display_name(traffic_source)})`, *notes_to_md(lock_howto));
+              source_ops_md = *merge_source_ops_md(source_ops_md, lock_howto);
+            END:
             const ok_notes = *filter_novel_ops_notes(
-              [...lock_howto, ...*draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch)],
+              *draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch),
               against: source_ops_md,
             );
             IF: ok_notes.length > 0;
-              *upsert_ops_append(*notes_to_md(ok_notes));
+              *upsert_ops_notes(ok_notes);
               source_ops_md = *merge_source_ops_md(source_ops_md, ok_notes);
             END:
             *save(~/data/{traffic_source_file}, traffic_source);
@@ -760,6 +782,10 @@ stages:
       Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/monitor-loop/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
+      *strip_ops_heading(body_md): strip leading ## HOWTO / ## PLACE / ## Q&A lines from body_md; return section body only.
+      *upsert_ops_section(section, body_md): body = *strip_ops_heading(body_md); /nixery(upsert-knowledge-page, topic: knowledge_topic, page: source-ops-{city_slug}, section: section, mode: append, content: body); on ok:false retry once (flat args — never nest defId); merge into source_ops_md.
+      *upsert_ops_log(notes_md): body = *strip_ops_heading(notes_md); page-append without section when body has no ## headings; never key-append ## blocks.
+      *upsert_ops_notes(notes): partition into HOWTO ({provider}) / PLACE / Q&A / ops-log; one section upsert or ops-log append each; one upsert per novel partition.
       const window_ms = Number(monitor_minutes) * 60 * 1000;
       const notifications = notifications || [];
       const fetches = fetches || [];
@@ -813,22 +839,7 @@ stages:
               const candidates = *draft_source_ops_candidates(miss: true, fetch: fetch, source: traffic_source);
               const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
               IF: novel.length > 0;
-                /nixery(
-                  upsert-knowledge-page,
-                  topic: knowledge_topic,
-                  key: source-ops-{city_slug},
-                  mode: append,
-                  value: *notes_to_md(novel),
-                );
-                IF: !*last_nixery_ok();
-                  /nixery(
-                    upsert-knowledge-page,
-                    topic: knowledge_topic,
-                    key: source-ops-{city_slug},
-                    mode: append,
-                    content: *notes_to_md(novel),
-                  );
-                END:
+                *upsert_ops_notes(novel);
                 source_ops_md = *merge_source_ops_md(source_ops_md, novel);
               END:
               last_source_notes_at = new Date().toISOString();
@@ -905,22 +916,7 @@ stages:
               const candidates = *draft_source_ops_candidates(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis);
               const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
               IF: novel.length > 0;
-                /nixery(
-                  upsert-knowledge-page,
-                  topic: knowledge_topic,
-                  key: source-ops-{city_slug},
-                  mode: append,
-                  value: *notes_to_md(novel),
-                );
-                IF: !*last_nixery_ok();
-                  /nixery(
-                    upsert-knowledge-page,
-                    topic: knowledge_topic,
-                    key: source-ops-{city_slug},
-                    mode: append,
-                    content: *notes_to_md(novel),
-                  );
-                END:
+                *upsert_ops_notes(novel);
                 source_ops_md = *merge_source_ops_md(source_ops_md, novel);
               END:
               last_source_notes_at = new Date().toISOString();

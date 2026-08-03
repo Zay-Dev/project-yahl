@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const GRACEFUL_WAIT_MS = 60_000;
-const STOP_TIMEOUT_SEC = 60;
+const GRACEFUL_WAIT_MS = 20_000;
+const STOP_TIMEOUT_SEC = 15;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => {
   setTimeout(resolve, ms);

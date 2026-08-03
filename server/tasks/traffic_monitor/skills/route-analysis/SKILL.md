@@ -96,4 +96,4 @@ Name the ETA **source** from context `traffic_source` only:
 - If `traffic_source.is_fallback` is true **or** `url` is the Google Maps directions template → say Google Maps (budget fallback).
 - Otherwise name the city source from `url` / howto (e.g. HKeMobility) — never claim Google Maps when a non-fallback city source was locked.
 
-`*format_report_run_append(summary_md, origin, destination, monitor, timezone)` wraps `summary_md` for day-page append: leading `## Run — {origin} → {destination}` (plus window times from `monitor` in `timezone`), then the report body, so multiple same-day OD windows stack on one `raw/report-YYYY-MM-DD` page.
+`*format_report_run_append(summary_md, origin, destination, monitor, timezone)` wraps `summary_md` for day-page append: leading `## Run — {origin} → {destination}` (plus window times from `monitor` in `timezone`), then the report body, so multiple same-day OD windows stack on one `raw/report-YYYY-MM-DD` page. Emit **one** `## Run` block per window — do not nest a second `# Daily` / duplicate run header inside `summary_md`. Flat nixery args only (never nest `defId` inside `args`); one upsert attempt + one retry on `ok: false`.
