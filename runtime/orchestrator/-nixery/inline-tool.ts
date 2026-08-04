@@ -6,6 +6,13 @@ import {
   resolveNixeryOutputHint,
 } from '@project-yahl/shared/nixery/output-contract';
 import { loadDefValidationModule } from '@project-yahl/shared/nixery/load-validation';
+import {
+  assertNamespaceWriteAllowed,
+  isKnowledgeManagerTask,
+  isKnowledgeWriteDef,
+} from '@project-yahl/shared/nixery/knowledge-write-gate';
+
+import { fetchSession } from '@/orchestrator/-ask-user/session-api';
 
 import { loadNixeryDef, resolveNixeryRoot } from './load-def';
 import { runNixeryDef, resolveSessionNixeryDir } from './run-stage';
@@ -35,17 +42,46 @@ const parseInlineToolPayload = async (params: {
   return JSON.parse(params.raw) as Record<string, unknown>;
 };
 
+const resolveTaskIdForSession = async (sessionId: string, taskId?: string) => {
+  if (taskId?.trim()) {
+    return taskId.trim();
+  }
+
+  if (!sessionId.trim()) {
+    return '';
+  }
+
+  try {
+    const session = await fetchSession(sessionId);
+
+    return session.taskId?.trim() ?? '';
+  } catch {
+    return '';
+  }
+};
+
 export const runNixeryInlineTool = async (params: {
   args: Record<string, unknown>;
   defId: string;
   requestId?: string;
   sessionId: string;
+  taskId?: string;
 }) => {
   const defId = params.defId.trim();
   const def = await loadNixeryDef(defId);
+  const taskId = await resolveTaskIdForSession(params.sessionId, params.taskId);
+  const managerWriteBypass = isKnowledgeWriteDef(defId) && isKnowledgeManagerTask(taskId);
 
-  if (!def.output?.inlineTool) {
+  if (!def.output?.inlineTool && !managerWriteBypass) {
     throw new Error(`[nixery] def ${defId} is not enabled for inline tool calls`);
+  }
+
+  try {
+    assertNamespaceWriteAllowed({ defId, taskId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'knowledge_write_forbidden';
+
+    return { ok: false as const, error: message };
   }
 
   const output = resolveNixeryOutputHint(def, params.args);
@@ -64,6 +100,7 @@ export const runNixeryInlineTool = async (params: {
     defId,
     input,
     sessionId: params.sessionId,
+    taskId,
   });
 
   const outputPath = path.join(resolveSessionNixeryDir(params.sessionId, defId), output);

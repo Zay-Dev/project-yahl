@@ -262,6 +262,22 @@ pnpm run orchestrate
 | PATCH | `/api/platform/cron/jobs/:id` | Update a cron job |
 | DELETE | `/api/platform/cron/jobs/:id` | Soft-delete a cron job |
 
+#### Example: Knowledge Manager overnight
+
+Schedule full-corpus review (global instruction; every topic). Prefer the thin dispatcher:
+
+```json
+{
+  "enabled": true,
+  "id": "knowledge-manager-overnight",
+  "schedule": "0 2 * * *",
+  "timezone": "Asia/Hong_Kong",
+  "taskPath": "auto_knowledge_refresh"
+}
+```
+
+Or `taskPath: "knowledge_manager"` directly. Edit focus via `/platform/knowledge-policies` or task `knowledge_settings`.
+
 #### Example: traffic monitor cron
 
 Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`traffic_monitor`](../server/tasks/traffic_monitor/SKILL.yahl) at 08:00 HKT:

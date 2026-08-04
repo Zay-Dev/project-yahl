@@ -146,16 +146,13 @@ stages:
     logic: "(nixery)"
 
   - contextKeys: [holidays_topic]
-    produceContextKeys: [holidays_fetch_note]
-    logic: |
-      Read ~/task-skills/task-mission/SKILL.md.
-      /nixery(
-        get-knowledge,
-        purpose: Read holidays topic for the current calendar year when present; write holidays.md,
-        topic: holidays_topic,
-        output: holidays.md,
-      );
-      const holidays_fetch_note = holidays_topic;
+    nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: |
+        Read holidays topic for the current calendar year when present; write holidays.md.
+      topic: holidays_topic
+      output: holidays.md
+    logic: "(nixery)"
 
   - contextKeys: [holidays_topic, holidays_file_prefix, city, timezone]
     produceContextKeys: [holidays_md, holidays_year]
@@ -190,7 +187,7 @@ stages:
         );
         *save(~/data/{holidays_file_prefix}_{holidays_year}.md, holidays_md);
         /nixery(
-          upsert-knowledge-page,
+          append-raw-knowledge-page,
           topic: holidays_topic,
           page: raw/holidays-{holidays_year},
           mode: replace,
@@ -261,11 +258,12 @@ stages:
       Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
       *strip_ops_heading(body_md): strip leading ## HOWTO / ## PLACE / ## Q&A lines from body_md; return section body only.
-      *upsert_ops_section(section, body_md): body = *strip_ops_heading(body_md); /nixery(upsert-knowledge-page, topic: knowledge_topic, page: source-ops-{city_slug}, section: section, mode: append, content: body); on ok:false retry once with same page/section/mode/content (flat args only — never nest defId inside args); merge body under that section into source_ops_md.
-      *upsert_ops_log(notes_md): body = *strip_ops_heading(notes_md); if body has no ## headings, /nixery(upsert-knowledge-page, topic: knowledge_topic, page: source-ops-{city_slug}, mode: append, content: body); on ok:false retry once; merge into source_ops_md. Never key-append ## heading blocks.
-      *upsert_ops_notes(notes): partition notes into HOWTO ({provider}) / PLACE / Q&A / ops-log; one *upsert_ops_section per section body and *upsert_ops_log for loose bullets; one upsert per novel partition — do not triple-retry the same note.
-      *upsert_ops_append(notes_md): alias of *upsert_ops_notes(notes_md) — routes HOWTO/PLACE/Q&A via section; ops-log via page append.
-      *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean_md string); on ok:false retry once with content: lean_md; never upsert Maps / is_fallback:true.
+      *submit_ops_observation(tag, cue, claim, example): /nixery(submit-knowledge-observation, topic_hint: knowledge_topic, cue: cue, claim: claim, example: example, evidence: { task: traffic_monitor, city_slug: city_slug, tag: tag }, confidence: observed, tags: [tag]); on ok:false retry once; merge note text into source_ops_md session copy only.
+      *upsert_ops_section(section, body_md): *submit_ops_observation(section, section, *strip_ops_heading(body_md), *strip_ops_heading(body_md)).
+      *upsert_ops_log(notes_md): *submit_ops_observation("TRICK", "ops-log", *strip_ops_heading(notes_md), *strip_ops_heading(notes_md)).
+      *upsert_ops_notes(notes): for each novel note call *submit_ops_observation with HOWTO|PLACE|Q&A|TRICK tag — Knowledge Manager applies to source-ops; never /nixery(upsert-knowledge-page).
+      *upsert_ops_append(notes_md): alias of *upsert_ops_notes(notes_md).
+      *upsert_sources(lean_md): *save(~/data/{traffic_source_file}) only; submit observation for durable HOWTO tips — never upsert sources-* or Maps.
       *strip_od_bleed(howto_md, origin, destination, origin_resolved, destination_resolved): rewrite howto_md so it has no concrete run OD / POI autocomplete literals; keep generic form-fill steps with {resolved origin}/{resolved destination}.
       *ensure_provider_howto_ops(source, source_ops_md): if source_ops_md already has a ## HOWTO section for this provider, return []; else draft body WITHOUT a ## heading (section title is HOWTO ({provider})) covering entry URL, Driving tab, form-fill From/To + click autocomplete (not ArrowDown), Search button label, SPA spinner→miss+reload, must re-enter form each poll; promote any city-reusable tips already in get-knowledge extract that are missing from source_ops_md.
       *place_this_run_note(origin, origin_resolved, destination, destination_resolved): short PLACE body (no ## heading) with this-run Origin/Destination → resolved POI literals.
@@ -709,8 +707,8 @@ stages:
       END:
 
   - contextMode: true
-    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note]
-    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note]
+    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note]
+    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note]
     logic: |
       (() => {
         const existing = context.context.started_at;
@@ -724,7 +722,6 @@ stages:
             miss_count: Number(context.context.miss_count) || 0,
             day_page: String(context.context.day_page || ''),
             last_heartbeat_at: String(context.context.last_heartbeat_at || ''),
-            last_source_notes_at: String(context.context.last_source_notes_at || ''),
             prev_incident_note: String(context.context.prev_incident_note || ''),
           };
         }
@@ -741,7 +738,6 @@ stages:
           miss_count: 0,
           day_page: `raw/fetches-${y}`,
           last_heartbeat_at: '',
-          last_source_notes_at: '',
           prev_incident_note: '',
         };
       });
@@ -750,8 +746,8 @@ stages:
     goto:
       - command: '/stage(explorer)'
         description: 'when the cached/locked traffic source is no longer available or usable'
-    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, origin_resolved, destination_resolved, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
-    produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, last_source_notes_at, prev_incident_note, source_ops_md]
+    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, origin_resolved, destination_resolved, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
+    produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, prev_incident_note, source_ops_md]
     agentOverrides:
       bashTimeoutMs: 360000
     maxBashCalls: 120
@@ -783,9 +779,10 @@ stages:
       Read ~/task-skills/monitor-loop/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
       *strip_ops_heading(body_md): strip leading ## HOWTO / ## PLACE / ## Q&A lines from body_md; return section body only.
-      *upsert_ops_section(section, body_md): body = *strip_ops_heading(body_md); /nixery(upsert-knowledge-page, topic: knowledge_topic, page: source-ops-{city_slug}, section: section, mode: append, content: body); on ok:false retry once (flat args — never nest defId); merge into source_ops_md.
-      *upsert_ops_log(notes_md): body = *strip_ops_heading(notes_md); page-append without section when body has no ## headings; never key-append ## blocks.
-      *upsert_ops_notes(notes): partition into HOWTO ({provider}) / PLACE / Q&A / ops-log; one section upsert or ops-log append each; one upsert per novel partition.
+      *submit_ops_observation(tag, cue, claim, example): /nixery(submit-knowledge-observation, topic_hint: knowledge_topic, cue: cue, claim: claim, example: example, evidence: { task: traffic_monitor, tag: tag }, confidence: observed, tags: [tag]); retry once on ok:false.
+      *upsert_ops_section(section, body_md): *submit_ops_observation(section, section, *strip_ops_heading(body_md), *strip_ops_heading(body_md)).
+      *upsert_ops_log(notes_md): *submit_ops_observation("TRICK", "ops-log", *strip_ops_heading(notes_md), *strip_ops_heading(notes_md)).
+      *upsert_ops_notes(notes): submit each novel note via *submit_ops_observation — never upsert-knowledge-page.
       const window_ms = Number(monitor_minutes) * 60 * 1000;
       const notifications = notifications || [];
       const fetches = fetches || [];
@@ -793,7 +790,6 @@ stages:
       let summary_notified = summary_notified === true;
       let miss_count = miss_count || 0;
       let last_heartbeat_at = last_heartbeat_at || '';
-      let last_source_notes_at = last_source_notes_at || '';
       let prev_incident_note = prev_incident_note || '';
       let source_ops_md = source_ops_md || '<none>';
       *read(source_ops_md);
@@ -827,7 +823,7 @@ stages:
             miss_count = miss_count + 1;
             *set_context(miss_count);
             /nixery(
-              upsert-knowledge-page,
+              append-raw-knowledge-page,
               topic: knowledge_topic,
               page: day_page,
               mode: append,
@@ -835,15 +831,12 @@ stages:
             );
             const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180);
 
-            IF: (!last_source_notes_at ? (Date.now() - Date.parse(started_at)) : (Date.now() - Date.parse(last_source_notes_at))) >= 20 * 60 * 1000;
-              const candidates = *draft_source_ops_candidates(miss: true, fetch: fetch, source: traffic_source);
-              const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
-              IF: novel.length > 0;
-                *upsert_ops_notes(novel);
-                source_ops_md = *merge_source_ops_md(source_ops_md, novel);
-              END:
-              last_source_notes_at = new Date().toISOString();
-              *set_context(last_source_notes_at, source_ops_md);
+            const candidates = *draft_source_ops_candidates(miss: true, fetch: fetch, source: traffic_source);
+            const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
+            IF: novel.length > 0;
+              *upsert_ops_notes(novel);
+              source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+              *set_context(source_ops_md);
             END:
           ELSE:
             *read(holidays_md);
@@ -855,7 +848,7 @@ stages:
             fetches = [...fetches, fetch_with_status];
 
             /nixery(
-              upsert-knowledge-page,
+              append-raw-knowledge-page,
               topic: knowledge_topic,
               page: day_page,
               mode: append,
@@ -912,15 +905,12 @@ stages:
             prev_incident_note = analysis.incident_note || '';
             *set_context(prev_incident_note);
 
-            IF: (!last_source_notes_at ? (Date.now() - Date.parse(started_at)) : (Date.now() - Date.parse(last_source_notes_at))) >= 20 * 60 * 1000;
-              const candidates = *draft_source_ops_candidates(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis);
-              const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
-              IF: novel.length > 0;
-                *upsert_ops_notes(novel);
-                source_ops_md = *merge_source_ops_md(source_ops_md, novel);
-              END:
-              last_source_notes_at = new Date().toISOString();
-              *set_context(last_source_notes_at, source_ops_md);
+            const candidates = *draft_source_ops_candidates(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis);
+            const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
+            IF: novel.length > 0;
+              *upsert_ops_notes(novel);
+              source_ops_md = *merge_source_ops_md(source_ops_md, novel);
+              *set_context(source_ops_md);
             END:
 
             const sleep_sec = fetches.length === 1
@@ -991,7 +981,7 @@ stages:
         timezone: timezone,
       );
       const report_up = /nixery(
-        upsert-knowledge-page,
+        append-raw-knowledge-page,
         topic: knowledge_topic,
         page: report_page,
         mode: append,
@@ -999,7 +989,7 @@ stages:
       );
       IF: !*last_nixery_ok();
         /nixery(
-          upsert-knowledge-page,
+          append-raw-knowledge-page,
           topic: knowledge_topic,
           page: report_page,
           mode: append,
@@ -1007,17 +997,25 @@ stages:
         );
       END:
       const summary_up = /nixery(
-        upsert-knowledge-page,
-        topic: knowledge_topic,
-        key: summary,
-        value: summary_md,
+        submit-knowledge-observation,
+        topic_hint: knowledge_topic,
+        cue: 'daily traffic summary',
+        claim: 'latest monitor narrative for manager brief promotion',
+        example: summary_md,
+        evidence: { task: traffic_monitor, kind: 'summary' },
+        confidence: observed,
+        tags: ['SUMMARY'],
       );
       IF: !*last_nixery_ok();
         /nixery(
-          upsert-knowledge-page,
-          topic: knowledge_topic,
-          key: summary,
-          value: summary_md,
+          submit-knowledge-observation,
+          topic_hint: knowledge_topic,
+          cue: 'daily traffic summary retry',
+          claim: 'latest monitor narrative for manager brief promotion',
+          example: summary_md,
+          evidence: { task: traffic_monitor, kind: 'summary' },
+          confidence: observed,
+          tags: ['SUMMARY'],
         );
       END:
       *assert_upsert_topic(report_up, summary_up, topic: knowledge_topic);

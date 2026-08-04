@@ -1,53 +1,18 @@
 ---
 name: nixery
-description: Inline nixery defs for knowledge, topic resolve, tidy, QA, and LLM helpers
+description: Inline nixery defs for agent-safe helpers; knowledge writes are manager-only
 ---
 
 # nixery tool
 
 Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 
-## Topic / tidy / QA
+## Agent-safe writes
 
 | Call | Result |
 |------|--------|
-| `/nixery(resolve-topic, topicText: …, slug: …, seedUrls: …)` | `canonical` |
-| `/nixery(tidy-knowledge, dryRun: …, topic: …)` | `report` |
-| `/nixery(knowledge-qa-review, topic: …, auditIssues: …)` | `review` (OpenAI in-def) |
-
-## Writes
-
-| Call | Result |
-|------|--------|
-| `/nixery(upsert-knowledge-page, topic: …, key: …, value: …, mode?: …)` | `{ data: { ok, path, canonicalTopic } }` — **requires** non-empty `topic` or `topicText` (empty topic no longer falls through to `general`). Key→page map is a **suggestion** only. |
-| `/nixery(upsert-knowledge-page, topic: …, page: …, content: …, section?: …, mode?: …)` | Open write for **any** page / `##` section under the topic. `section` or `page: "foo#Section Title"`; `mode: append` appends inside that section (or whole page if no section); `replace` replaces the section body or page. |
-| `/nixery(dedup-knowledge, topic: …, purpose: …)` | review JSON under `~/nixery/dedup-knowledge/` |
-
-Topics and wiki sections are open — task skills recommend shapes; agents may write any page/section.
-
-```json
-{
-  "defId": "upsert-knowledge-page",
-  "args": {
-    "topic": "traffic-monitor",
-    "page": "source-ops-hong-kong",
-    "section": "Q&A",
-    "mode": "append",
-    "content": "**Q:** empty result table\\n**A:** reload entry URL and re-fill"
-  }
-}
-```
-
-```json
-{
-  "defId": "upsert-knowledge-page",
-  "args": {
-    "topic": "hk-weather",
-    "key": "facts",
-    "value": { "items": [] }
-  }
-}
-```
+| `/nixery(submit-knowledge-observation, …)` | observation under `raw/observations/…` |
+| `/nixery(append-raw-knowledge-page, topic: …, page: raw/…, …)` | machine timelines under `raw/` only |
 
 ## LLM helpers (inline)
 
@@ -58,18 +23,29 @@ Topics and wiki sections are open — task skills recommend shapes; agents may w
 | `/nixery(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `batches` |
 | `/nixery(research, topic: …, source: ~/…, mission: …, guidelinePath: …)` | `markdown` |
 | `/nixery(consult-breaking-change, proposedChange: …, reason: …, context?: …)` | `{ agree, reasons, alternatives }` |
+| `/nixery(resolve-notification-target, to: …)` | notify channel prefs |
 
-## Rules
+## Forbidden for stage agents (manager / nixeryRun only)
 
-- Never pass `source`, `file`, or `path` to upsert (except `outputPath` on research).
-- Dedup is opt-in maintenance — not on every upsert.
-- Append `data.path` from upsert results to `knowledge_paths.persisted` (task convention — see context-paths skill).
-- `knowledge-qa-review` fails closed on empty corpus; judgment is OpenAI in-def (no Cursor key / no worker hop).
-- `media-to-text` uses Cursor CLI inside the nixery container (`CURSOR_API_KEY` declared on that def only); persist `data.text`.
-- Before breaking stage procedure (sleep protocol, window, thresholds, editing task skills), call `consult-breaking-change`; if `agree: false`, follow `alternatives`.
+These defs are **not** inline tools. Orchestrator `nixeryRun` stages on `knowledge_manager` / `knowledge_refresh` (and greets/whatsapp stack for their namespaces) may run them. Any other task gets `knowledge_write_forbidden`:
+
+- `run-knowledge-manager` (overnight manager body — preferred entry)
+- `upsert-knowledge-page`
+- `dedup-knowledge`
+- `tidy-knowledge`
+- `knowledge-qa-review`
+- `resolve-topic` (registry write)
+- `upsert-greets-page` / `upsert-whatsapp-page`
+
+Overnight Knowledge Manager is a **thin YAHL dispatcher** that only `nixeryRun`s `run-knowledge-manager`. That def hones, emits ApplyPlan JSON, and applies upserts deterministically — stage agents must not invent upsert/dedup/research calls.
 
 ## Reads
 
-Knowledge reads still use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`).
+Knowledge reads use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`).
 
-Task skills: `~/task-skills/nixery-*/SKILL.md` when mounted.
+## Rules
+
+- Never pass `source`, `file`, or `path` to knowledge write helpers.
+- Observations need `example` or `quote` plus `evidence`.
+- Before breaking stage procedure, call `consult-breaking-change`.
+- On `{ ok: false, error }`: read `error`, fix args, re-call `nixery`. Orchestrator allows up to `YAHL_NIXERY_INLINE_RETRY_MAX` (default 3) soft failures per stage; the next failure ends the stage. `retryRemaining` is included on soft fails.

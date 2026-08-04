@@ -112,6 +112,10 @@
       "development": "./nixery/resolve-policy.ts",
       "import": "./dist/nixery/resolve-policy.js"
     },
+    "./nixery/knowledge-write-gate": {
+      "development": "./nixery/knowledge-write-gate.ts",
+      "import": "./dist/nixery/knowledge-write-gate.js"
+    },
     "./nixery/load-def": {
       "development": "./nixery/load-def.ts",
       "import": "./dist/nixery/load-def.js"

@@ -1,0 +1,43 @@
+name: knowledge-manager
+description: Thin dispatcher — overnight Knowledge Manager body runs in nixery run-knowledge-manager
+background: true
+resultContextKey: result
+
+types: |
+  type TReviewRecord = {
+    topic: string;
+    depth: 'focus' | 'light';
+    honeApplied: number;
+    honeSkipped: number;
+    opsApplied: number;
+    opsDiscarded: number;
+    quizTodoAdded: boolean;
+    transfersProposed: number;
+  };
+
+  type TResult = {
+    reviewedAt: string;
+    instructionPreview: string;
+    topicCount: number;
+    reviews: TReviewRecord[];
+    approvedTransfersApplied: number;
+  };
+
+stages:
+  - nixeryRun: run-knowledge-manager
+    nixeryInput:
+      output: result.json
+    logic: "(nixery)"
+
+  - produceContextKeys: [result]
+    logic: |
+      Read ~/nixery/run-knowledge-manager/result.json from the session workspace.
+      Parse the gate JSON. If ok and report present, set result to report
+      (reviewedAt, instructionPreview, topicCount, reviews, approvedTransfersApplied).
+      If missing or ok=false, set result to {
+        reviewedAt: now ISO,
+        instructionPreview: '',
+        topicCount: 0,
+        reviews: [],
+        approvedTransfersApplied: 0,
+      }.

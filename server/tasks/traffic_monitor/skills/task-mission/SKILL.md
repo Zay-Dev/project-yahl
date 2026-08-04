@@ -4,7 +4,7 @@ Canonical mission for the traffic_monitor task.
 
 ## Mission text
 
-Monitor private-car driving traffic from `origin` to `destination` (empty runInput defaults: Kowloon Tong → Hong Kong International Airport) for about `monitor_minutes` minutes after run start (default 60). Discover or reuse a real-time multi-route ETA source for `city` (empty default Hong_Kong → holidays topic via city path aliases), resolve notify target preference via nixery, load city source-ops knowledge, explore/probe a live ETA site (free research when knowledge is missing, fails, or prior source was Google Maps budget fallback — **at most 2** distinct city-local sources), poll live ETAs for the top 2–3 routes (iconic corridor/tunnel/bridge/highway labels for that city), append each poll to one wiki page for that calendar day (each section includes time + Origin + Destination), propose notifications in three kinds (initial summary after fetch #2, 15-min heartbeat when proactivity allows, abnormal/incident including cleared incidents), every 20 minutes upsert **novel-only** source-ops notes to nixery (`source-ops-{city_slug}`), then **append** a daily report run block to `raw/report-YYYY-MM-DD` under topic `traffic-monitor` (weekday / weekend / public holiday). Use `timezone` (empty default Asia/Hong_Kong) for all wall-clock labels and day classification.
+Monitor private-car driving traffic from `origin` to `destination` (empty runInput defaults: Kowloon Tong → Hong Kong International Airport) for about `monitor_minutes` minutes after run start (default 60). Discover or reuse a real-time multi-route ETA source for `city` (empty default Hong_Kong → holidays topic via city path aliases), resolve notify target preference via nixery, load city source-ops knowledge, explore/probe a live ETA site (free research when knowledge is missing, fails, or prior source was Google Maps budget fallback — **at most 2** distinct city-local sources), poll live ETAs for the top 2–3 routes (iconic corridor/tunnel/bridge/highway labels for that city), append each poll to one wiki page for that calendar day (each section includes time + Origin + Destination), propose notifications in three kinds (initial summary after fetch #2, 15-min heartbeat when proactivity allows, abnormal/incident including cleared incidents), after each poll upsert **novel-only** source-ops notes to nixery (`source-ops-{city_slug}`) when worth keeping for future runs, then **append** a daily report run block to `raw/report-YYYY-MM-DD` under topic `traffic-monitor` (weekday / weekend / public holiday). Use `timezone` (empty default Asia/Hong_Kong) for all wall-clock labels and day classification.
 
 ## Explore / map-to-use (before monitor)
 
@@ -31,10 +31,10 @@ Monitor private-car driving traffic from `origin` to `destination` (empty runInp
 7. Monitor stage sets `agentOverrides.bashTimeoutMs: 360000`. Use a single `sleep 300` / `180` / `60` per wait. Do not chunk, background (`&`), or wrap sleeps to dodge timeout.
 8. Before any breaking change to stage procedure (sleep protocol, window length, thresholds, editing task skills / `SKILL.yahl`), call `/nixery(consult-breaking-change, …)`. If `agree: false`, follow `alternatives` — do not proceed.
 9. Every `produceContextKeys` / `set_context` value must be **non-null** JSON (use `[]` / `{}` / `false` / `''` — never `null`).
-10. Knowledge pages for traffic polls/reports use topic `knowledge_topic` (`traffic-monitor`). Holidays use `holidays_topic` derived from `city`. Lean traffic sources upsert under `sources-{city_slug}`. Operational notes upsert under `source-ops-{city_slug}` (novel-only append). When `get-knowledge` already returned a usable holidays list for the year, use it and **do not** research or `upsert` replace that page.
+10. Knowledge pages for traffic polls/reports use topic `knowledge_topic` (`traffic-monitor`). Holidays use `holidays_topic` derived from `city`. Operational learning uses `submit-knowledge-observation` (manager applies to `source-ops-*`). Raw polls/reports use `append-raw-knowledge-page` under `raw/…` only. When `get-knowledge` already returned a usable holidays list for the year, use it and **do not** research that page.
 11. Before probing or polling the traffic website, `*read(source_ops_md)` (seeded earlier via nixery get-knowledge → context) and use Input `source_ops_md` together with core `howto_md`. Do not `const`/`let`-assign or `set_context` a copy of the full ops blob unless novel merge changed it. Never pass unread `source_ops_md` as a `*func` kwarg. Do not paste ops history into `howto_md`.
 12. Do not silently rewrite a non-placeholder URL to Google Maps outside the explicit budget-fallback branch. Prefer any working city-local live multi-route private-car ETA site; Maps is budget fallback only via `/google-maps-directions`.
-13. Daily report / `summary_md` must name the **locked** `traffic_source` (Maps only when `is_fallback: true` or URL is the Maps directions template). Persist with `topic: knowledge_topic` always (never empty — empty topic fails upsert). Same-day reports **append** to `raw/report-YYYY-MM-DD` with a run header (window + origin → destination); `summary` replaces `brief` with the latest narrative. **Do not** upsert `analysis_md` or dump daily ETA series into `overview` — overview is a short living pointer page (purpose, locked source, links to source-ops / sources / raw), seeded rarely, not per-run. Confirm each upsert `ok: true` and `canonicalTopic` / path under `topics/traffic-monitor/`.
+13. Daily report / `summary_md` must name the **locked** `traffic_source` (Maps only when `is_fallback: true` or URL is the Maps directions template). Persist reports with `/nixery(append-raw-knowledge-page, topic: knowledge_topic, page: raw/report-YYYY-MM-DD, mode: append, content: …)`. Submit a short observation for the latest narrative tip if novel — do **not** call `upsert-knowledge-page` / `key: summary`. Confirm each raw append `ok: true` and path under `topics/traffic-monitor/raw/`.
 
 ## WhatsApp notification kinds
 
@@ -84,25 +84,23 @@ Canonical page `source-ops-{city_slug}` sections (append-only across sessions �
 | `## Q&A` | Problem → fix pairs the agent hit (promote recurring FIX patterns here) |
 | Ops log | Loose `- TRICK` / `- SKIP/FAIL` / `- HISTORY:` bullets |
 
-### Upsert shape (mandatory)
+### Observation shape (mandatory for ops learning)
 
-Prefer **section-targeted** upserts — never key-append a value that starts with `##` (that stacks a new heading and duplicates HOWTO/Q&A):
+Stage agents **must not** call `upsert-knowledge-page`. Submit novel ops as observations:
 
 ```text
-/nixery(upsert-knowledge-page, topic: knowledge_topic, page: source-ops-{city_slug}, section: PLACE|Q&A|HOWTO ({provider}), mode: append, content: <body without ## heading>)
+/nixery(submit-knowledge-observation, topic_hint: knowledge_topic, cue: …, claim: …, example: …, evidence: {…}, confidence: observed, tags: [HOWTO|PLACE|Q&A|TRICK])
 ```
 
-- `content` / body is **section body only** — no leading `## HOWTO` / `## PLACE` / `## Q&A` line (nixery owns the heading via `section:`).
-- Ops-log bullets (`- TRICK` / `- SKIP/FAIL` / `- HISTORY:`) may page-append without `section:` — still **no** `##` headings in that body.
-- Do **not** use `key: source-ops-…` + `mode: append` + a markdown block that contains `##` headings.
-- One upsert per novel section/note; confirm `ok: true` once — do not triple-retry the same Q&A/HOWTO. Flat args only — never nest `defId` inside `args`.
-- Collapse duplicate `## HOWTO` / `## PLACE` / `## Q&A` headings if you encounter them: keep one section per title and append novel body into it via `section:` + `mode: append`.
+- Required: `example` or `quote`, plus `evidence`. Knowledge Manager decides append/replace into HOWTO/PLACE/Q&A.
+- Raw poll/report timelines use `/nixery(append-raw-knowledge-page, topic: knowledge_topic, page: raw/…, mode: append, content: …)` only under `raw/`.
+- Lean city source lock: `*save` workspace file; submit an observation for durable HOWTO tips — do **not** upsert `sources-*` from this task (manager may promote).
 
 ### Attend / refresh
 
-- Attend before site use via `*read(source_ops_md)` (Input already holds the blob — do not re-`set_context` the full markdown every poll). Refresh context only when novel notes are upserted (`*set_context(source_ops_md)` after merge).
-- During explore and every 20 min in monitor: draft candidates → `*filter_novel_ops_notes` against `source_ops_md` → partition into HOWTO / PLACE / Q&A / ops-log → upsert each via the shape above. If none novel, still bump `last_source_notes_at` in monitor (no empty upsert). Prefer promoting recurring miss/FIX patterns into `## Q&A` rather than only one-off FAIL lines.
-- **Stagehand is CU-only.** Nested browser LLM cannot persist wiki knowledge. After each `browser` success or miss, YAHL must draft novel ops from the **tool result** (actions / errors / OD chips) and upsert — do not wait for Stagehand to “remember” howto.
+- Attend before site use via `*read(source_ops_md)`.
+- After each poll/explore: draft candidates → `*filter_novel_ops_notes` → `submit-knowledge-observation` per novel note (not section upsert).
+- **Stagehand is CU-only.** YAHL drafts observations from tool JSON after each poll.
 
 ### Section rules
 

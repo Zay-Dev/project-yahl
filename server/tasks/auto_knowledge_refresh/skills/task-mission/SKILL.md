@@ -1,5 +1,5 @@
 # task-mission
 
-Cron checkpoint: evaluate stale knowledge topics and dispatch one `knowledge_refresh` run per stale slug.
+Cron checkpoint: dispatch one `knowledge_manager` run that reviews **every** knowledge topic using the global free-text instruction.
 
-Read `~/task-skills/dispatch-loop/SKILL.md` for set_context shapes.
+Do not call `evaluate-knowledge-refresh`. Do not filter stale topics.

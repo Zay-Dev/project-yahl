@@ -5,7 +5,7 @@ Rules for the configurable-length traffic poll stage (`monitor_minutes`, default
 ## Clock
 
 - `started_at` is set once in a prior VM stage. Never overwrite it. After a `/stage(explorer)` transfer, the clock-seed stage is **idempotent** — it keeps existing `started_at` / counters when already set.
-- Seed context uses `prev_routes: []`, `last_heartbeat_at: ''`, `last_source_notes_at: ''`, `prev_incident_note: ''` (never `null`) — produce-keys rejects null allowlisted keys.
+- Seed context uses `prev_routes: []`, `last_heartbeat_at: ''`, `prev_incident_note: ''` (never `null`) — produce-keys rejects null allowlisted keys.
 - `day_page` / calendar day use **`timezone`** from context (default Asia/Hong_Kong). For Asia/Hong_Kong the VM clock stage uses UTC+8; otherwise prefer timezone-aware formatting in this stage.
 - Display times and wiki sections `## HH:MM {tz_label}` must use `timezone` wall clock — never label a UTC clock as local.
 - At loop head and after every sleep: if `Date.now() - Date.parse(started_at) >= monitor_minutes * 60 * 1000`, finish the stage and write `monitor`.
@@ -40,19 +40,19 @@ Check the monitor-minutes exit condition again after each sleep returns.
    - `set_context` key `prev_routes` to that fetch’s `routes`.
    - `set_context` key `prev_incident_note` to the current analysis incident note (or `''` if none) **after** analysis used the prior value.
    - Never update `prev_routes` alone after a successful poll — `fetches` must grow every success.
-3. Only after those `set_context` calls succeed: append a markdown section to `day_page` via `/nixery(upsert-knowledge-page, topic: knowledge_topic, page: day_page, mode: append, content: …)`. Section must include `## HH:MM {tz_label}`, `- Origin: …`, `- Destination: …`, then corridor ETAs (see route-analysis). Pass `origin` / `destination` into `*format_fetch_section`. Do **not** write a success section unless `fetches` was already extended. Never omit `topic: knowledge_topic`.
-4. Do not re-read the whole wiki every minute. Never write `null` into `prev_routes` / `fetches` / `notifications` / `miss_count` / heartbeat or notes timestamps.
-5. Run the three notification checks **independently** (see below), then the 20-min source-ops tick.
+3. Only after those `set_context` calls succeed: append a markdown section to `day_page` via `/nixery(append-raw-knowledge-page, topic: knowledge_topic, page: day_page, mode: append, content: …)` (`day_page` must be `raw/fetches-YYYY-MM-DD`). Section must include `## HH:MM {tz_label}`, `- Origin: …`, `- Destination: …`, then corridor ETAs (see route-analysis). Pass `origin` / `destination` into `*format_fetch_section`. Do **not** write a success section unless `fetches` was already extended. Never call `upsert-knowledge-page`.
+4. Do not re-read the whole wiki every minute. Never write `null` into `prev_routes` / `fetches` / `notifications` / `miss_count` / heartbeat timestamps.
+5. Run the three notification checks **independently** (see below), then the per-poll source-ops **observation** submit (novel-only).
 6. Adaptive sleep as above until the window ends.
 
 ## Browser fetch failures
 
-`browser` / Stagehand is **CU-only** (clicks, observe, extract). It cannot `set_context`, `nixery`, or `mastermind`. YAHL owns knowledge: after every browser poll (**success or miss**), draft novel ops candidates from the **browser tool result JSON** (not “the agent said…” narration), then run `*filter_novel_ops_notes` → section upsert when due. Put OD/howto tips the CU loop needs into the stage Input / instruction — the runtime injects a short browse brief only (no full stage chat history).
+`browser` / Stagehand is **CU-only** (clicks, observe, extract). It cannot `set_context`, `nixery`, or `mastermind`. YAHL owns knowledge: after every browser poll (**success or miss**), draft novel ops candidates from the **browser tool result JSON** (not “the agent said…” narration), then run `*filter_novel_ops_notes` → section upsert when novel. Put OD/howto tips the CU loop needs into the stage Input / instruction — the runtime injects a short browse brief only (no full stage chat history).
 
 When route fetch via `browser` fails (timeout, blank page, `ok: false`):
 
 - At most **2** browser attempts for that poll (initial + one retry), including OD-mismatch as failure. Do not burn turns on further `goto` / `agent` / `observe` retries.
-- After 2 consecutive failures for the same poll: **skip the poll**. Keep prior `fetches` / `prev_routes` / `prev_incident_note` unchanged. Increment `miss_count` via `set_context` (`miss_count = (miss_count || 0) + 1`). Append a day-page note with `## HH:MM {tz_label}`, `- Origin: …`, `- Destination: …`, `- Fetch missed: …`, `- Using previous routes` via `*format_miss_section(…, origin, destination, timezone)`. Then run the 20-min source-ops tick if due (miss reasons may be novel ops notes). Then sleep with the adaptive schedule based on the last successful primary ETA (or `180` if none).
+- After 2 consecutive failures for the same poll: **skip the poll**. Keep prior `fetches` / `prev_routes` / `prev_incident_note` unchanged. Increment `miss_count` via `set_context` (`miss_count = (miss_count || 0) + 1`). Append a day-page note with `## HH:MM {tz_label}`, `- Origin: …`, `- Destination: …`, `- Fetch missed: …`, `- Using previous routes` via `*format_miss_section(…, origin, destination, timezone)`. Then run the per-poll source-ops upsert (miss reasons may be novel ops notes). Then sleep with the adaptive schedule based on the last successful primary ETA (or `180` if none).
 - Never invent route ETAs when the browser failed.
 - Never write a success-shaped day-page section (route ETAs) for a missed poll.
 - When the locked source is **no longer usable** (site permanently broken, howto invalid, sustained misses that show the source itself is dead — not a one-off flake): call **`goto_stage`** with `stageId: "explorer"` and a concrete `reason` (do not keep sleeping forever on a dead source). Orchestrator ends this monitor stage without verify and jump-and-continues at explorer; clock-seed later preserves `started_at`.
@@ -96,12 +96,12 @@ When `fetches.length >= 2` and `analysis.should_notify_abnormal`: urgent ETA spi
 
 If A and B, or B and C, are due on the same poll, send separate proposals (do not coalesce).
 
-## Source ops (20 min)
+## Source ops (per poll, novel-only)
 
-When `(now - last_source_notes_at || started_at) >= 20m`:
+After every poll (**success or miss**), persist notes worth keeping for future runs — no time throttle:
 
-1. Draft 0–5 short candidate notes from this window (tricks, brittle selectors, timeouts, URL quirks, miss/fail reasons, and recoverable **Q&A** problem→fix pairs). When `traffic_source.is_fallback` (Google Maps budget fallback), include novel Maps howto / prevent notes (encoding, OD chips, SPA URLs, UI quirks) — do not skip learning because the source is fallback. Fail notes are equal priority to success tips. Prefer Q&A bodies for recurring FIX patterns; one-off misses may stay as `- SKIP/FAIL` / `- TRICK` ops-log bullets.
-2. `*read(source_ops_md)` then `novel = *filter_novel_ops_notes(candidates, against: source_ops_md)` — skip fuzzy/semantic duplicates already in knowledge; never treat a new SKIP/FAIL as a duplicate of a success tip.
-3. If `novel` non-empty: partition into HOWTO / PLACE / Q&A / ops-log, then upsert each via **page + section + mode:append** (ops-log: page append without section). Body must **not** include `##` headings — nixery owns the heading. Example: `/nixery(upsert-knowledge-page, topic: knowledge_topic, page: source-ops-{city_slug}, section: Q&A, mode: append, content: "**Q:** …\n**A:** …")`. Never `key:` + append of a `## HOWTO` / `## Q&A` block (duplicates headings). Flat args only; one upsert per novel section; retry once on `ok: false` only. Merge into context `source_ops_md`, then `*set_context(source_ops_md)` only because content changed. Append only — never replace the whole source-ops page.
-4. Do **not** append into `traffic_source.howto_md` or save the local traffic_source file for ops. Novel city-reusable UI tips → `section: HOWTO ({provider})`; this-run OD autocomplete → `section: PLACE`; recurring problem→fix → `section: Q&A`.
-5. Always set `last_source_notes_at` to now ISO (even when nothing novel — no empty upsert spam).
+1. Draft 0–5 short candidate notes from this poll (tricks, brittle selectors, timeouts, URL quirks, miss/fail reasons, and recoverable **Q&A** problem→fix pairs). Fail notes are equal priority to success tips.
+2. `*read(source_ops_md)` then `novel = *filter_novel_ops_notes(candidates, against: source_ops_md)`.
+3. If `novel` non-empty: for each note call `/nixery(submit-knowledge-observation, topic_hint: knowledge_topic, cue: …, claim: …, example: …, evidence: { poll, tool }, confidence: observed, tags: [HOWTO|PLACE|Q&A|TRICK])`. Do **not** call `upsert-knowledge-page`.
+4. If `novel` is empty: do **not** submit (no empty write spam).
+5. Do **not** append into `traffic_source.howto_md` or save the local traffic_source file for ops.

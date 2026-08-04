@@ -1,6 +1,6 @@
 ---
 name: mastermind
-description: Gateway helper skills — topic policies, dispatch, notifications
+description: Gateway helper skills — instruction, dispatch, notifications, knowledge transfers
 ---
 
 # mastermind (stage agent)
@@ -9,42 +9,13 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic. Masterm
 
 | Invocation | Tool skill |
 |------------|------------|
-| `/mastermind(list-topic-policies)` | `list-topic-policies` (registry rows; no LLM) |
-| `/mastermind(resolve-topic-policy, topic: …)` | `resolve-topic-policy` (registry refresh row + `refresh_skipped`; no LLM) |
-| `/mastermind(patch-topic-policy, topic: …, …)` | `patch-topic-policy` (update refresh policy; no LLM) |
-| `/mastermind(evaluate-knowledge-refresh)` | `evaluate-knowledge-refresh` (stale topics; no LLM) |
-| `/mastermind(dispatch-task-run, taskId: …, …)` | `dispatch-task-run` (queue a task run; no LLM) |
-| `/mastermind(propose-notification, channel: …, direction: …, to: …, body: …)` | `propose-notification` (draft only; human approve → worker send) |
+| `/mastermind(list-topic-policies)` | registry rows (labels only; intervals retired for scheduling) |
+| `/mastermind(get-knowledge-manager-instruction)` | global do/don't/focus free-text |
+| `/mastermind(put-knowledge-manager-instruction, text: …)` | update global instruction |
+| `/mastermind(dispatch-task-run, taskId: …, …)` | queue a task run |
+| `/mastermind(propose-notification, …)` | draft outbound; human approve |
+| `/mastermind(propose-knowledge-transfer, …)` | cross-topic apply proposal + notify SYSTEM_ADMIN |
 
-**Moved to nixery** — use the **`nixery`** tool instead:
+Deprecated for overnight scheduling: `evaluate-knowledge-refresh`, `patch-topic-policy` interval toggles — use global instruction + `knowledge_manager` instead.
 
-| Invocation | Def |
-|------------|-----|
-| `/nixery(resolve-topic, …)` | canonical topic slug |
-| `/nixery(tidy-knowledge, …)` | wiki/export audit |
-| `/nixery(knowledge-qa-review, …)` | corpus load → OpenAI checklist QA |
-| `/nixery(research, …)` | study / synthesis markdown |
-| `/nixery(extract-info, source: ~/…, need: …)` | workspace-file RAG |
-| `/nixery(media-to-text, file: ~/…)` | media → plain text for text-only agents (Cursor CLI) |
-| `/nixery(design-questions, …)` | dynamic ask-user batches |
-
-**Knowledge writes** use **`nixery`** — see `/opt/skills/nixery/SKILL.md`.
-
-**Knowledge reads** use orchestrator `nixeryRun` — not mastermind:
-
-| Def | Read path |
-|-----|-----------|
-| `get-knowledge` | `~/nixery/get-knowledge/{output}` |
-| `list-knowledge-pages` | `~/nixery/list-knowledge-pages/{output}` |
-| `search-knowledge` | `~/nixery/search-knowledge/{output}` |
-| `plan` | `~/nixery/plan/{output}` |
-| `plan-study` | `~/nixery/plan-study/{output}` |
-
-**Verify/score is not a mastermind skill** — orchestrator runs verify via nixery `verify.defId` (default `stage-verify`).
-
-| Tool | Use |
-|------|-----|
-| `mastermind` | Policy / dispatch / notification skills above |
-| `nixery` | Inline nixery defs (resolve-topic, tidy, QA, upsert, dedup, research, media-to-text, …) |
-
-Task-specific skills live under `~/task-skills/`. Load mission via `*load_task_mission(~/task-skills/task-mission/SKILL.md)` when needed.
+**Knowledge writes for stage agents:** `/nixery(submit-knowledge-observation, …)` only. Overnight manager is `knowledge_manager` → `nixeryRun: run-knowledge-manager` (deterministic apply inside the def). See `/opt/skills/nixery/SKILL.md`.

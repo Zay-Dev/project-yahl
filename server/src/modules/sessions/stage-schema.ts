@@ -35,6 +35,12 @@ const agentOverridesSchema = Joi.object({
   bashTimeoutMs: Joi.number().integer().min(1).optional(),
 }).unknown(false);
 
+const stagehandConfigSchema = Joi.object({
+  apiBaseUrl: Joi.string().trim().min(1).optional(),
+  model: Joi.string().trim().min(1).optional(),
+  preferScreenshot: Joi.boolean().optional(),
+}).unknown(false);
+
 const gotoEntrySchema = Joi.object({
   command: Joi.string().trim().pattern(STAGE_GOTO_COMMAND_PATTERN).required(),
   description: Joi.string().trim().required(),
@@ -60,6 +66,7 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   nixeryRun: Joi.string().trim().optional(),
   produceContextKeys: stringArraySchema.optional(),
   produceTypeKeys: stringArraySchema.optional(),
+  stagehand: stagehandConfigSchema.optional(),
   temperature: Joi.number().min(0).max(2).optional(),
   updateContextKeys: stringArraySchema.optional(),
   verify: verifySpecSchema.optional(),

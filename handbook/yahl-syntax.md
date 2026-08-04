@@ -54,6 +54,7 @@ Per-stage fields:
 | `maxBashCalls` | Optional cap on `run_bash` calls for this AI stage (default 24) |
 | `maxTurns` | Optional cap on chat turns for this AI stage (default 60) |
 | `agentOverrides` | Optional agent knobs for this stage. **Only** `bashTimeoutMs` (positive int ms) is accepted — unknown keys fail validation. Used by `run_bash` instead of the shared 60s default. |
+| `stagehand` | Optional Stagehand knobs for this AI stage: `model`, `apiBaseUrl` (both optional; default to agent `LLM_*` / `STAGEHAND_MODEL`), `preferScreenshot` (optional boolean, default `false` — excludes Stagehand `screenshot` tool on `browser` `mode: agent`). Unknown keys fail validation. |
 | `temperature` | Model temperature for AI stages (0–2) |
 | `contextKeys` | Allowlist of context/stage keys passed into the runner |
 | `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |

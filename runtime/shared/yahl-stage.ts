@@ -29,6 +29,12 @@ export type YahlAgentOverrides = {
   bashTimeoutMs?: number;
 };
 
+export type YahlStagehandConfig = {
+  apiBaseUrl?: string;
+  model?: string;
+  preferScreenshot?: boolean;
+};
+
 export type YahlGotoEntry = {
   command: string;
   description: string;
@@ -50,6 +56,7 @@ export interface YahlStage {
   nixeryRun?: string;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
+  stagehand?: YahlStagehandConfig;
   temperature?: number;
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
@@ -211,6 +218,59 @@ const validateAgentOverrides = (
   }
 
   return { bashTimeoutMs };
+};
+
+const STAGEHAND_KEYS = new Set(['apiBaseUrl', 'model', 'preferScreenshot']);
+
+const validateStagehandConfig = (
+  raw: unknown,
+  label: string,
+): YahlStagehandConfig | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`${label}.stagehand: expected an object`);
+  }
+
+  const entry = raw as Record<string, unknown>;
+
+  for (const key of Object.keys(entry)) {
+    if (!STAGEHAND_KEYS.has(key)) {
+      throw new Error(
+        `${label}.stagehand: unknown key "${key}" (only apiBaseUrl, model, preferScreenshot allowed)`,
+      );
+    }
+  }
+
+  const config: YahlStagehandConfig = {};
+
+  if (entry.model !== undefined) {
+    if (typeof entry.model !== 'string' || !entry.model.trim()) {
+      throw new Error(`${label}.stagehand.model: must be a non-empty string`);
+    }
+
+    config.model = entry.model.trim();
+  }
+
+  if (entry.apiBaseUrl !== undefined) {
+    if (typeof entry.apiBaseUrl !== 'string' || !entry.apiBaseUrl.trim()) {
+      throw new Error(`${label}.stagehand.apiBaseUrl: must be a non-empty string`);
+    }
+
+    config.apiBaseUrl = entry.apiBaseUrl.trim();
+  }
+
+  if (entry.preferScreenshot !== undefined) {
+    if (typeof entry.preferScreenshot !== 'boolean') {
+      throw new Error(`${label}.stagehand.preferScreenshot: must be a boolean`);
+    }
+
+    config.preferScreenshot = entry.preferScreenshot;
+  }
+
+  return config;
 };
 
 const validateGotoEntries = (
@@ -439,6 +499,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
 
   const verify = normalizeVerifySpec(stage.verify, label);
   const agentOverrides = validateAgentOverrides(stage.agentOverrides, label);
+  const stagehand = validateStagehandConfig(stage.stagehand, label);
 
   return {
     logic: logicRaw || '(nixery)',
@@ -448,6 +509,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
       : {}),
     ...(askUser ? { askUser } : {}),
     ...(agentOverrides ? { agentOverrides } : {}),
+    ...(stagehand ? { stagehand } : {}),
     ...(stageId ? { id: stageId } : {}),
     ...(goto ? { goto } : {}),
     ...(stage.contextMode === true ? { contextMode: true } : {}),

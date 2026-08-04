@@ -16,6 +16,10 @@ export {
   resolveNixeryToolOutputHint,
 } from './inline-tool';
 export {
+  resolveNixeryInlineRetryMax,
+  resolveNixerySoftFailToolResult,
+} from './inline-retry';
+export {
   runNixeryDef,
   runNixeryStage,
   resolveSessionNixeryDir,

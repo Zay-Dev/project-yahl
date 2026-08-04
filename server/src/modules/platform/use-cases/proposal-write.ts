@@ -14,6 +14,7 @@ import {
 } from '@project-yahl/shared/whatsapp/whitelist';
 
 import type {
+  TRequestCreateKnowledgeTransferProposal,
   TRequestCreateNotificationProposal,
   TRequestCreateSettingProposal,
   TResponseProposalCreated,
@@ -40,6 +41,21 @@ const settingBodySchema = Joi.object<TRequestCreateSettingProposal>({
   orgUnitId: Joi.string().optional(),
   patch: Joi.object().required(),
   reason: Joi.string().optional(),
+  userId: Joi.string().optional(),
+});
+
+const knowledgeTransferBodySchema = Joi.object<TRequestCreateKnowledgeTransferProposal>({
+  claim: Joi.string().required(),
+  example: Joi.string().optional().allow(''),
+  evidence: Joi.object().optional(),
+  observationIds: Joi.array().items(Joi.string()).optional(),
+  orgId: Joi.string().optional(),
+  orgUnitId: Joi.string().optional(),
+  proposedOps: Joi.array().optional(),
+  rationale: Joi.string().required(),
+  sessionId: Joi.string().optional(),
+  sourceTopic: Joi.string().required(),
+  targetTopic: Joi.string().required(),
   userId: Joi.string().optional(),
 });
 
@@ -105,6 +121,33 @@ export const createSettingProposal = [
         payload: body,
         proposalId,
         reason: body.reason,
+        status: 'pending',
+      });
+
+      express.res.status(201);
+      express.respondOne<TResponseProposalCreated>({ id: proposalId });
+    })
+    .toMiddleware(),
+];
+
+export const createKnowledgeTransferProposal = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      body: joi.getValidatedOrThrow(knowledgeTransferBodySchema, req.body),
+    }))
+    .next(async (express, { body }) => {
+      if (body.sourceTopic.trim() === body.targetTopic.trim()) {
+        throw errors.badRequest('sourceTopic and targetTopic must differ');
+      }
+
+      const proposalId = randomUUID();
+
+      await modelPlatformProposal.create({
+        done: false,
+        kind: 'knowledge_transfer',
+        payload: body,
+        proposalId,
+        reason: body.rationale,
         status: 'pending',
       });
 

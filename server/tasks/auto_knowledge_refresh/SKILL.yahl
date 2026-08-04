@@ -1,61 +1,37 @@
 name: auto-knowledge-refresh
-description: Cron checkpoint — evaluate stale knowledge topics and dispatch knowledge_refresh runs
+description: Cron checkpoint — dispatch Knowledge Manager full-corpus review (replaces stale-only evaluate)
 background: true
 resultContextKey: result
 
 types: |
-  type TDispatchItem = {
-    canonical: string;
+  type TResult = {
+    checkedAt: string;
     sessionId?: string;
     taskId: string;
   };
 
-  type TResult = {
-    checkedAt: string;
-    dispatchCount: number;
-    dispatched: TDispatchItem[];
-    staleCount: number;
-  };
-
 stages:
-  - produceContextKeys: [refresh_eval, stale_topics, missionText]
+  - produceContextKeys: [missionText, dispatch]
     logic: |
       const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
-      const refresh_eval = /mastermind(evaluate-knowledge-refresh);
-      *echo('set_context stale_topics from refresh_eval.data.staleTopics per ~/task-skills/dispatch-loop/SKILL.md');
-
-  - loopSetup: for each topic of [stale_topics]
-    contextKeys: [refresh_eval, stale_topics, missionText, dispatched]
-    updateContextKeys: [dispatched]
-    logic: |
-      /mastermind(
+      const dispatch = /mastermind(
         dispatch-task-run,
-        taskId: knowledge_refresh,
-        runInput: {
-          knowledge_topic: topic.canonical,
-          rerun_intent: {
-            isRerun: true,
-            proceedMode: update_selected,
-            updateScope: topic.scopes,
-            addressOpenQuestions: false,
-          },
-        },
+        taskId: knowledge_manager,
+        runInput: {},
       );
-      *echo('set_context extend dispatched per ~/task-skills/dispatch-loop/SKILL.md');
 
   - contextMode: true
-    contextKeys: [refresh_eval, dispatched]
-    produceContextKeys: [result]
+    contextKeys: [dispatch]
+    updateContextKeys: [result]
     logic: |
       (() => {
-        const evalData = context.context.refresh_eval?.data;
-        const items = context.context.dispatched ?? [];
+        const dispatch = context.context.dispatch ?? {};
+        const data = dispatch.data ?? dispatch;
         return {
           result: {
-            checkedAt: evalData?.checkedAt ?? '',
-            dispatchCount: items.length,
-            dispatched: items,
-            staleCount: evalData?.staleTopics?.length ?? 0,
+            checkedAt: new Date().toISOString(),
+            sessionId: data.sessionId,
+            taskId: data.taskId ?? 'knowledge_manager',
           },
         };
       })

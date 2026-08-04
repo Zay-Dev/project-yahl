@@ -22,7 +22,9 @@ export type TDedupApplyResult = {
   status: 'applied' | 'skipped';
 };
 
-const resolveCanonicalFromPagePath = (pagePath: string): { canonical: string; page: string } | null => {
+export const resolveCanonicalFromPagePath = (
+  pagePath: string,
+): { canonical: string; page: string } | null => {
   const normalized = pagePath.replace(/^\/+/, '').replace(/^en\//, '');
   const match = normalized.match(/^topics\/([^/]+)\/(.+)$/);
 
@@ -37,16 +39,24 @@ const resolveCanonicalFromPagePath = (pagePath: string): { canonical: string; pa
 };
 
 export const applyDedupAction = async (item: TDedupAction): Promise<TDedupApplyResult> => {
-  const pagePath = item.pagePath?.trim();
+  const pagePath = item.pagePath?.trim() ?? '';
 
   if (!pagePath) {
-    throw new Error('dedup action requires pagePath');
+    return {
+      id: item.id,
+      pagePath: '',
+      status: 'skipped',
+    };
   }
 
   const resolved = resolveCanonicalFromPagePath(pagePath);
 
   if (!resolved) {
-    throw new Error(`dedup action pagePath not under topics/: ${pagePath}`);
+    return {
+      id: item.id,
+      pagePath,
+      status: 'skipped',
+    };
   }
 
   const wikiPath = resolveWikiPagePath(resolved.canonical, resolved.page);

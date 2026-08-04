@@ -1,0 +1,65 @@
+id: run-knowledge-manager
+description: Overnight Knowledge Manager — hone, ApplyPlan intake, deterministic apply (no agent tool loop)
+
+packages: [nodejs]
+
+env:
+  OPENAI_API_KEY: ""
+  OPENAI_BASE_URL: ""
+  OPENAI_MODEL: deepseek-v4-flash
+  OPENAI_TEMPERATURE: "0.2"
+  WIKI_GRAPHQL_URL: ""
+  WIKI_API_TOKEN: ""
+  TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
+  SESSION_API_BASE_URL: ""
+  MASTERMIND_API_URL: ""
+
+nixery:
+  default: "true"
+  tools: [nodejs]
+  policies:
+    - tools: [nodejs]
+      mode: "true"
+
+input:
+  dryRun:
+    type: string
+    required: false
+  topic:
+    type: string
+    required: false
+  topics:
+    type: string
+    required: false
+  skipLlmPlan:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: ro
+  /data/mastermind:
+    host: data/mastermind
+    mode: rw
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+  /opt/nixery/knowledge-wiki:
+    host: lib/knowledge-wiki
+    mode: ro
+
+run:
+  entry: [node, /opt/nixery/def/run.mjs]
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: false

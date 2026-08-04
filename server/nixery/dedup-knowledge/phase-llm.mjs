@@ -34,7 +34,7 @@ const baseUrlFallbackChains = {
 };
 
 const defaultModels = {
-  execute: 'deepseek-flash',
+  execute: 'deepseek-v4-flash',
   plan: 'deepseek-v4-pro',
   review: 'deepseek-v4-pro',
 };

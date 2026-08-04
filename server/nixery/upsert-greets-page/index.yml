@@ -51,4 +51,4 @@ run:
 output:
   default: result.json
   validate: validation.mjs
-  inlineTool: true
+  inlineTool: false

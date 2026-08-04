@@ -5,12 +5,17 @@ import { z } from "zod";
 
 import type { BrowserToolArguments } from "@/shared/stage-tools";
 import type { TModelResponse } from "@/shared/transports/-types";
+import type { YahlStagehandConfig } from "@/shared/yahl-stage";
 
+import { normalizeAgentExecuteResult } from "./normalize-agent-result";
+import { resolveAgentExecuteOptions } from "./resolve-agent-execute-options";
 import {
   clearStagehandProxyBrief,
+  clearStagehandProxyLlmOverrides,
   clearStagehandProxyReporter,
   ensureStagehandLlmProxy,
   setStagehandProxyBrief,
+  setStagehandProxyLlmOverrides,
   setStagehandProxyReporter,
   stopStagehandLlmProxy,
 } from "./stagehand-llm-proxy";
@@ -37,6 +42,7 @@ type TBrowserResult =
 export type TRunBrowserCommandOptions = {
   onModelResponse?: (response: TModelResponse) => Promise<void>;
   proxyBrief?: string;
+  stagehand?: YahlStagehandConfig;
 };
 
 let stagehand: Stagehand | null = null;
@@ -177,6 +183,7 @@ export const closeStagehandSession = async () => {
 
 const executeBrowserCommand = async (
   args: BrowserToolArguments,
+  options?: { preferScreenshot?: boolean },
 ): Promise<TBrowserResult> => {
   const sh = await resolveStagehand();
   const page = sh.context.pages()[0];
@@ -238,12 +245,16 @@ const executeBrowserCommand = async (
     const maxSteps = args.maxSteps ?? DEFAULT_AGENT_MAX_STEPS;
     const agent = sh.agent();
     const result = await withTimeout(
-      agent.execute({ instruction: args.instruction, maxSteps }),
+      agent.execute(resolveAgentExecuteOptions({
+        instruction: args.instruction,
+        maxSteps,
+        preferScreenshot: options?.preferScreenshot === true,
+      })),
       AGENT_TIMEOUT_MS,
       "browser.agent",
     );
 
-    return { data: result, ok: true };
+    return { data: normalizeAgentExecuteResult(result), ok: true };
   }
 
   return { error: `browser: unsupported mode ${mode}`, ok: false };
@@ -257,12 +268,7 @@ const shouldResetBrowser = (_args: BrowserToolArguments, error: string) => {
   return consecutiveBrowserFailures >= CONSECUTIVE_FAILURES_BEFORE_RESET;
 };
 
-export const runBrowserCommand = async (
-  args: BrowserToolArguments,
-  options?: TRunBrowserCommandOptions,
-): Promise<TBrowserResult> => {
-  await ensureStagehandLlmProxy();
-
+const applyBrowserProxyOptions = (options?: TRunBrowserCommandOptions) => {
   if (options?.onModelResponse) {
     setStagehandProxyReporter({ onModelResponse: options.onModelResponse });
   }
@@ -271,11 +277,34 @@ export const runBrowserCommand = async (
     setStagehandProxyBrief(options.proxyBrief);
   }
 
+  const stagehand = options?.stagehand;
+
+  if (stagehand?.model || stagehand?.apiBaseUrl) {
+    setStagehandProxyLlmOverrides({
+      ...(stagehand.apiBaseUrl ? { apiBaseUrl: stagehand.apiBaseUrl } : {}),
+      ...(stagehand.model ? { model: stagehand.model } : {}),
+    });
+  } else {
+    clearStagehandProxyLlmOverrides();
+  }
+};
+
+export const runBrowserCommand = async (
+  args: BrowserToolArguments,
+  options?: TRunBrowserCommandOptions,
+): Promise<TBrowserResult> => {
+  await ensureStagehandLlmProxy();
+  applyBrowserProxyOptions(options);
+
+  const executeOptions = {
+    preferScreenshot: options?.stagehand?.preferScreenshot === true,
+  };
+
   try {
     let result: TBrowserResult;
 
     try {
-      result = await executeBrowserCommand(args);
+      result = await executeBrowserCommand(args, executeOptions);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -301,17 +330,10 @@ export const runBrowserCommand = async (
     await closeStagehandSession();
 
     await ensureStagehandLlmProxy();
-
-    if (options?.onModelResponse) {
-      setStagehandProxyReporter({ onModelResponse: options.onModelResponse });
-    }
-
-    if (options?.proxyBrief !== undefined) {
-      setStagehandProxyBrief(options.proxyBrief);
-    }
+    applyBrowserProxyOptions(options);
 
     try {
-      result = await executeBrowserCommand(args);
+      result = await executeBrowserCommand(args, executeOptions);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -327,6 +349,7 @@ export const runBrowserCommand = async (
     return result;
   } finally {
     clearStagehandProxyBrief();
+    clearStagehandProxyLlmOverrides();
     clearStagehandProxyReporter();
   }
 };

@@ -1,6 +1,6 @@
 import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
-export type TProposalKind = 'notification' | 'setting';
+export type TProposalKind = 'notification' | 'setting' | 'knowledge_transfer';
 
 export type TProposalStatus = 'pending' | 'approved' | 'rejected';
 
@@ -53,6 +53,21 @@ export type TRequestCreateSettingProposal = {
   orgUnitId?: string;
   patch: Record<string, unknown>;
   reason?: string;
+  userId?: string;
+};
+
+export type TRequestCreateKnowledgeTransferProposal = {
+  claim: string;
+  example?: string;
+  evidence?: Record<string, unknown>;
+  observationIds?: string[];
+  orgId?: string;
+  orgUnitId?: string;
+  proposedOps?: unknown[];
+  rationale: string;
+  sessionId?: string;
+  sourceTopic: string;
+  targetTopic: string;
   userId?: string;
 };
 

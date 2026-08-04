@@ -8,11 +8,13 @@ import type { TStagehandProxyCompletionInput } from "../-utils/llm-client";
 import { buildBrowserProxyBrief } from "./browser-proxy-brief";
 import {
   clearStagehandProxyBrief,
+  clearStagehandProxyLlmOverrides,
   clearStagehandProxyReporter,
   ensureStagehandLlmProxy,
   mergeStagehandProxyMessages,
   setStagehandProxyBrief,
   setStagehandProxyCompletionFnForTests,
+  setStagehandProxyLlmOverrides,
   setStagehandProxyReporter,
   stopStagehandLlmProxy,
 } from "./stagehand-llm-proxy";
@@ -55,6 +57,7 @@ describe("browser-proxy-brief", () => {
 describe("stagehand-llm-proxy", () => {
   after(async () => {
     clearStagehandProxyBrief();
+    clearStagehandProxyLlmOverrides();
     clearStagehandProxyReporter();
     setStagehandProxyCompletionFnForTests(null);
     await stopStagehandLlmProxy();
@@ -176,6 +179,58 @@ describe("stagehand-llm-proxy", () => {
           || String((message as { content?: string }).content || "").includes("Prior tool result"),
       ),
     );
+  });
+
+  it("forwards stagehand llm overrides into nested completion input", async () => {
+    process.env.STAGEHAND_LLM_PROXY_PORT = "0";
+
+    let nestedInput: TStagehandProxyCompletionInput | null = null;
+
+    setStagehandProxyCompletionFnForTests(async (input) => {
+      nestedInput = input;
+
+      return {
+        choices: [
+          {
+            finish_reason: "stop",
+            index: 0,
+            logprobs: null,
+            message: {
+              content: "ok",
+              role: "assistant",
+              refusal: null,
+            },
+          },
+        ],
+        created: Math.floor(Date.now() / 1000),
+        id: "chatcmpl-override",
+        model: "custom-model",
+        object: "chat.completion",
+      };
+    });
+
+    const { port } = await ensureStagehandLlmProxy();
+
+    setStagehandProxyLlmOverrides({
+      apiBaseUrl: "https://api.example.com/v1",
+      model: "custom-model",
+    });
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      body: JSON.stringify({
+        messages: [{ content: "hi", role: "user" }],
+        model: "openai/deepseek-v4-flash",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    assert.equal(res.status, 200);
+    assert.ok(nestedInput);
+    assert.equal(nestedInput.modelOverride, "custom-model");
+    assert.equal(nestedInput.apiBaseUrl, "https://api.example.com/v1");
+
+    clearStagehandProxyLlmOverrides();
   });
 
   it("posts onModelResponse with usage and stagehand tag after each completion", async () => {
@@ -330,5 +385,25 @@ describe("chatCompletionForStagehandProxy nesting", () => {
     assert.equal(params.model, "deepseek-v4-flash");
     assert.equal(params.stream, false);
     assert.equal(params.tool_choice, "required");
+  });
+
+  it("prefers modelOverride over Stagehand requested model", async () => {
+    const {
+      buildStagehandProxyLlmCreateParams,
+      resolveNestedModelForStagehandProxy,
+    } = await import("../-utils/llm-client/index.ts");
+
+    assert.equal(
+      resolveNestedModelForStagehandProxy("openai/deepseek-v4-flash", "openai/gpt-4o-mini"),
+      "gpt-4o-mini",
+    );
+
+    const params = buildStagehandProxyLlmCreateParams({
+      messages: [{ content: "hi", role: "user" }],
+      model: "openai/deepseek-v4-flash",
+      modelOverride: "custom-model",
+    });
+
+    assert.equal(params.model, "custom-model");
   });
 });

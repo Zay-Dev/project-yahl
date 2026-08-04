@@ -44,6 +44,12 @@ export type TYahlAgentOverrides = {
   bashTimeoutMs?: number;
 };
 
+export type TYahlStagehandConfig = {
+  apiBaseUrl?: string;
+  model?: string;
+  preferScreenshot?: boolean;
+};
+
 export type TYahlGotoEntry = {
   command: string;
   description: string;
@@ -65,6 +71,7 @@ export type TYahlStage = {
   nixeryRun?: string;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
+  stagehand?: TYahlStagehandConfig;
   temperature?: number;
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;

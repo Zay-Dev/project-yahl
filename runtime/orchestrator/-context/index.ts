@@ -18,6 +18,7 @@ export {
   setContextScopeForStage,
   shouldApplySetContext,
 } from './stage-field-policy';
+export type { TApplySetContextResult } from './stage-field-policy';
 export {
   mergeContextPayloadToStorage,
   storageFromContextPayload,

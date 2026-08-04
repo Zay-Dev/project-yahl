@@ -8,20 +8,25 @@ import config from "@/agent/config";
 
 import { STAGE_TOOLS } from "@/shared/stage-tools";
 
-import { effectiveApiKey, openAiFetch } from "../llm-transport";
+import { effectiveApiKey, normalizeLlmBaseUrl, openAiFetch } from "../llm-transport";
 
 import * as Utils from "./-utils";
 
 export type TStagehandProxyCompletionInput = {
+  apiBaseUrl?: string;
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   model?: string;
+  modelOverride?: string;
   temperature?: number;
   tool_choice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption;
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
 };
 
-export const resolveNestedModelForStagehandProxy = (requested?: string) => {
-  const raw = (requested || config.model).trim();
+export const resolveNestedModelForStagehandProxy = (
+  requested?: string,
+  override?: string,
+) => {
+  const raw = (override?.trim() || requested || config.model).trim();
 
   if (!raw) return config.model;
 
@@ -34,7 +39,7 @@ export const buildStagehandProxyLlmCreateParams = (
   input: TStagehandProxyCompletionInput,
 ) => ({
   messages: input.messages,
-  model: resolveNestedModelForStagehandProxy(input.model),
+  model: resolveNestedModelForStagehandProxy(input.model, input.modelOverride),
   stream: false as const,
   thinking: { type: "disabled" as const },
   ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
@@ -56,7 +61,15 @@ export const chatWithTools = async (
 export const chatCompletionForStagehandProxy = async (
   input: TStagehandProxyCompletionInput,
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
-  const response = await _client.chat.completions.create(
+  const client = input.apiBaseUrl
+    ? new OpenAI({
+        apiKey: effectiveApiKey(config.apiKey),
+        baseURL: normalizeLlmBaseUrl(input.apiBaseUrl),
+        fetch: openAiFetch(config.apiKey),
+      })
+    : _client;
+
+  const response = await client.chat.completions.create(
     buildStagehandProxyLlmCreateParams(input) as any,
   );
 

@@ -48,6 +48,35 @@ describe('collapseDuplicateWikiSections', () => {
     assert.equal((collapsed.match(/# .*(Key Facts|key facts)/g) ?? []).length, 1);
   });
 
+  it('collapses all duplicate ## titles when sectionTitle omitted', () => {
+    const content = [
+      '## HOWTO',
+      '',
+      'old howto',
+      '',
+      '## PLACE',
+      '',
+      'place a',
+      '',
+      '## HOWTO',
+      '',
+      'new howto',
+      '',
+      '## PLACE',
+      '',
+      'place b',
+    ].join('\n');
+
+    const collapsed = collapseDuplicateWikiSections(content);
+
+    assert.match(collapsed, /new howto/);
+    assert.doesNotMatch(collapsed, /old howto/);
+    assert.match(collapsed, /place b/);
+    assert.doesNotMatch(collapsed, /place a/);
+    assert.equal((collapsed.match(/^## HOWTO$/gm) ?? []).length, 1);
+    assert.equal((collapsed.match(/^## PLACE$/gm) ?? []).length, 1);
+  });
+
   it('returns content unchanged when no duplicate sections', () => {
     const content = '## Key facts\n\none block only\n';
 

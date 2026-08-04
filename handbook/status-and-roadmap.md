@@ -29,7 +29,7 @@ But more importantly — it does feel like patching in the right direction. No m
 | verify.autoRetry | Works | Orchestrator in-process verify loop on stages with `verify.autoRetry: true`. |
 | Task-local skills | Works | Echoed from session snapshot to agent `~/task-skills/`; see [yahl-syntax.md](yahl-syntax.md). |
 | Knowledge store | Works | Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see the root README and [security.md](security.md). |
-| Topic governance | Works | Nixery `resolve-topic` + nixery `tidy-knowledge` audit; cron `auto_knowledge_refresh` → `knowledge_refresh`. |
+| Topic governance | Works | Global Knowledge Manager instruction + overnight `auto_knowledge_refresh` → `knowledge_manager` (full corpus); observations inbox; cross-topic `knowledge_transfer` approvals. |
 | Background sessions | Works | Cron/utility runs hidden by default on `/sessions` (toggle to show). |
 | Platform UI | Works | `/platform/approvals` (`PLATFORM_APPROVAL_TOKEN` / `X-Approval-Token`); `/platform/cron-jobs` create/edit/delete (worker ticks via `POST /api/runs`). Example: `traffic_monitor` at `0 8 * * *` / `Asia/Hong_Kong` with `runInput` — see [how-to-run.md](how-to-run.md). |
 | Direct user ↔ mastermind chat | Planned | Deferred for v1; skills stay stateless for now. |

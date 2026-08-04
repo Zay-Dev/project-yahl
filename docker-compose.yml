@@ -76,6 +76,7 @@ services:
       WORKSPACE_ROOT: /workspace
       EMAIL_WHITELIST: ${EMAIL_WHITELIST:-}
       WHATSAPP_WHITELIST: ${WHATSAPP_WHITELIST:-}
+      YAHL_NIXERY_INLINE_RETRY_MAX: ${YAHL_NIXERY_INLINE_RETRY_MAX:-3}
     ports:
       - "${SERVER_PORT:-4000}:4000"
     depends_on:

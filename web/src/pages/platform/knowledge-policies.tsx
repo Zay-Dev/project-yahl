@@ -1,30 +1,28 @@
-import type { TRequestPatchKnowledgePolicyBody, TResponseTopicPolicy } from "@project-yahl/server/modules/platform/-api-types";
-
 import { useEffect, useState } from "react";
 
-import { WIKI_PUBLIC_URL } from "@/providers/constants";
 import { Button } from "@/components/ui/button";
 import {
-  listKnowledgePolicies,
-  patchKnowledgePolicy,
-  REFRESH_INTERVAL_OPTIONS,
-} from "@/pages/platform/lib/knowledge-policies-api";
+  getKnowledgeManagerInstruction,
+  putKnowledgeManagerInstruction,
+} from "@/pages/platform/lib/knowledge-instruction-api";
 
 export function KnowledgePoliciesPage() {
-  const [items, setItems] = useState<TResponseTopicPolicy[]>([]);
+  const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savingSlug, setSavingSlug] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const load = async () => {
     setLoading(true);
     setError(null);
+    setSaved(false);
 
     try {
-      setItems(await listKnowledgePolicies());
+      setText(await getKnowledgeManagerInstruction());
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load policies");
-      setItems([]);
+      setError(loadError instanceof Error ? loadError.message : "Failed to load instruction");
+      setText("");
     } finally {
       setLoading(false);
     }
@@ -34,132 +32,59 @@ export function KnowledgePoliciesPage() {
     void load();
   }, []);
 
-  const savePolicy = async (slug: string, patch: TRequestPatchKnowledgePolicyBody) => {
-    setSavingSlug(slug);
+  const save = async () => {
+    setSaving(true);
     setError(null);
+    setSaved(false);
 
     try {
-      const updated = await patchKnowledgePolicy(slug, patch);
-      setItems((current) => current.map((item) => (
-        item.canonical === slug ? updated : item
-      )));
+      const next = await putKnowledgeManagerInstruction({ text });
+      setText(next);
+      setSaved(true);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save policy");
+      setError(saveError instanceof Error ? saveError.message : "Failed to save instruction");
     } finally {
-      setSavingSlug(null);
+      setSaving(false);
     }
   };
 
-  const toggleEnabled = async (item: TResponseTopicPolicy) => {
-    const enabled = !(item.refresh?.enabled ?? false);
-
-    await savePolicy(item.canonical, {
-      enabled,
-      interval: enabled ? (item.refresh?.interval ?? "weekly") : null,
-    });
-  };
-
-  const setInterval = async (item: TResponseTopicPolicy, interval: typeof REFRESH_INTERVAL_OPTIONS[number]["value"]) => {
-    await savePolicy(item.canonical, {
-      enabled: interval !== null,
-      interval,
-    });
-  };
-
   if (loading) {
-    return <p className="p-6 text-sm text-muted-foreground">Loading knowledge policies…</p>;
+    return <p className="p-6 text-sm text-muted-foreground">Loading Knowledge Manager instruction…</p>;
   }
 
   return (
     <div className="flex flex-col gap-4 p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Knowledge refresh policies</h1>
+          <h1 className="text-xl font-semibold">Knowledge Manager instruction</h1>
           <p className="text-sm text-muted-foreground">
-            Per-topic scheduled refresh settings. Corpus content is not shown here.
+            Global free-text do / don&apos;t / focus for overnight review of every topic.
+            Per-topic refresh intervals are retired.
           </p>
         </div>
-        <Button onClick={() => void load()} size="sm" variant="outline">
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => void load()} size="sm" variant="outline">
+            Reload
+          </Button>
+          <Button disabled={saving} onClick={() => void save()} size="sm">
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
       </div>
 
       {error ? (
         <p className="text-sm text-destructive">{error}</p>
       ) : null}
 
-      {items.length === 0 ? (
-        <p className="text-sm">No knowledge topics found.</p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="min-w-[720px] w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="p-3 text-left font-medium">Topic</th>
-                <th className="p-3 text-left font-medium">Wiki</th>
-                <th className="p-3 text-left font-medium">Enabled</th>
-                <th className="p-3 text-left font-medium">Interval</th>
-                <th className="p-3 text-left font-medium">Last run</th>
-                <th className="p-3 text-left font-medium">Status</th>
-                <th className="p-3 text-left font-medium">Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr className="border-t" key={item.canonical}>
-                  <td className="p-3 font-medium">{item.canonical}</td>
-                  <td className="p-3">
-                    <a
-                      className="text-primary underline-offset-4 hover:underline"
-                      href={`${WIKI_PUBLIC_URL}/en/topics/${encodeURIComponent(item.canonical)}/overview`}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Browse
-                    </a>
-                  </td>
-                  <td className="p-3">
-                    <Button
-                      disabled={savingSlug === item.canonical}
-                      onClick={() => void toggleEnabled(item)}
-                      size="sm"
-                      variant="outline"
-                    >
-                      {item.refresh?.enabled ? "On" : "Off"}
-                    </Button>
-                  </td>
-                  <td className="p-3">
-                    <select
-                      className="rounded-md border bg-background px-2 py-1 text-sm"
-                      disabled={savingSlug === item.canonical}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        const interval = value === "off"
-                          ? null
-                          : value as "daily" | "weekly" | "biweekly" | "monthly";
+      {saved ? (
+        <p className="text-sm text-muted-foreground">Saved.</p>
+      ) : null}
 
-                        void setInterval(item, interval);
-                      }}
-                      value={item.refresh?.interval ?? "off"}
-                    >
-                      {REFRESH_INTERVAL_OPTIONS.map((option) => (
-                        <option key={option.label} value={option.value ?? "off"}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="p-3 text-xs text-muted-foreground">
-                    {item.refresh?.lastRunAt ?? "—"}
-                  </td>
-                  <td className="p-3">{item.refresh?.lastRunStatus ?? "—"}</td>
-                  <td className="p-3 text-xs text-muted-foreground">{item.updatedAt ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <textarea
+        className="min-h-[320px] w-full rounded-md border bg-background p-3 font-mono text-sm"
+        onChange={(event) => setText(event.target.value)}
+        value={text}
+      />
     </div>
   );
 }

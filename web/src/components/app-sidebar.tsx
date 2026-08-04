@@ -117,7 +117,7 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       ),
     },
     {
-      title: "Knowledge policies",
+      title: "Knowledge Manager",
       url: "/platform/knowledge-policies",
       icon: (
         <RefreshCwIcon

@@ -18,6 +18,10 @@ import {
 import { runSelfCheck } from '../-activity/self-check.js';
 import { config } from '../config.js';
 import { postProposal, runSkill, runListTopicPolicies, runPatchTopicPolicy } from '../-handlers/skills.js';
+import {
+  readKnowledgeManagerInstruction,
+  writeKnowledgeManagerInstruction,
+} from '../-knowledge/manager-instruction.js';
 
 const readJsonBody = async (req: http.IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = [];
@@ -88,6 +92,32 @@ export const createApiServer = () => {
         const payload = buildRequestStatusPayload({ request });
 
         sendJson(res, 200, payload);
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/v1/internal/knowledges/manager-instruction') {
+        if (!isInternalRequest(req)) {
+          sendJson(res, 403, { error: 'forbidden' });
+          return;
+        }
+
+        const text = await readKnowledgeManagerInstruction();
+
+        sendJson(res, 200, { ok: true, data: { text } });
+        return;
+      }
+
+      if (req.method === 'PUT' && pathname === '/v1/internal/knowledges/manager-instruction') {
+        if (!isInternalRequest(req)) {
+          sendJson(res, 403, { error: 'forbidden' });
+          return;
+        }
+
+        const body = await readJsonBody(req) as { text?: unknown };
+        const text = typeof body.text === 'string' ? body.text : '';
+        const filePath = await writeKnowledgeManagerInstruction(text);
+
+        sendJson(res, 200, { ok: true, data: { text, path: filePath } });
         return;
       }
 

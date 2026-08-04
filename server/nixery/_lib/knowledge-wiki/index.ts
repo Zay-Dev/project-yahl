@@ -1,5 +1,5 @@
 export { readKnowledgeWikiConfig, type TKnowledgeWikiConfig } from './config.js';
-export { applyDedupAction, applyDedupActions, type TDedupAction, type TDedupApplyResult } from './dedup.js';
+export { applyDedupAction, applyDedupActions, resolveCanonicalFromPagePath, type TDedupAction, type TDedupApplyResult } from './dedup.js';
 export {
   measurePersistPayloadBytes,
   resolveKnowledgeFileExtension,
@@ -46,6 +46,48 @@ export {
   type TUpsertKnowledgePageInput,
   type TUpsertKnowledgePageResult,
 } from './upsert.js';
+export {
+  formatObservationMarkdown,
+  observationDayStamp,
+  observationPagePath,
+  OBSERVATION_CONFIDENCE,
+  validateKnowledgeObservation,
+  WIKI_OBSERVATIONS_PREFIX,
+  type TKnowledgeObservation,
+  type TObservationConfidence,
+} from './observation.js';
+export {
+  APPLY_PLAN_OPS,
+  formatObservationApplyBody,
+  validateApplyPlan,
+  type TApplyPlan,
+  type TApplyPlanOp,
+  type TApplyPlanOpKind,
+} from './apply-plan.js';
+export {
+  applyApprovedTransfers,
+  applyPlanOps,
+  buildHeuristicApplyPlan,
+  honeTopicPages,
+  isHoneableWikiPagePath,
+  listManagerTopics,
+  listPendingObservations,
+  resolveManagerDepth,
+  runKnowledgeManager,
+  type TCompleteApplyPlan,
+  type TKnowledgeManagerReport,
+  type TManagerDepth,
+  type TPendingObservation,
+  type TTopicReviewRecord,
+} from './run-knowledge-manager.js';
+export {
+  TOPIC_PAGE_LAYOUT,
+  WIKI_OBSERVATIONS_PREFIX as WIKI_OBSERVATIONS_LAYOUT_PREFIX,
+  WIKI_RAW_PREFIX,
+  WIKI_REQUIRED_PAGES,
+  WIKI_SUGGESTED_PAGES,
+  WIKI_TOPIC_PAGES,
+} from './content-model.js';
 export {
   getWikiPageByPath,
   upsertWikiPage,

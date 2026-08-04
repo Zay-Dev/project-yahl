@@ -16,6 +16,7 @@ const CONTEXT_PREAMBLE =
 
 type TProxyState = {
   brief: string | null;
+  llmOverrides: TStagehandProxyLlmOverrides | null;
   port: number;
   server: Server;
 };
@@ -26,6 +27,11 @@ type TCompletionFn = (
 
 export type TStagehandProxyReporter = {
   onModelResponse: (response: TModelResponse) => Promise<void>;
+};
+
+export type TStagehandProxyLlmOverrides = {
+  apiBaseUrl?: string;
+  model?: string;
 };
 
 let proxyState: TProxyState | null = null;
@@ -75,6 +81,38 @@ export const clearStagehandProxyBrief = () => {
   if (!proxyState) return;
 
   proxyState.brief = null;
+};
+
+export const setStagehandProxyLlmOverrides = (
+  overrides: TStagehandProxyLlmOverrides | null | undefined,
+) => {
+  if (!proxyState) return;
+
+  if (!overrides) {
+    proxyState.llmOverrides = null;
+    return;
+  }
+
+  const model = typeof overrides.model === "string" ? overrides.model.trim() : "";
+  const apiBaseUrl = typeof overrides.apiBaseUrl === "string"
+    ? overrides.apiBaseUrl.trim()
+    : "";
+
+  if (!model && !apiBaseUrl) {
+    proxyState.llmOverrides = null;
+    return;
+  }
+
+  proxyState.llmOverrides = {
+    ...(apiBaseUrl ? { apiBaseUrl } : {}),
+    ...(model ? { model } : {}),
+  };
+};
+
+export const clearStagehandProxyLlmOverrides = () => {
+  if (!proxyState) return;
+
+  proxyState.llmOverrides = null;
 };
 
 export const getStagehandProxyBaseUrl = () => {
@@ -159,18 +197,24 @@ const handleChatCompletions = async (req: IncomingMessage, res: ServerResponse) 
     const temperature = typeof body.temperature === "number" ? body.temperature : undefined;
     const model = typeof body.model === "string" ? body.model : undefined;
     const brief = proxyState?.brief ?? null;
+    const llmOverrides = proxyState?.llmOverrides ?? null;
     const messages = mergeStagehandProxyMessages(brief, stagehandMessages);
 
     if (config.debug) {
       console.log(
-        `[stagehand-llm-proxy] chat/completions briefChars=${brief?.length ?? 0} stagehand=${stagehandMessages.length} tools=${tools?.length ?? 0}\n`,
+        `[stagehand-llm-proxy] chat/completions briefChars=${brief?.length ?? 0} stagehand=${stagehandMessages.length} tools=${tools?.length ?? 0}`
+        + (llmOverrides?.model ? ` modelOverride=${llmOverrides.model}` : "")
+        + (llmOverrides?.apiBaseUrl ? ` apiBaseUrlOverride=${llmOverrides.apiBaseUrl}` : "")
+        + `\n`,
       );
     }
 
     const startedAt = Date.now();
     const completion = await completionFn({
+      ...(llmOverrides?.apiBaseUrl ? { apiBaseUrl: llmOverrides.apiBaseUrl } : {}),
       messages,
       model,
+      ...(llmOverrides?.model ? { modelOverride: llmOverrides.model } : {}),
       temperature,
       tool_choice,
       tools,
@@ -239,6 +283,7 @@ const startProxyServer = async (): Promise<TProxyState> =>
       console.log(`[stagehand-llm-proxy] listening on 127.0.0.1:${address.port}\n`);
       resolve({
         brief: null,
+        llmOverrides: null,
         port: address.port,
         server,
       });

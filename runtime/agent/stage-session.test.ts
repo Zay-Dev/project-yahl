@@ -119,4 +119,26 @@ describe("runStageSession", () => {
     assert.equal(envelope.type, 'result');
     assert.match(envelope.output, /saved/);
   });
+
+  it("returns a failure envelope when chatWithTools hits context length", async () => {
+    const envelope = await runStageSession(
+      {
+        context: emptyContext(),
+        stage: { logic: "noop" },
+      },
+      [],
+      {
+        chatWithTools: async () => {
+          throw new Error(
+            "This model's maximum context length is 1048576 tokens. However, you requested 1257163 tokens",
+          );
+        },
+        runCommand: async () => "",
+      },
+      { maxTurns: 2 },
+    );
+
+    assert.equal(envelope.type, "result");
+    assert.match(envelope.output, /context length exceeded/);
+  });
 });

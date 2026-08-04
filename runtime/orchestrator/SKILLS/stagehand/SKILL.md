@@ -10,6 +10,25 @@ description: Browser automation via Stagehand — web search, page fetch, struct
 - **Browse/search:** use `browser` only — no curl for page fetch, search, or scraping.
 - **Post-extraction validation:** after `browser` returns URLs, use `run_bash` with the curl HEAD pattern below to sanity-check reachability before `set_context`.
 
+## Stage YAML: `stagehand`
+
+Optional per-AI-stage overrides (defaults apply when omitted):
+
+```yaml
+stagehand:
+  model: deepseek-v4-flash              # optional — default STAGEHAND_MODEL / LLM_MODEL
+  apiBaseUrl: https://api.deepseek.com  # optional — default LLM_BASE_URL
+  preferScreenshot: false               # optional — default false
+```
+
+| Key | Effect |
+|-----|--------|
+| `model` | Nested Stagehand LLM model (proxy outbound) |
+| `apiBaseUrl` | Nested Stagehand provider base URL (proxy outbound; API key stays env) |
+| `preferScreenshot` | When `false` (default), `mode: "agent"` excludes the Stagehand `screenshot` tool so the agent uses ariaTree / act instead of PNG base64 (avoids huge uncached token spikes) |
+
+Rebuild the agent image after changing this runtime so live sessions pick it up.
+
 ## Tool: `browser`
 
 ```json
@@ -153,6 +172,7 @@ Then:
 
 - Chromium runs locally in the agent container (headless unless live view).
 - Stagehand’s LLM calls go through a **localhost-only OpenAI-compatible proxy** in the agent runtime. The proxy answers with a nested completion that includes a short **YAHL browse brief** (mode/url + optional opaque text) plus Stagehand’s act/observe/extract/agent prompt — not the full stage chat history. Thinking is forced off so provider `tool_choice` works. Stagehand is CU-only; YAHL persists knowledge after browser tool results.
+- By default `mode: "agent"` **excludes** the Stagehand `screenshot` tool (`preferScreenshot: false`). Opt in via stage `stagehand.preferScreenshot: true` only when visual confirmation is required.
 - `mode: "agent"` is supported for multi-step browse / search / form-fill tasks when a single instruction is clearer than many discrete `act` calls.
 - Reuse the same browser session within a stage; multiple `browser` calls share one Chromium instance.
 - For large page text saved to `~/tmp/`, follow up with `/nixery(extract-info, source: ~/tmp/…, need: …)` per `/opt/skills/nixery/SKILL.md`.

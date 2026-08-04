@@ -89,3 +89,11 @@ export type TRequestPatchKnowledgePolicyBody = {
   lastRunStatus?: 'success' | 'failed' | 'skipped' | null;
   scopes?: TTopicRefreshScope[];
 };
+
+export type TResponseKnowledgeManagerInstruction = {
+  text: string;
+};
+
+export type TRequestPutKnowledgeManagerInstructionBody = {
+  text: string;
+};

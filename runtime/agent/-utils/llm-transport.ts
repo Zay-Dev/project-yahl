@@ -19,6 +19,12 @@ export const normalizeStagehandModel = (raw: string) => {
   return `openai/${trimmed}`;
 };
 
+export const normalizeLlmBaseUrl = (value: string) =>
+  value
+    .replace(/\/+$/, "")
+    .replace(/\/v1\/chat\/completions$/, "")
+    .replace(/\/chat\/completions$/, "");
+
 export const openAiFetch = (apiKey: string): typeof fetch | undefined => {
   if (hasRealApiKey(apiKey)) return undefined;
 

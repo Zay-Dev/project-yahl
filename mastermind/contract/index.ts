@@ -48,6 +48,9 @@ export const skillNames = [
   'evaluate-knowledge-refresh',
   'dispatch-task-run',
   'propose-notification',
+  'propose-knowledge-transfer',
+  'get-knowledge-manager-instruction',
+  'put-knowledge-manager-instruction',
 ] as const;
 
 export type TSkillName = (typeof skillNames)[number];
@@ -137,6 +140,21 @@ export const settingProposalSchema = z.object({
 
 export type TSettingProposalInput = z.infer<typeof settingProposalSchema>;
 
+export const knowledgeTransferProposalSchema = z.object({
+  claim: z.string(),
+  example: z.string().optional(),
+  evidence: z.record(z.string(), z.unknown()).optional(),
+  observationIds: z.array(z.string()).optional(),
+  proposedOps: z.array(z.unknown()).optional(),
+  rationale: z.string(),
+  sessionId: z.string().optional(),
+  sourceTopic: z.string(),
+  targetTopic: z.string(),
+  ...orgScopeSchema.shape,
+});
+
+export type TKnowledgeTransferProposalInput = z.infer<typeof knowledgeTransferProposalSchema>;
+
 export const proposalStatusSchema = z.enum(['pending', 'approved', 'rejected']);
 
 export const pendingWorkItemSchema = z.object({
@@ -144,7 +162,7 @@ export const pendingWorkItemSchema = z.object({
   approvedAt: z.string().optional(),
   done: z.boolean(),
   id: z.string(),
-  kind: z.enum(['notification', 'setting']),
+  kind: z.enum(['notification', 'setting', 'knowledge_transfer']),
   payload: z.record(z.string(), z.unknown()),
 });
 

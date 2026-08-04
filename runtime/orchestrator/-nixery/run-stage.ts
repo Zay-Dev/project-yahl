@@ -16,6 +16,8 @@ import {
   startNixeryLogStream,
 } from './run-container';
 import { waitForNixeryOutput } from './validate-output';
+import { assertNamespaceWriteAllowed } from '@project-yahl/shared/nixery/knowledge-write-gate';
+import { fetchSession } from '@/orchestrator/-ask-user/session-api';
 
 export const resolveSessionNixeryDir = (sessionId: string, defId: string) =>
   path.join(workspaceRoot(), 'sessions', sessionId, 'nixery', defId);
@@ -81,9 +83,24 @@ export const runNixeryDef = async (params: {
   input: Record<string, unknown>;
   sessionId: string;
   skipTeardown?: boolean;
+  taskId?: string;
 }): Promise<TNixeryRunResult> => {
   registerSigtermHook();
   await writeSharedOneCliOverride();
+
+  let taskId = params.taskId?.trim() ?? '';
+
+  if (!taskId && params.sessionId.trim()) {
+    try {
+      const session = await fetchSession(params.sessionId);
+
+      taskId = session.taskId?.trim() ?? '';
+    } catch {
+      taskId = '';
+    }
+  }
+
+  assertNamespaceWriteAllowed({ defId: params.defId, taskId });
 
   const def = await loadNixeryDef(params.defId);
   const sessionDir = resolveSessionNixeryDir(params.sessionId, params.defId);

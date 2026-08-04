@@ -37,6 +37,8 @@ import {
 
 import {
   loadNixeryDef,
+  resolveNixeryInlineRetryMax,
+  resolveNixerySoftFailToolResult,
   resolveNixeryStageInput,
   runNixeryDef,
   runNixeryInlineTool,
@@ -79,6 +81,10 @@ class YahlAgentRunner {
   private readonly agentName: string;
 
   private readonly maxProduceKeysRetries = produceKeysMaxRetries();
+
+  private readonly maxNixeryInlineRetries = resolveNixeryInlineRetryMax();
+
+  private nixerySoftFails = 0;
 
   private options: TRunYahlOptions;
 
@@ -326,6 +332,8 @@ class YahlAgentRunner {
     let paused = false;
     let pauseError: AskUserPausedError | null = null;
 
+    this.nixerySoftFails = 0;
+
     const onPause = () => {
       paused = true;
     };
@@ -360,15 +368,22 @@ class YahlAgentRunner {
     const toolCallHandlers = getWaitForToolCall(async (toolCall) => {
       try {
         if (toolCall.function.name === 'set_context') {
-          const applied = await applySetContextToolCall(
+          const outcome = await applySetContextToolCall(
             this.storage,
             toolCall,
             this.activeStage,
           );
 
+          if (outcome.invalidJson) {
+            return {
+              hasError: false,
+              result: `set_context: invalid JSON arguments: ${outcome.invalidJson}`,
+            };
+          }
+
           return {
             hasError: false,
-            result: applied ? 'OK' : 'skipped',
+            result: outcome.applied ? 'OK' : 'skipped',
             newStorage: this.storage,
           };
         }
@@ -433,10 +448,15 @@ class YahlAgentRunner {
             sessionId: this.sessionId,
           });
 
-          return {
-            hasError: !result.ok,
-            result: JSON.stringify(result),
-          };
+          if (!result.ok) {
+            this.nixerySoftFails += 1;
+          }
+
+          return resolveNixerySoftFailToolResult({
+            maxRetries: this.maxNixeryInlineRetries,
+            result,
+            softFailCount: this.nixerySoftFails,
+          });
         }
 
         if (AGENT_LOCAL_TOOLS.has(toolCall.function.name)) {
