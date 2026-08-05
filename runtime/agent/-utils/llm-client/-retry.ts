@@ -1,4 +1,4 @@
-export const LLM_CALL_RETRY_SLEEP_MS = 3000;
+export const LLM_CALL_RETRY_SLEEP_MS = 60_000;
 
 export const resolveLlmCallRetryMax = () => {
   const raw = Math.floor(Number(process.env.LLM_CALL_RETRY_MAX ?? 3));

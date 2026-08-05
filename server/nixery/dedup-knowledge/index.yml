@@ -5,6 +5,7 @@ packages: [shell, gnugrep, nodejs]
 
 env:
   OPENAI_API_KEY: ""
+  LLM_CALL_RETRY_MAX: ""
   OPENAI_BASE_URL: ""
   OPENAI_BASE_URL_PLAN: "https://api.deepseek.com"
   OPENAI_BASE_URL_EXECUTE: "https://api.deepseek.com"
