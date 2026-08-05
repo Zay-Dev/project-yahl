@@ -45,8 +45,8 @@ describe('pendingSessionUpdateDoc', () => {
     const update = pendingSessionUpdateDoc({
       isBackground: true,
       sessionId: 'sess-bg',
-      taskId: 'auto_knowledge_refresh',
-      taskYahl: 'name: tidy\nstages: []',
+      taskId: 'knowledge_manager',
+      taskYahl: 'name: km\nstages: []',
     });
 
     assert.equal(update.$set.isBackground, true);

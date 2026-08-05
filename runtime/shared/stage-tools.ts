@@ -216,7 +216,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(list-topic-policies|resolve-topic-policy|patch-topic-policy|evaluate-knowledge-refresh|dispatch-task-run|propose-notification, ...) in stage logic. Topic resolve, tidy, QA, media-to-text, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(list-topic-policies|resolve-topic-policy|patch-topic-policy|dispatch-task-run|propose-notification, ...) in stage logic. Topic resolve, media-to-text, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -230,7 +230,6 @@ export const STAGE_TOOLS = [
               "list-topic-policies",
               "resolve-topic-policy",
               "patch-topic-policy",
-              "evaluate-knowledge-refresh",
               "dispatch-task-run",
               "propose-notification",
               "propose-knowledge-transfer",

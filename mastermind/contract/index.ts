@@ -45,7 +45,6 @@ export const skillNames = [
   'list-topic-policies',
   'resolve-topic-policy',
   'patch-topic-policy',
-  'evaluate-knowledge-refresh',
   'dispatch-task-run',
   'propose-notification',
   'propose-knowledge-transfer',

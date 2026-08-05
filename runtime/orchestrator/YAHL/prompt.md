@@ -41,11 +41,11 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details. Stagehand’s internal LLM is answered via a localhost proxy with a short YAHL browse brief (not full stage chat history; thinking disabled). Persist knowledge yourself via **`set_context`** / **`nixery`** after browser results — Stagehand cannot.
 
-Use the **`mastermind`** tool for `/mastermind(...)` platform skills (list-topic-policies, resolve-topic-policy, patch-topic-policy, evaluate-knowledge-refresh, dispatch-task-run, propose-notification). Read `/opt/skills/mastermind/SKILL.md`. Use **`nixery`** for media-to-text and LLM helpers. **Do not use mastermind for verify** — stages with a `verify:` object (or `verify: true`) are scored by the orchestrator via nixery `verify.defId` after the stage finishes.
+Use the **`mastermind`** tool for `/mastermind(...)` platform skills (list-topic-policies, resolve-topic-policy, patch-topic-policy, dispatch-task-run, propose-notification). Read `/opt/skills/mastermind/SKILL.md`. Use **`nixery`** for media-to-text and LLM helpers. **Do not use mastermind for verify** — stages with a `verify:` object (or `verify: true`) are scored by the orchestrator via nixery `verify.defId` after the stage finishes.
 
-Use the **`nixery`** tool for `/nixery(resolve-topic, …)`, `/nixery(tidy-knowledge, …)`, `/nixery(knowledge-qa-review, …)`, `/nixery(upsert-knowledge-page, …)`, `/nixery(dedup-knowledge, …)`, `/nixery(research, …)`, `/nixery(design-questions, …)`, `/nixery(extract-info, …)`, `/nixery(consult-breaking-change, …)`. Read `/opt/skills/nixery/SKILL.md`.
+Use the **`nixery`** tool for `/nixery(resolve-topic, …)`, `/nixery(upsert-knowledge-page, …)`, `/nixery(dedup-knowledge, …)`, `/nixery(research, …)`, `/nixery(design-questions, …)`, `/nixery(extract-info, …)`, `/nixery(consult-breaking-change, …)`, `/nixery(submit-knowledge-observation, …)`. Read `/opt/skills/nixery/SKILL.md`.
 
-Knowledge reads use orchestrator **`nixeryRun: get-knowledge`** — read **`~/nixery/get-knowledge/{output}`** after the nixery stage. Wiki writes use **`/nixery(upsert-knowledge-page, …)`** with semantic `key` / `topic` only — never pass file paths.
+Knowledge reads use orchestrator **`nixeryRun: get-knowledge`** — read **`~/nixery/get-knowledge/{output}`** after the nixery stage. Stage agents write observations via **`/nixery(submit-knowledge-observation, …)`**; narrative wiki writes are Knowledge Manager–only.
 
 **`~/` means this session's scratch folder** (`/root/sessions/{sessionId}/` in the agent container).
 

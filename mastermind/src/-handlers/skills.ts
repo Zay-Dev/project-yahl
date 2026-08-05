@@ -7,7 +7,6 @@ import {
 } from '../../contract/index.js';
 
 import {
-  evaluateKnowledgeRefresh,
   listTopicPolicies,
   patchTopicPolicy,
   readKnowledgeManagerInstruction,
@@ -227,19 +226,6 @@ export const runPatchTopicPolicy = async (
   }
 };
 
-const runEvaluateKnowledgeRefresh = async (): Promise<TSkillResponse> => {
-  try {
-    const report = await evaluateKnowledgeRefresh();
-
-    return { data: report, ok: true };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'evaluate-knowledge-refresh failed',
-      ok: false,
-    };
-  }
-};
-
 const runDispatchTaskRun = async (
   args: Record<string, unknown>,
 ): Promise<TSkillResponse> => {
@@ -307,10 +293,6 @@ export const runSkill = async (
 
   if (name === 'patch-topic-policy') {
     return runPatchTopicPolicy(body.args);
-  }
-
-  if (name === 'evaluate-knowledge-refresh') {
-    return runEvaluateKnowledgeRefresh();
   }
 
   if (name === 'dispatch-task-run') {

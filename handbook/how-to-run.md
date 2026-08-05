@@ -264,7 +264,7 @@ pnpm run orchestrate
 
 #### Example: Knowledge Manager overnight
 
-Schedule full-corpus review (global instruction; every topic). Prefer the thin dispatcher cron → multi-stage `knowledge_manager` (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers):
+Schedule full-corpus review (global instruction; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers):
 
 ```json
 {
@@ -272,11 +272,11 @@ Schedule full-corpus review (global instruction; every topic). Prefer the thin d
   "id": "knowledge-manager-overnight",
   "schedule": "0 2 * * *",
   "timezone": "Asia/Hong_Kong",
-  "taskPath": "auto_knowledge_refresh"
+  "taskPath": "knowledge_manager"
 }
 ```
 
-Or `taskPath: "knowledge_manager"` directly. Edit focus via `/platform/knowledge-policies` or task `knowledge_settings`.
+Edit focus via `/platform/knowledge-policies` or task `knowledge_settings`. Manual / from another stage: `/mastermind(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
 
 #### Example: traffic monitor cron
 

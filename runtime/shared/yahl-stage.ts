@@ -528,7 +528,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
 };
 
 export const toAgentStage = (stage: YahlStage): YahlStage => {
-  const { loopSetup: _loopSetup, ...rest } = stage;
+  const { loopSetup: _loopSetup, verify: _verify, ...rest } = stage;
 
   return validateYahlStage(rest);
 };

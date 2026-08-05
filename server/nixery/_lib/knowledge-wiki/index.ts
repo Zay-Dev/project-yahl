@@ -28,12 +28,6 @@ export {
   parseWikiPageRef,
 } from './section-merge.js';
 export {
-  runTidyKnowledge,
-  type TTidyKnowledgeReport,
-  type TTopicWikiAudit,
-  type TTopicWikiIssue,
-} from './tidy-knowledge.js';
-export {
   hasPathArgs,
   normalizePersistKnowledgeValue,
   PERSIST_KNOWLEDGE_MAX_VALUE_BYTES,

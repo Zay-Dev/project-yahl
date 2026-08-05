@@ -1,5 +1,8 @@
 name: knowledge-manager
-description: Multi-stage overnight Knowledge Manager — per-topic validate/apply + cross-topic transfer proposals
+description: |
+  Multi-stage overnight Knowledge Manager — per-topic validate/apply + cross-topic transfer proposals.
+  Start via cron taskPath knowledge_manager (handbook/how-to-run.md) or
+  /mastermind(dispatch-task-run, taskId: knowledge_manager, runInput: {}).
 background: true
 resultContextKey: result
 

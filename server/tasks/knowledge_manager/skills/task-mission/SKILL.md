@@ -2,6 +2,11 @@
 
 Multi-stage overnight Knowledge Manager.
 
+## How to start
+
+- Cron: `POST /api/platform/cron/jobs` with `taskPath: "knowledge_manager"` (see handbook/how-to-run.md).
+- Manual / from another stage: `/mastermind(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
+
 ## Pass A — same-topic note-making
 
 1. `list-manager-topics` → every topic (Focus changes depth only).

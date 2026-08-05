@@ -1,6 +1,6 @@
 # submit-knowledge-observation
 
-Agent-facing **only** knowledge write. Submit an atomic observation note. Do **not** call `upsert-knowledge-page`, `dedup-knowledge`, `tidy-knowledge`, or `knowledge-qa-review`.
+Agent-facing **only** knowledge write. Submit an atomic observation note. Do **not** call `upsert-knowledge-page` or `dedup-knowledge`.
 
 ## Contract
 

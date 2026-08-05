@@ -9,6 +9,10 @@ Start any YAHL task via server `POST /api/runs`.
 
 `/mastermind(dispatch-task-run, taskId: hk_weather)`
 
+Overnight Knowledge Manager (empty runInput):
+
+`/mastermind(dispatch-task-run, taskId: knowledge_manager, runInput: {})`
+
 With runInput (must match target task's declared `runInput:` keys in SKILL.yahl):
 
 `/mastermind(dispatch-task-run, taskId: knowledge_refresh, runInput: { knowledge_topic: my-topic-slug })`

@@ -2,8 +2,6 @@
 
 Build `study_plan` and `wiki_structure` via orchestrator `nixeryRun: plan-study`, then read `~/nixery/plan-study/plan.json`.
 
-See `server/tasks/knowledge_capture/skills/plan-study/SKILL.md` for full contract.
-
 ## Refresh-specific rule 0
 
 When `todo_pickup` includes items with `kind: plan_study`, fold their summaries into `researchQuestions` and `successCriteria` before emitting `study_plan`.

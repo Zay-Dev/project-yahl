@@ -1,6 +1,6 @@
 # rerun-intent
 
-Rerun gate for **knowledge_capture** and **knowledge_refresh** when persisted corpus already exists for the resolved topic.
+Rerun gate for **knowledge_refresh** when persisted corpus already exists for the resolved topic.
 
 Read after `get-knowledge` returns non-absent for `knowledge_topic`.
 

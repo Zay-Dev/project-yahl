@@ -1,6 +1,6 @@
 # answer-open-questions
 
-Handle pending open questions on knowledge_capture rerun.
+Handle pending open questions on knowledge_refresh rerun.
 
 ## When to use
 

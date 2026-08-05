@@ -1,12 +1,9 @@
 export const KNOWLEDGE_WRITE_DEFS = [
   'upsert-knowledge-page',
   'dedup-knowledge',
-  'tidy-knowledge',
-  'knowledge-qa-review',
   'resolve-topic',
   'upsert-greets-page',
   'upsert-whatsapp-page',
-  'run-knowledge-manager',
   'apply-manager-topic',
   'apply-approved-transfers',
 ] as const;

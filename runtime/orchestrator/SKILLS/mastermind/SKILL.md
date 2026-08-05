@@ -16,6 +16,4 @@ Use the **`mastermind`** API tool for `/mastermind(...)` in stage logic. Masterm
 | `/mastermind(propose-notification, …)` | draft outbound; human approve |
 | `/mastermind(propose-knowledge-transfer, …)` | cross-topic apply proposal + notify SYSTEM_ADMIN |
 
-Deprecated for overnight scheduling: `evaluate-knowledge-refresh`, `patch-topic-policy` interval toggles — use global instruction + `knowledge_manager` instead.
-
-**Knowledge writes for stage agents:** `/nixery(submit-knowledge-observation, …)` only. Overnight manager is multi-stage `knowledge_manager` (intake → research feedback → `apply-manager-topic` → group → `propose-knowledge-transfer` → `apply-approved-transfers`). See `/opt/skills/nixery/SKILL.md`.
+**Knowledge writes for stage agents:** `/nixery(submit-knowledge-observation, …)` only. Overnight manager is multi-stage `knowledge_manager` (intake → research feedback → `apply-manager-topic` → group → `propose-knowledge-transfer` → `apply-approved-transfers`). Cron: `taskPath: "knowledge_manager"`. See `/opt/skills/nixery/SKILL.md`.

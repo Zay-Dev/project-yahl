@@ -4,7 +4,7 @@ Refresh defaults for `knowledge_refresh` stage 1.
 
 ## Unattended topic (background dispatch)
 
-This task runs with `background: true` and `runInput` from `auto_knowledge_refresh` or `dispatch-task-run`.
+This task runs with `background: true` and `runInput` from `dispatch-task-run`.
 
 - **Never** call `ask_user` to clarify the topic slug.
 - If `knowledge_topic` is missing from context at stage 1, treat as infrastructure failure: set `refresh_skipped: true` and do not invent a capture-style topic question.

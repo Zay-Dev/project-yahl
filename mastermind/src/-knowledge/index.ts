@@ -23,12 +23,10 @@ export {
   type TRefreshRunStatus,
 } from './topic-registry.js';
 export {
-  evaluateKnowledgeRefresh,
   listTopicPolicies,
   patchTopicPolicy,
   resolveTopicPolicy,
   type TPatchTopicPolicyInput,
-  type TStaleTopic,
   type TTopicPolicyRow,
 } from './topic-refresh.js';
 export {
