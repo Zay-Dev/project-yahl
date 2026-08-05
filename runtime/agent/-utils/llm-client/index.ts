@@ -10,6 +10,7 @@ import { STAGE_TOOLS } from "@/shared/stage-tools";
 
 import { effectiveApiKey, normalizeLlmBaseUrl, openAiFetch } from "../llm-transport";
 
+import { withLlmCallRetry } from "./-retry";
 import * as Utils from "./-utils";
 
 export type TStagehandProxyCompletionInput = {
@@ -66,11 +67,15 @@ export const chatCompletionForStagehandProxy = async (
         apiKey: effectiveApiKey(config.apiKey),
         baseURL: normalizeLlmBaseUrl(input.apiBaseUrl),
         fetch: openAiFetch(config.apiKey),
+        maxRetries: 0,
       })
     : _client;
 
-  const response = await client.chat.completions.create(
-    buildStagehandProxyLlmCreateParams(input) as any,
+  const response = await withLlmCallRetry(
+    () => client.chat.completions.create(
+      buildStagehandProxyLlmCreateParams(input) as any,
+    ),
+    { maxAttempts: config.llmCallRetryMax },
   );
 
   if (!response.choices?.[0]?.message) {
@@ -88,31 +93,34 @@ const _chat = async (
   } = {},
 ) => {
   try {
-    const response = await _client.chat.completions.create({
-      messages,
-      model: config.model,
-      stream: false,
+    const response = await withLlmCallRetry(
+      () => _client.chat.completions.create({
+        messages,
+        model: config.model,
+        stream: false,
 
-      ...options.allowTools && {
-        tool_choice: "auto",
-        tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
-      },
+        ...options.allowTools && {
+          tool_choice: "auto",
+          tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
+        },
 
-      ...options.temperature !== undefined && { temperature: options.temperature },
+        ...options.temperature !== undefined && { temperature: options.temperature },
 
-      thinking: { type: config.thinkingMode ? "enabled" : "disabled" },
-    } as any);
-    
+        thinking: { type: config.thinkingMode ? "enabled" : "disabled" },
+      } as any),
+      { maxAttempts: config.llmCallRetryMax },
+    );
+
     const message = response.choices?.[0]?.message || null;
-  
+
     if (!message) {
       throw new Error("LLM API returned no message");
     }
-  
+
     const content = Utils.getContentText(message.content);
     const reasoning_content = Utils.getReasoningText(message);
     const tool_calls = Utils.normalizeToolCalls(message.tool_calls);
-  
+
     return {
       content,
       response,
@@ -130,4 +138,5 @@ const _client = new OpenAI({
   apiKey: effectiveApiKey(config.apiKey),
   baseURL: config.apiBaseUrl,
   fetch: openAiFetch(config.apiKey),
+  maxRetries: 0,
 });
