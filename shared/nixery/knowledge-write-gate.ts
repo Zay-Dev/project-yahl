@@ -7,6 +7,8 @@ export const KNOWLEDGE_WRITE_DEFS = [
   'upsert-greets-page',
   'upsert-whatsapp-page',
   'run-knowledge-manager',
+  'apply-manager-topic',
+  'apply-approved-transfers',
 ] as const;
 
 export type TKnowledgeWriteDef = (typeof KNOWLEDGE_WRITE_DEFS)[number];

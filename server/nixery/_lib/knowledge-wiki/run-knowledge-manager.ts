@@ -20,7 +20,9 @@ import {
 } from './topic-registry.js';
 import { runUpsertKnowledgePage } from './upsert.js';
 import {
+  getWikiPageByPath,
   listWikiPagesUnderPrefix,
+  upsertWikiPage,
   wikiConfigured,
 } from './wiki-client.js';
 import { resolveTopicWikiPrefix } from './wiki-paths.js';
@@ -33,10 +35,15 @@ export type TPendingObservation = {
   content: string;
   cue: string;
   example?: string;
+  evidence?: Record<string, unknown>;
   id: string;
+  needsValidation: boolean;
   pagePath: string;
   quote?: string;
+  status?: string;
+  tags: string[];
   topicHint: string;
+  validationReasons: string[];
 };
 
 export type TTopicReviewRecord = {
@@ -58,6 +65,30 @@ export type TKnowledgeManagerReport = {
   topicCount: number;
 };
 
+export type TManagerTopicRow = {
+  depth: TManagerDepth;
+  topic: string;
+};
+
+export type TTopicGroup = {
+  id: string;
+  rationale: string;
+  topics: string[];
+};
+
+export type TTopicIntake = {
+  depth: TManagerDepth;
+  excerpts: {
+    howto?: string;
+    place?: string;
+    qa?: string;
+  };
+  needsValidation: TPendingObservation[];
+  observations: TPendingObservation[];
+  placePage: string;
+  topic: string;
+};
+
 export type TCompleteApplyPlan = (params: {
   depth: TManagerDepth;
   instruction: string;
@@ -71,7 +102,7 @@ const sessionApiBase = () =>
 const mastermindApiBase = () =>
   (process.env.MASTERMIND_API_URL?.trim() || 'http://mastermind:4100').replace(/\/+$/, '');
 
-const readInstructionFile = async (): Promise<string> => {
+export const readInstructionFile = async (): Promise<string> => {
   const registryPath = readKnowledgeWikiConfig().topicsRegistryPath;
   const filePath = path.join(path.dirname(registryPath), 'knowledge-manager-instruction.md');
 
@@ -114,6 +145,79 @@ export const listManagerTopics = async (): Promise<string[]> => {
   return [...new Set(slugs)].filter(Boolean).sort((left, right) => left.localeCompare(right));
 };
 
+export const listManagerTopicRows = async (instruction?: string): Promise<TManagerTopicRow[]> => {
+  const text = instruction ?? await readInstructionFile();
+  const topics = await listManagerTopics();
+
+  return topics.map((topic) => ({
+    depth: resolveManagerDepth(topic, text),
+    topic,
+  }));
+};
+
+const parseTagsLine = (raw: string | undefined): string[] => {
+  if (!raw?.trim()) {
+    return [];
+  }
+
+  return raw
+    .split(/[,|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const parseEvidenceBlock = (content: string): Record<string, unknown> | undefined => {
+  const match = content.match(/## Evidence\s*\n+```json\s*([\s\S]*?)```/i);
+
+  if (!match?.[1]?.trim()) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(match[1].trim()) as unknown;
+
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+export const observationValidationReasons = (params: {
+  claim: string;
+  confidence: string;
+  cue: string;
+  example?: string;
+  evidence?: Record<string, unknown>;
+  quote?: string;
+  tags: string[];
+}): string[] => {
+  const reasons: string[] = [];
+
+  if (params.tags.some((tag) => tag.toUpperCase() === 'PLACE')) {
+    reasons.push('place_tag');
+  }
+
+  if (params.confidence === 'inferred') {
+    reasons.push('inferred_confidence');
+  }
+
+  const evidenceKeys = params.evidence ? Object.keys(params.evidence) : [];
+
+  if (params.tags.some((tag) => tag.toUpperCase() === 'PLACE') && !evidenceKeys.includes('bound_poi') && !evidenceKeys.includes('claimed_place')) {
+    reasons.push('weak_place_evidence');
+  }
+
+  if (params.tags.some((tag) => tag.toUpperCase() === 'SUMMARY') && evidenceKeys.length <= 2) {
+    reasons.push('weak_summary_evidence');
+  }
+
+  return reasons;
+};
+
 const parseObservationMarkdown = (
   content: string,
   pagePath: string,
@@ -122,6 +226,8 @@ const parseObservationMarkdown = (
   const topicMatch = content.match(/^- topic_hint:\s*(.+)$/m);
   const confidenceMatch = content.match(/^- confidence:\s*(.+)$/m);
   const cueMatch = content.match(/^- cue:\s*(.+)$/m);
+  const tagsMatch = content.match(/^- tags:\s*(.+)$/m);
+  const statusMatch = content.match(/^- status:\s*(.+)$/m);
   const claimMatch = content.match(/## Claim\s*\n+([\s\S]*?)(?=\n## |\n```|$)/);
   const exampleMatch = content.match(/## Example\s*\n+([\s\S]*?)(?=\n## |\n```|$)/);
   const quoteMatch = content.match(/## Quote\s*\n+([\s\S]*?)(?=\n## |\n```|$)/);
@@ -129,21 +235,46 @@ const parseObservationMarkdown = (
   const claim = claimMatch?.[1]?.trim();
   const cue = cueMatch?.[1]?.trim();
   const topicHint = topicMatch?.[1]?.trim();
+  const status = statusMatch?.[1]?.trim().toLowerCase();
 
   if (!claim || !cue || !topicHint) {
     return null;
   }
 
+  if (status === 'applied' || status === 'discarded' || status === 'consumed') {
+    return null;
+  }
+
+  const tags = parseTagsLine(tagsMatch?.[1]);
+  const evidence = parseEvidenceBlock(content);
+  const confidence = confidenceMatch?.[1]?.trim() || 'observed';
+  const example = exampleMatch?.[1]?.trim() || undefined;
+  const quote = quoteMatch?.[1]?.trim() || undefined;
+  const validationReasons = observationValidationReasons({
+    claim,
+    confidence,
+    cue,
+    example,
+    evidence,
+    quote,
+    tags,
+  });
+
   return {
     claim,
-    confidence: confidenceMatch?.[1]?.trim() || 'observed',
+    confidence,
     content,
     cue,
-    example: exampleMatch?.[1]?.trim() || undefined,
+    example,
+    evidence,
     id: idMatch?.[1]?.trim() || path.basename(pagePath),
+    needsValidation: validationReasons.length > 0,
     pagePath,
-    quote: quoteMatch?.[1]?.trim() || undefined,
+    quote,
+    status,
+    tags,
     topicHint,
+    validationReasons,
   };
 };
 
@@ -183,6 +314,48 @@ export const listPendingObservations = async (topic: string): Promise<TPendingOb
   }
 
   return found;
+};
+
+const extractSection = (content: string, heading: RegExp): string | undefined => {
+  const match = content.match(new RegExp(`(^|\\n)##\\s+${heading.source}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s+|$)`, 'i'));
+  const body = match?.[2]?.trim();
+
+  return body ? body.slice(0, 4000) : undefined;
+};
+
+export const resolvePlacePageForTopic = async (_topic: string): Promise<string> => 'facts';
+
+export const loadTopicExcerpts = async (topic: string): Promise<TTopicIntake['excerpts']> => {
+  const files = await listExportTopicFiles(topic);
+  const joined = files.map((file) => file.content).join('\n\n');
+
+  return {
+    howto: extractSection(joined, /HOWTO/),
+    place: extractSection(joined, /PLACE/),
+    qa: extractSection(joined, /Q&A|QA/),
+  };
+};
+
+export const buildTopicIntake = async (params: {
+  instruction?: string;
+  topic: string;
+}): Promise<TTopicIntake> => {
+  const instruction = params.instruction ?? await readInstructionFile();
+  const depth = resolveManagerDepth(params.topic, instruction);
+  const observations = await listPendingObservations(params.topic);
+  const excerpts = await loadTopicExcerpts(params.topic);
+  const placePage = await resolvePlacePageForTopic(params.topic);
+
+  const needsValidation = observations.filter((row) => row.needsValidation);
+
+  return {
+    depth,
+    excerpts,
+    needsValidation,
+    observations,
+    placePage,
+    topic: params.topic,
+  };
 };
 
 export const isHoneableWikiPagePath = (pagePath: string, topic?: string): boolean => {
@@ -246,11 +419,42 @@ export const honeTopicPages = async (topic: string): Promise<{
   return { applied, skipped };
 };
 
+const primaryTag = (tags: string[]): string | undefined => {
+  const upper = tags.map((tag) => tag.toUpperCase());
+
+  for (const candidate of ['PLACE', 'HOWTO', 'Q&A', 'QA', 'TRICK', 'SUMMARY']) {
+    if (upper.includes(candidate)) {
+      return candidate === 'QA' ? 'Q&A' : candidate;
+    }
+  }
+
+  return tags[0]?.toUpperCase();
+};
+
+export const HEURISTIC_APPLY_OBS_THRESHOLD = 15;
+export const HEURISTIC_APPLY_PLACE_THRESHOLD = 3;
+
+export const shouldUseHeuristicApplyPlan = (
+  observations: TPendingObservation[],
+): boolean => {
+  if (observations.length >= HEURISTIC_APPLY_OBS_THRESHOLD) {
+    return true;
+  }
+
+  const placeCount = observations.filter((observation) =>
+    (observation.tags ?? []).some((tag) => tag.toUpperCase() === 'PLACE'),
+  ).length;
+
+  return placeCount >= HEURISTIC_APPLY_PLACE_THRESHOLD;
+};
+
 export const buildHeuristicApplyPlan = (
   topic: string,
   observations: TPendingObservation[],
+  options?: { placePage?: string },
 ): TApplyPlan => {
   const ops: TApplyPlanOp[] = [];
+  const placePage = options?.placePage?.trim() || 'facts';
 
   for (const observation of observations) {
     if (observation.confidence === 'inferred') {
@@ -270,7 +474,61 @@ export const buildHeuristicApplyPlan = (
       continue;
     }
 
+    const tag = primaryTag(observation.tags ?? []);
     const section = observation.cue.slice(0, 80);
+
+    if (tag === 'SUMMARY') {
+      ops.push({
+        content: formatObservationApplyBody({
+          claim: observation.claim,
+          cue: observation.cue,
+          example: observation.example,
+          quote: observation.quote,
+        }),
+        mode: 'append',
+        observationIds: [observation.id],
+        op: 'append_raw',
+        page: `raw/manager-${observation.id}`,
+        rationale: 'SUMMARY → append_raw only',
+      });
+      continue;
+    }
+
+    if (tag === 'PLACE') {
+      ops.push({
+        content: formatObservationApplyBody({
+          claim: observation.claim,
+          cue: observation.cue,
+          example: observation.example,
+          quote: observation.quote,
+        }),
+        mode: 'append',
+        observationIds: [observation.id],
+        op: 'merge',
+        page: placePage,
+        rationale: `promote PLACE ${observation.confidence}`,
+        section: 'PLACE',
+      });
+      continue;
+    }
+
+    if (tag === 'HOWTO' || tag === 'TRICK' || tag === 'Q&A') {
+      ops.push({
+        content: formatObservationApplyBody({
+          claim: observation.claim,
+          cue: observation.cue,
+          example: observation.example,
+          quote: observation.quote,
+        }),
+        mode: 'append',
+        observationIds: [observation.id],
+        op: 'merge',
+        page: placePage,
+        rationale: `promote ${tag} ${observation.confidence}`,
+        section: tag === 'TRICK' ? 'ops-log' : tag,
+      });
+      continue;
+    }
 
     ops.push({
       content: formatObservationApplyBody({
@@ -427,7 +685,6 @@ export const applyApprovedTransfers = async (): Promise<number> => {
       });
       applied += 1;
     } catch {
-      // upsert already applied; mark-done best-effort
       applied += 1;
     }
   }
@@ -467,12 +724,18 @@ export const applyPlanOps = async (params: {
   discarded: number;
   opsApplied: number;
   transfersProposed: number;
+  observationIds: string[];
 }> => {
   let opsApplied = 0;
   let discarded = 0;
   let transfersProposed = 0;
+  const observationIds: string[] = [];
 
   for (const op of params.plan.ops) {
+    if (op.observationIds?.length) {
+      observationIds.push(...op.observationIds);
+    }
+
     if (op.op === 'transfer') {
       const ok = await proposeTransfer({
         op,
@@ -496,7 +759,211 @@ export const applyPlanOps = async (params: {
     }
   }
 
-  return { discarded, opsApplied, transfersProposed };
+  return { discarded, observationIds: [...new Set(observationIds)], opsApplied, transfersProposed };
+};
+
+const markObservationStatus = async (params: {
+  observation: TPendingObservation;
+  status: 'applied' | 'discarded';
+  topic: string;
+}): Promise<boolean> => {
+  if (!params.observation.pagePath) {
+    return false;
+  }
+
+  const stamped = params.observation.content.includes('- status:')
+    ? params.observation.content.replace(/^- status:\s*.+$/m, `- status: ${params.status}`)
+    : params.observation.content.replace(
+      /^- cue:\s*.+$/m,
+      (line) => `${line}\n- status: ${params.status}`,
+    );
+
+  if (wikiConfigured()) {
+    const wikiPath = params.observation.pagePath.startsWith('topics/')
+      ? params.observation.pagePath
+      : `${resolveTopicWikiPrefix(params.topic)}/${params.observation.pagePath.replace(/^\/+/, '')}`;
+
+    try {
+      const existing = await getWikiPageByPath(wikiPath);
+
+      if (existing) {
+        await upsertWikiPage({
+          content: stamped,
+          mode: 'replace',
+          pagePath: wikiPath,
+        });
+
+        return true;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  const page = params.observation.pagePath.includes(WIKI_OBSERVATIONS_PREFIX)
+    ? params.observation.pagePath
+      .replace(/^topics\/[^/]+\//, '')
+      .replace(/\.md$/, '')
+    : `${WIKI_OBSERVATIONS_PREFIX}/${params.observation.id}`;
+
+  const result = await runUpsertKnowledgePage({
+    content: stamped,
+    mode: 'replace',
+    page,
+    topic: params.topic,
+  });
+
+  return result.ok;
+};
+
+export const consumeObservations = async (params: {
+  observations: TPendingObservation[];
+  plan: TApplyPlan;
+  topic: string;
+}): Promise<number> => {
+  const discardedIds = new Set(
+    params.plan.ops.filter((op) => op.op === 'discard').flatMap((op) => op.observationIds ?? []),
+  );
+  const appliedIds = new Set(
+    params.plan.ops
+      .filter((op) => op.op !== 'discard' && op.op !== 'transfer')
+      .flatMap((op) => op.observationIds ?? []),
+  );
+
+  let consumed = 0;
+
+  for (const observation of params.observations) {
+    if (discardedIds.has(observation.id)) {
+      if (await markObservationStatus({ observation, status: 'discarded', topic: params.topic })) {
+        consumed += 1;
+      }
+      continue;
+    }
+
+    if (appliedIds.has(observation.id)) {
+      if (await markObservationStatus({ observation, status: 'applied', topic: params.topic })) {
+        consumed += 1;
+      }
+    }
+  }
+
+  return consumed;
+};
+
+export const applyManagerTopic = async (options: {
+  completeApplyPlan?: TCompleteApplyPlan;
+  dryRun?: boolean;
+  instruction?: string;
+  sessionId?: string;
+  topic: string;
+}): Promise<TTopicReviewRecord & { consumed: number }> => {
+  const instruction = options.instruction ?? await readInstructionFile();
+  const topic = options.topic.trim();
+  const depth = resolveManagerDepth(topic, instruction);
+  const placePage = await resolvePlacePageForTopic(topic);
+  const hone = options.dryRun
+    ? { applied: 0, skipped: 0 }
+    : await honeTopicPages(topic);
+  const observations = await listPendingObservations(topic);
+
+  let plan: TApplyPlan = { ops: [], topic };
+
+  if (observations.length > 0) {
+    const useLlm = Boolean(options.completeApplyPlan)
+      && !shouldUseHeuristicApplyPlan(observations);
+
+    if (useLlm && options.completeApplyPlan) {
+      try {
+        const raw = await options.completeApplyPlan({
+          depth,
+          instruction,
+          observations,
+          topic,
+        });
+        const validated = validateApplyPlan(raw, topic);
+
+        plan = validated.ok
+          ? validated.plan
+          : buildHeuristicApplyPlan(topic, observations, { placePage });
+      } catch {
+        plan = buildHeuristicApplyPlan(topic, observations, { placePage });
+      }
+    } else {
+      plan = buildHeuristicApplyPlan(topic, observations, { placePage });
+    }
+  }
+
+  const applied = options.dryRun
+    ? { discarded: 0, observationIds: [], opsApplied: 0, transfersProposed: 0 }
+    : await applyPlanOps({ plan, sessionId: options.sessionId });
+
+  const consumed = options.dryRun
+    ? 0
+    : await consumeObservations({ observations, plan, topic });
+
+  const quizTodoAdded = options.dryRun
+    ? false
+    : await maybeAddQuizTodo({ depth, topic });
+
+  return {
+    consumed,
+    depth,
+    honeApplied: hone.applied,
+    honeSkipped: hone.skipped,
+    opsApplied: applied.opsApplied,
+    opsDiscarded: applied.discarded,
+    quizTodoAdded,
+    topic,
+    transfersProposed: applied.transfersProposed,
+  };
+};
+
+const slugPrefixToken = (topic: string): string => {
+  const slug = topic.trim().toLowerCase();
+  const dash = slug.indexOf('-');
+
+  return dash > 0 ? slug.slice(0, dash) : slug;
+};
+
+export const groupManagerTopics = (topics: string[]): TTopicGroup[] => {
+  const byPrefix = new Map<string, string[]>();
+
+  for (const topic of topics) {
+    const prefix = slugPrefixToken(topic);
+
+    if (!prefix) {
+      continue;
+    }
+
+    const bucket = byPrefix.get(prefix) ?? [];
+    bucket.push(topic);
+    byPrefix.set(prefix, bucket);
+  }
+
+  const groups: TTopicGroup[] = [];
+
+  for (const [prefix, members] of [...byPrefix.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
+    const sorted = [...members].sort((left, right) => left.localeCompare(right));
+
+    if (sorted.length >= 2) {
+      groups.push({
+        id: `prefix-${prefix}`,
+        rationale: `Shared slug prefix "${prefix}"`,
+        topics: sorted,
+      });
+      continue;
+    }
+
+    for (const topic of sorted) {
+      groups.push({
+        id: `solo-${topic}`,
+        rationale: 'Singleton — no shared slug prefix cluster',
+        topics: [topic],
+      });
+    }
+  }
+
+  return groups;
 };
 
 export const runKnowledgeManager = async (options?: {
@@ -512,51 +979,23 @@ export const runKnowledgeManager = async (options?: {
   const reviews: TTopicReviewRecord[] = [];
 
   for (const topic of topics) {
-    const depth = resolveManagerDepth(topic, instruction);
-    const hone = options?.dryRun
-      ? { applied: 0, skipped: 0 }
-      : await honeTopicPages(topic);
-    const observations = await listPendingObservations(topic);
-
-    let plan: TApplyPlan = { ops: [], topic };
-
-    if (observations.length > 0) {
-      if (options?.completeApplyPlan) {
-        try {
-          const raw = await options.completeApplyPlan({
-            depth,
-            instruction,
-            observations,
-            topic,
-          });
-          const validated = validateApplyPlan(raw, topic);
-
-          plan = validated.ok ? validated.plan : buildHeuristicApplyPlan(topic, observations);
-        } catch {
-          plan = buildHeuristicApplyPlan(topic, observations);
-        }
-      } else {
-        plan = buildHeuristicApplyPlan(topic, observations);
-      }
-    }
-
-    const applied = options?.dryRun
-      ? { discarded: 0, opsApplied: 0, transfersProposed: 0 }
-      : await applyPlanOps({ plan, sessionId: options?.sessionId });
-
-    const quizTodoAdded = options?.dryRun
-      ? false
-      : await maybeAddQuizTodo({ depth, topic });
+    const review = await applyManagerTopic({
+      completeApplyPlan: options?.completeApplyPlan,
+      dryRun: options?.dryRun,
+      instruction,
+      sessionId: options?.sessionId,
+      topic,
+    });
 
     reviews.push({
-      depth,
-      honeApplied: hone.applied,
-      honeSkipped: hone.skipped,
-      opsApplied: applied.opsApplied,
-      opsDiscarded: applied.discarded,
-      quizTodoAdded,
-      topic,
-      transfersProposed: applied.transfersProposed,
+      depth: review.depth,
+      honeApplied: review.honeApplied,
+      honeSkipped: review.honeSkipped,
+      opsApplied: review.opsApplied,
+      opsDiscarded: review.opsDiscarded,
+      quizTodoAdded: review.quizTodoAdded,
+      topic: review.topic,
+      transfersProposed: review.transfersProposed,
     });
   }
 

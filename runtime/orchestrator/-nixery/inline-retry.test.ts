@@ -87,4 +87,33 @@ describe('resolveNixerySoftFailToolResult', () => {
       error: 'topic_hint is required',
     });
   });
+
+  it('soft-fails invalid arguments within budget', () => {
+    const out = resolveNixerySoftFailToolResult({
+      maxRetries: 3,
+      result: { ok: false, error: 'nixery: invalid arguments' },
+      softFailCount: 1,
+    });
+
+    assert.equal(out.hasError, false);
+    assert.deepEqual(JSON.parse(out.result), {
+      ok: false,
+      error: 'nixery: invalid arguments',
+      retryRemaining: 2,
+    });
+  });
+
+  it('hard-fails invalid arguments after budget exceeded', () => {
+    const out = resolveNixerySoftFailToolResult({
+      maxRetries: 3,
+      result: { ok: false, error: 'nixery: invalid arguments' },
+      softFailCount: 4,
+    });
+
+    assert.equal(out.hasError, true);
+    assert.deepEqual(JSON.parse(out.result), {
+      ok: false,
+      error: 'nixery: invalid arguments',
+    });
+  });
 });

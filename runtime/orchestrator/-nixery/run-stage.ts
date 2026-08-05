@@ -15,8 +15,12 @@ import {
   runNixeryContainerDetached,
   startNixeryLogStream,
 } from './run-container';
-import { waitForNixeryOutput } from './validate-output';
+import { clearStaleNixeryOutput, waitForNixeryOutput } from './validate-output';
 import { assertNamespaceWriteAllowed } from '@project-yahl/shared/nixery/knowledge-write-gate';
+import {
+  resolveNixeryOutputHint,
+  resolveNixeryOutputRetry,
+} from '@project-yahl/shared/nixery/output-contract';
 import { fetchSession } from '@/orchestrator/-ask-user/session-api';
 
 export const resolveSessionNixeryDir = (sessionId: string, defId: string) =>
@@ -106,6 +110,7 @@ export const runNixeryDef = async (params: {
   const sessionDir = resolveSessionNixeryDir(params.sessionId, params.defId);
   const containerName = resolveNixeryContainerName(params.sessionId, params.defId);
   const diagnosticsLogPath = resolveDiagnosticsLogPath(params.sessionId, params.defId);
+  const maxRetries = resolveNixeryOutputRetry(def);
 
   await fs.mkdir(sessionDir, { recursive: true });
   await fs.mkdir(path.dirname(diagnosticsLogPath), { recursive: true });
@@ -120,6 +125,8 @@ export const runNixeryDef = async (params: {
     JSON.stringify(params.input, null, 2),
     'utf8',
   );
+
+  const outputHint = resolveNixeryOutputHint(def, params.input);
 
   if (!def.run?.entry?.length) {
     throw new Error(`[nixery] def ${params.defId} requires run.entry`);
@@ -143,37 +150,73 @@ export const runNixeryDef = async (params: {
     packages: def.packages,
   });
 
-  console.log(
-    `[nixery] run start def=${params.defId} sessionId=${params.sessionId} `
-    + `container=${containerName} image=${image}`,
-  );
-
   let stopLogStream: (() => void) | undefined;
+  let lastError: unknown;
 
   try {
-    await runNixeryContainerDetached({
-      containerName,
-      entry: def.run.entry,
-      env: {
-        ...env,
-        NIXERY_DEF_ID: params.defId,
-      },
-      image,
-      volumeMounts: [...defMounts, sharedMount, ...oneCliMounts],
-    });
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      await clearStaleNixeryOutput({
+        defDefault: def.output?.default,
+        outputHint,
+        sessionDir,
+      });
 
-    activeNixeryContainer = containerName;
-    stopLogStream = startNixeryLogStream(containerName, diagnosticsLogPath);
+      console.log(
+        `[nixery] run start def=${params.defId} sessionId=${params.sessionId} `
+        + `container=${containerName} image=${image}`
+        + (maxRetries > 0 ? ` attempt=${attempt + 1}/${maxRetries + 1}` : ''),
+      );
 
-    await waitForNixeryOutput({
-      containerName,
-      defId: params.defId,
-      outputHint: typeof params.input.output === 'string' ? params.input.output : undefined,
-      sessionDir,
-    });
+      try {
+        await runNixeryContainerDetached({
+          containerName,
+          entry: def.run.entry,
+          env: {
+            ...env,
+            NIXERY_DEF_ID: params.defId,
+          },
+          image,
+          volumeMounts: [...defMounts, sharedMount, ...oneCliMounts],
+        });
+
+        activeNixeryContainer = containerName;
+        stopLogStream = startNixeryLogStream(containerName, diagnosticsLogPath);
+
+        await waitForNixeryOutput({
+          containerName,
+          defId: params.defId,
+          outputHint,
+          sessionDir,
+        });
+
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        stopLogStream?.();
+        stopLogStream = undefined;
+
+        await teardownNixeryContainer(containerName, params.sessionId, params.defId);
+
+        if (attempt >= maxRetries) {
+          throw error;
+        }
+
+        const reason = error instanceof Error ? error.message : String(error);
+
+        console.log(
+          `[nixery] validation failed; retry attempt=${attempt + 1}/${maxRetries} `
+          + `def=${params.defId} (${reason})`,
+        );
+      }
+    }
   } finally {
     stopLogStream?.();
     await cleanup();
+  }
+
+  if (lastError) {
+    throw lastError;
   }
 
   console.log(

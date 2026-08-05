@@ -5,20 +5,20 @@ import { mapKnowledgeKeyToPage } from './knowledge-key-map.js';
 
 describe('mapKnowledgeKeyToPage', () => {
   it('maps unknown keys including source-ops-* to replace by default', () => {
-    const mapping = mapKnowledgeKeyToPage('source-ops-hong-kong');
+    const mapping = mapKnowledgeKeyToPage('source-ops-sample');
 
     assert.equal(mapping.mode, 'replace');
-    assert.equal(mapping.page, 'source-ops-hong-kong');
+    assert.equal(mapping.page, 'source-ops-sample');
     assert.equal(mapping.narrative, true);
     assert.equal(mapping.raw, false);
     assert.equal(mapping.section, undefined);
   });
 
   it('maps other unknown keys to replace by default', () => {
-    const mapping = mapKnowledgeKeyToPage('sources-hong-kong');
+    const mapping = mapKnowledgeKeyToPage('sources-sample');
 
     assert.equal(mapping.mode, 'replace');
-    assert.equal(mapping.page, 'sources-hong-kong');
+    assert.equal(mapping.page, 'sources-sample');
   });
 
   it('keeps summary as brief replace', () => {

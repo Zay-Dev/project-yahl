@@ -10,6 +10,7 @@ Do **not** paste raw brand/abbrev OD strings into map sites as if they were uniq
 2. Produce `origin_resolved` / `destination_resolved` (canonical name + district; optional latlng). Prefer these for every bind/goto.
 3. After goto, check origin/destination chips against **resolved** places (district + landmark), not only the raw runInput string.
 4. Never accept autocomplete that changes district/landmark identity. Treat as **geocode fail** — do not reinterpret as “short trip, source only returns 1 route.”
+4a. **Estate ≠ nearby transit hub.** Binding River Station for Maple Court (or any estate→station proxy) is a geocode fail unless PLACE documents an explicit verified_proxy. Prefer the estate name / car park / building row; if autocomplete lacks it, miss the poll and submit a PLACE observation with `confidence: inferred` + evidence `{ claimed_place, bound_poi, reason: 'autocomplete_missing' }` — do not invent a station binding as truth.
 5. If returned distance is implausible for the stated districts, fail the probe as geocode mismatch and upsert a SKIP/FAIL / place note — do not burn a city attempt as a multi-route source deficiency.
 6. Persist disambiguation notes into `source-ops-{city_slug}` so later runs do not re-confuse the same brand.
 
@@ -30,7 +31,7 @@ When `traffic_source.is_fallback` is true (or URL is the Google Maps directions 
    ```
    Prefer Latin/English place names in the URL when non-Latin geocoding is ambiguous; keep local-script names for labels / day-page text.
 3. Use the short canonical directions URL for the chosen site — do not paste SPA sessionful / `data=!…` address-bar URLs into `goto`.
-4. After goto, check the origin/destination chips (or equivalent). If they do **not** match resolved origin/destination (district + landmark), treat the poll as a **fetch miss** / geocode fail — do not thrash with more gotos, edits, or alternate encodings.
+4. After goto, check the origin/destination chips (or equivalent). If they do **not** match resolved origin/destination (district + landmark), treat the poll as a **fetch miss** / geocode fail — do not thrash with more gotos, edits, or alternate encodings. Landmark class must match: estate/building chip for estate OD — an MTR station chip is a mismatch.
 
 ### Browser budget
 

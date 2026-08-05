@@ -264,7 +264,7 @@ pnpm run orchestrate
 
 #### Example: Knowledge Manager overnight
 
-Schedule full-corpus review (global instruction; every topic). Prefer the thin dispatcher:
+Schedule full-corpus review (global instruction; every topic). Prefer the thin dispatcher cron → multi-stage `knowledge_manager` (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers):
 
 ```json
 {

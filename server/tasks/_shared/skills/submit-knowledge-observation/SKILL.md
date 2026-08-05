@@ -15,10 +15,10 @@ Agent-facing **only** knowledge write. Submit an atomic observation note. Do **n
 {
   "defId": "submit-knowledge-observation",
   "args": {
-    "topic_hint": "traffic-monitor",
-    "cue": "HKeMobility form-fill ok:false after Search click",
-    "claim": "agent-mode fill may report ok:false after From/To/Search already applied; read the result table with a separate extract",
-    "example": "poll#3: POI clicks and Search succeeded on page; tool returned Thinking mode does not support this tool_choice; independent extract still read corridor ETA rows",
+    "topic_hint": "sample-topic",
+    "cue": "browser form-fill ok:false after Submit click",
+    "claim": "agent-mode fill may report ok:false after fields already applied; read the result table with a separate extract",
+    "example": "run#3: form fields and Submit succeeded on page; tool returned Thinking mode does not support this tool_choice; independent extract still read result rows",
     "evidence": {
       "type": "tool_observation",
       "tool": "browser",
@@ -36,8 +36,8 @@ Agent-facing **only** knowledge write. Submit an atomic observation note. Do **n
 {
   "defId": "submit-knowledge-observation",
   "args": {
-    "topic_hint": "traffic-monitor",
-    "cue": "ETA rule",
+    "topic_hint": "sample-topic",
+    "cue": "threshold rule",
     "claim": "always use 120% threshold",
     "evidence": { "type": "guess" }
   }
@@ -46,11 +46,13 @@ Agent-facing **only** knowledge write. Submit an atomic observation note. Do **n
 
 Missing `example`/`quote` → rejected.
 
+PLACE without `claimed_place` / `bound_poi` is accepted but overnight manager marks `needsValidation` and may research before ApplyPlan.
+
 ```json
 {
   "defId": "submit-knowledge-observation",
   "args": {
-    "topic_hint": "traffic-monitor",
+    "topic_hint": "sample-topic",
     "cue": "maybe SPA bug",
     "claim": "spinner forever means site is down forever",
     "example": "I assume this based on one miss",

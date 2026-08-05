@@ -435,10 +435,13 @@ class YahlAgentRunner {
           const nixeryArgs = parseNixeryToolArguments(toolCall.function.arguments ?? '{}');
 
           if (!nixeryArgs) {
-            return {
-              hasError: true,
-              result: 'nixery: invalid arguments',
-            };
+            this.nixerySoftFails += 1;
+
+            return resolveNixerySoftFailToolResult({
+              maxRetries: this.maxNixeryInlineRetries,
+              result: { ok: false, error: 'nixery: invalid arguments' },
+              softFailCount: this.nixerySoftFails,
+            });
           }
 
           const result = await runNixeryInlineTool({

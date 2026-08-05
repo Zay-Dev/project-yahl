@@ -102,6 +102,6 @@ After every poll (**success or miss**), persist notes worth keeping for future r
 
 1. Draft 0–5 short candidate notes from this poll (tricks, brittle selectors, timeouts, URL quirks, miss/fail reasons, and recoverable **Q&A** problem→fix pairs). Fail notes are equal priority to success tips.
 2. `*read(source_ops_md)` then `novel = *filter_novel_ops_notes(candidates, against: source_ops_md)`.
-3. If `novel` non-empty: for each note call `/nixery(submit-knowledge-observation, topic_hint: knowledge_topic, cue: …, claim: …, example: …, evidence: { poll, tool }, confidence: observed, tags: [HOWTO|PLACE|Q&A|TRICK])`. Do **not** call `upsert-knowledge-page`.
+3. If `novel` non-empty: for each note call `/nixery(submit-knowledge-observation, topic_hint: knowledge_topic, cue: …, claim: …, example: …, evidence: { poll, tool, claimed_place?, bound_poi? }, confidence: observed, tags: [HOWTO|PLACE|Q&A|TRICK])`. PLACE notes must include `claimed_place` + `bound_poi`. Do **not** call `upsert-knowledge-page`.
 4. If `novel` is empty: do **not** submit (no empty write spam).
 5. Do **not** append into `traffic_source.howto_md` or save the local traffic_source file for ops.

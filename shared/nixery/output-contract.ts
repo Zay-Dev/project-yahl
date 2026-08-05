@@ -4,9 +4,22 @@ export const DEFAULT_NIXERY_OUTPUT_FILE = 'output.md';
 
 export const DEFAULT_VALIDATION_MODULE = 'validation.mjs';
 
+export const DEFAULT_NIXERY_OUTPUT_RETRY = 3;
+
+export const resolveNixeryOutputRetry = (def: TNixeryDef): number => {
+  const retry = def.output?.retry;
+
+  if (typeof retry === 'number' && Number.isInteger(retry) && retry >= 0) {
+    return retry;
+  }
+
+  return DEFAULT_NIXERY_OUTPUT_RETRY;
+};
+
 export const resolveNixeryOutputSpec = (def: TNixeryDef): Required<TNixeryOutputSpec> => ({
   default: def.output?.default?.trim() || DEFAULT_NIXERY_OUTPUT_FILE,
   inlineTool: def.output?.inlineTool === true,
+  retry: resolveNixeryOutputRetry(def),
   validate: def.output?.validate?.trim() || DEFAULT_VALIDATION_MODULE,
 });
 

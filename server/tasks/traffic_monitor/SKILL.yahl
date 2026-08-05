@@ -215,6 +215,8 @@ stages:
       minScore: 0.75
       rubric: |
         Pass when origin_resolved and destination_resolved are non-empty (canonical place name; include district when raw OD was a brand/abbrev/mall/cinema),
+        and origin_resolved / destination_resolved do NOT substitute a nearby MTR station for an estate/building runInput
+        (estate ≠ station unless source_ops PLACE has an explicit verified_proxy),
         and traffic_source.url is http(s) that either (a) includes {origin} and {destination} placeholders
         OR (b) kind is browser and howto_md documents form-fill/autocomplete binding of origin/destination
         (prefer keeping a placeholder template in url when the site supports query params, even if howto navigates a form base URL),
@@ -947,6 +949,7 @@ stages:
         Pass when result.day_kind is weekday|weekend|public_holiday, result.summary_md is non-empty,
         and result.monitor.fetch_count matches monitor.fetch_count, and result.monitor.miss_count
         matches monitor.miss_count,
+        and summary_md / notification bodies use runInput origin and destination labels (not bound MTR/station proxies),
         and summary_md names the locked traffic_source (Google Maps only when traffic_source.is_fallback is true
         or url is the Maps directions template; otherwise name the city source from traffic_source.url / howto),
         and every report upsert returned ok:true with canonicalTopic equal to knowledge_topic

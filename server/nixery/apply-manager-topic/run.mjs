@@ -2,7 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import {
-  runKnowledgeManager,
+  applyManagerTopic,
+  listPendingObservations,
+  shouldUseHeuristicApplyPlan,
   validateApplyPlan,
 } from '/opt/nixery/knowledge-wiki/index.js';
 import { completeApplyPlanWithLlm } from '../_shared/knowledge-manager-llm.mjs';
@@ -36,30 +38,6 @@ const parseBool = (value) => {
   return undefined;
 };
 
-const parseTopics = (input) => {
-  if (Array.isArray(input.topics)) {
-    return input.topics.filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim());
-  }
-
-  if (typeof input.topics === 'string' && input.topics.trim()) {
-    try {
-      const parsed = JSON.parse(input.topics);
-
-      if (Array.isArray(parsed)) {
-        return parsed.filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim());
-      }
-    } catch {
-      return input.topics.split(',').map((item) => item.trim()).filter(Boolean);
-    }
-  }
-
-  if (typeof input.topic === 'string' && input.topic.trim()) {
-    return [input.topic.trim()];
-  }
-
-  return undefined;
-};
-
 const main = async () => {
   const workspace = '/workspace';
   const defRoot = '/opt/nixery/def';
@@ -69,10 +47,17 @@ const main = async () => {
     ? input.output.trim()
     : 'result.json';
   const outputPath = path.join(workspace, outputName);
+  const topic = typeof input.topic === 'string' ? input.topic.trim() : '';
   const dryRun = parseBool(input.dryRun) === true;
   const skipLlmPlan = parseBool(input.skipLlmPlan) === true;
-  const topics = parseTopics(input);
   const sessionId = typeof input.sessionId === 'string' ? input.sessionId : undefined;
+
+  if (!topic) {
+    const gate = { ok: false, error: 'topic is required' };
+
+    await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
+    process.exit(1);
+  }
 
   if (!process.env.SESSION_API_BASE_URL?.trim()) {
     process.env.SESSION_API_BASE_URL = 'http://server:4000';
@@ -82,10 +67,16 @@ const main = async () => {
     process.env.MASTERMIND_API_URL = 'http://mastermind:4100';
   }
 
-  logProgress(defId, `start topics=${topics?.join(',') || '*'} dryRun=${dryRun} skipLlm=${skipLlmPlan}`);
-
   try {
-    const completeApplyPlan = skipLlmPlan
+    const pending = await listPendingObservations(topic);
+    const forceHeuristic = skipLlmPlan || shouldUseHeuristicApplyPlan(pending);
+
+    logProgress(
+      defId,
+      `start topic=${topic} dryRun=${dryRun} skipLlm=${forceHeuristic} pending=${pending.length}`,
+    );
+
+    const completeApplyPlan = forceHeuristic
       ? undefined
       : async (params) => {
         const parsed = await completeApplyPlanWithLlm({
@@ -101,21 +92,21 @@ const main = async () => {
         return validated.plan;
       };
 
-    const report = await runKnowledgeManager({
+    const review = await applyManagerTopic({
       completeApplyPlan,
       dryRun,
       sessionId,
-      topics,
+      topic,
     });
 
-    const gate = { ok: true, report };
+    const gate = { ok: true, review };
 
     await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
-    logProgress(defId, `done ok=true topicCount=${report.topicCount} transfers=${report.approvedTransfersApplied}`);
+    logProgress(defId, `done ok=true topic=${topic} ops=${review.opsApplied} consumed=${review.consumed}`);
   } catch (error) {
     const gate = {
       ok: false,
-      error: error instanceof Error ? error.message : 'run-knowledge-manager failed',
+      error: error instanceof Error ? error.message : 'apply-manager-topic failed',
     };
 
     await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
