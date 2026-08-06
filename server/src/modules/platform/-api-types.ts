@@ -1,5 +1,6 @@
 export type TResponseCronJobListItem = {
   createdAt: string;
+  deleteAfterRun?: boolean;
   enabled: boolean;
   id: string;
   orgId?: string;
@@ -23,6 +24,7 @@ export type TRequestCronJobParams = {
 };
 
 export type TRequestCreateCronJobBody = {
+  deleteAfterRun?: boolean;
   enabled?: boolean;
   id: string;
   orgId?: string;
@@ -35,6 +37,7 @@ export type TRequestCreateCronJobBody = {
 };
 
 export type TRequestUpdateCronJobBody = {
+  deleteAfterRun?: boolean;
   enabled?: boolean;
   orgId?: string;
   orgUnitId?: string;

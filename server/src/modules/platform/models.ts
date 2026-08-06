@@ -29,6 +29,7 @@ proposalSchema.index({ status: 1, done: 1, kind: 1 });
 
 const cronJobSchema = new Schema<TDbCronJob>({
   deletedAt: model.d.deletedAt(),
+  deleteAfterRun: { default: false, type: Boolean },
   enabled: { default: true, required: true, type: Boolean },
   id: model.d.requiredString(),
   orgId: model.d.optionalString(),

@@ -14,6 +14,7 @@ import {
 import { getTask, listTasks } from "@/pages/tasks/lib/tasks-api";
 
 export type TCronJobFormValues = {
+  deleteAfterRun: boolean;
   enabled: boolean;
   id: string;
   orgId: string;
@@ -26,6 +27,7 @@ export type TCronJobFormValues = {
 };
 
 export const EMPTY_CRON_JOB_FORM: TCronJobFormValues = {
+  deleteAfterRun: false,
   enabled: true,
   id: "",
   orgId: "",
@@ -52,6 +54,7 @@ export const toCreateCronJobBody = (values: TCronJobFormValues): TRequestCreateC
     : undefined;
 
   return {
+    deleteAfterRun: values.deleteAfterRun,
     enabled: values.enabled,
     id: values.id.trim(),
     orgId: values.orgId.trim() || undefined,
@@ -293,6 +296,16 @@ export function CronJobForm({ idReadOnly = false, onChange, values }: TCronJobFo
           type="checkbox"
         />
         <span className="font-medium">Enabled</span>
+      </label>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          checked={values.deleteAfterRun}
+          className="size-4 rounded border"
+          onChange={(event) => setField("deleteAfterRun", event.target.checked)}
+          type="checkbox"
+        />
+        <span className="font-medium">Run once and delete</span>
       </label>
 
       <label className="flex flex-col gap-2 text-sm">

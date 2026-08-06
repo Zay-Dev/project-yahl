@@ -14,10 +14,11 @@ import {
   setWhatsAppReadyListener,
 } from './-channels/whatsapp/client.js';
 import { whatsappConfig } from './-channels/whatsapp/config.js';
-import { startCronScheduler } from './-cron/scheduler.js';
+import { startCronScheduler, stopCronJob } from './-cron/scheduler.js';
 import { configureWhatsAppHealth, markPollSucceeded, startHealthServer } from './-health/server.js';
 import {
   applySettingProposal,
+  deleteCronJob,
   fetchPendingApproved,
   markWorkDone,
   postTaskRun,
@@ -54,6 +55,11 @@ const installProcessSafetyNet = (): void => {
 };
 
 const handleCronTick = async (job: TCronJobDef) => {
+  if (job.deleteAfterRun) {
+    stopCronJob(job.id);
+    await deleteCronJob(job.id);
+  }
+
   await postTaskRun(job.taskPath, job.runInput);
 };
 

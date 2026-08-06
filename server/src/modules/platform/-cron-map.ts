@@ -3,6 +3,7 @@ import type { ICronJob } from './-types';
 
 export const toCronJobResponse = (doc: ICronJob): TResponseCronJob => ({
   createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
+  deleteAfterRun: doc.deleteAfterRun ?? false,
   enabled: doc.enabled,
   id: doc.id,
   orgId: doc.orgId,
