@@ -399,7 +399,7 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
       return {
         error: async (error) => {
           await this.redis.lpush(replyQueue, JSON.stringify({
-            type: "result",
+            type: "error",
             output: {
               error: {
                 message: error.message,
@@ -410,6 +410,7 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
               type: 'error',
             },
           }));
+          await this.redis.lpush(replyQueue, 'END');
         },
 
         end: () => this.redis.lpush(replyQueue, 'END'),

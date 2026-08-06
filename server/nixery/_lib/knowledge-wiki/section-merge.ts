@@ -34,6 +34,47 @@ export const mergeWikiSection = (
   return `${content}\n\n${sectionBlock}\n`;
 };
 
+export const appendWikiSection = (
+  existingContent: string,
+  sectionTitle: string,
+  sectionBody: string,
+): string => {
+  const heading = `## ${sectionTitle}`;
+  const trimmedBody = sectionBody.trim();
+  const content = existingContent.trim();
+
+  if (!trimmedBody) {
+    return content ? `${content}\n` : '';
+  }
+
+  if (!content) {
+    return `${heading}\n\n${trimmedBody}\n`;
+  }
+
+  const sectionPattern = sectionBlockPattern(heading);
+  const match = content.match(sectionPattern);
+
+  if (!match) {
+    return `${content}\n\n${heading}\n\n${trimmedBody}\n`;
+  }
+
+  const matchedBlock = match[0];
+  const lead = match[1] ?? '';
+  const existingBlock = matchedBlock.startsWith('\n')
+    ? matchedBlock.slice(1)
+    : matchedBlock;
+  const existingBody = existingBlock
+    .replace(new RegExp(`^${escapeRegExp(heading)}\\r?\\n?`), '')
+    .trim();
+  const nextBody = existingBody
+    ? `${existingBody}\n\n${trimmedBody}`
+    : trimmedBody;
+  const sectionBlock = `${heading}\n\n${nextBody}`.trim();
+  const replaced = content.replace(sectionPattern, `${lead}${sectionBlock}`);
+
+  return `${replaced.trim()}\n`;
+};
+
 const collapseLegacyKeyFactsBlocks = (content: string): string => {
   const blocks = content.split(/(?=^# [^\n]+\n)/m).filter((block) => block.trim());
 
@@ -53,16 +94,7 @@ const collapseLegacyKeyFactsBlocks = (content: string): string => {
   return [...withoutDupes, keep].join('\n\n').trim();
 };
 
-export const collapseDuplicateWikiSections = (
-  existingContent: string,
-  sectionTitle?: string,
-): string => {
-  let content = collapseLegacyKeyFactsBlocks(existingContent.trim());
-
-  if (!sectionTitle) {
-    return content;
-  }
-
+const collapseOneDuplicateH2 = (content: string, sectionTitle: string): string => {
   const heading = `## ${sectionTitle}`;
   const sectionPattern = sectionBlockPattern(heading, 'g');
   const matches = [...content.matchAll(sectionPattern)];
@@ -72,10 +104,37 @@ export const collapseDuplicateWikiSections = (
   }
 
   const last = matches[matches.length - 1][0];
+  const stripped = content.replace(sectionPattern, '').trim();
 
-  return content.replace(sectionPattern, '').trim()
-    ? `${content.replace(sectionPattern, '').trim()}\n\n${last.trim()}`.trim()
+  return stripped
+    ? `${stripped}\n\n${last.trim()}`.trim()
     : last.trim();
+};
+
+export const collapseDuplicateWikiSections = (
+  existingContent: string,
+  sectionTitle?: string,
+): string => {
+  let content = collapseLegacyKeyFactsBlocks(existingContent.trim());
+
+  if (sectionTitle) {
+    return collapseOneDuplicateH2(content, sectionTitle);
+  }
+
+  const titles = [...content.matchAll(/^## (.+)$/gm)].map((match) => match[1]);
+  const counts = new Map<string, number>();
+
+  for (const title of titles) {
+    counts.set(title, (counts.get(title) ?? 0) + 1);
+  }
+
+  for (const [title, count] of counts) {
+    if (count > 1) {
+      content = collapseOneDuplicateH2(content, title);
+    }
+  }
+
+  return content;
 };
 
 export const parseWikiPageRef = (

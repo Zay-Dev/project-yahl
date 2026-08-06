@@ -1,5 +1,5 @@
 export { readKnowledgeWikiConfig, type TKnowledgeWikiConfig } from './config.js';
-export { applyDedupAction, applyDedupActions, type TDedupAction, type TDedupApplyResult } from './dedup.js';
+export { applyDedupAction, applyDedupActions, resolveCanonicalFromPagePath, type TDedupAction, type TDedupApplyResult } from './dedup.js';
 export {
   measurePersistPayloadBytes,
   resolveKnowledgeFileExtension,
@@ -21,17 +21,12 @@ export {
   type TResolveTopicResult,
 } from './topic-registry.js';
 export {
+  appendWikiSection,
   collapseDuplicateWikiSections,
   isJsonFenceOnlyContent,
   mergeWikiSection,
   parseWikiPageRef,
 } from './section-merge.js';
-export {
-  runTidyKnowledge,
-  type TTidyKnowledgeReport,
-  type TTopicWikiAudit,
-  type TTopicWikiIssue,
-} from './tidy-knowledge.js';
 export {
   hasPathArgs,
   normalizePersistKnowledgeValue,
@@ -45,6 +40,63 @@ export {
   type TUpsertKnowledgePageInput,
   type TUpsertKnowledgePageResult,
 } from './upsert.js';
+export {
+  formatObservationMarkdown,
+  observationDayStamp,
+  observationPagePath,
+  OBSERVATION_CONFIDENCE,
+  validateKnowledgeObservation,
+  WIKI_OBSERVATIONS_PREFIX,
+  type TKnowledgeObservation,
+  type TObservationConfidence,
+} from './observation.js';
+export {
+  APPLY_PLAN_OPS,
+  formatObservationApplyBody,
+  validateApplyPlan,
+  type TApplyPlan,
+  type TApplyPlanOp,
+  type TApplyPlanOpKind,
+} from './apply-plan.js';
+export {
+  applyApprovedTransfers,
+  applyManagerTopic,
+  applyPlanOps,
+  buildHeuristicApplyPlan,
+  buildTopicIntake,
+  consumeObservations,
+  groupManagerTopics,
+  HEURISTIC_APPLY_OBS_THRESHOLD,
+  HEURISTIC_APPLY_PLACE_THRESHOLD,
+  honeTopicPages,
+  isHoneableWikiPagePath,
+  listManagerTopicRows,
+  listManagerTopics,
+  listPendingObservations,
+  loadTopicExcerpts,
+  observationValidationReasons,
+  readInstructionFile,
+  resolveManagerDepth,
+  resolvePlacePageForTopic,
+  runKnowledgeManager,
+  shouldUseHeuristicApplyPlan,
+  type TCompleteApplyPlan,
+  type TKnowledgeManagerReport,
+  type TManagerDepth,
+  type TManagerTopicRow,
+  type TPendingObservation,
+  type TTopicGroup,
+  type TTopicIntake,
+  type TTopicReviewRecord,
+} from './run-knowledge-manager.js';
+export {
+  TOPIC_PAGE_LAYOUT,
+  WIKI_OBSERVATIONS_PREFIX as WIKI_OBSERVATIONS_LAYOUT_PREFIX,
+  WIKI_RAW_PREFIX,
+  WIKI_REQUIRED_PAGES,
+  WIKI_SUGGESTED_PAGES,
+  WIKI_TOPIC_PAGES,
+} from './content-model.js';
 export {
   getWikiPageByPath,
   upsertWikiPage,

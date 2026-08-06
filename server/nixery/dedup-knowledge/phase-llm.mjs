@@ -1,4 +1,5 @@
 import { hasRealApiKey } from '/opt/nixery/_shared/run-agent.mjs';
+import { withLlmCallRetry } from '/opt/nixery/_shared/llm-retry.mjs';
 
 const PHASES = ['plan', 'execute', 'review'];
 
@@ -34,7 +35,7 @@ const baseUrlFallbackChains = {
 };
 
 const defaultModels = {
-  execute: 'deepseek-flash',
+  execute: 'deepseek-v4-flash',
   plan: 'deepseek-v4-pro',
   review: 'deepseek-v4-pro',
 };
@@ -78,22 +79,28 @@ export const callChatForPhase = async (phase, params) => {
     headers.Authorization = `Bearer ${config.apiKey}`;
   }
 
-  const response = await fetch(url, {
-    body: JSON.stringify({
-      max_tokens: params.maxTokens ?? config.maxTokens,
-      messages: params.messages,
-      model: params.model ?? config.model,
-      temperature: params.temperature ?? config.temperature,
-      tools: params.tools,
-    }),
-    headers,
-    method: 'POST',
+  return withLlmCallRetry(async () => {
+    const response = await fetch(url, {
+      body: JSON.stringify({
+        max_tokens: params.maxTokens ?? config.maxTokens,
+        messages: params.messages,
+        model: params.model ?? config.model,
+        temperature: params.temperature ?? config.temperature,
+        tools: params.tools,
+      }),
+      headers,
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      const error = new Error(
+        `openai chat failed (${phase}): ${response.status} ${body.slice(0, 500)}`,
+      );
+      error.status = response.status;
+      throw error;
+    }
+
+    return response.json();
   });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`openai chat failed (${phase}): ${response.status} ${body.slice(0, 500)}`);
-  }
-
-  return response.json();
 };

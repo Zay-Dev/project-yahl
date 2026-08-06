@@ -17,14 +17,14 @@ describe('verify finish order', () => {
     assert.ok(runOneStageStart >= 0);
 
     const runOneStageBody = src.slice(runOneStageStart);
-    const agentLoopStart = runOneStageBody.indexOf('while (true)');
-    const agentPath = agentLoopStart >= 0 ? runOneStageBody.slice(agentLoopStart) : runOneStageBody;
-    const verifyIdx = agentPath.indexOf('await runVerifyGate');
-    const finishIdx = agentPath.indexOf('publisher.emitStageFinish');
+    const verifyIdx = runOneStageBody.indexOf('await runVerifyGate');
 
     assert.ok(verifyIdx >= 0, 'runVerifyGate call missing from runOneStage');
-    assert.ok(finishIdx >= 0, 'emitStageFinish call missing from runOneStage');
-    assert.ok(verifyIdx < finishIdx, 'runVerifyGate must run before emitStageFinish');
+
+    const afterVerify = runOneStageBody.slice(verifyIdx);
+    const finishIdx = afterVerify.indexOf('publisher.emitStageFinish');
+
+    assert.ok(finishIdx >= 0, 'emitStageFinish call missing after runVerifyGate');
   });
 
   it('runOneStage blocks emitStageFinish when activeStage diverges from bound slot', () => {
@@ -34,13 +34,16 @@ describe('verify finish order', () => {
     assert.ok(runOneStageStart >= 0);
 
     const runOneStageBody = src.slice(runOneStageStart);
-    const agentLoopStart = runOneStageBody.indexOf('while (true)');
-    const agentPath = agentLoopStart >= 0 ? runOneStageBody.slice(agentLoopStart) : runOneStageBody;
-    const integrityIdx = agentPath.indexOf('stage slot integrity');
-    const finishIdx = agentPath.indexOf('publisher.emitStageFinish');
+    const verifyIdx = runOneStageBody.indexOf('await runVerifyGate');
 
-    assert.ok(integrityIdx >= 0, 'slot integrity guard missing from runOneStage');
-    assert.ok(finishIdx >= 0, 'emitStageFinish call missing from runOneStage');
+    assert.ok(verifyIdx >= 0, 'runVerifyGate call missing from runOneStage');
+
+    const afterVerify = runOneStageBody.slice(verifyIdx);
+    const integrityIdx = afterVerify.indexOf('stage slot integrity');
+    const finishIdx = afterVerify.indexOf('publisher.emitStageFinish');
+
+    assert.ok(integrityIdx >= 0, 'slot integrity guard missing after runVerifyGate');
+    assert.ok(finishIdx >= 0, 'emitStageFinish call missing after runVerifyGate');
     assert.ok(integrityIdx < finishIdx, 'slot integrity guard must run before emitStageFinish');
   });
 

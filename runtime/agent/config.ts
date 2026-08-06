@@ -99,6 +99,10 @@ export const config = {
     1,
     Number(process.env.AGENT_BASH_TIMEOUT_MS?.trim() || "60000") || 60_000,
   ),
+  llmCallRetryMax: Math.max(
+    1,
+    Math.floor(Number(process.env.LLM_CALL_RETRY_MAX ?? 3)) || 3,
+  ),
   thinkingMode: (process.env.LLM_THINKING_MODE || process.env.DEEPSEEK_THINKING_MODE || "disabled")
     .trim()
     .toLowerCase() === "enabled",

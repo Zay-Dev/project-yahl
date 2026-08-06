@@ -64,6 +64,24 @@ export const markSettingDone = [
     .toMiddleware(),
 ];
 
+export const markKnowledgeTransferDone = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      params: joi.getValidatedOrThrow(Joi.object({
+        id: Joi.string().required(),
+      }), req.params),
+    }))
+    .next(async (express, { params }) => {
+      await modelPlatformProposal.updateOne(
+        { kind: 'knowledge_transfer', proposalId: params.id, status: 'approved' },
+        { $set: { done: true, doneAt: new Date() } },
+      );
+
+      express.respondOne({ id: params.id, ok: true });
+    })
+    .toMiddleware(),
+];
+
 export const applySettingProposal = [
   Middlewares.Chainable
     .validate(({ req }) => ({

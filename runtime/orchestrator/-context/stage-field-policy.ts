@@ -179,16 +179,32 @@ const _applyOneSetContextArg = async (
   return true;
 };
 
+export type TApplySetContextResult = {
+  applied: boolean;
+  invalidJson?: string;
+};
+
 export const applySetContextToolCall = async (
   storage: TStorage,
   toolCall: TChatToolCall,
   stage: ParsedStage,
-) => {
-  const parsed = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+): Promise<TApplySetContextResult> => {
+  let parsed: Record<string, unknown>;
+
+  try {
+    parsed = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return { applied: false, invalidJson: error.message };
+    }
+
+    throw error;
+  }
+
   const argList = _canonicalSetContextArgs(parsed);
 
   if (argList.length === 0) {
-    return false;
+    return { applied: false };
   }
 
   let applied = false;
@@ -199,5 +215,5 @@ export const applySetContextToolCall = async (
     }
   }
 
-  return applied;
+  return { applied };
 };

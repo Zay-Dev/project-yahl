@@ -1,8 +1,12 @@
 import Joi from 'joi';
 
+import { STAGE_ID_PATTERN } from '@project-yahl/shared/yahl/stage-goto';
+
 import type { TParsedStage, TYahlStage } from './-types';
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
+
+const STAGE_GOTO_COMMAND_PATTERN = /^\/stage\([a-zA-Z][a-zA-Z0-9_-]*\)$/;
 
 const stringArraySchema = Joi.array().items(Joi.string());
 
@@ -31,12 +35,25 @@ const agentOverridesSchema = Joi.object({
   bashTimeoutMs: Joi.number().integer().min(1).optional(),
 }).unknown(false);
 
+const stagehandConfigSchema = Joi.object({
+  apiBaseUrl: Joi.string().trim().min(1).optional(),
+  model: Joi.string().trim().min(1).optional(),
+  preferScreenshot: Joi.boolean().optional(),
+}).unknown(false);
+
+const gotoEntrySchema = Joi.object({
+  command: Joi.string().trim().pattern(STAGE_GOTO_COMMAND_PATTERN).required(),
+  description: Joi.string().trim().required(),
+});
+
 export const yahlStageSchema = Joi.object<TYahlStage>({
   agentOverrides: agentOverridesSchema.optional(),
   askUser: Joi.array().items(askUserEntrySchema).min(1).optional(),
   conditionMode: Joi.boolean().optional(),
   contextKeys: stringArraySchema.optional(),
   contextMode: Joi.boolean().optional(),
+  goto: Joi.array().items(gotoEntrySchema).min(1).optional(),
+  id: Joi.string().trim().pattern(STAGE_ID_PATTERN).optional(),
   logic: Joi.string().trim().when('nixeryRun', {
     is: Joi.exist(),
     otherwise: Joi.required(),
@@ -49,6 +66,7 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   nixeryRun: Joi.string().trim().optional(),
   produceContextKeys: stringArraySchema.optional(),
   produceTypeKeys: stringArraySchema.optional(),
+  stagehand: stagehandConfigSchema.optional(),
   temperature: Joi.number().min(0).max(2).optional(),
   updateContextKeys: stringArraySchema.optional(),
   verify: verifySpecSchema.optional(),
@@ -65,6 +83,16 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
 
     if (value.conditionMode === true && !String(value.logic).includes('IF:')) {
       return helpers.error('any.invalid', { message: 'conditionMode logic must contain IF:' });
+    }
+
+    if (value.goto?.length) {
+      if (value.contextMode === true || value.conditionMode === true) {
+        return helpers.error('any.invalid', { message: 'goto cannot combine with contextMode or conditionMode' });
+      }
+
+      if (value.nixeryRun) {
+        return helpers.error('any.invalid', { message: 'goto cannot combine with nixeryRun' });
+      }
     }
 
     if (value.nixeryRun) {

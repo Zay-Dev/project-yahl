@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const GRACEFUL_WAIT_MS = 60_000;
-const STOP_TIMEOUT_SEC = 60;
+const GRACEFUL_WAIT_MS = 20_000;
+const STOP_TIMEOUT_SEC = 15;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => {
   setTimeout(resolve, ms);
@@ -173,16 +173,72 @@ export const resolveCustomNixeryImageTag = (defId: string, dockerfileBytes: stri
   return `custom-nixery-${defId}:v${hash}`;
 };
 
+export const DOCKER_PULL_MAX_ATTEMPTS = 3;
+export const DOCKER_PULL_BACKOFF_MS = 1_000;
+
+export const isTransientDockerPullError = (message: string): boolean => {
+  const lower = message.toLowerCase();
+
+  return (
+    lower.includes('eof')
+    || lower.includes('connection reset')
+    || lower.includes('timeout')
+    || lower.includes('i/o timeout')
+    || lower.includes('tls handshake timeout')
+    || lower.includes('temporary failure')
+    || lower.includes('network is unreachable')
+    || lower.includes('no such host')
+    || lower.includes('connection refused')
+    || lower.includes('failed to do request')
+  );
+};
+
+export const pullDockerImageWithRetry = async (
+  image: string,
+  options?: {
+    maxAttempts?: number;
+    pull?: (ref: string) => Promise<void>;
+    sleep?: (ms: number) => Promise<void>;
+  },
+): Promise<void> => {
+  const maxAttempts = options?.maxAttempts ?? DOCKER_PULL_MAX_ATTEMPTS;
+  const sleepFn = options?.sleep ?? sleep;
+  const pull = options?.pull ?? (async (ref: string) => {
+    await runDockerCapture(['pull', ref]);
+  });
+
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await pull(image);
+
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (!isTransientDockerPullError(message) || attempt >= maxAttempts) {
+        throw error;
+      }
+
+      await sleepFn(DOCKER_PULL_BACKOFF_MS * attempt);
+    }
+  }
+
+  throw lastError;
+};
+
 const prefetchNixeryPackages = async (packages: string[]) => {
   const registry = resolveNixeryRegistry();
   const deduped = dedupePackages(packages);
   const composedImage = resolveNixeryImage(registry, deduped);
   const singletonRefs = [...new Set(deduped.map((pkg) => `${registry}/${pkg}`))];
 
-  await Promise.all(singletonRefs.map((ref) => runDocker(['pull', ref])));
+  await Promise.all(singletonRefs.map((ref) => pullDockerImageWithRetry(ref)));
 
   if (!singletonRefs.includes(composedImage)) {
-    await runDocker(['pull', composedImage]);
+    await pullDockerImageWithRetry(composedImage);
   }
 
   return composedImage;
@@ -199,7 +255,7 @@ export const prepareNixeryImage = async (params: {
 
   if (!dockerfileName) {
     return {
-      cleanup: () => runDocker(['rmi', composedImage], { ignoreFailure: true }),
+      cleanup: async () => undefined,
       image: composedImage,
     };
   }

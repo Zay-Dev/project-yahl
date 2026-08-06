@@ -1,4 +1,5 @@
 import {
+  knowledgeTransferProposalSchema,
   notificationProposalSchema,
   type TSkillName,
   type TSkillRequest,
@@ -6,10 +7,11 @@ import {
 } from '../../contract/index.js';
 
 import {
-  evaluateKnowledgeRefresh,
   listTopicPolicies,
   patchTopicPolicy,
+  readKnowledgeManagerInstruction,
   resolveTopicPolicy,
+  writeKnowledgeManagerInstruction,
   type TPatchTopicPolicyInput,
   type TRefreshInterval,
   type TRefreshRunStatus,
@@ -34,6 +36,55 @@ const runProposeNotification = async (
 
   if (!posted.ok) {
     return { error: posted.error ?? 'proposal failed', ok: false };
+  }
+
+  return {
+    data: { proposalId: posted.id },
+    ok: true,
+  };
+};
+
+const runProposeKnowledgeTransfer = async (
+  args: Record<string, unknown>,
+  sessionId?: string,
+): Promise<TSkillResponse> => {
+  const parsed = knowledgeTransferProposalSchema.safeParse({
+    ...args,
+    sessionId: typeof args.sessionId === 'string' ? args.sessionId : sessionId,
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.message, ok: false };
+  }
+
+  if (parsed.data.sourceTopic.trim() === parsed.data.targetTopic.trim()) {
+    return { error: 'sourceTopic and targetTopic must differ', ok: false };
+  }
+
+  const posted = await postProposal('knowledge-transfers', parsed.data);
+
+  if (!posted.ok) {
+    return { error: posted.error ?? 'proposal failed', ok: false };
+  }
+
+  const adminEmail = process.env.SYSTEM_ADMIN_EMAIL?.trim();
+
+  if (adminEmail) {
+    await postProposal('notifications', {
+      body: [
+        'New pending knowledge_transfer approval.',
+        `proposalId: ${posted.id}`,
+        `source: ${parsed.data.sourceTopic}`,
+        `target: ${parsed.data.targetTopic}`,
+        `claim: ${parsed.data.claim}`,
+        'Review at /platform/approvals',
+      ].join('\n'),
+      channel: 'email',
+      direction: 'to_user',
+      sessionId: parsed.data.sessionId,
+      taskRef: 'knowledge_manager',
+      to: adminEmail,
+    });
   }
 
   return {
@@ -175,19 +226,6 @@ export const runPatchTopicPolicy = async (
   }
 };
 
-const runEvaluateKnowledgeRefresh = async (): Promise<TSkillResponse> => {
-  try {
-    const report = await evaluateKnowledgeRefresh();
-
-    return { data: report, ok: true };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'evaluate-knowledge-refresh failed',
-      ok: false,
-    };
-  }
-};
-
 const runDispatchTaskRun = async (
   args: Record<string, unknown>,
 ): Promise<TSkillResponse> => {
@@ -257,10 +295,6 @@ export const runSkill = async (
     return runPatchTopicPolicy(body.args);
   }
 
-  if (name === 'evaluate-knowledge-refresh') {
-    return runEvaluateKnowledgeRefresh();
-  }
-
   if (name === 'dispatch-task-run') {
     return runDispatchTaskRun(body.args);
   }
@@ -269,11 +303,28 @@ export const runSkill = async (
     return runProposeNotification(body.args, body.sessionId);
   }
 
+  if (name === 'propose-knowledge-transfer') {
+    return runProposeKnowledgeTransfer(body.args, body.sessionId);
+  }
+
+  if (name === 'get-knowledge-manager-instruction') {
+    const text = await readKnowledgeManagerInstruction();
+
+    return { data: { text }, ok: true };
+  }
+
+  if (name === 'put-knowledge-manager-instruction') {
+    const text = typeof body.args.text === 'string' ? body.args.text : '';
+    const path = await writeKnowledgeManagerInstruction(text);
+
+    return { data: { path, text }, ok: true };
+  }
+
   return { ok: false, error: `unknown skill: ${name}` };
 };
 
 export const postProposal = async (
-  kind: 'notifications' | 'settings',
+  kind: 'notifications' | 'settings' | 'knowledge-transfers',
   payload: Record<string, unknown>,
 ): Promise<{ error?: string; id?: string; ok: boolean }> => {
   const url = `${config.sessionApiBaseUrl}/api/platform/proposals/${kind}`;

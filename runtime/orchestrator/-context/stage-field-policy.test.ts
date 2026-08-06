@@ -46,7 +46,13 @@ describe("filterStageBucket", () => {
   });
 
   it("always includes platform context keys", () => {
-    const records = { foo: 1, today: "2026-06-22", now_iso: "2026-06-22T00:00:00.000Z" };
+    const records = {
+      foo: 1,
+      today: "2026-06-22",
+      now_iso: "2026-06-22T00:00:00.000Z",
+      stage_goto_reason: "cache dead",
+      stage_goto_from: "monitor",
+    };
     const filtered = filterStageBucket(
       "x = foo;",
       records,
@@ -56,6 +62,8 @@ describe("filterStageBucket", () => {
     assert.equal(filtered.foo, 1);
     assert.equal(filtered.today, "2026-06-22");
     assert.equal(filtered.now_iso, "2026-06-22T00:00:00.000Z");
+    assert.equal(filtered.stage_goto_reason, "cache dead");
+    assert.equal(filtered.stage_goto_from, "monitor");
   });
 });
 
@@ -124,7 +132,7 @@ describe("applySetContextToolCall", () => {
     const storage = createStorage();
     const stage = plainStage({ produceContextKeys: ["a"] });
 
-    const applied = await applySetContextToolCall(storage, {
+    const outcome = await applySetContextToolCall(storage, {
       function: {
         arguments: JSON.stringify({
           key: "d",
@@ -138,7 +146,7 @@ describe("applySetContextToolCall", () => {
       type: "function",
     }, stage);
 
-    assert.equal(applied, false);
+    assert.equal(outcome.applied, false);
     assert.equal(storage.context.has("d"), false);
   });
 
@@ -149,7 +157,7 @@ describe("applySetContextToolCall", () => {
       updateContextKeys: ["knowledge_paths", "sources"],
     });
 
-    const applied = await applySetContextToolCall(storage, {
+    const outcome = await applySetContextToolCall(storage, {
       function: {
         arguments: JSON.stringify({
           key: "sources",
@@ -163,7 +171,7 @@ describe("applySetContextToolCall", () => {
       type: "function",
     }, stage);
 
-    assert.equal(applied, true);
+    assert.equal(outcome.applied, true);
     assert.deepEqual(storage.context.get("sources"), [{ studyKey: "study_a" }]);
   });
 
@@ -171,7 +179,7 @@ describe("applySetContextToolCall", () => {
     const storage = createStorage();
     const stage = plainStage({ produceContextKeys: ["result"] });
 
-    const applied = await applySetContextToolCall(storage, {
+    const outcome = await applySetContextToolCall(storage, {
       function: {
         arguments: JSON.stringify({
           key: "a",
@@ -185,7 +193,7 @@ describe("applySetContextToolCall", () => {
       type: "function",
     }, stage);
 
-    assert.equal(applied, true);
+    assert.equal(outcome.applied, true);
     assert.equal(storage.context.get("a"), 1);
   });
 
@@ -194,7 +202,7 @@ describe("applySetContextToolCall", () => {
     storage.context.set("c", 28);
     const stage = plainStage({ updateContextKeys: ["c"] });
 
-    const applied = await applySetContextToolCall(storage, {
+    const outcome = await applySetContextToolCall(storage, {
       function: {
         arguments: JSON.stringify({ c: 56 }),
         name: "set_context",
@@ -203,7 +211,7 @@ describe("applySetContextToolCall", () => {
       type: "function",
     }, stage);
 
-    assert.equal(applied, true);
+    assert.equal(outcome.applied, true);
     assert.equal(storage.context.get("c"), 56);
   });
 
@@ -227,6 +235,25 @@ describe("applySetContextToolCall", () => {
 
     assert.deepEqual(storage.types.get("T"), { x: 1 });
     assert.equal(storage.context.has("T"), false);
+  });
+
+  it("soft-fails empty-value malformed JSON without mutating storage", async () => {
+    const storage = createStorage();
+    storage.context.set("prev_incident_note", "");
+    const stage = plainStage({ updateContextKeys: ["prev_incident_note"] });
+
+    const outcome = await applySetContextToolCall(storage, {
+      function: {
+        arguments: '{"scope": "global", "key": "prev_incident_note", "value": }',
+        name: "set_context",
+      },
+      id: "1",
+      type: "function",
+    }, stage);
+
+    assert.equal(outcome.applied, false);
+    assert.match(outcome.invalidJson ?? "", /Unexpected token/i);
+    assert.equal(storage.context.get("prev_incident_note"), "");
   });
 });
 

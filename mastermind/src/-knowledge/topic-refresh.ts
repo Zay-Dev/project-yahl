@@ -247,13 +247,6 @@ export const patchTopicPolicy = async (
   return row;
 };
 
-export type TStaleTopic = {
-  canonical: string;
-  interval: TRefreshInterval;
-  reason: string;
-  scopes: TTopicRefreshScope[];
-};
-
 const referenceTimestamp = (
   entry: TTopicRegistryEntry,
   folder?: TTopicFolderSummary,
@@ -293,39 +286,5 @@ export const isTopicRefreshDue = (
     interval: refresh.interval,
     reason: `elapsed >= ${refresh.interval}`,
     scopes: refresh.scopes,
-  };
-};
-
-export const evaluateKnowledgeRefresh = async (): Promise<{
-  checkedAt: string;
-  staleTopics: TStaleTopic[];
-}> => {
-  const registry = await loadNormalizedRegistry();
-  const summaries = await listTopicFolderSummaries();
-  const summaryBySlug = new Map(summaries.map((summary) => [summary.slug, summary]));
-  const staleTopics: TStaleTopic[] = [];
-  const seen = new Set<string>();
-
-  for (const entry of registry.topics) {
-    const folder = summaryBySlug.get(entry.canonical)
-      ?? entry.aliases.map((alias) => summaryBySlug.get(alias)).find(Boolean);
-    const due = isTopicRefreshDue(entry, folder);
-
-    if (!due.due || !due.interval || seen.has(entry.canonical)) {
-      continue;
-    }
-
-    seen.add(entry.canonical);
-    staleTopics.push({
-      canonical: entry.canonical,
-      interval: due.interval,
-      reason: due.reason ?? 'due',
-      scopes: due.scopes ?? DEFAULT_REFRESH_SCOPES,
-    });
-  }
-
-  return {
-    checkedAt: nowIso(),
-    staleTopics: staleTopics.sort((left, right) => left.canonical.localeCompare(right.canonical)),
   };
 };

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import { resolveNixeryOutputHint, resolveNixeryOutputSpec, resolveNixeryInlineToolResult } from './output-contract';
+import { resolveNixeryOutputHint, resolveNixeryOutputRetry, resolveNixeryOutputSpec, resolveNixeryInlineToolResult } from './output-contract';
 
 import type { TNixeryDef } from './types';
 
@@ -13,12 +13,29 @@ const baseDef = (overrides: Partial<TNixeryDef> = {}): TNixeryDef => ({
 });
 
 describe('resolveNixeryOutputSpec', () => {
-  it('defaults to output.md and validation.mjs', () => {
+  it('defaults to output.md, validation.mjs, and retry 3', () => {
     assert.deepEqual(resolveNixeryOutputSpec(baseDef()), {
       default: 'output.md',
       inlineTool: false,
+      retry: 3,
       validate: 'validation.mjs',
     });
+  });
+
+  it('honors explicit output.retry including 0', () => {
+    assert.equal(resolveNixeryOutputSpec(baseDef({ output: { retry: 0 } })).retry, 0);
+    assert.equal(resolveNixeryOutputSpec(baseDef({ output: { retry: 5 } })).retry, 5);
+  });
+});
+
+describe('resolveNixeryOutputRetry', () => {
+  it('defaults to 3 when omitted', () => {
+    assert.equal(resolveNixeryOutputRetry(baseDef()), 3);
+  });
+
+  it('honors explicit 0 and 5', () => {
+    assert.equal(resolveNixeryOutputRetry(baseDef({ output: { retry: 0 } })), 0);
+    assert.equal(resolveNixeryOutputRetry(baseDef({ output: { retry: 5 } })), 5);
   });
 });
 

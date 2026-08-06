@@ -1,3 +1,5 @@
+import { withLlmCallRetry } from './llm-retry.mjs';
+
 export const resolveDefId = (defRoot) =>
   process.env.NIXERY_DEF_ID?.trim() || defRoot.split('/').filter(Boolean).pop() || 'nixery';
 
@@ -36,22 +38,26 @@ export const callChat = async (params) => {
     headers.Authorization = `Bearer ${params.apiKey}`;
   }
 
-  const response = await fetch(url, {
-    body: JSON.stringify({
-      max_tokens: params.maxTokens,
-      messages: params.messages,
-      model: params.model,
-      temperature: params.temperature ?? 0.2,
-      tools: params.tools,
-    }),
-    headers,
-    method: 'POST',
+  return withLlmCallRetry(async () => {
+    const response = await fetch(url, {
+      body: JSON.stringify({
+        max_tokens: params.maxTokens,
+        messages: params.messages,
+        model: params.model,
+        temperature: params.temperature ?? 0.2,
+        tools: params.tools,
+      }),
+      headers,
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      const error = new Error(`openai chat failed: ${response.status} ${body.slice(0, 500)}`);
+      error.status = response.status;
+      throw error;
+    }
+
+    return response.json();
   });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`openai chat failed: ${response.status} ${body.slice(0, 500)}`);
-  }
-
-  return response.json();
 };

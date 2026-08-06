@@ -29,14 +29,14 @@ describe('resolveNixeryToolOutputHint', () => {
 });
 
 describe('runNixeryInlineTool', () => {
-  it('rejects defs with output.inlineTool: false', async () => {
-    await assert.rejects(
-      () => runNixeryInlineTool({
-        args: {},
-        defId: 'get-knowledge',
-        sessionId: 'test-session',
-      }),
-      /not enabled for inline tool calls/,
-    );
+  it('returns ok:false for defs with output.inlineTool: false', async () => {
+    const result = await runNixeryInlineTool({
+      args: {},
+      defId: 'get-knowledge',
+      sessionId: 'test-session',
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? '', /not enabled for inline tool calls/);
   });
 });

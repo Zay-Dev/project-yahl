@@ -1,5 +1,5 @@
 # task-mission
 
-Manage per-topic knowledge refresh policies — enable/disable scheduled refresh and set interval.
+Edit the **global** Knowledge Manager instruction (free-text do / don't / focus). This replaces per-topic refresh interval policies.
 
-Use `list-topic-policies` for slug labels only (never corpus content). Confirm changes before `patch-topic-policy`.
+Use `get-knowledge-manager-instruction` / `put-knowledge-manager-instruction`. Do not call `patch-topic-policy` for scheduling.

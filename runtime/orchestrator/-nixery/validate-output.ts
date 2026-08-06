@@ -31,6 +31,31 @@ const outputFileExists = async (outputPath: string) => {
   }
 };
 
+export const clearStaleNixeryOutput = async (params: {
+  outputHint?: string;
+  sessionDir: string;
+  defDefault?: string;
+}): Promise<string> => {
+  const outputName = params.outputHint?.trim()
+    || params.defDefault?.trim()
+    || 'result.json';
+  const outputPath = path.join(params.sessionDir, outputName);
+
+  try {
+    await fs.unlink(outputPath);
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : '';
+
+    if (code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  return outputName;
+};
+
 export const validateNixeryOutputFile = async (params: {
   defId: string;
   input: Record<string, unknown>;

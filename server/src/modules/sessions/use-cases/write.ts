@@ -6,7 +6,7 @@ import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
 import { emitSessionEvent } from '../-session-events';
-import type { TParsedStage } from '../-types';
+import type { TParsedStage, TSessionRunCursor } from '../-types';
 import { modelSession } from '../models';
 import { parsedStageSchema } from '../stage-schema';
 
@@ -30,15 +30,23 @@ export type TResponseRegisterSession = {
 export type TRequestPatchSessionBody = {
   liveViewVncPort?: number | null;
   result?: unknown;
+  runCursor?: TSessionRunCursor;
 };
 
 export type TResponsePatchSession = {
   ok: true;
 };
 
+const runCursorSchema = Joi.object<TSessionRunCursor>({
+  kind: Joi.string().valid('pipeline').required(),
+  stageIndex: Joi.number().integer().min(0).required(),
+  loopMeta: Joi.any().optional(),
+});
+
 const patchBodySchema = Joi.object<TRequestPatchSessionBody>({
   liveViewVncPort: Joi.number().integer().min(1).max(65535).allow(null).optional(),
   result: Joi.any().optional(),
+  runCursor: runCursorSchema.optional(),
 });
 
 const taskSkillFileSchema = Joi.object<TTaskSkillFile>({
@@ -56,7 +64,8 @@ const bodySchema = Joi.object<TRequestRegisterSessionBody>({
 });
 
 const isLiveViewPortOnlyPatch = (body: TRequestPatchSessionBody) =>
-  'liveViewVncPort' in body && !('result' in body);
+  'liveViewVncPort' in body && !('result' in body) && !('runCursor' in body);
+
 
 const paramsSchema = Joi.object<TRequestRegisterSessionParams>({
   sessionId: Joi.string().trim().required(),
@@ -130,6 +139,7 @@ export const patchSession = [
             $set: {
               ...('result' in body ? { result: body.result } : {}),
               ...('liveViewVncPort' in body ? { liveViewVncPort: body.liveViewVncPort } : {}),
+              ...('runCursor' in body && body.runCursor ? { runCursor: body.runCursor } : {}),
               updatedAt: now,
             },
           },

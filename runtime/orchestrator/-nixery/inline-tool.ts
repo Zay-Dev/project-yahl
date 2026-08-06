@@ -6,6 +6,13 @@ import {
   resolveNixeryOutputHint,
 } from '@project-yahl/shared/nixery/output-contract';
 import { loadDefValidationModule } from '@project-yahl/shared/nixery/load-validation';
+import {
+  assertNamespaceWriteAllowed,
+  isKnowledgeManagerTask,
+  isKnowledgeWriteDef,
+} from '@project-yahl/shared/nixery/knowledge-write-gate';
+
+import { fetchSession } from '@/orchestrator/-ask-user/session-api';
 
 import { loadNixeryDef, resolveNixeryRoot } from './load-def';
 import { runNixeryDef, resolveSessionNixeryDir } from './run-stage';
@@ -35,40 +42,78 @@ const parseInlineToolPayload = async (params: {
   return JSON.parse(params.raw) as Record<string, unknown>;
 };
 
+const resolveTaskIdForSession = async (sessionId: string, taskId?: string) => {
+  if (taskId?.trim()) {
+    return taskId.trim();
+  }
+
+  if (!sessionId.trim()) {
+    return '';
+  }
+
+  try {
+    const session = await fetchSession(sessionId);
+
+    return session.taskId?.trim() ?? '';
+  } catch {
+    return '';
+  }
+};
+
+const toInlineError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return { ok: false as const, error: message };
+};
+
 export const runNixeryInlineTool = async (params: {
   args: Record<string, unknown>;
   defId: string;
   requestId?: string;
   sessionId: string;
+  taskId?: string;
 }) => {
-  const defId = params.defId.trim();
-  const def = await loadNixeryDef(defId);
+  try {
+    const defId = params.defId.trim();
+    const def = await loadNixeryDef(defId);
+    const taskId = await resolveTaskIdForSession(params.sessionId, params.taskId);
+    const managerWriteBypass = isKnowledgeWriteDef(defId) && isKnowledgeManagerTask(taskId);
 
-  if (!def.output?.inlineTool) {
-    throw new Error(`[nixery] def ${defId} is not enabled for inline tool calls`);
+    if (!def.output?.inlineTool && !managerWriteBypass) {
+      return toInlineError(new Error(`[nixery] def ${defId} is not enabled for inline tool calls`));
+    }
+
+    try {
+      assertNamespaceWriteAllowed({ defId, taskId });
+    } catch (error) {
+      return toInlineError(error);
+    }
+
+    const output = resolveNixeryOutputHint(def, params.args);
+    const input = {
+      ...params.args,
+      ...(params.sessionId.trim() && !params.args.sessionId
+        ? { sessionId: params.sessionId }
+        : {}),
+      ...(params.requestId?.trim() && !params.args.requestId
+        ? { requestId: params.requestId.trim() }
+        : {}),
+      output,
+    };
+
+    await runNixeryDef({
+      defId,
+      input,
+      sessionId: params.sessionId,
+      taskId,
+    });
+
+    const outputPath = path.join(resolveSessionNixeryDir(params.sessionId, defId), output);
+    const raw = await fs.readFile(outputPath, 'utf8');
+    const parsed = await parseInlineToolPayload({ defId, outputPath, raw });
+
+    return resolveNixeryInlineToolResult(parsed);
+  } catch (error) {
+    return toInlineError(error);
   }
-
-  const output = resolveNixeryOutputHint(def, params.args);
-  const input = {
-    ...params.args,
-    ...(params.sessionId.trim() && !params.args.sessionId
-      ? { sessionId: params.sessionId }
-      : {}),
-    ...(params.requestId?.trim() && !params.args.requestId
-      ? { requestId: params.requestId.trim() }
-      : {}),
-    output,
-  };
-
-  await runNixeryDef({
-    defId,
-    input,
-    sessionId: params.sessionId,
-  });
-
-  const outputPath = path.join(resolveSessionNixeryDir(params.sessionId, defId), output);
-  const raw = await fs.readFile(outputPath, 'utf8');
-  const parsed = await parseInlineToolPayload({ defId, outputPath, raw });
-
-  return resolveNixeryInlineToolResult(parsed);
 };

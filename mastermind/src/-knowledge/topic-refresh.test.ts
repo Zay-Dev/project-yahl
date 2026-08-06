@@ -6,47 +6,30 @@ import { describe, it } from 'node:test';
 
 describe('topic refresh', () => {
   it('marks topic due when enabled interval elapsed since lastRunAt', async () => {
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'yahl-topic-refresh-'));
+    const { isTopicRefreshDue, normalizeRefreshPolicy } = await import('./topic-refresh.js');
 
-    process.env.MASTERMIND_DATA_ROOT = tmp;
-    process.env.KNOWLEDGE_EXPORT_ROOT = path.join(tmp, 'knowledge_export');
+    const entry = {
+      aliases: [],
+      canonical: 'dogfood-topic',
+      createdAt: '2020-01-01T00:00:00.000Z',
+      maxAgeDays: null,
+      refresh: normalizeRefreshPolicy({
+        enabled: true,
+        interval: 'daily',
+        lastRunAt: '2020-01-01T00:00:00.000Z',
+        lastRunSessionId: null,
+        lastRunStatus: null,
+        scopes: ['facts', 'summary'],
+      }),
+      signals: { seedUrlHosts: [], seedUrlPaths: [], topicTexts: [] },
+      updatedAt: '2020-01-01T00:00:00.000Z',
+    };
 
-    const topicDir = path.join(tmp, 'knowledge_export', 'en', 'topics', 'dogfood-topic');
+    const due = isTopicRefreshDue(entry, undefined);
 
-    await fs.mkdir(topicDir, { recursive: true });
-    await fs.writeFile(path.join(topicDir, 'overview.md'), '# Dogfood\n', 'utf8');
-    await fs.writeFile(
-      path.join(tmp, 'topics.json'),
-      `${JSON.stringify({
-        topics: [{
-          aliases: [],
-          canonical: 'dogfood-topic',
-          createdAt: '2020-01-01T00:00:00.000Z',
-          maxAgeDays: null,
-          refresh: {
-            enabled: true,
-            interval: 'daily',
-            lastRunAt: '2020-01-01T00:00:00.000Z',
-            lastRunSessionId: null,
-            lastRunStatus: null,
-            scopes: ['facts', 'summary'],
-          },
-          signals: { seedUrlHosts: [], seedUrlPaths: [], topicTexts: [] },
-          updatedAt: '2020-01-01T00:00:00.000Z',
-        }],
-      }, null, 2)}\n`,
-      'utf8',
-    );
-
-    const { evaluateKnowledgeRefresh } = await import('./topic-refresh.js');
-    const report = await evaluateKnowledgeRefresh();
-
-    assert.equal(report.staleTopics.length, 1);
-    assert.equal(report.staleTopics[0]?.canonical, 'dogfood-topic');
-    assert.deepEqual(report.staleTopics[0]?.scopes, ['facts', 'summary']);
-
-    delete process.env.MASTERMIND_DATA_ROOT;
-    delete process.env.KNOWLEDGE_EXPORT_ROOT;
+    assert.equal(due.due, true);
+    assert.equal(due.interval, 'daily');
+    assert.deepEqual(due.scopes, ['facts', 'summary']);
   });
 
   it('skips topics with refresh disabled or null interval', async () => {

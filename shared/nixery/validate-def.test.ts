@@ -73,6 +73,7 @@ test('validateNixeryDef accepts output block', () => {
     output: {
       default: 'result.json',
       inlineTool: true,
+      retry: 2,
       validate: 'validation.mjs',
     },
     run: {
@@ -82,7 +83,28 @@ test('validateNixeryDef accepts output block', () => {
 
   assert.equal(def.output?.default, 'result.json');
   assert.equal(def.output?.inlineTool, true);
+  assert.equal(def.output?.retry, 2);
   assert.equal(def.output?.validate, 'validation.mjs');
+});
+
+test('validateNixeryDef rejects negative output.retry', () => {
+  assert.throws(() => validateNixeryDef({
+    id: 'bad-retry',
+    packages: ['nodejs'],
+    output: {
+      retry: -1,
+    },
+  }));
+});
+
+test('validateNixeryDef rejects non-integer output.retry', () => {
+  assert.throws(() => validateNixeryDef({
+    id: 'bad-retry-float',
+    packages: ['nodejs'],
+    output: {
+      retry: 1.5,
+    },
+  }));
 });
 
 test('validateNixeryDef rejects invalid output.validate filename', () => {

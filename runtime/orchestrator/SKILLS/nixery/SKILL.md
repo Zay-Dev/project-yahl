@@ -1,26 +1,18 @@
 ---
 name: nixery
-description: Inline nixery defs for knowledge, topic resolve, tidy, QA, and LLM helpers
+description: Inline nixery defs for agent-safe helpers; knowledge writes are manager-only
 ---
 
 # nixery tool
 
 Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 
-## Topic / tidy / QA
+## Agent-safe writes
 
 | Call | Result |
 |------|--------|
-| `/nixery(resolve-topic, topicText: …, slug: …, seedUrls: …)` | `canonical` |
-| `/nixery(tidy-knowledge, dryRun: …, topic: …)` | `report` |
-| `/nixery(knowledge-qa-review, topic: …, auditIssues: …)` | `review` (OpenAI in-def) |
-
-## Writes
-
-| Call | Result |
-|------|--------|
-| `/nixery(upsert-knowledge-page, topic: …, key: …, value: …)` | `{ data: { ok, path, canonicalTopic } }` — **requires** non-empty `topic` or `topicText` (empty topic no longer falls through to `general`) |
-| `/nixery(dedup-knowledge, topic: …, purpose: …)` | review JSON under `~/nixery/dedup-knowledge/` |
+| `/nixery(submit-knowledge-observation, …)` | observation under `raw/observations/…` |
+| `/nixery(append-raw-knowledge-page, topic: …, page: raw/…, …)` | machine timelines under `raw/` only |
 
 ## LLM helpers (inline)
 
@@ -31,29 +23,38 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 | `/nixery(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `batches` |
 | `/nixery(research, topic: …, source: ~/…, mission: …, guidelinePath: …)` | `markdown` |
 | `/nixery(consult-breaking-change, proposedChange: …, reason: …, context?: …)` | `{ agree, reasons, alternatives }` |
+| `/nixery(resolve-notification-target, to: …)` | notify channel prefs |
 
-```json
-{
-  "defId": "upsert-knowledge-page",
-  "args": {
-    "topic": "hk-weather",
-    "key": "facts",
-    "value": { "items": [] }
-  }
-}
-```
+## Knowledge Manager inline (task `knowledge_manager` only)
 
-## Rules
+| Call | Role |
+|------|------|
+| `/nixery(list-pending-observations, topic: …)` | intake + needsValidation |
+| `/nixery(apply-manager-topic, topic: …)` | hone + ApplyPlan + consume one topic |
 
-- Never pass `source`, `file`, or `path` to upsert (except `outputPath` on research).
-- Dedup is opt-in maintenance — not on every upsert.
-- Append `data.path` from upsert results to `knowledge_paths.persisted` (task convention — see context-paths skill).
-- `knowledge-qa-review` fails closed on empty corpus; judgment is OpenAI in-def (no Cursor key / no worker hop).
-- `media-to-text` uses Cursor CLI inside the nixery container (`CURSOR_API_KEY` declared on that def only); persist `data.text`.
-- Before breaking stage procedure (sleep protocol, window, thresholds, editing task skills), call `consult-breaking-change`; if `agree: false`, follow `alternatives`.
+Other tasks calling these get `knowledge_write_forbidden` on `apply-manager-topic`.
+
+## Forbidden for non-manager tasks (nixeryRun / manager allowlist)
+
+- `apply-manager-topic` / `apply-approved-transfers`
+- `upsert-knowledge-page` / `dedup-knowledge`
+- `resolve-topic` (registry write)
+- `upsert-greets-page` / `upsert-whatsapp-page`
+
+Overnight Knowledge Manager is a **multi-stage** task: list topics → per-topic validate (`plan`/`research` → observation feedback) → `apply-manager-topic` → group topics → cross-topic `propose-knowledge-transfer` → `apply-approved-transfers`. Start via cron `taskPath: "knowledge_manager"` or `/mastermind(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
 
 ## Reads
 
-Knowledge reads still use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`).
+Knowledge reads use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `list-manager-topics`, `group-manager-topics`).
 
-Task skills: `~/task-skills/nixery-*/SKILL.md` when mounted.
+Def `output` contract (`server/nixery/<def>/index.yml`): `validate` (default `validation.mjs`), `default` output filename, optional `inlineTool`, and optional `retry` (max container re-runs after validation failure; default **3**; `0` = no re-run).
+
+## Soft-fail then abandon
+
+Inline `{ ok: false, error }` (bad args or transient infra such as registry pull blips) soft-fails up to `YAHL_NIXERY_INLINE_RETRY_MAX` (default **3**). While `retryRemaining > 0`, fix args and retry. After the budget: `{ ok: false, abandoned: true }` — **continue the stage** (skip that call / move on). Soft-fail never aborts the stage; orchestrator `nixeryRun` stages remain hard failures.
+
+## Rules
+
+- Never pass `source`, `file`, or `path` to knowledge write helpers.
+- Observations need `example` or `quote` plus `evidence`.
+- Before breaking stage procedure, call `consult-breaking-change`.

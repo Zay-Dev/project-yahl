@@ -37,7 +37,7 @@ Use the short canonical directions URL only — never paste SPA `data=!…` addr
 1. `/stagehand(goto, <bound_url>)`.
 2. Confirm driving / private-car mode (not transit / walking / cycling).
 3. Check origin/destination chips (or equivalent). If they do **not** match context OD (or the English equivalents you encoded), treat as fetch failure — do not thrash encodings.
-4. Capture up to **3** fastest routes: iconic `label` / optional `via`, integer `eta_min`, optional `distance_km`, `status`.
+4. Capture up to **3** fastest routes: iconic `label` / optional `via` / optional `path` (ordered major roads when the UI shows them), integer `eta_min`, optional `distance_km`, `status`.
 5. Capture short `incident_note` when the UI shows crash / closure / major disruption (`''` if none).
 6. At most **2** browser attempts (initial + one retry). Do not invent ETAs.
 

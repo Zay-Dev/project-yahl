@@ -1,4 +1,8 @@
 import {
+  parseStageGotoCommand,
+  STAGE_ID_PATTERN,
+} from '@project-yahl/shared/yahl/stage-goto';
+import {
   DEFAULT_VERIFY_DEF_ID,
   type TYahlVerifySpec,
 } from '@project-yahl/shared/yahl/verify';
@@ -25,12 +29,25 @@ export type YahlAgentOverrides = {
   bashTimeoutMs?: number;
 };
 
+export type YahlStagehandConfig = {
+  apiBaseUrl?: string;
+  model?: string;
+  preferScreenshot?: boolean;
+};
+
+export type YahlGotoEntry = {
+  command: string;
+  description: string;
+};
+
 export interface YahlStage {
   agentOverrides?: YahlAgentOverrides;
   askUser?: YahlAskUserEntry[];
   conditionMode?: boolean;
   contextKeys?: string[];
   contextMode?: boolean;
+  goto?: YahlGotoEntry[];
+  id?: string;
   logic: string;
   loopSetup?: string;
   maxBashCalls?: number;
@@ -39,6 +56,7 @@ export interface YahlStage {
   nixeryRun?: string;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
+  stagehand?: YahlStagehandConfig;
   temperature?: number;
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
@@ -202,6 +220,103 @@ const validateAgentOverrides = (
   return { bashTimeoutMs };
 };
 
+const STAGEHAND_KEYS = new Set(['apiBaseUrl', 'model', 'preferScreenshot']);
+
+const validateStagehandConfig = (
+  raw: unknown,
+  label: string,
+): YahlStagehandConfig | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`${label}.stagehand: expected an object`);
+  }
+
+  const entry = raw as Record<string, unknown>;
+
+  for (const key of Object.keys(entry)) {
+    if (!STAGEHAND_KEYS.has(key)) {
+      throw new Error(
+        `${label}.stagehand: unknown key "${key}" (only apiBaseUrl, model, preferScreenshot allowed)`,
+      );
+    }
+  }
+
+  const config: YahlStagehandConfig = {};
+
+  if (entry.model !== undefined) {
+    if (typeof entry.model !== 'string' || !entry.model.trim()) {
+      throw new Error(`${label}.stagehand.model: must be a non-empty string`);
+    }
+
+    config.model = entry.model.trim();
+  }
+
+  if (entry.apiBaseUrl !== undefined) {
+    if (typeof entry.apiBaseUrl !== 'string' || !entry.apiBaseUrl.trim()) {
+      throw new Error(`${label}.stagehand.apiBaseUrl: must be a non-empty string`);
+    }
+
+    config.apiBaseUrl = entry.apiBaseUrl.trim();
+  }
+
+  if (entry.preferScreenshot !== undefined) {
+    if (typeof entry.preferScreenshot !== 'boolean') {
+      throw new Error(`${label}.stagehand.preferScreenshot: must be a boolean`);
+    }
+
+    config.preferScreenshot = entry.preferScreenshot;
+  }
+
+  return config;
+};
+
+const validateGotoEntries = (
+  raw: unknown,
+  label: string,
+  stage: Record<string, unknown>,
+): YahlGotoEntry[] | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(`${label}.goto: must be a non-empty array when present`);
+  }
+
+  if (stage.contextMode === true || stage.conditionMode === true) {
+    throw new Error(`${label}.goto: cannot combine with contextMode or conditionMode`);
+  }
+
+  if (typeof stage.nixeryRun === 'string' && stage.nixeryRun.trim()) {
+    throw new Error(`${label}.goto: cannot combine with nixeryRun`);
+  }
+
+  return raw.map((entry, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new Error(`${label}.goto[${index}]: expected an object`);
+    }
+
+    const item = entry as Record<string, unknown>;
+    const command = typeof item.command === 'string' ? item.command.trim() : '';
+    const description = typeof item.description === 'string' ? item.description.trim() : '';
+
+    if (!command || !parseStageGotoCommand(command)) {
+      throw new Error(
+        `${label}.goto[${index}].command: must match /stage(<id>)`,
+      );
+    }
+
+    if (!description) {
+      throw new Error(`${label}.goto[${index}].description: required non-empty string`);
+    }
+
+    return { command, description };
+  });
+};
+
 const normalizeVerifySpec = (
   raw: unknown,
   label: string,
@@ -348,6 +463,18 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     throw new Error(`${label}: conditionMode logic must contain IF:`);
   }
 
+  let stageId: string | undefined;
+
+  if (stage.id !== undefined) {
+    if (typeof stage.id !== 'string' || !STAGE_ID_PATTERN.test(stage.id.trim())) {
+      throw new Error(`${label}.id: must match ${STAGE_ID_PATTERN}`);
+    }
+
+    stageId = stage.id.trim();
+  }
+
+  const goto = validateGotoEntries(stage.goto, label, stage);
+
   let askUser: YahlAskUserEntry[] | undefined;
 
   if (stage.askUser !== undefined) {
@@ -372,6 +499,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
 
   const verify = normalizeVerifySpec(stage.verify, label);
   const agentOverrides = validateAgentOverrides(stage.agentOverrides, label);
+  const stagehand = validateStagehandConfig(stage.stagehand, label);
 
   return {
     logic: logicRaw || '(nixery)',
@@ -381,6 +509,9 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
       : {}),
     ...(askUser ? { askUser } : {}),
     ...(agentOverrides ? { agentOverrides } : {}),
+    ...(stagehand ? { stagehand } : {}),
+    ...(stageId ? { id: stageId } : {}),
+    ...(goto ? { goto } : {}),
     ...(stage.contextMode === true ? { contextMode: true } : {}),
     ...(stage.conditionMode === true ? { conditionMode: true } : {}),
     ...(typeof stage.loopSetup === 'string' ? { loopSetup: stage.loopSetup.trim() } : {}),
@@ -397,7 +528,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
 };
 
 export const toAgentStage = (stage: YahlStage): YahlStage => {
-  const { loopSetup: _loopSetup, ...rest } = stage;
+  const { loopSetup: _loopSetup, verify: _verify, ...rest } = stage;
 
   return validateYahlStage(rest);
 };

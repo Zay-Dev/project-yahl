@@ -217,6 +217,7 @@ export const startRedisDaemon = async () => {
               );
               await toolCall(call);
             },
+            onModelResponse,
             requestId,
             resumeFrom,
             resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,

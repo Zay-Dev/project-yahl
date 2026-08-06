@@ -6,8 +6,8 @@ import { pendingSessionUpdateDoc } from '../../sessions/-pending-session-update'
 
 describe('createRun background flag', () => {
   it('maps task background metadata to pending session isBackground', () => {
-    const yahl = `name: knowledge-tidy
-description: Tidy knowledges
+    const yahl = `name: knowledge-manager
+description: Overnight Knowledge Manager
 background: true
 
 stages:
@@ -19,8 +19,8 @@ stages:
 
     const update = pendingSessionUpdateDoc({
       isBackground: task.background === true,
-      sessionId: 'sess-tidy',
-      taskId: 'auto_knowledge_refresh',
+      sessionId: 'sess-km',
+      taskId: 'knowledge_manager',
       taskYahl: yahl,
     });
 

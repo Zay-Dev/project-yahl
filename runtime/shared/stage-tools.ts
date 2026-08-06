@@ -110,6 +110,28 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
+        "End this stage and jump the pipeline to another labeled stage declared in this stage's goto list. Use for /stage(id) in stage logic. Requires a non-empty reason. On success the current stage finishes without verify and the orchestrator continues from the target stage.",
+      name: "goto_stage",
+      parameters: {
+        properties: {
+          reason: {
+            description: "Why this jump is needed (injected as stage_goto_reason on the target stage).",
+            type: "string",
+          },
+          stageId: {
+            description: "Authoring id of the target stage (must match a declared /stage(id) goto entry).",
+            type: "string",
+          },
+        },
+        required: ["stageId", "reason"],
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
+  {
+    function: {
+      description:
         "Control a headless browser via Stagehand. Use for /stagehand(...) in stage logic: web search, page fetch, structured extract, observe elements, or multi-step agent tasks. Returns JSON { ok, data } or { ok: false, error }.",
       name: "browser",
       parameters: {
@@ -194,7 +216,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(list-topic-policies|resolve-topic-policy|patch-topic-policy|evaluate-knowledge-refresh|dispatch-task-run|propose-notification, ...) in stage logic. Topic resolve, tidy, QA, media-to-text, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
+        "Invoke the mastermind gateway helper. Use for /mastermind(list-topic-policies|resolve-topic-policy|patch-topic-policy|dispatch-task-run|propose-notification, ...) in stage logic. Topic resolve, media-to-text, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
       name: "mastermind",
       parameters: {
         properties: {
@@ -208,9 +230,11 @@ export const STAGE_TOOLS = [
               "list-topic-policies",
               "resolve-topic-policy",
               "patch-topic-policy",
-              "evaluate-knowledge-refresh",
               "dispatch-task-run",
               "propose-notification",
+              "propose-knowledge-transfer",
+              "get-knowledge-manager-instruction",
+              "put-knowledge-manager-instruction",
             ],
             type: "string",
           },
@@ -381,3 +405,24 @@ export const parseBrowserToolArguments = (raw: string): BrowserToolArguments | n
 export const parseAskUserToolArguments = (
   raw: string,
 ): AskUserToolCallEnvelope["arguments"] | null => parseAskUserBatchToolArguments(raw);
+
+export const parseGotoStageToolArguments = (
+  raw: string,
+): { reason: string; stageId: string } | null => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed)) return null;
+  if (typeof parsed.stageId !== "string" || !parsed.stageId.trim()) return null;
+  if (typeof parsed.reason !== "string" || !parsed.reason.trim()) return null;
+
+  return {
+    reason: parsed.reason.trim(),
+    stageId: parsed.stageId.trim(),
+  };
+};

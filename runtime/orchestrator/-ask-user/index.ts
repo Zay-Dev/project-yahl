@@ -3,6 +3,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 import { shutdownAgent } from '@/orchestrator/-docker';
+import { explainAskUserBatchParseFailure } from '@/shared/ask-user-batch';
 import { parseAskUserToolArguments } from '@/shared/stage-tools';
 
 import { AskUserPausedError } from './errors';
@@ -39,10 +40,11 @@ export const handleAskUserToolCall = async (params: {
     return { hasError: true, result: 'ask_user is disabled' };
   }
 
-  const args = parseAskUserToolArguments(params.toolCall.function.arguments ?? '');
+  const rawArgs = params.toolCall.function.arguments ?? '';
+  const args = parseAskUserToolArguments(rawArgs);
 
   if (!args) {
-    return { hasError: true, result: 'ask_user: invalid arguments' };
+    return { hasError: true, result: explainAskUserBatchParseFailure(rawArgs) };
   }
 
   const validationError = validateAskUserToolCall(params.stage.spec, args);

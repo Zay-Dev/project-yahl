@@ -1,0 +1,45 @@
+id: list-manager-topics
+description: List all knowledge topics with manager depth hints from global instruction
+
+packages: [nodejs]
+
+env:
+  TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
+
+nixery:
+  default: "true"
+  tools: [nodejs]
+  policies:
+    - tools: [nodejs]
+      mode: "true"
+
+input:
+  output:
+    type: string
+    required: false
+
+mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: ro
+  /data/mastermind:
+    host: data/mastermind
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+  /opt/nixery/knowledge-wiki:
+    host: lib/knowledge-wiki
+    mode: ro
+
+run:
+  entry: [node, /opt/nixery/def/run.mjs]
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: false

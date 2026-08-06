@@ -237,6 +237,21 @@ describe("toAgentStage", () => {
     assert.equal(agent.loopSetup, undefined);
     assert.deepEqual(agent.contextKeys, ["c"]);
   });
+
+  it("omits verify for agent/redis payloads", () => {
+    const agent = toAgentStage({
+      logic: "c += 1;",
+      verify: {
+        defId: "stage-verify",
+        autoRetry: true,
+        minScore: 0.75,
+        rubric: "Pass when c is set.",
+      },
+    });
+
+    assert.equal(agent.logic, "c += 1;");
+    assert.equal(agent.verify, undefined);
+  });
 });
 
 describe("toLoopIterationStage", () => {

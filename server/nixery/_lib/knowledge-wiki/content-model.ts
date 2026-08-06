@@ -18,6 +18,8 @@ export const WIKI_STUDIES_PREFIX = 'studies';
 
 export const WIKI_RAW_PREFIX = 'raw';
 
+export const WIKI_OBSERVATIONS_PREFIX = 'raw/observations';
+
 export const wikiLink = (canonical: string, page: string): string =>
   `[[topics/${canonical}/${page}]]`;
 
@@ -42,4 +44,5 @@ export const TOPIC_PAGE_LAYOUT = [
   'topics/{slug}/brief',
   'topics/{slug}/todo',
   `topics/{slug}/${WIKI_RAW_PREFIX}/{key}`,
+  `topics/{slug}/${WIKI_OBSERVATIONS_PREFIX}/{YYYY-MM-DD}/{id}`,
 ] as const;

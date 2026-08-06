@@ -76,7 +76,7 @@ const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
 
   if (
     item.tool === "ask_user" &&
-    parsedArgs.version === "askUserBatch.v1" &&
+    (parsedArgs.version === undefined || parsedArgs.version === "askUserBatch.v1") &&
     typeof parsedArgs.batchId === "string" &&
     typeof parsedArgs.title === "string" &&
     Array.isArray(parsedArgs.questions)

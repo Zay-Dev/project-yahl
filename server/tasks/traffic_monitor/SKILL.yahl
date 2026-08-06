@@ -18,6 +18,7 @@ types: |
   type TRouteSample = {
     label: string;
     via?: string;
+    path?: string;
     eta_min: number;
     distance_km?: number;
     status: 'ok' | 'slow' | 'abnormal' | 'unknown';
@@ -113,10 +114,12 @@ stages:
     nixeryRun: get-knowledge
     nixeryInput:
       purpose: |
-        Load lean sources-{city_slug} and source-ops-{city_slug} for this city only.
-        Prefer raw page bullets over synthesizing budget/exhausted/quota objects.
-        Do not invent budget.exhausted, city_attempts totals, or "Research quota" status —
-        prior BUDGET/HISTORY lines are avoid-list history, not a live research stop.
+        Seed from raw page bodies only — prefer cat of
+        topics/{topic}/source-ops-{city_slug}.md (full markdown body after frontmatter)
+        and lean sources-{city_slug}.md bullets when present.
+        Do NOT synthesize Overview/History essays, multi-OD scrapbooks, or budget/exhausted/quota objects.
+        Write the source-ops page body first in source-knowledge.md (verbatim sections HOWTO/PLACE/Q&A/ops-log).
+        Prior BUDGET/HISTORY lines are avoid-list history, not a live research stop.
       topic: knowledge_topic
       output: source-knowledge.md
     logic: "(nixery)"
@@ -125,7 +128,10 @@ stages:
     produceContextKeys: [source_ops_md]
     logic: |
       Read ~/nixery/get-knowledge/source-knowledge.md from the session workspace.
-      If missing or empty after trim, set source_ops_md to '<none>'; otherwise set source_ops_md to the file's full markdown content (prefer the source-ops-{city_slug} section when present).
+      If missing or empty after trim, set source_ops_md to '<none>'.
+      Otherwise set source_ops_md to the source-ops-{city_slug} page body only
+      (strip any Overview/History/sources preamble the extract may have added; keep HOWTO/PLACE/Q&A/ops-log).
+      Do not keep a multi-OD essay scrapbook — prefer the raw wiki page body.
 
   - contextKeys: [origin, destination, city, holidays_topic, holidays_file_prefix, traffic_source_file]
     nixeryRun: plan
@@ -141,16 +147,13 @@ stages:
     logic: "(nixery)"
 
   - contextKeys: [holidays_topic]
-    produceContextKeys: [holidays_fetch_note]
-    logic: |
-      Read ~/task-skills/task-mission/SKILL.md.
-      /nixery(
-        get-knowledge,
-        purpose: Read holidays topic for the current calendar year when present; write holidays.md,
-        topic: holidays_topic,
-        output: holidays.md,
-      );
-      const holidays_fetch_note = holidays_topic;
+    nixeryRun: get-knowledge
+    nixeryInput:
+      purpose: |
+        Read holidays topic for the current calendar year when present; write holidays.md.
+      topic: holidays_topic
+      output: holidays.md
+    logic: "(nixery)"
 
   - contextKeys: [holidays_topic, holidays_file_prefix, city, timezone]
     produceContextKeys: [holidays_md, holidays_year]
@@ -165,7 +168,7 @@ stages:
         On fail, set resumeAction: rerun.
     logic: |
       Read ~/nixery/plan/plan.md when execution steps need clarification.
-      Read ~/task-skills/task-mission/SKILL.md for mission framing.
+      # *holidays_list_usable: absent when missing/empty/'<none>'/absent:true/diagnostic-only/no dated rows for year.
       const holidays_year = *current_calendar_year_in_tz(timezone);
       Read ~/nixery/get-knowledge/holidays.md from the session workspace.
       If missing or empty after trim, set holidays_extract to '<none>'; otherwise set holidays_extract to the file's full markdown content.
@@ -185,7 +188,7 @@ stages:
         );
         *save(~/data/{holidays_file_prefix}_{holidays_year}.md, holidays_md);
         /nixery(
-          upsert-knowledge-page,
+          append-raw-knowledge-page,
           topic: holidays_topic,
           page: raw/holidays-{holidays_year},
           mode: replace,
@@ -203,7 +206,8 @@ stages:
         (() => ({ instruction_active: false }));
       END:
 
-  - contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, source_instruction, instruction_active, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
+  - id: explorer
+    contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, source_instruction, instruction_active, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
     produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources, origin_resolved, destination_resolved]
     maxTurns: 80
     verify:
@@ -211,51 +215,40 @@ stages:
       autoRetry: true
       minScore: 0.75
       rubric: |
-        Pass when origin_resolved and destination_resolved are non-empty (canonical place name; include district when raw OD was a brand/abbrev/mall/cinema),
-        and probe_fetch has at least 2 routes with numeric eta_min and a non-empty http(s) source_url
-        OR probe documented an OD geocode/district mismatch (not accepted as a short-trip multi-route source fail),
-        and traffic_source.url is http(s) that either (a) includes {origin} and {destination} placeholders
-        OR (b) kind is browser and howto_md documents form-fill/autocomplete binding of origin/destination with probe chips matching resolved places
-        (prefer keeping a placeholder template in url when the site supports query params, even if howto navigates a form base URL),
-        and traffic_source.howto_md is inline howto markdown (length >= 80, not a path like ~/data/...),
-        and traffic_source.is_fallback is boolean,
-        and explore_started_at is a non-empty ISO timestamp,
-        and tried_sources is a non-null array,
-        and city attempts in tried_sources (entries whose url is not the Google Maps directions template
-        AND whose what_tried is not a known-broken cached decline) are <= 2,
-        and every failed/skipped tried_sources entry has non-empty why and what_tried,
-        and every failed/skipped city attempt has a durable SKIP/FAIL bullet in source_ops_md (name + why + what was tried)
-        matching that entry,
-        and when traffic_source.is_fallback is false the locked city source appears in tried_sources with outcome ok,
-        and when traffic_source.is_fallback is true Maps was NOT persisted as the reusable city sources-{city_slug} or ~/data/{traffic_source_file} lock,
-        and when instruction_active is true the run applied Input source_instruction (free-text this-run override) —
-        do not pass a blind known-failed skip whose what_tried/why is only prior skip/fail / did not re-probe
-        while ignoring source_instruction.
-        Fail when routes are missing without a geocode-fail record, eta_min is not numeric, howto is empty/path-only,
-        url is missing, is_fallback is missing, tried_sources missing/null, city attempts > 2,
-        failed/skipped entries lack why/what_tried or lack a matching SKIP/FAIL line in source_ops_md,
-        Maps was upserted/saved as the permanent city source, origin_resolved/destination_resolved missing,
-        autocomplete accepted a different district/landmark than the stated OD without a geocode-fail,
-        browser chips do not match resolved places,
-        or instruction_active is true and explore only blind-skipped known-failed sources without applying source_instruction.
-        On fail, set resumeAction: rerun.
+        Pass when origin_resolved and destination_resolved are non-empty (canonical; district when raw OD was brand/abbrev/mall/cinema),
+        and they do NOT substitute a nearby MTR station for an estate/building runInput unless PLACE verified_proxy,
+        and traffic_source.url is http(s) with {origin}/{destination} placeholders OR (kind browser and howto_md documents form-fill OD bind),
+        and howto_md is inline markdown length >= 80 (not a ~/data path) and when kind browser has no concrete run OD/POI literals,
+        and when is_fallback is false source_ops_md has reusable ## HOWTO for the locked provider,
+        and is_fallback is boolean, explore_started_at is ISO, tried_sources is a non-null array,
+        and city attempts (non-Maps, excluding known-broken cache declines) are <= 2,
+        and every failed/skipped entry has why + what_tried and a matching SKIP/FAIL bullet in source_ops_md,
+        and when is_fallback is false the locked city source is tried_sources outcome ok,
+        and when is_fallback is true Maps was NOT saved/upserted as city lock,
+        and when instruction_active is true the run applied source_instruction (no blind known-failed skip ignoring it;
+        no trust-only lock with what_tried 'trusted durable cache; no re-probe' unless instruction clearly allows trust/skip-probe),
+        and ONE of:
+        (Trust path — cold start only, instruction_active false) probe_fetch.trusted_cache === true, source_url matches traffic_source.url,
+        is_fallback false, tried_sources ok with what_tried 'trusted durable cache; no re-probe';
+        OR (Live probe path) probe_fetch has >= 2 numeric eta_min routes and http(s) source_url
+        OR documented OD geocode fail; browser form-fill chips match resolved places.
+        Fail otherwise. On fail, set resumeAction: rerun.
     logic: |
-      Read ~/nixery/plan/plan.md when helpful.
       Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
-      *upsert_ops_append(notes_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: source-ops-{city_slug}, mode: append, value: notes_md); on ok:false retry once with content: notes_md; still merge into source_ops_md.
-      *upsert_sources(lean_md): /nixery(upsert-knowledge-page, topic: knowledge_topic, key: sources-{city_slug}, value: lean_md string); on ok:false retry once with content: lean_md; never upsert Maps / is_fallback:true.
-
-      const explore_started_at = new Date().toISOString();
-      *set_context(explore_started_at);
-
-      let source_ops_md = source_ops_md || '<none>';
       *read(source_ops_md);
       *read(instruction_active);
       IF: instruction_active;
         *read(source_instruction);
       END:
+      IF: stage_goto_reason;
+        *read(stage_goto_reason);
+        *read(stage_goto_from);
+      END:
 
+      const explore_started_at = new Date().toISOString();
+      *set_context(explore_started_at);
+      let source_ops_md = source_ops_md || '<none>';
       let locked = false;
       let tried_sources = [];
       let city_attempts = 0;
@@ -265,267 +258,112 @@ stages:
       const origin_resolved = *resolve_place(origin, city: city, role: origin);
       const destination_resolved = *resolve_place(destination, city: city, role: destination);
       *set_context(origin_resolved, destination_resolved);
-      IF: *place_was_disambiguated(origin, origin_resolved) || *place_was_disambiguated(destination, destination_resolved);
-        *upsert_ops_append(*place_disambiguation_note(origin, origin_resolved, destination, destination_resolved));
-      END:
+      *upsert_novel_place_ops(origin, origin_resolved, destination, destination_resolved);
 
       let candidate = null;
       IF: *exists(~/data/{traffic_source_file});
         candidate = *normalize_traffic_source(*read(~/data/{traffic_source_file}), as: TTrafficSource);
       ELSE:
-        const from_knowledge = *extract_sources_page(
-          ~/nixery/get-knowledge/source-knowledge.md,
-          key: sources-{city_slug},
-        );
+        const from_knowledge = *extract_sources_page(~/nixery/get-knowledge/source-knowledge.md, key: sources-{city_slug});
         IF: from_knowledge;
           candidate = *normalize_traffic_source(from_knowledge, as: TTrafficSource);
         END:
       END:
-
-      const candidate_is_fallback =
-        !!candidate && (
-          candidate.is_fallback === true
-          || (String(candidate.url || '').includes('google.com/maps/dir/') && candidate.is_fallback !== false)
-        );
-
-      IF: candidate_is_fallback;
+      IF: candidate && (candidate.is_fallback === true || (String(candidate.url || '').includes('google.com/maps/dir/') && candidate.is_fallback !== false));
         candidate = null;
       END:
 
       IF: candidate && *already_tried_or_known_failed(candidate, tried_sources, source_ops_md) && !instruction_active;
-        tried_sources = [...tried_sources, {
-          name: *source_display_name(candidate),
-          url: String(candidate.url || ''),
-          what_tried: 'declined known-broken cached recommend; did not re-probe; does not burn city_attempts',
-          outcome: 'skipped',
-          why: *prior_skip_reason(candidate, tried_sources, source_ops_md) || 'prior skip/fail still applies in source_ops',
-          at: new Date().toISOString(),
-        }];
-        const decline_bullet = `- SKIP ${*source_display_name(candidate)} (${candidate.url}): declined known-broken cached recommend; research continues (no attempt burn).`;
-        const decline_novel = *filter_novel_ops_notes([decline_bullet], against: source_ops_md);
-        IF: decline_novel.length > 0;
-          *upsert_ops_append(*notes_to_md(decline_novel));
-          source_ops_md = *merge_source_ops_md(source_ops_md, decline_novel);
-        ELSE:
-          *upsert_ops_append(decline_bullet);
-          source_ops_md = *merge_source_ops_md(source_ops_md, [decline_bullet]);
-        END:
+        tried_sources = [...tried_sources, { name: *source_display_name(candidate), url: String(candidate.url || ''), what_tried: 'declined known-broken cached recommend; did not re-probe; does not burn city_attempts', outcome: 'skipped', why: *prior_skip_reason(candidate, tried_sources, source_ops_md) || 'prior skip/fail still applies in source_ops', at: new Date().toISOString() }];
+        *upsert_skip_fail_ops(candidate, tried_sources[tried_sources.length - 1]);
         *set_context(source_ops_md, tried_sources);
         candidate = null;
       END:
-
       IF: candidate && *already_tried_or_known_failed(candidate, tried_sources, source_ops_md) && instruction_active;
         IF: *instruction_blocks_probe(source_instruction, candidate);
-          tried_sources = [...tried_sources, {
-            name: *source_display_name(candidate),
-            url: String(candidate.url || ''),
-            what_tried: 'declined per source_instruction; did not re-probe; does not burn city_attempts',
-            outcome: 'skipped',
-            why: *instruction_skip_reason(source_instruction, candidate) || 'source_instruction forbids this candidate',
-            at: new Date().toISOString(),
-          }];
+          tried_sources = [...tried_sources, { name: *source_display_name(candidate), url: String(candidate.url || ''), what_tried: 'declined per source_instruction; did not re-probe; does not burn city_attempts', outcome: 'skipped', why: *instruction_skip_reason(source_instruction, candidate) || 'source_instruction forbids this candidate', at: new Date().toISOString() }];
           *set_context(tried_sources);
           candidate = null;
         END:
-      END;
+      END:
 
-      IF: candidate && String(candidate.url || '').includes('{origin}');
-        const traffic_source = { ...candidate, city: city, is_fallback: false };
-        const probe_fetch = *fetch_driving_routes(
-          origin: origin_resolved,
-          destination: destination_resolved,
-          mode: private_car_driving,
-          max_routes: 3,
-          source: traffic_source,
-          as: TTrafficFetch,
-        );
+      const candidate_usable = !!candidate && (String(candidate.url || '').includes('{origin}') || (String(candidate.kind || '') === 'browser' && String(candidate.howto_md || '').length >= 80));
+
+      IF: candidate_usable && !stage_goto_reason && !instruction_active;
+        let traffic_source = { ...candidate, city: city, is_fallback: false, howto_md: *strip_od_bleed(candidate.howto_md, origin, destination, origin_resolved, destination_resolved) };
+        const probe_fetch = { trusted_cache: true, source_url: String(traffic_source.url || ''), routes: [] };
+        tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'trusted durable cache; no re-probe', outcome: 'ok', why: 'cold-start non-fallback cache present and not known-failed', at: new Date().toISOString() }];
+        *save(~/data/{traffic_source_file}, traffic_source);
+        *ensure_howto_and_lock(traffic_source, source_ops_md);
+        *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
+        locked = true;
+      END:
+
+      IF: !locked && candidate_usable;
+        let traffic_source = { ...candidate, city: city, is_fallback: false, howto_md: *strip_od_bleed(candidate.howto_md, origin, destination, origin_resolved, destination_resolved) };
+        const probe_fetch = *fetch_driving_routes(origin: origin_resolved, destination: destination_resolved, mode: private_car_driving, max_routes: 3, source: traffic_source, as: TTrafficFetch);
         IF: *probe_ok(probe_fetch) && !*od_geocode_failed(probe_fetch, origin_resolved, destination_resolved);
-          tried_sources = [...tried_sources, {
-            name: *source_display_name(traffic_source),
-            url: traffic_source.url,
-            what_tried: 'cached non-fallback probe',
-            outcome: 'ok',
-            why: 'probe returned usable multi-route ETAs',
-            at: new Date().toISOString(),
-          }];
+          tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'cached non-fallback probe', outcome: 'ok', why: 'probe returned usable multi-route ETAs', at: new Date().toISOString() }];
           *save(~/data/{traffic_source_file}, traffic_source);
-          *upsert_sources(*serialize_traffic_source_lean(traffic_source));
+          *ensure_howto_and_lock(traffic_source, source_ops_md);
+          *upsert_novel_fetch_ops(miss: false, source: traffic_source, fetch: probe_fetch);
           *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
           locked = true;
         ELSE:
           city_attempts = city_attempts + 1;
-          const why = *od_geocode_failed(probe_fetch, origin_resolved, destination_resolved)
-            ? (*geocode_fail_reason(probe_fetch, origin_resolved, destination_resolved) || 'OD geocode/district mismatch')
-            : (*probe_fail_reason(probe_fetch) || 'cached probe failed');
-          const what_tried = 'cached non-fallback probe via howto_md + source_ops_md; at most 2 browser attempts';
-          tried_sources = [...tried_sources, {
-            name: *source_display_name(traffic_source),
-            url: traffic_source.url,
-            what_tried,
-            outcome: 'failed',
-            why,
-            at: new Date().toISOString(),
-          }];
-          const miss_bullets = [
-            `- SKIP/FAIL ${*source_display_name(traffic_source)} (${traffic_source.url}): ${why}. Tried: ${what_tried}.`,
-            ...*draft_source_ops_candidates(miss: true, source: traffic_source, fetch: probe_fetch),
-          ];
-          const novel = *filter_novel_ops_notes(miss_bullets, against: source_ops_md);
-          IF: novel.length > 0;
-            *upsert_ops_append(*notes_to_md(novel));
-            source_ops_md = *merge_source_ops_md(source_ops_md, novel);
-          ELSE:
-            *upsert_ops_append(miss_bullets[0]);
-            source_ops_md = *merge_source_ops_md(source_ops_md, [miss_bullets[0]]);
-          END:
+          const why = *od_geocode_failed(probe_fetch, origin_resolved, destination_resolved) ? (*geocode_fail_reason(probe_fetch, origin_resolved, destination_resolved) || 'OD geocode/district mismatch') : (*probe_fail_reason(probe_fetch) || 'cached probe failed');
+          tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'cached non-fallback probe via howto_md + source_ops_md; at most 2 browser attempts', outcome: 'failed', why, at: new Date().toISOString() }];
+          *upsert_skip_fail_ops(traffic_source, tried_sources[tried_sources.length - 1], probe_fetch);
           *set_context(source_ops_md, tried_sources);
         END:
       END:
 
       IF: !locked;
-        while (
-          !locked
-          && city_attempts < max_city_attempts
-          && (Date.now() - Date.parse(explore_started_at)) <= 30 * 60 * 1000
-        ) {
+        while (!locked && city_attempts < max_city_attempts && (Date.now() - Date.parse(explore_started_at)) <= 30 * 60 * 1000) {
           IF: *about_to_hit_max_turns(remaining_le: 4) || (Date.now() - Date.parse(explore_started_at)) > 30 * 60 * 1000;
             break;
           END:
-          const research_need = *research_need_for_explore(
-            city,
-            tried_sources,
-            source_ops_md,
-            instruction_active,
-            source_instruction,
-          );
-          const researched = *normalize_traffic_source(/nixery(
-            research,
-            topic: real-time driving traffic ETA origin to destination in city,
-            need: research_need,
-            output_shape: TTrafficSource,
-            howto_md_must_be_inline_markdown_not_a_path: true,
-          ), as: TTrafficSource);
+          const researched = *normalize_traffic_source(/nixery(research, topic: real-time driving traffic ETA origin to destination in city, need: *research_need_for_explore(city, tried_sources, source_ops_md, instruction_active, source_instruction), output_shape: TTrafficSource, howto_md_must_be_inline_markdown_not_a_path: true), as: TTrafficSource);
           IF: String(researched.url || '').includes('google.com/maps/dir/');
             break;
           END:
           IF: *already_tried_or_known_failed(researched, tried_sources, source_ops_md) && !instruction_active;
             city_attempts = city_attempts + 1;
-            tried_sources = [...tried_sources, {
-              name: *source_display_name(researched),
-              url: String(researched.url || ''),
-              what_tried: 'skipped re-probe; prior skip/fail still applies',
-              outcome: 'skipped',
-              why: *prior_skip_reason(researched, tried_sources, source_ops_md) || 'already failed/skipped in knowledge',
-              at: new Date().toISOString(),
-            }];
-            const skip_bullet = `- SKIP ${*source_display_name(researched)} (${researched.url}): prior skip/fail still applies; did not re-probe.`;
-            const skip_novel = *filter_novel_ops_notes([skip_bullet], against: source_ops_md);
-            IF: skip_novel.length > 0;
-              *upsert_ops_append(*notes_to_md(skip_novel));
-              source_ops_md = *merge_source_ops_md(source_ops_md, skip_novel);
-            ELSE:
-              *upsert_ops_append(skip_bullet);
-              source_ops_md = *merge_source_ops_md(source_ops_md, [skip_bullet]);
-            END:
+            tried_sources = [...tried_sources, { name: *source_display_name(researched), url: String(researched.url || ''), what_tried: 'skipped re-probe; prior skip/fail still applies', outcome: 'skipped', why: *prior_skip_reason(researched, tried_sources, source_ops_md) || 'already failed/skipped in knowledge', at: new Date().toISOString() }];
+            *upsert_skip_fail_ops(researched, tried_sources[tried_sources.length - 1]);
             *set_context(source_ops_md, tried_sources);
             continue;
           END:
-          IF: *already_tried_or_known_failed(researched, tried_sources, source_ops_md) && instruction_active;
-            IF: *instruction_blocks_probe(source_instruction, researched);
-              city_attempts = city_attempts + 1;
-              tried_sources = [...tried_sources, {
-                name: *source_display_name(researched),
-                url: String(researched.url || ''),
-                what_tried: 'skipped per source_instruction',
-                outcome: 'skipped',
-                why: *instruction_skip_reason(source_instruction, researched) || 'source_instruction forbids this candidate',
-                at: new Date().toISOString(),
-              }];
-              *set_context(tried_sources);
-              continue;
-            END:
+          IF: *already_tried_or_known_failed(researched, tried_sources, source_ops_md) && instruction_active && *instruction_blocks_probe(source_instruction, researched);
+            city_attempts = city_attempts + 1;
+            tried_sources = [...tried_sources, { name: *source_display_name(researched), url: String(researched.url || ''), what_tried: 'skipped per source_instruction', outcome: 'skipped', why: *instruction_skip_reason(source_instruction, researched) || 'source_instruction forbids this candidate', at: new Date().toISOString() }];
+            *set_context(tried_sources);
+            continue;
           END:
           IF: !String(researched.url || '').includes('{origin}') && !*howto_documents_form_fill(researched.howto_md);
             city_attempts = city_attempts + 1;
-            tried_sources = [...tried_sources, {
-              name: *source_display_name(researched),
-              url: String(researched.url || ''),
-              what_tried: 'research returned candidate without placeholders and without form-fill howto',
-              outcome: 'skipped',
-              why: 'url missing placeholders and howto lacks form-fill binding steps',
-              at: new Date().toISOString(),
-            }];
-            const ph_bullet = `- SKIP ${*source_display_name(researched)} (${researched.url || 'missing-url'}): no {origin}/{destination} placeholders and no form-fill howto.`;
-            const ph_novel = *filter_novel_ops_notes([ph_bullet], against: source_ops_md);
-            IF: ph_novel.length > 0;
-              *upsert_ops_append(*notes_to_md(ph_novel));
-              source_ops_md = *merge_source_ops_md(source_ops_md, ph_novel);
-            ELSE:
-              *upsert_ops_append(ph_bullet);
-              source_ops_md = *merge_source_ops_md(source_ops_md, [ph_bullet]);
-            END:
+            tried_sources = [...tried_sources, { name: *source_display_name(researched), url: String(researched.url || ''), what_tried: 'research returned candidate without placeholders and without form-fill howto', outcome: 'skipped', why: 'url missing placeholders and howto lacks form-fill binding steps', at: new Date().toISOString() }];
+            *upsert_skip_fail_ops(researched, tried_sources[tried_sources.length - 1]);
             *set_context(source_ops_md, tried_sources);
             continue;
           END:
           IF: !String(researched.url || '').includes('{origin}') && *howto_documents_form_fill(researched.howto_md);
-            Prefer rewriting researched.url to a placeholder template when the site supports query params (e.g. ?from={origin}&to={destination}) while howto keeps form-fill steps for the base entry URL.
+            researched = *prefer_placeholder_url(researched);
           END:
-          const traffic_source = { ...researched, city: city, is_fallback: false };
-          const probe_fetch = *fetch_driving_routes(
-            origin: origin_resolved,
-            destination: destination_resolved,
-            mode: private_car_driving,
-            max_routes: 3,
-            source: traffic_source,
-            as: TTrafficFetch,
-          );
+          const traffic_source = { ...researched, city: city, is_fallback: false, howto_md: *strip_od_bleed(researched.howto_md, origin, destination, origin_resolved, destination_resolved) };
+          const probe_fetch = *fetch_driving_routes(origin: origin_resolved, destination: destination_resolved, mode: private_car_driving, max_routes: 3, source: traffic_source, as: TTrafficFetch);
           city_attempts = city_attempts + 1;
           IF: *probe_ok(probe_fetch) && !*od_geocode_failed(probe_fetch, origin_resolved, destination_resolved);
-            tried_sources = [...tried_sources, {
-              name: *source_display_name(traffic_source),
-              url: traffic_source.url,
-              what_tried: 'research + probe (howto_md + source_ops_md)',
-              outcome: 'ok',
-              why: 'probe returned usable multi-route ETAs',
-              at: new Date().toISOString(),
-            }];
-            const ok_notes = *filter_novel_ops_notes(
-              *draft_source_ops_candidates(miss: false, source: traffic_source, fetch: probe_fetch),
-              against: source_ops_md,
-            );
-            IF: ok_notes.length > 0;
-              *upsert_ops_append(*notes_to_md(ok_notes));
-              source_ops_md = *merge_source_ops_md(source_ops_md, ok_notes);
-            END:
+            tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'research + probe (howto_md + source_ops_md)', outcome: 'ok', why: 'probe returned usable multi-route ETAs', at: new Date().toISOString() }];
             *save(~/data/{traffic_source_file}, traffic_source);
-            *upsert_sources(*serialize_traffic_source_lean(traffic_source));
+            *ensure_howto_and_lock(traffic_source, source_ops_md);
+            *upsert_novel_fetch_ops(miss: false, source: traffic_source, fetch: probe_fetch);
             *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
             locked = true;
           ELSE:
-            const why = *od_geocode_failed(probe_fetch, origin_resolved, destination_resolved)
-              ? (*geocode_fail_reason(probe_fetch, origin_resolved, destination_resolved) || 'OD geocode/district mismatch')
-              : (*probe_fail_reason(probe_fetch) || 'probe failed');
-            const what_tried = 'research + browser/API probe; at most 2 browser attempts';
-            tried_sources = [...tried_sources, {
-              name: *source_display_name(traffic_source),
-              url: traffic_source.url,
-              what_tried,
-              outcome: 'failed',
-              why,
-              at: new Date().toISOString(),
-            }];
-            const fail_bullets = [
-              `- SKIP/FAIL ${*source_display_name(traffic_source)} (${traffic_source.url}): ${why}. Tried: ${what_tried}.`,
-              ...*draft_source_ops_candidates(miss: true, source: traffic_source, fetch: probe_fetch),
-            ];
-            const try_notes = *filter_novel_ops_notes(fail_bullets, against: source_ops_md);
-            IF: try_notes.length > 0;
-              *upsert_ops_append(*notes_to_md(try_notes));
-              source_ops_md = *merge_source_ops_md(source_ops_md, try_notes);
-            ELSE:
-              *upsert_ops_append(fail_bullets[0]);
-              source_ops_md = *merge_source_ops_md(source_ops_md, [fail_bullets[0]]);
-            END:
+            const why = *od_geocode_failed(probe_fetch, origin_resolved, destination_resolved) ? (*geocode_fail_reason(probe_fetch, origin_resolved, destination_resolved) || 'OD geocode/district mismatch') : (*probe_fail_reason(probe_fetch) || 'probe failed');
+            tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'research + browser/API probe; at most 2 browser attempts', outcome: 'failed', why, at: new Date().toISOString() }];
+            *upsert_skip_fail_ops(traffic_source, tried_sources[tried_sources.length - 1], probe_fetch);
             *set_context(source_ops_md, tried_sources);
           END:
         }
@@ -534,67 +372,12 @@ stages:
       IF: !locked;
         Read /opt/skills/google-maps-directions/SKILL.md.
         IF: city_attempts < max_city_attempts && (*about_to_hit_max_turns(remaining_le: 4) || (Date.now() - Date.parse(explore_started_at)) > 30 * 60 * 1000);
-          const budget_bullet = `- HISTORY: this explore hard-stopped after ${city_attempts} city attempt(s) (cap ${max_city_attempts}) and fell back to Google Maps; next run resets city_attempts to 0 and must re-research — not a durable Research quota.`;
-          const budget_novel = *filter_novel_ops_notes([budget_bullet], against: source_ops_md);
-          IF: budget_novel.length > 0;
-            *upsert_ops_append(*notes_to_md(budget_novel));
-            source_ops_md = *merge_source_ops_md(source_ops_md, budget_novel);
-          ELSE:
-            *upsert_ops_append(budget_bullet);
-            source_ops_md = *merge_source_ops_md(source_ops_md, [budget_bullet]);
-          END:
+          *upsert_history_hard_stop(city_attempts, max_city_attempts);
         END:
-        const maps_howto = [
-          '1. Bind template https://www.google.com/maps/dir/{origin}/{destination}/ with deterministic encodeURIComponent (node one-liner in skill).',
-          '2. /stagehand(goto, bound_url); confirm driving mode; verify OD chips match context.',
-          '3. Extract up to 3 private-car routes (iconic labels, eta_min, distance_km, status) and incident_note.',
-          '4. At most 2 browser attempts; never hand-type percent-encoding or paste SPA data=! URLs.',
-        ].join('\n');
-        const traffic_source = {
-          ...*normalize_traffic_source(/google-maps-directions(origin_resolved, destination_resolved), as: TTrafficSource),
-          city: city,
-          url: maps_template,
-          kind: 'browser',
-          howto_md: maps_howto,
-          is_fallback: true,
-        };
-        const fallback_prep_notes = *filter_novel_ops_notes(
-          *draft_source_ops_candidates(
-            fallback: true,
-            source: traffic_source,
-            note: 'google-maps budget fallback after at most 2 city sources; persist howto and prevent notes; do not lock Maps as city sources-{city_slug}',
-          ),
-          against: source_ops_md,
-        );
-        IF: fallback_prep_notes.length > 0;
-          *upsert_ops_append(*notes_to_md(fallback_prep_notes));
-          source_ops_md = *merge_source_ops_md(source_ops_md, fallback_prep_notes);
-        END:
-        const probe_fetch = *fetch_driving_routes(
-          origin: origin_resolved,
-          destination: destination_resolved,
-          mode: private_car_driving,
-          max_routes: 3,
-          source: traffic_source,
-          as: TTrafficFetch,
-        );
-        tried_sources = [...tried_sources, {
-          name: 'Google Maps',
-          url: maps_template,
-          what_tried: 'google-maps-directions budget fallback probe',
-          outcome: *probe_ok(probe_fetch) ? 'ok' : 'failed',
-          why: *probe_ok(probe_fetch) ? 'fallback probe returned usable multi-route ETAs' : (*probe_fail_reason(probe_fetch) || 'fallback probe failed'),
-          at: new Date().toISOString(),
-        }];
-        const fallback_fetch_notes = *filter_novel_ops_notes(
-          *draft_source_ops_candidates(fallback: true, source: traffic_source, fetch: probe_fetch),
-          against: source_ops_md,
-        );
-        IF: fallback_fetch_notes.length > 0;
-          *upsert_ops_append(*notes_to_md(fallback_fetch_notes));
-          source_ops_md = *merge_source_ops_md(source_ops_md, fallback_fetch_notes);
-        END:
-        Do NOT *save(~/data/{traffic_source_file}) or *upsert_sources for Maps fallback — keep traffic_source in-session only so the next run researches city-local sources again.
+        const traffic_source = { ...*normalize_traffic_source(/google-maps-directions(origin_resolved, destination_resolved), as: TTrafficSource), city: city, url: maps_template, kind: 'browser', howto_md: *maps_howto_md(), is_fallback: true };
+        const probe_fetch = *fetch_driving_routes(origin: origin_resolved, destination: destination_resolved, mode: private_car_driving, max_routes: 3, source: traffic_source, as: TTrafficFetch);
+        tried_sources = [...tried_sources, { name: 'Google Maps', url: maps_template, what_tried: 'google-maps-directions budget fallback probe', outcome: *probe_ok(probe_fetch) ? 'ok' : 'failed', why: *probe_ok(probe_fetch) ? 'fallback probe returned usable multi-route ETAs' : (*probe_fail_reason(probe_fetch) || 'fallback probe failed'), at: new Date().toISOString() }];
+        *upsert_novel_fetch_ops(fallback: true, source: traffic_source, fetch: probe_fetch);
         IF: *exists(~/data/{traffic_source_file}) && *file_is_maps_fallback(~/data/{traffic_source_file});
           *delete(~/data/{traffic_source_file});
         END:
@@ -602,28 +385,47 @@ stages:
       END:
 
   - contextMode: true
-    contextKeys: [timezone]
-    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note]
+    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note]
+    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note]
     logic: |
-      const started_at = new Date().toISOString();
-      const tz = String(context.context.timezone ?? 'Asia/Hong_Kong');
-      const offsetMs = tz === 'Asia/Hong_Kong' ? 8 * 60 * 60 * 1000 : 0;
-      const y = new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
-      (() => ({
-        started_at,
-        fetches: [],
-        prev_routes: [],
-        summary_notified: false,
-        notifications: [],
-        miss_count: 0,
-        day_page: `raw/fetches-${y}`,
-        last_heartbeat_at: '',
-        last_source_notes_at: '',
-        prev_incident_note: '',
-      }))
+      (() => {
+        const existing = context.context.started_at;
+        if (existing && String(existing).trim()) {
+          return {
+            started_at: context.context.started_at,
+            fetches: Array.isArray(context.context.fetches) ? context.context.fetches : [],
+            prev_routes: Array.isArray(context.context.prev_routes) ? context.context.prev_routes : [],
+            summary_notified: context.context.summary_notified === true,
+            notifications: Array.isArray(context.context.notifications) ? context.context.notifications : [],
+            miss_count: Number(context.context.miss_count) || 0,
+            day_page: String(context.context.day_page || ''),
+            last_heartbeat_at: String(context.context.last_heartbeat_at || ''),
+            prev_incident_note: String(context.context.prev_incident_note || ''),
+          };
+        }
+        const started_at = new Date().toISOString();
+        const tz = String(context.context.timezone ?? 'Asia/Hong_Kong');
+        const offsetMs = tz === 'Asia/Hong_Kong' ? 8 * 60 * 60 * 1000 : 0;
+        const y = new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
+        return {
+          started_at,
+          fetches: [],
+          prev_routes: [],
+          summary_notified: false,
+          notifications: [],
+          miss_count: 0,
+          day_page: `raw/fetches-${y}`,
+          last_heartbeat_at: '',
+          prev_incident_note: '',
+        };
+      });
 
-  - contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, last_source_notes_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, origin_resolved, destination_resolved, monitor_minutes, timezone, knowledge_topic, city_slug, TTrafficFetch, TRouteSample, TMonitorResult]
-    produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, last_source_notes_at, prev_incident_note, source_ops_md]
+  - id: monitor
+    goto:
+      - command: '/stage(explorer)'
+        description: 'when the cached/locked traffic source is no longer available or usable'
+    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, origin_resolved, destination_resolved, monitor_minutes, timezone, knowledge_topic, city_slug, source_instruction, instruction_active, TTrafficFetch, TRouteSample, TMonitorResult]
+    produceContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, monitor, last_heartbeat_at, prev_incident_note, source_ops_md]
     agentOverrides:
       bashTimeoutMs: 360000
     maxBashCalls: 120
@@ -633,28 +435,22 @@ stages:
       autoRetry: true
       minScore: 0.75
       rubric: |
-        Pass when started_at is unchanged from context, monitor.ended_at is set,
-        monitor.elapsed_min >= monitor_minutes OR (elapsed already past window on retry),
-        and monitor.day_page is non-empty,
-        and monitor.fetches is an array whose length equals monitor.fetch_count and equals context fetches length
-        (same entries — do not invent fetches; reject round-second fabricated timestamps when wall time allowed polling),
-        and monitor.notifications is a subset of real propose-notification outcomes tied to actual polls.
-        When elapsed wall time from started_at allowed at least 2 polls (roughly monitor_minutes >= 10 or elapsed >= 10),
-        require fetch_count + miss_count >= 2 with recorded miss sections covering gaps; fail under-poll with fabricated timelines.
-        Fail when started_at was reset, monitor is missing, fetches were invented, or fetch_count < 2 without enough miss sections
-        when the window allowed multiple polls.
-        Day page may already contain sections from earlier same-day runs — do NOT fail solely because
-        total `## HH:MM` count exceeds this run's fetch_count + miss_count. Pass when this run's
-        sections (matching context Origin/Destination) are present and each includes Origin and Destination
-        lines; count of this-run sections must be >= fetch_count + miss_count - 1 (allow at most one miss).
-        Fail when any this-run section lacks Origin or Destination.
-        Intentional `Fetch missed` sections count toward miss_count, not fetch_count.
+        Pass when started_at unchanged, monitor.ended_at set,
+        monitor.elapsed_min >= monitor_minutes OR elapsed already past window on retry,
+        monitor.day_page non-empty, monitor.fetches length equals fetch_count and context fetches
+        (no invented polls), notifications subset of real propose-notification outcomes.
+        When window allowed >=2 polls, require fetch_count + miss_count >= 2 with miss sections covering gaps.
+        This-run day-page sections (matching Origin/Destination) present with Origin and Destination lines;
+        count >= fetch_count + miss_count - 1. Fail when any this-run section lacks Origin or Destination.
         On fail, set resumeAction: rerun.
     logic: |
-      Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/monitor-loop/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
-      Do not change started_at.
+      IF: instruction_active;
+        *read(source_instruction);
+      END:
+      *read(source_ops_md);
+      *read(holidays_md);
       const window_ms = Number(monitor_minutes) * 60 * 1000;
       const notifications = notifications || [];
       const fetches = fetches || [];
@@ -662,13 +458,8 @@ stages:
       let summary_notified = summary_notified === true;
       let miss_count = miss_count || 0;
       let last_heartbeat_at = last_heartbeat_at || '';
-      let last_source_notes_at = last_source_notes_at || '';
       let prev_incident_note = prev_incident_note || '';
       let source_ops_md = source_ops_md || '<none>';
-      *read(source_ops_md);
-      *read(holidays_md);
-      Do not const/let-assign or set_context a copy of full source_ops_md / holidays_md every poll — only *set_context(source_ops_md) when novel merge changed it.
-      Never invent fetches or notifications — only append after a real browser/API poll.
       const bind_origin = origin_resolved || origin;
       const bind_destination = destination_resolved || destination;
 
@@ -698,144 +489,54 @@ stages:
             miss_count = miss_count + 1;
             *set_context(miss_count);
             /nixery(
-              upsert-knowledge-page,
+              append-raw-knowledge-page,
               topic: knowledge_topic,
               page: day_page,
               mode: append,
               content: *format_miss_section(prev_routes, origin: bind_origin, destination: bind_destination, timezone: timezone),
             );
+            *submit_novel_ops(miss: true, fetch: fetch, source: traffic_source, source_ops_md);
             const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180);
-
-            IF: (!last_source_notes_at ? (Date.now() - Date.parse(started_at)) : (Date.now() - Date.parse(last_source_notes_at))) >= 20 * 60 * 1000;
-              const candidates = *draft_source_ops_candidates(miss: true, fetch: fetch, source: traffic_source);
-              const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
-              IF: novel.length > 0;
-                /nixery(
-                  upsert-knowledge-page,
-                  topic: knowledge_topic,
-                  key: source-ops-{city_slug},
-                  mode: append,
-                  value: *notes_to_md(novel),
-                );
-                IF: !*last_nixery_ok();
-                  /nixery(
-                    upsert-knowledge-page,
-                    topic: knowledge_topic,
-                    key: source-ops-{city_slug},
-                    mode: append,
-                    content: *notes_to_md(novel),
-                  );
-                END:
-                source_ops_md = *merge_source_ops_md(source_ops_md, novel);
-              END:
-              last_source_notes_at = new Date().toISOString();
-              *set_context(last_source_notes_at, source_ops_md);
-            END:
           ELSE:
-            *read(holidays_md);
             const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, holidays_md, ~/task-skills/route-analysis/SKILL.md);
             const fetch_with_status = { ...fetch, ...analysis.patch };
             *set_context(fetches, operation: extend, value: fetch_with_status);
             prev_routes = fetch_with_status.routes;
             *set_context(prev_routes);
             fetches = [...fetches, fetch_with_status];
-
             /nixery(
-              upsert-knowledge-page,
+              append-raw-knowledge-page,
               topic: knowledge_topic,
               page: day_page,
               mode: append,
               content: *format_fetch_section(fetch_with_status, analysis, origin: bind_origin, destination: bind_destination, timezone: timezone),
             );
-
             IF: fetches.length === 2 && !summary_notified;
-              const body = *format_summary_notification(fetches, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
-              const proposal = /mastermind(
-                propose-notification,
-                channel: notifyChannel,
-                direction: to_user,
-                to: notifyTo,
-                body: body,
-                taskRef: traffic_monitor,
-              );
-              notifications = [...notifications, proposal];
+              *propose_kind_a_summary(fetches, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications);
               summary_notified = true;
               *set_context(summary_notified, notifications);
             END:
-
-            const since_hb = !last_heartbeat_at
-              ? (Date.now() - Date.parse(started_at))
-              : (Date.now() - Date.parse(last_heartbeat_at));
-            IF: *proactivity_allows_heartbeat(notifyPreference) && since_hb >= 15 * 60 * 1000;
-              const body = *format_heartbeat_notification(fetch_with_status, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
-              const proposal = /mastermind(
-                propose-notification,
-                channel: notifyChannel,
-                direction: to_user,
-                to: notifyTo,
-                body: body,
-                taskRef: traffic_monitor,
-              );
-              notifications = [...notifications, proposal];
+            IF: *heartbeat_due(notifyPreference, started_at, last_heartbeat_at);
+              *propose_kind_b_heartbeat(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications);
               last_heartbeat_at = new Date().toISOString();
               *set_context(last_heartbeat_at, notifications);
             END:
-
             IF: fetches.length >= 2 && analysis.should_notify_abnormal;
-              const body = *format_abnormal_notification(fetch_with_status, analysis, timezone: timezone, preference: notifyPreference, name: notifyName);
-              const proposal = /mastermind(
-                propose-notification,
-                channel: notifyChannel,
-                direction: to_user,
-                to: notifyTo,
-                body: body,
-                taskRef: traffic_monitor,
-              );
-              notifications = [...notifications, proposal];
+              *propose_kind_c_abnormal(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications);
               *set_context(notifications);
             END:
-
             prev_incident_note = analysis.incident_note || '';
             *set_context(prev_incident_note);
-
-            IF: (!last_source_notes_at ? (Date.now() - Date.parse(started_at)) : (Date.now() - Date.parse(last_source_notes_at))) >= 20 * 60 * 1000;
-              const candidates = *draft_source_ops_candidates(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis);
-              const novel = *filter_novel_ops_notes(candidates, against: source_ops_md);
-              IF: novel.length > 0;
-                /nixery(
-                  upsert-knowledge-page,
-                  topic: knowledge_topic,
-                  key: source-ops-{city_slug},
-                  mode: append,
-                  value: *notes_to_md(novel),
-                );
-                IF: !*last_nixery_ok();
-                  /nixery(
-                    upsert-knowledge-page,
-                    topic: knowledge_topic,
-                    key: source-ops-{city_slug},
-                    mode: append,
-                    content: *notes_to_md(novel),
-                  );
-                END:
-                source_ops_md = *merge_source_ops_md(source_ops_md, novel);
-              END:
-              last_source_notes_at = new Date().toISOString();
-              *set_context(last_source_notes_at, source_ops_md);
-            END:
-
+            *submit_novel_ops(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis, source_ops_md);
             const sleep_sec = fetches.length === 1
               ? 300
               : *adaptive_sleep_sec(fetch_with_status, prev_primary_eta: analysis.prev_primary_eta);
           END:
-
           IF: (Date.now() - Date.parse(started_at)) >= window_ms;
             break;
           END:
-
           *run_bash(sleep ${sleep_sec});
         }
-
         const monitor = {
           started_at,
           ended_at: new Date().toISOString(),
@@ -858,6 +559,7 @@ stages:
         Pass when result.day_kind is weekday|weekend|public_holiday, result.summary_md is non-empty,
         and result.monitor.fetch_count matches monitor.fetch_count, and result.monitor.miss_count
         matches monitor.miss_count,
+        and summary_md / notification bodies use runInput origin and destination labels (not bound MTR/station proxies),
         and summary_md names the locked traffic_source (Google Maps only when traffic_source.is_fallback is true
         or url is the Maps directions template; otherwise name the city source from traffic_source.url / howto),
         and every report upsert returned ok:true with canonicalTopic equal to knowledge_topic
@@ -892,7 +594,7 @@ stages:
         timezone: timezone,
       );
       const report_up = /nixery(
-        upsert-knowledge-page,
+        append-raw-knowledge-page,
         topic: knowledge_topic,
         page: report_page,
         mode: append,
@@ -900,7 +602,7 @@ stages:
       );
       IF: !*last_nixery_ok();
         /nixery(
-          upsert-knowledge-page,
+          append-raw-knowledge-page,
           topic: knowledge_topic,
           page: report_page,
           mode: append,
@@ -908,35 +610,28 @@ stages:
         );
       END:
       const summary_up = /nixery(
-        upsert-knowledge-page,
-        topic: knowledge_topic,
-        key: summary,
-        value: summary_md,
+        submit-knowledge-observation,
+        topic_hint: knowledge_topic,
+        cue: 'daily traffic summary',
+        claim: 'latest monitor narrative for manager brief promotion',
+        example: summary_md,
+        evidence: { task: traffic_monitor, kind: 'summary' },
+        confidence: observed,
+        tags: ['SUMMARY'],
       );
       IF: !*last_nixery_ok();
         /nixery(
-          upsert-knowledge-page,
-          topic: knowledge_topic,
-          key: summary,
-          value: summary_md,
+          submit-knowledge-observation,
+          topic_hint: knowledge_topic,
+          cue: 'daily traffic summary retry',
+          claim: 'latest monitor narrative for manager brief promotion',
+          example: summary_md,
+          evidence: { task: traffic_monitor, kind: 'summary' },
+          confidence: observed,
+          tags: ['SUMMARY'],
         );
       END:
-      const analysis_up = /nixery(
-        upsert-knowledge-page,
-        topic: knowledge_topic,
-        key: analysis_md,
-        value: summary_md,
-      );
-      IF: !*last_nixery_ok();
-        /nixery(
-          upsert-knowledge-page,
-          topic: knowledge_topic,
-          key: analysis_md,
-          value: summary_md,
-        );
-      END:
-      Keep report_up / summary_up / analysis_up data.canonicalTopic and data.path for verify —
-      they must equal knowledge_topic and paths under topics/traffic-monitor/ (never general).
+      *assert_upsert_topic(report_up, summary_up, topic: knowledge_topic);
       const result = {
         started_at,
         day_kind,

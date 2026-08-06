@@ -32,6 +32,9 @@ input:
   page:
     type: string
     required: false
+  section:
+    type: string
+    required: false
   content:
     type: string
     required: false
@@ -68,4 +71,4 @@ run:
 output:
   default: result.json
   validate: validation.mjs
-  inlineTool: true
+  inlineTool: false

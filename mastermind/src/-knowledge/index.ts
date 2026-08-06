@@ -23,14 +23,17 @@ export {
   type TRefreshRunStatus,
 } from './topic-registry.js';
 export {
-  evaluateKnowledgeRefresh,
   listTopicPolicies,
   patchTopicPolicy,
   resolveTopicPolicy,
   type TPatchTopicPolicyInput,
-  type TStaleTopic,
   type TTopicPolicyRow,
 } from './topic-refresh.js';
+export {
+  readKnowledgeManagerInstruction,
+  writeKnowledgeManagerInstruction,
+  resolveKnowledgeManagerInstructionPath,
+} from './manager-instruction.js';
 
 export const resolveTopicForPersist = async (args: {
   seedUrls?: string[];

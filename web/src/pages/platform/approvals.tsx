@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 type TProposal = {
-  kind: 'notification' | 'setting';
+  kind: 'notification' | 'setting' | 'knowledge_transfer';
   payload: Record<string, unknown>;
   proposalId: string;
   status: string;
@@ -65,7 +65,7 @@ export function PlatformApprovalsPage() {
     <div className="flex flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold">Platform approvals</h1>
       <p className="text-sm text-muted-foreground">
-        Approve outbound notifications and setting changes before the worker executes them.
+        Approve outbound notifications, setting changes, and cross-topic knowledge transfers before they apply.
       </p>
 
       {items.length === 0 ? (

@@ -4,9 +4,21 @@ import { jsonSchemaToZod, Stagehand } from "@browserbasehq/stagehand";
 import { z } from "zod";
 
 import type { BrowserToolArguments } from "@/shared/stage-tools";
+import type { TModelResponse } from "@/shared/transports/-types";
+import type { YahlStagehandConfig } from "@/shared/yahl-stage";
 
-import { effectiveApiKey } from "../-utils/llm-transport";
-
+import { normalizeAgentExecuteResult } from "./normalize-agent-result";
+import { resolveAgentExecuteOptions } from "./resolve-agent-execute-options";
+import {
+  clearStagehandProxyBrief,
+  clearStagehandProxyLlmOverrides,
+  clearStagehandProxyReporter,
+  ensureStagehandLlmProxy,
+  setStagehandProxyBrief,
+  setStagehandProxyLlmOverrides,
+  setStagehandProxyReporter,
+  stopStagehandLlmProxy,
+} from "./stagehand-llm-proxy";
 import { resolveChromiumExecutablePath } from "./chromium-executable";
 
 const DEFAULT_AGENT_MAX_STEPS = 15;
@@ -26,6 +38,12 @@ const GOTO_OPTIONS = {
 type TBrowserResult =
   | { data: unknown; ok: true }
   | { error: string; ok: false };
+
+export type TRunBrowserCommandOptions = {
+  onModelResponse?: (response: TModelResponse) => Promise<void>;
+  proxyBrief?: string;
+  stagehand?: YahlStagehandConfig;
+};
 
 let stagehand: Stagehand | null = null;
 let initPromise: Promise<Stagehand> | null = null;
@@ -59,8 +77,11 @@ const resolveStagehand = async (): Promise<Stagehand> => {
     const chromePath = resolveChromiumExecutablePath();
     process.env.CHROME_PATH = chromePath;
 
+    const proxy = await ensureStagehandLlmProxy();
+
     if (config.debug) {
       console.log(`[stagehand] CHROME_PATH=${chromePath}\n`);
+      console.log(`[stagehand] llm proxy baseURL=${proxy.baseURL}\n`);
     }
 
     const instance = new Stagehand({
@@ -74,8 +95,8 @@ const resolveStagehand = async (): Promise<Stagehand> => {
         headless: !config.stagehandLiveview,
       },
       model: {
-        apiKey: effectiveApiKey(config.apiKey),
-        baseURL: config.apiBaseUrl,
+        apiKey: "stagehand-proxy",
+        baseURL: proxy.baseURL,
         modelName: config.stagehandModel,
       },
       sessionId,
@@ -143,6 +164,8 @@ export const closeStagehandSession = async () => {
   initPromise = null;
   consecutiveBrowserFailures = 0;
 
+  await stopStagehandLlmProxy();
+
   if (!current) return;
 
   try {
@@ -160,6 +183,7 @@ export const closeStagehandSession = async () => {
 
 const executeBrowserCommand = async (
   args: BrowserToolArguments,
+  options?: { preferScreenshot?: boolean },
 ): Promise<TBrowserResult> => {
   const sh = await resolveStagehand();
   const page = sh.context.pages()[0];
@@ -221,12 +245,16 @@ const executeBrowserCommand = async (
     const maxSteps = args.maxSteps ?? DEFAULT_AGENT_MAX_STEPS;
     const agent = sh.agent();
     const result = await withTimeout(
-      agent.execute({ instruction: args.instruction, maxSteps }),
+      agent.execute(resolveAgentExecuteOptions({
+        instruction: args.instruction,
+        maxSteps,
+        preferScreenshot: options?.preferScreenshot === true,
+      })),
       AGENT_TIMEOUT_MS,
       "browser.agent",
     );
 
-    return { data: result, ok: true };
+    return { data: normalizeAgentExecuteResult(result), ok: true };
   }
 
   return { error: `browser: unsupported mode ${mode}`, ok: false };
@@ -240,50 +268,88 @@ const shouldResetBrowser = (_args: BrowserToolArguments, error: string) => {
   return consecutiveBrowserFailures >= CONSECUTIVE_FAILURES_BEFORE_RESET;
 };
 
+const applyBrowserProxyOptions = (options?: TRunBrowserCommandOptions) => {
+  if (options?.onModelResponse) {
+    setStagehandProxyReporter({ onModelResponse: options.onModelResponse });
+  }
+
+  if (options?.proxyBrief !== undefined) {
+    setStagehandProxyBrief(options.proxyBrief);
+  }
+
+  const stagehand = options?.stagehand;
+
+  if (stagehand?.model || stagehand?.apiBaseUrl) {
+    setStagehandProxyLlmOverrides({
+      ...(stagehand.apiBaseUrl ? { apiBaseUrl: stagehand.apiBaseUrl } : {}),
+      ...(stagehand.model ? { model: stagehand.model } : {}),
+    });
+  } else {
+    clearStagehandProxyLlmOverrides();
+  }
+};
+
 export const runBrowserCommand = async (
   args: BrowserToolArguments,
+  options?: TRunBrowserCommandOptions,
 ): Promise<TBrowserResult> => {
-  let result: TBrowserResult;
+  await ensureStagehandLlmProxy();
+  applyBrowserProxyOptions(options);
+
+  const executeOptions = {
+    preferScreenshot: options?.stagehand?.preferScreenshot === true,
+  };
 
   try {
-    result = await executeBrowserCommand(args);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    let result: TBrowserResult;
 
-    result = { error: message, ok: false };
-  }
+    try {
+      result = await executeBrowserCommand(args, executeOptions);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
 
-  if (result.ok) {
-    consecutiveBrowserFailures = 0;
+      result = { error: message, ok: false };
+    }
 
-    return result;
-  }
+    if (result.ok) {
+      consecutiveBrowserFailures = 0;
 
-  consecutiveBrowserFailures += 1;
+      return result;
+    }
 
-  if (!shouldResetBrowser(args, result.error)) {
-    return result;
-  }
-
-  console.error(
-    `[stagehand] resetting browser after failure (mode=${args.mode}, consecutive=${consecutiveBrowserFailures}): ${result.error}\n`,
-  );
-
-  await closeStagehandSession();
-
-  try {
-    result = await executeBrowserCommand(args);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    result = { error: message, ok: false };
-  }
-
-  if (result.ok) {
-    consecutiveBrowserFailures = 0;
-  } else {
     consecutiveBrowserFailures += 1;
-  }
 
-  return result;
+    if (!shouldResetBrowser(args, result.error)) {
+      return result;
+    }
+
+    console.error(
+      `[stagehand] resetting browser after failure (mode=${args.mode}, consecutive=${consecutiveBrowserFailures}): ${result.error}\n`,
+    );
+
+    await closeStagehandSession();
+
+    await ensureStagehandLlmProxy();
+    applyBrowserProxyOptions(options);
+
+    try {
+      result = await executeBrowserCommand(args, executeOptions);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      result = { error: message, ok: false };
+    }
+
+    if (result.ok) {
+      consecutiveBrowserFailures = 0;
+    } else {
+      consecutiveBrowserFailures += 1;
+    }
+
+    return result;
+  } finally {
+    clearStagehandProxyBrief();
+    clearStagehandProxyLlmOverrides();
+    clearStagehandProxyReporter();
+  }
 };

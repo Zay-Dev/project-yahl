@@ -27,6 +27,7 @@ Syntax reference:
 - `REPLACE: ...` — system tag the runtime uses when a step needs a second pass after a tool call.
 - `EXTENDS: ...` — append or merge into an existing context value without replacing it.
 - `/ask-user-batch(...)` — pause for **`askUserBatch.v1`** (one or more questions per submit: text, radio, or checkbox MC).
+- `/stage(id)` — end this AI stage and jump-and-continue to a labeled stage declared in `goto` (tool: `goto_stage`; injects `stage_goto_reason` / `stage_goto_from`).
 - `/skill_name(...)` — call into a skill from the skills folder.
 - `/mastermind(...)` — topic registry, policies, tidy, notifications (deterministic + platform ops).
 - `/nixery(...)` — knowledge writes, research, design-questions, extract-info (see `/opt/skills/nixery/SKILL.md`).
@@ -45,12 +46,15 @@ Per-stage fields:
 | Field | Purpose |
 |-------|---------|
 | `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
+| `id` | Optional authoring id (`^[a-zA-Z][a-zA-Z0-9_-]*$`); unique within the document when set |
+| `goto` | Optional AI-stage transfer list: `{ command: '/stage(<id>)', description: '…' }[]` — agent may call `goto_stage` for a declared target |
 | `contextMode` | VM-only stage; read prior keys via `context.context.{key}`; return `(() => ({ ... }))` to write `produceContextKeys` |
 | `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` (same `context.context.{key}` reads as `contextMode`) |
 | `loopSetup` | Orchestrator-only (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
 | `maxBashCalls` | Optional cap on `run_bash` calls for this AI stage (default 24) |
 | `maxTurns` | Optional cap on chat turns for this AI stage (default 60) |
 | `agentOverrides` | Optional agent knobs for this stage. **Only** `bashTimeoutMs` (positive int ms) is accepted — unknown keys fail validation. Used by `run_bash` instead of the shared 60s default. |
+| `stagehand` | Optional Stagehand knobs for this AI stage: `model`, `apiBaseUrl` (both optional; default to agent `LLM_*` / `STAGEHAND_MODEL`), `preferScreenshot` (optional boolean, default `false` — excludes Stagehand `screenshot` tool on `browser` `mode: agent`). Unknown keys fail validation. |
 | `temperature` | Model temperature for AI stages (0–2) |
 | `contextKeys` | Allowlist of context/stage keys passed into the runner |
 | `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |
@@ -58,6 +62,30 @@ Per-stage fields:
 | `produceTypeKeys` | Allowlist for VM / `set_context` writes to the types bucket |
 | `nixeryRun` | Orchestrator-direct nixery def id (e.g. `get-knowledge`, `plan`, `plan-study`); read `~/nixery/{defId}/{output}` in a following AI stage |
 | `verify` | Object gate after stage finish — see below. Shorthand `verify: true` → `{ defId: stage-verify }` |
+
+### Stage `id` + `goto`
+
+Optional labels enable in-process jump-and-continue (not a new resume entry):
+
+```yaml
+- id: explorer
+  logic: |
+    # lock traffic_source …
+- id: monitor
+  goto:
+    - command: '/stage(explorer)'
+      description: 'when the locked source is no longer usable'
+  logic: |
+    # on dead source:
+    # call goto_stage { stageId: "explorer", reason: "…" }
+```
+
+Rules:
+
+- `id` unique within the document; `goto[].command` must reference an existing id.
+- `goto` only on AI stages (not `contextMode` / `conditionMode` / `nixeryRun`).
+- On success: current stage finishes **without verify**; orchestrator continues from the target index onward; `stage_goto_reason` and `stage_goto_from` are platform context keys (always visible like `now_iso`).
+- Session max transfers: 5.
 
 ### `verify` object
 
@@ -110,7 +138,7 @@ Tasks can ship their own SKILL files — handy when you want assess/synthesize r
 - **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
 - **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` (untrusted hints banner). Planning via orchestrator `nixeryRun: plan` / `plan-study`.
-- **Examples:** `user_onboarding`, `knowledge_capture`, `knowledge_refresh` (see [`server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md`](server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md) for the read path)
+- **Examples:** `user_onboarding`, `knowledge_refresh`, `knowledge_manager` (see [`server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md`](server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md) for the read path)
 
 ```
 server/tasks/my_task/

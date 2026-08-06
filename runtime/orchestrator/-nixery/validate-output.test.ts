@@ -4,7 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import { validateNixeryOutputFile } from '@/orchestrator/-nixery/validate-output';
+import {
+  clearStaleNixeryOutput,
+  validateNixeryOutputFile,
+} from '@/orchestrator/-nixery/validate-output';
 import { resolveNixeryContainerName } from '@/orchestrator/-nixery/run-container';
 import { buildNixeryValidationContext } from '@/orchestrator/-nixery/run-validation-container';
 import { resolveDockerHostSessionDir } from '@/orchestrator/-nixery/resolve-mounts';
@@ -72,6 +75,41 @@ describe('validateNixeryOutputFile', () => {
       outputName: 'identity.md',
       sessionDir: dir,
     }), { ok: false, reason: 'output file missing' });
+
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe('clearStaleNixeryOutput', () => {
+  it('unlinks a prior result.json so wait cannot accept a stale gate', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'nixery-stale-'));
+    const outputPath = path.join(dir, 'result.json');
+
+    await fs.writeFile(outputPath, `${JSON.stringify({ ok: true, review: { topic: 'prior' } }, null, 2)}\n`);
+
+    const name = await clearStaleNixeryOutput({
+      outputHint: 'result.json',
+      sessionDir: dir,
+    });
+
+    assert.equal(name, 'result.json');
+    assert.deepEqual(await validateNixeryOutputFile({
+      defId: 'apply-manager-topic',
+      input: { output: 'result.json' },
+      outputName: 'result.json',
+      sessionDir: dir,
+    }), { ok: false, reason: 'output file missing' });
+
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('ignores missing output files', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'nixery-stale-missing-'));
+
+    await clearStaleNixeryOutput({
+      outputHint: 'apply-traffic-monitor.json',
+      sessionDir: dir,
+    });
 
     await fs.rm(dir, { recursive: true, force: true });
   });

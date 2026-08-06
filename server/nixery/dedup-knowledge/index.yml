@@ -5,12 +5,13 @@ packages: [shell, gnugrep, nodejs]
 
 env:
   OPENAI_API_KEY: ""
+  LLM_CALL_RETRY_MAX: ""
   OPENAI_BASE_URL: ""
   OPENAI_BASE_URL_PLAN: "https://api.deepseek.com"
   OPENAI_BASE_URL_EXECUTE: "https://api.deepseek.com"
   OPENAI_BASE_URL_REVIEW: ""
   OPENAI_MODEL_PLAN: deepseek-v4-pro
-  OPENAI_MODEL_EXECUTE: deepseek-flash
+  OPENAI_MODEL_EXECUTE: deepseek-v4-flash
   OPENAI_MODEL_REVIEW: deepseek-v4-pro
   OPENAI_TEMPERATURE_PLAN: "0.3"
   OPENAI_TEMPERATURE_EXECUTE: "0.1"
@@ -64,4 +65,4 @@ run:
 output:
   default: result.json
   validate: validation.mjs
-  inlineTool: true
+  inlineTool: false

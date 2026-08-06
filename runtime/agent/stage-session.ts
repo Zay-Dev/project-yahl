@@ -1,6 +1,6 @@
 import config from "./config";
 
-import type { TAskUserResumeFrom } from '@/shared/transports/-types';
+import type { TAskUserResumeFrom, TModelResponse } from '@/shared/transports/-types';
 
 import {
   parseStageEnvelope,
@@ -21,7 +21,10 @@ import {
 import { callMastermindSkill, fetchMastermindRequestStatus } from "@/shared/mastermind-client";
 
 import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
+import { buildBrowserProxyBrief } from "./-browser/browser-proxy-brief";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
+import { clipToolContent } from "./-utils/clip-tool-content";
+import { isContextLengthError } from "./-utils/context-length-error";
 import { isOrchestratorHandledTool } from "./-utils/orchestrator-handled-tools";
 
 type BootstrapMessage = {
@@ -53,6 +56,7 @@ type StageSessionOptions = {
   maxTurns?: number;
   onLocalToolCall?: (record: TLocalToolCallRecord) => Promise<void>;
   onLocalToolStart?: (record: TLocalToolStartRecord) => Promise<void>;
+  onModelResponse?: (response: TModelResponse) => Promise<void>;
   requestId?: string;
   resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
@@ -226,7 +230,26 @@ export const runStageSession = async (
 
       const chatOpts =
         stageInput.temperature === undefined ? undefined : { temperature: stageInput.temperature };
-      const assistantMessage = await runner.chatWithTools(stageMessages, chatOpts);
+
+      let assistantMessage;
+
+      try {
+        assistantMessage = await runner.chatWithTools(stageMessages, chatOpts);
+      } catch (error) {
+        if (isContextLengthError(error)) {
+          const message = error instanceof Error ? error.message : String(error);
+
+          console.error(`[agent-daemon] context length exceeded turn=${turns}: ${message}\n`);
+
+          return {
+            output: `执行失败 model context length exceeded: ${message.slice(0, 240)}`,
+            type: "result",
+          };
+        }
+
+        throw error;
+      }
+
       stageMessages.push(...assistantMessage);
 
       const toolCalls = assistantMessage.flatMap((message) => message.tool_calls || []);
@@ -326,7 +349,11 @@ export const runStageSession = async (
           );
 
           const browserStartedAt = Date.now();
-          const browserResult = await runBrowserCommand(browserArgs);
+          const browserResult = await runBrowserCommand(browserArgs, {
+            onModelResponse: options.onModelResponse,
+            proxyBrief: buildBrowserProxyBrief({ args: browserArgs }),
+            stagehand: stageInput.stage.stagehand,
+          });
           const browserDurationMs = Date.now() - browserStartedAt;
 
           console.log(
@@ -338,7 +365,7 @@ export const runStageSession = async (
             console.log(`[DEBUG] [BROWSER] ${browserArgs.mode}: ${JSON.stringify(browserResult)}\n`);
           }
 
-          const browserContent = JSON.stringify(browserResult);
+          const browserContent = clipToolContent(JSON.stringify(browserResult));
 
           stageMessages.push({
             content: browserContent,
@@ -426,6 +453,29 @@ export const runStageSession = async (
           role: "tool",
           tool_call_id: call.id,
         });
+      }
+
+      const gotoCall = toolCalls.find((call) => call.function.name === "goto_stage");
+
+      if (gotoCall) {
+        const gotoResult = [...stageMessages].reverse().find(
+          (message) => message.role === "tool" && message.tool_call_id === gotoCall.id,
+        );
+        const content = gotoResult && "content" in gotoResult
+          ? String(gotoResult.content)
+          : "";
+
+        try {
+          const parsed = JSON.parse(content) as { ok?: unknown; transfer?: unknown };
+
+          if (parsed.ok === true && parsed.transfer === true) {
+            console.log(`[agent-daemon] stage finalize turn=${turns} goto_stage transfer\n`);
+
+            return finalizeEnvelope("");
+          }
+        } catch {
+          // fall through — invalid/error result continues the stage
+        }
       }
 
       if (toolCalls.length > 0) continue;

@@ -38,7 +38,7 @@ export function TasksPage() {
           New task
         </Button>
       </div>
-      <div className="mt-4 overflow-hidden rounded-lg border">
+      <div className="mt-4 overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>

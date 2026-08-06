@@ -88,6 +88,14 @@
       "development": "./yahl/types-preamble.ts",
       "import": "./dist/yahl/types-preamble.js"
     },
+    "./yahl/stage-goto": {
+      "development": "./yahl/stage-goto.ts",
+      "import": "./dist/yahl/stage-goto.js"
+    },
+    "./yahl/assert-stage-goto-graph": {
+      "development": "./yahl/assert-stage-goto-graph.ts",
+      "import": "./dist/yahl/assert-stage-goto-graph.js"
+    },
     "./nixery/types": {
       "development": "./nixery/types.ts",
       "import": "./dist/nixery/types.js"
@@ -103,6 +111,10 @@
     "./nixery/resolve-policy": {
       "development": "./nixery/resolve-policy.ts",
       "import": "./dist/nixery/resolve-policy.js"
+    },
+    "./nixery/knowledge-write-gate": {
+      "development": "./nixery/knowledge-write-gate.ts",
+      "import": "./dist/nixery/knowledge-write-gate.js"
     },
     "./nixery/load-def": {
       "development": "./nixery/load-def.ts",
