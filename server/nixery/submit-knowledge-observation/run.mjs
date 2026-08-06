@@ -10,64 +10,12 @@ import {
 } from '/opt/nixery/knowledge-wiki/index.js';
 import { logProgress, resolveDefId } from '../_shared/run-agent.mjs';
 
+import { buildObservationInput } from './build-observation-input.mjs';
+
 const readJson = async (filePath) => {
   const raw = await fs.readFile(filePath, 'utf8');
 
   return JSON.parse(raw);
-};
-
-const parseMaybeJson = (value) => {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-
-  if (typeof value === 'object') {
-    return value;
-  }
-
-  if (typeof value !== 'string' || !value.trim()) {
-    return value;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-};
-
-const parseTags = (value) => {
-  const parsed = parseMaybeJson(value);
-
-  if (Array.isArray(parsed)) {
-    return parsed;
-  }
-
-  if (typeof parsed === 'string' && parsed.trim()) {
-    return parsed.split(',').map((item) => item.trim()).filter(Boolean);
-  }
-
-  return undefined;
-};
-
-const buildObservationInput = (input) => {
-  const nested = parseMaybeJson(input.observation);
-
-  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    return nested;
-  }
-
-  return {
-    kind: 'observation',
-    topic_hint: input.topic_hint ?? input.topicHint ?? input.topic,
-    cue: input.cue,
-    claim: input.claim,
-    example: input.example,
-    quote: input.quote,
-    evidence: parseMaybeJson(input.evidence) ?? { sessionId: input.sessionId ?? null },
-    confidence: input.confidence,
-    tags: parseTags(input.tags),
-  };
 };
 
 const main = async () => {

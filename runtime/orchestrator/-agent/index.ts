@@ -432,34 +432,49 @@ class YahlAgentRunner {
         }
 
         if (toolCall.function.name === 'nixery') {
-          const nixeryArgs = parseNixeryToolArguments(toolCall.function.arguments ?? '{}');
+          try {
+            const nixeryArgs = parseNixeryToolArguments(toolCall.function.arguments ?? '{}');
 
-          if (!nixeryArgs) {
-            this.nixerySoftFails += 1;
+            if (!nixeryArgs) {
+              this.nixerySoftFails += 1;
+
+              return resolveNixerySoftFailToolResult({
+                maxRetries: this.maxNixeryInlineRetries,
+                result: { ok: false, error: 'nixery: invalid arguments' },
+                softFailCount: this.nixerySoftFails,
+              });
+            }
+
+            const result = await runNixeryInlineTool({
+              args: nixeryArgs.args,
+              defId: nixeryArgs.defId,
+              requestId: this.requestId,
+              sessionId: this.sessionId,
+            });
+
+            if (!result.ok) {
+              this.nixerySoftFails += 1;
+            }
 
             return resolveNixerySoftFailToolResult({
               maxRetries: this.maxNixeryInlineRetries,
-              result: { ok: false, error: 'nixery: invalid arguments' },
+              result,
+              softFailCount: this.nixerySoftFails,
+            });
+          } catch (error) {
+            if (error instanceof AskUserPausedError) {
+              throw error;
+            }
+
+            this.nixerySoftFails += 1;
+            const message = error instanceof Error ? error.message : String(error);
+
+            return resolveNixerySoftFailToolResult({
+              maxRetries: this.maxNixeryInlineRetries,
+              result: { ok: false, error: message },
               softFailCount: this.nixerySoftFails,
             });
           }
-
-          const result = await runNixeryInlineTool({
-            args: nixeryArgs.args,
-            defId: nixeryArgs.defId,
-            requestId: this.requestId,
-            sessionId: this.sessionId,
-          });
-
-          if (!result.ok) {
-            this.nixerySoftFails += 1;
-          }
-
-          return resolveNixerySoftFailToolResult({
-            maxRetries: this.maxNixeryInlineRetries,
-            result,
-            softFailCount: this.nixerySoftFails,
-          });
         }
 
         if (AGENT_LOCAL_TOOLS.has(toolCall.function.name)) {

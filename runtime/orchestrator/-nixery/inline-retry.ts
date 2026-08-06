@@ -18,8 +18,11 @@ export const resolveNixerySoftFailToolResult = (params: {
 
   if (params.softFailCount > params.maxRetries) {
     return {
-      hasError: true,
-      result: JSON.stringify(params.result),
+      hasError: false,
+      result: JSON.stringify({
+        ...params.result,
+        abandoned: true,
+      }),
     };
   }
 

@@ -74,17 +74,18 @@ describe('resolveNixerySoftFailToolResult', () => {
     assert.equal(JSON.parse(out.result).retryRemaining, 0);
   });
 
-  it('hard-fails after budget exceeded', () => {
+  it('abandons after budget exceeded without hasError', () => {
     const out = resolveNixerySoftFailToolResult({
       maxRetries: 3,
       result: { ok: false, error: 'topic_hint is required' },
       softFailCount: 4,
     });
 
-    assert.equal(out.hasError, true);
+    assert.equal(out.hasError, false);
     assert.deepEqual(JSON.parse(out.result), {
       ok: false,
       error: 'topic_hint is required',
+      abandoned: true,
     });
   });
 
@@ -103,17 +104,18 @@ describe('resolveNixerySoftFailToolResult', () => {
     });
   });
 
-  it('hard-fails invalid arguments after budget exceeded', () => {
+  it('abandons invalid arguments after budget exceeded without hasError', () => {
     const out = resolveNixerySoftFailToolResult({
       maxRetries: 3,
       result: { ok: false, error: 'nixery: invalid arguments' },
       softFailCount: 4,
     });
 
-    assert.equal(out.hasError, true);
+    assert.equal(out.hasError, false);
     assert.deepEqual(JSON.parse(out.result), {
       ok: false,
       error: 'nixery: invalid arguments',
+      abandoned: true,
     });
   });
 });

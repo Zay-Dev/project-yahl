@@ -4,8 +4,11 @@ Agent-facing **only** knowledge write. Submit an atomic observation note. Do **n
 
 ## Contract
 
-- Required: `topic_hint` (or `topic`), `cue`, `claim`, `evidence`, and **`example` or `quote`**
+- Required top-level fields: `topic_hint` (or `topic`), `cue`, `claim`, `evidence`, and **`example` or `quote`**
+- `evidence` must be a **JSON object**, never prose (e.g. `{ "type": "tool_observation", "tool": "browser" }`)
+- Do **not** pass free-text `observation` — that key is only for a nested observation object
 - Optional: `confidence` (`observed` | `quoted` | `inferred`, default `observed`), `tags`
+- PLACE notes: put `claimed_place` and `bound_poi` inside `evidence`
 - Never pass `mode`, `section`, or a full wiki `##` body — Knowledge Manager decides apply shape
 - `inferred` observations will not be promoted to HOWTO/facts by the manager without further evidence
 

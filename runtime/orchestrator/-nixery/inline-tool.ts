@@ -60,6 +60,12 @@ const resolveTaskIdForSession = async (sessionId: string, taskId?: string) => {
   }
 };
 
+const toInlineError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return { ok: false as const, error: message };
+};
+
 export const runNixeryInlineTool = async (params: {
   args: Record<string, unknown>;
   defId: string;
@@ -67,45 +73,47 @@ export const runNixeryInlineTool = async (params: {
   sessionId: string;
   taskId?: string;
 }) => {
-  const defId = params.defId.trim();
-  const def = await loadNixeryDef(defId);
-  const taskId = await resolveTaskIdForSession(params.sessionId, params.taskId);
-  const managerWriteBypass = isKnowledgeWriteDef(defId) && isKnowledgeManagerTask(taskId);
-
-  if (!def.output?.inlineTool && !managerWriteBypass) {
-    throw new Error(`[nixery] def ${defId} is not enabled for inline tool calls`);
-  }
-
   try {
-    assertNamespaceWriteAllowed({ defId, taskId });
+    const defId = params.defId.trim();
+    const def = await loadNixeryDef(defId);
+    const taskId = await resolveTaskIdForSession(params.sessionId, params.taskId);
+    const managerWriteBypass = isKnowledgeWriteDef(defId) && isKnowledgeManagerTask(taskId);
+
+    if (!def.output?.inlineTool && !managerWriteBypass) {
+      return toInlineError(new Error(`[nixery] def ${defId} is not enabled for inline tool calls`));
+    }
+
+    try {
+      assertNamespaceWriteAllowed({ defId, taskId });
+    } catch (error) {
+      return toInlineError(error);
+    }
+
+    const output = resolveNixeryOutputHint(def, params.args);
+    const input = {
+      ...params.args,
+      ...(params.sessionId.trim() && !params.args.sessionId
+        ? { sessionId: params.sessionId }
+        : {}),
+      ...(params.requestId?.trim() && !params.args.requestId
+        ? { requestId: params.requestId.trim() }
+        : {}),
+      output,
+    };
+
+    await runNixeryDef({
+      defId,
+      input,
+      sessionId: params.sessionId,
+      taskId,
+    });
+
+    const outputPath = path.join(resolveSessionNixeryDir(params.sessionId, defId), output);
+    const raw = await fs.readFile(outputPath, 'utf8');
+    const parsed = await parseInlineToolPayload({ defId, outputPath, raw });
+
+    return resolveNixeryInlineToolResult(parsed);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'knowledge_write_forbidden';
-
-    return { ok: false as const, error: message };
+    return toInlineError(error);
   }
-
-  const output = resolveNixeryOutputHint(def, params.args);
-  const input = {
-    ...params.args,
-    ...(params.sessionId.trim() && !params.args.sessionId
-      ? { sessionId: params.sessionId }
-      : {}),
-    ...(params.requestId?.trim() && !params.args.requestId
-      ? { requestId: params.requestId.trim() }
-      : {}),
-    output,
-  };
-
-  await runNixeryDef({
-    defId,
-    input,
-    sessionId: params.sessionId,
-    taskId,
-  });
-
-  const outputPath = path.join(resolveSessionNixeryDir(params.sessionId, defId), output);
-  const raw = await fs.readFile(outputPath, 'utf8');
-  const parsed = await parseInlineToolPayload({ defId, outputPath, raw });
-
-  return resolveNixeryInlineToolResult(parsed);
 };

@@ -49,6 +49,10 @@ Knowledge reads use orchestrator `nixeryRun` stages (`get-knowledge`, `list-know
 
 Def `output` contract (`server/nixery/<def>/index.yml`): `validate` (default `validation.mjs`), `default` output filename, optional `inlineTool`, and optional `retry` (max container re-runs after validation failure; default **3**; `0` = no re-run).
 
+## Soft-fail then abandon
+
+Inline `{ ok: false, error }` (bad args or transient infra such as registry pull blips) soft-fails up to `YAHL_NIXERY_INLINE_RETRY_MAX` (default **3**). While `retryRemaining > 0`, fix args and retry. After the budget: `{ ok: false, abandoned: true }` — **continue the stage** (skip that call / move on). Soft-fail never aborts the stage; orchestrator `nixeryRun` stages remain hard failures.
+
 ## Rules
 
 - Never pass `source`, `file`, or `path` to knowledge write helpers.
