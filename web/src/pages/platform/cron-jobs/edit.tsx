@@ -9,8 +9,10 @@ import {
   toCreateCronJobBody,
 } from "@/pages/platform/cron-job-form";
 import { deleteCronJob, getCronJob, updateCronJob } from "@/pages/platform/lib/platform-api";
+import { createRun } from "@/pages/tasks/lib/tasks-api";
 
 const toFormValues = (job: {
+  deleteAfterRun?: boolean;
   enabled: boolean;
   id: string;
   orgId?: string;
@@ -21,6 +23,7 @@ const toFormValues = (job: {
   timezone?: string;
   userId?: string;
 }): TCronJobFormValues => ({
+  deleteAfterRun: job.deleteAfterRun ?? false,
   enabled: job.enabled,
   id: job.id,
   orgId: job.orgId ?? "",
@@ -39,6 +42,7 @@ export function CronJobEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,6 +76,7 @@ export function CronJobEditPage() {
       const body = toCreateCronJobBody(values);
 
       await updateCronJob(jobId, {
+        deleteAfterRun: body.deleteAfterRun,
         enabled: body.enabled,
         orgId: body.orgId,
         orgUnitId: body.orgUnitId,
@@ -107,6 +112,25 @@ export function CronJobEditPage() {
     }
   };
 
+  const run = async () => {
+    if (!values?.taskPath.trim()) {
+      return;
+    }
+
+    setRunning(true);
+    setError(null);
+
+    try {
+      const body = toCreateCronJobBody(values);
+      const result = await createRun(body.taskPath, body.runInput);
+
+      navigate(`/sessions/${encodeURIComponent(result.sessionId)}`);
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Failed to start run");
+      setRunning(false);
+    }
+  };
+
   if (loading) {
     return <p className="p-6 text-sm text-muted-foreground">Loading cron job…</p>;
   }
@@ -116,6 +140,7 @@ export function CronJobEditPage() {
   }
 
   const canSave = values.schedule.trim() && values.taskPath.trim();
+  const busy = saving || deleting || running;
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -131,11 +156,19 @@ export function CronJobEditPage() {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div className="flex gap-2">
-        <Button disabled={!canSave || saving || deleting} onClick={() => void save()}>
+        <Button disabled={!canSave || busy} onClick={() => void save()}>
           Save changes
         </Button>
         <Button
-          disabled={saving || deleting}
+          disabled={!values.taskPath.trim() || busy}
+          onClick={() => void run()}
+          size="sm"
+          variant="outline"
+        >
+          Run
+        </Button>
+        <Button
+          disabled={busy}
           onClick={() => void remove()}
           size="sm"
           variant="outline"

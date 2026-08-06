@@ -6,29 +6,7 @@ WORKDIR /omniflex
 
 RUN corepack enable
 
-FROM base AS deps
-
-ARG OMNIFLEX_APP_DIR=project-yahl
-
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.infras.json ./
-COPY infras ./infras
-COPY ${OMNIFLEX_APP_DIR} ./${OMNIFLEX_APP_DIR}
-
-RUN pnpm install --frozen-lockfile \
-  --filter @project-yahl/server... \
-  --filter @project-yahl/runtime...
-
-FROM deps AS build
-
-ARG OMNIFLEX_APP_DIR=project-yahl
-
-RUN pnpm --filter @project-yahl/shared run build \
-  && pnpm --filter @project-yahl/server... run build \
-  && pnpm --filter @project-yahl/runtime run build
-
-FROM node:22-bookworm-slim AS prod
-
-ARG OMNIFLEX_APP_DIR=project-yahl
+FROM node:22-bookworm-slim AS docker-tools
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
@@ -43,6 +21,40 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin docker-buildx-plugin \
   && rm -rf /var/lib/apt/lists/*
 
+FROM base AS deps
+
+ARG OMNIFLEX_APP_DIR=project-yahl
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.infras.json ./
+COPY infras ./infras
+COPY ${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/
+COPY ${OMNIFLEX_APP_DIR}/shared/package.json ./${OMNIFLEX_APP_DIR}/shared/
+COPY ${OMNIFLEX_APP_DIR}/server/package.json ./${OMNIFLEX_APP_DIR}/server/
+COPY ${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
+
+RUN pnpm install --frozen-lockfile \
+  --filter @project-yahl/server... \
+  --filter @project-yahl/runtime...
+
+FROM deps AS build
+
+ARG OMNIFLEX_APP_DIR=project-yahl
+
+COPY ${OMNIFLEX_APP_DIR}/shared ./${OMNIFLEX_APP_DIR}/shared
+COPY ${OMNIFLEX_APP_DIR}/server/src ./${OMNIFLEX_APP_DIR}/server/src
+COPY ${OMNIFLEX_APP_DIR}/server/tsconfig.json ./${OMNIFLEX_APP_DIR}/server/tsconfig.json
+COPY ${OMNIFLEX_APP_DIR}/runtime ./${OMNIFLEX_APP_DIR}/runtime
+COPY ${OMNIFLEX_APP_DIR}/docker-compose.yml ./${OMNIFLEX_APP_DIR}/docker-compose.yml
+COPY ${OMNIFLEX_APP_DIR}/docker-compose.agent.yml ./${OMNIFLEX_APP_DIR}/docker-compose.agent.yml
+
+RUN pnpm --filter @project-yahl/shared run build \
+  && pnpm --filter @project-yahl/server... run build \
+  && pnpm --filter @project-yahl/runtime run build
+
+FROM docker-tools AS prod
+
+ARG OMNIFLEX_APP_DIR=project-yahl
+
 WORKDIR /omniflex
 
 COPY --from=build /omniflex/node_modules ./node_modules
@@ -53,7 +65,9 @@ COPY --from=build /omniflex/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/package.json
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.agent.yml ./${OMNIFLEX_APP_DIR}/docker-compose.agent.yml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.yml ./${OMNIFLEX_APP_DIR}/docker-compose.yml
-COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server ./${OMNIFLEX_APP_DIR}/server
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server/package.json ./${OMNIFLEX_APP_DIR}/server/package.json
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server/dist ./${OMNIFLEX_APP_DIR}/server/dist
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server/node_modules ./${OMNIFLEX_APP_DIR}/server/node_modules
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/shared ./${OMNIFLEX_APP_DIR}/shared
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/dist ./${OMNIFLEX_APP_DIR}/runtime/dist
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/

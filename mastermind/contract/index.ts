@@ -168,6 +168,7 @@ export const pendingWorkItemSchema = z.object({
 export type TPendingWorkItem = z.infer<typeof pendingWorkItemSchema>;
 
 export const cronJobSchema = z.object({
+  deleteAfterRun: z.boolean().default(false),
   enabled: z.boolean().default(true),
   id: z.string(),
   schedule: z.string(),

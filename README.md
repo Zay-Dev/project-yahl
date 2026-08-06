@@ -100,7 +100,7 @@ curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
 
 Optional: set `WHATSAPP_ENABLED=true` (and friends) in `.env`, restart worker, scan the QR — full channel setup in the handbook.
 
-Full compose, WhatsApp/SMTP, local flags, OneCLI, API, and ask-user recovery: [`handbook/how-to-run.md`](handbook/how-to-run.md).
+Full compose, WhatsApp/SMTP, local flags, OneCLI, API, and ask-user recovery: [`handbook/how-to-run.md`](handbook/how-to-run.md). Docker image builds use the Omniflex monorepo as context — keep a root `.dockerignore` there (see how-to-run).
 
 ## License
 

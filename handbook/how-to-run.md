@@ -41,6 +41,19 @@ Copy `server/.env.example` to `server/.env` if you run the server standalone.
 
 Image build context is the **Omniflex monorepo root** (`..` from project-yahl). App paths use `OMNIFLEX_APP_DIR` (default `project-yahl`). `COMPOSE_PROJECT_NAME` is independent (Docker naming only).
 
+Docker only reads `.dockerignore` from the **build context root**, so put it at the Omniflex monorepo root (`../.dockerignore` from project-yahl) — not under `project-yahl/`. Suggested contents:
+
+```gitignore
+**/node_modules
+**/.git
+**/dist
+**/.env
+**/.env.*
+**/.DS_Store
+
+*/data/
+```
+
 The agent compose file sets `MASTERMIND_API_URL=http://mastermind:4100` for stage agents.
 
 **Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).

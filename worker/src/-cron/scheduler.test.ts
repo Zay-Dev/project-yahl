@@ -71,4 +71,10 @@ describe('cronDefKey', () => {
     assert.notEqual(cronDefKey(def), cronDefKey(baseDef({ timezone: 'UTC' })));
     assert.notEqual(cronDefKey(def), cronDefKey(baseDef({ taskPath: 'research' })));
   });
+
+  it('changes when deleteAfterRun changes', () => {
+    const def = baseDef();
+
+    assert.notEqual(cronDefKey(def), cronDefKey(baseDef({ deleteAfterRun: true })));
+  });
 });

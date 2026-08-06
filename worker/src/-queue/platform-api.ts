@@ -41,6 +41,23 @@ export const applySettingProposal = async (id: string) => {
   await fetch(url, { method: 'POST' });
 };
 
+export const deleteCronJob = async (id: string): Promise<void> => {
+  const url = `${config.sessionApiBaseUrl}/api/platform/cron/jobs/${encodeURIComponent(id)}`;
+
+  try {
+    const res = await fetch(url, { method: 'DELETE' });
+
+    if (!res.ok) {
+      console.error('[worker][cron] delete failed', id, res.status);
+      return;
+    }
+
+    console.log(`[worker][cron] deleted after run id=${id}`);
+  } catch (error) {
+    console.error('[worker][cron] delete error', id, error);
+  }
+};
+
 export const postTaskRun = async (
   taskId: string,
   runInput?: Record<string, string>,

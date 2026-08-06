@@ -21,6 +21,7 @@ const paramsSchema = Joi.object<TRequestCronJobParams>({
 const runInputSchema = Joi.object().pattern(Joi.string(), Joi.string().allow('')).optional();
 
 const createBodySchema = Joi.object<TRequestCreateCronJobBody>({
+  deleteAfterRun: Joi.boolean().default(false),
   enabled: Joi.boolean().default(true),
   id: Joi.string().trim().required(),
   orgId: Joi.string().trim().optional(),
@@ -33,6 +34,7 @@ const createBodySchema = Joi.object<TRequestCreateCronJobBody>({
 });
 
 const updateBodySchema = Joi.object<TRequestUpdateCronJobBody>({
+  deleteAfterRun: Joi.boolean().optional(),
   enabled: Joi.boolean().optional(),
   orgId: Joi.string().trim().optional(),
   orgUnitId: Joi.string().trim().optional(),

@@ -21,6 +21,7 @@ export interface IPlatformProposal extends TWithTimestamps {
 
 export interface ICronJob extends TSoftDeletable, TWithTimestamps {
   _id: string;
+  deleteAfterRun?: boolean;
   enabled: boolean;
   id: string;
   orgId?: string;

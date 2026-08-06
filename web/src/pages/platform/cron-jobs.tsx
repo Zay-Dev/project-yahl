@@ -2,16 +2,19 @@ import type { TResponseCronJobListItem } from "@project-yahl/server/modules/plat
 
 import { useEffect, useState } from "react";
 
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { deleteCronJob, listCronJobs } from "@/pages/platform/lib/platform-api";
+import { createRun } from "@/pages/tasks/lib/tasks-api";
 
 export function CronJobsPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<TResponseCronJobListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [runningId, setRunningId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -46,6 +49,20 @@ export function CronJobsPage() {
       setError(deleteError instanceof Error ? deleteError.message : "Failed to delete cron job");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const run = async (item: TResponseCronJobListItem) => {
+    setRunningId(item.id);
+    setError(null);
+
+    try {
+      const result = await createRun(item.taskPath, item.runInput);
+
+      navigate(`/sessions/${encodeURIComponent(result.sessionId)}`);
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Failed to start run");
+      setRunningId(null);
     }
   };
 
@@ -87,6 +104,7 @@ export function CronJobsPage() {
                 <th className="p-3 text-left font-medium">Schedule</th>
                 <th className="p-3 text-left font-medium">Task</th>
                 <th className="p-3 text-left font-medium">Enabled</th>
+                <th className="p-3 text-left font-medium">One-off</th>
                 <th className="p-3 text-left font-medium">Timezone</th>
                 <th className="p-3 text-left font-medium">Actions</th>
               </tr>
@@ -98,9 +116,18 @@ export function CronJobsPage() {
                   <td className="p-3 font-mono text-xs">{item.schedule}</td>
                   <td className="p-3">{item.taskPath}</td>
                   <td className="p-3">{item.enabled ? "Yes" : "No"}</td>
+                  <td className="p-3">{item.deleteAfterRun ? "Yes" : "No"}</td>
                   <td className="p-3">{item.timezone ?? "—"}</td>
                   <td className="p-3">
                     <div className="flex gap-2">
+                      <Button
+                        disabled={runningId === item.id || deletingId === item.id}
+                        onClick={() => void run(item)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        Run
+                      </Button>
                       <Button
                         render={<Link to={`/platform/cron-jobs/${encodeURIComponent(item.id)}`} />}
                         size="sm"
@@ -109,7 +136,7 @@ export function CronJobsPage() {
                         Edit
                       </Button>
                       <Button
-                        disabled={deletingId === item.id}
+                        disabled={deletingId === item.id || runningId === item.id}
                         onClick={() => void remove(item.id)}
                         size="sm"
                         variant="outline"

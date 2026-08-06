@@ -3,6 +3,7 @@ import { CronJob } from 'cron';
 import { config } from '../config.js';
 
 export type TCronJobDef = {
+  deleteAfterRun?: boolean;
   enabled: boolean;
   id: string;
   runInput?: Record<string, string>;
@@ -21,7 +22,7 @@ const activeJobs = new Map<string, CronJob>();
 const activeDefs = new Map<string, TCronJobDef>();
 
 export const cronDefKey = (def: TCronJobDef) =>
-  `${def.schedule}|${def.timezone ?? ''}|${def.taskPath}|${JSON.stringify(def.runInput ?? {})}`;
+  `${def.schedule}|${def.timezone ?? ''}|${def.taskPath}|${JSON.stringify(def.runInput ?? {})}|${def.deleteAfterRun ? '1' : '0'}`;
 
 const stopActiveJob = (id: string) => {
   const job = activeJobs.get(id);
@@ -32,6 +33,10 @@ const stopActiveJob = (id: string) => {
 
   activeJobs.delete(id);
   activeDefs.delete(id);
+};
+
+export const stopCronJob = (id: string) => {
+  stopActiveJob(id);
 };
 
 const registerJob = (def: TCronJobDef, onTick: TCronTickHandler) => {
