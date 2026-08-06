@@ -6,7 +6,7 @@ import {
   summarizeRawArguments,
 } from "@/pages/sessions/lib/tool-call-parse";
 
-type TMastermindToolCallProps = {
+type TPlatformToolCallProps = {
   tool: TResponseStageToolSummary;
 };
 
@@ -32,7 +32,7 @@ const parseSkill = (argumentsRaw: string | null, parsed: unknown): string | unde
   }
 };
 
-export function MastermindToolCall({ tool }: TMastermindToolCallProps) {
+export function PlatformToolCall({ tool }: TPlatformToolCallProps) {
   const { parseError, parsed, raw } = parseToolArgumentsDetailed(tool.arguments);
   const rawPreview = summarizeRawArguments(raw);
   const skill = parseSkill(raw, parsed);
@@ -40,7 +40,7 @@ export function MastermindToolCall({ tool }: TMastermindToolCallProps) {
   return (
     <div className="rounded-md border bg-background p-2">
       <p className="font-mono text-xs font-medium">
-        mastermind{skill ? ` — ${skill}` : ''}
+        platform{skill ? ` — ${skill}` : ''}
       </p>
       {parsed !== null && parsed !== undefined ? (
         <SessionJsonFallback label="Arguments" value={parsed} />

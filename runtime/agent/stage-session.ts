@@ -14,11 +14,10 @@ import {
   type ChatAssistantMessage,
   type ChatToolCall,
   parseBrowserToolArguments,
-  parseMastermindStatusToolArguments,
-  parseMastermindToolArguments,
+  parsePlatformToolArguments,
   parseRunBashToolArguments,
 } from "@/shared/stage-tools";
-import { callMastermindSkill, fetchMastermindRequestStatus } from "@/shared/mastermind-client";
+import { callPlatformSkill } from "@/shared/platform-client";
 
 import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
 import { buildBrowserProxyBrief } from "./-browser/browser-proxy-brief";
@@ -378,12 +377,12 @@ export const runStageSession = async (
           continue;
         }
 
-        if (name === "mastermind") {
-          const mastermindArgs = parseMastermindToolArguments(rawArgs);
+        if (name === "platform") {
+          const platformArgs = parsePlatformToolArguments(rawArgs);
 
-          if (!mastermindArgs) {
+          if (!platformArgs) {
             stageMessages.push({
-              content: toolErrorContent("mastermind: invalid arguments"),
+              content: toolErrorContent("platform: invalid arguments"),
               role: "tool",
               tool_call_id: call.id,
             });
@@ -391,55 +390,21 @@ export const runStageSession = async (
             continue;
           }
 
-          const mastermindResult = await callMastermindSkill(
-            mastermindArgs.skill,
-            mastermindArgs.args,
+          const platformResult = await callPlatformSkill(
+            platformArgs.skill,
+            platformArgs.args,
             config.cliOptions.sessionId,
-            options.requestId,
           );
 
-          const mastermindContent = JSON.stringify(mastermindResult);
+          const platformContent = JSON.stringify(platformResult);
 
           stageMessages.push({
-            content: mastermindContent,
+            content: platformContent,
             role: "tool",
             tool_call_id: call.id,
           });
 
-          await options.onLocalToolCall?.({ call, resultContent: mastermindContent });
-
-          continue;
-        }
-
-        if (name === "mastermind_status") {
-          const statusArgs = parseMastermindStatusToolArguments(rawArgs);
-          const sessionId = config.cliOptions.sessionId?.trim();
-          const requestId = options.requestId?.trim();
-
-          if (!sessionId || !requestId) {
-            stageMessages.push({
-              content: toolErrorContent("mastermind_status: sessionId and requestId required"),
-              role: "tool",
-              tool_call_id: call.id,
-            });
-
-            continue;
-          }
-
-          const statusResult = await fetchMastermindRequestStatus({
-            ...(statusArgs.invocationId ? { invocationId: statusArgs.invocationId } : {}),
-            requestId,
-            sessionId,
-          });
-          const statusContent = JSON.stringify(statusResult);
-
-          stageMessages.push({
-            content: statusContent,
-            role: "tool",
-            tool_call_id: call.id,
-          });
-
-          await options.onLocalToolCall?.({ call, resultContent: statusContent });
+          await options.onLocalToolCall?.({ call, resultContent: platformContent });
 
           continue;
         }

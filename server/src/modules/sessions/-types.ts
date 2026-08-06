@@ -162,6 +162,7 @@ export type TModelResponseTag =
   | 'chat'
   | 'tool'
   | 'unknown'
+  | `platform:${string}`
   | `mastermind:${string}`;
 
 export interface IModelResponse extends TWithTimestamps {

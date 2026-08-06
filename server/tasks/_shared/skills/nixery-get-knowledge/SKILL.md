@@ -5,7 +5,7 @@ Shared contract for reading knowledge via orchestrator-direct `nixeryRun: get-kn
 ## When to use
 
 - **Preferred:** `nixeryRun: get-knowledge` in YAHL — orchestrator starts an in-container agent; no mastermind round-trip.
-- **Legacy (deprecated):** `/mastermind(get-knowledge, topic:, need:)` — do not add new usages.
+- **Legacy (deprecated):** do not call removed mastermind get-knowledge — use `nixeryRun: get-knowledge`.
 
 ## Stage shape
 

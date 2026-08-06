@@ -12,7 +12,7 @@ stages:
   - produceContextKeys: [missionText, current_instruction, instruction_answers, next_instruction]
     logic: |
       const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
-      const current = /mastermind(get-knowledge-manager-instruction);
+      const current = /platform(get-knowledge-manager-instruction);
       const current_instruction = current?.data?.text ?? '';
       const batch = *build_instruction_edit_batch(current_instruction, guideline: ~/task-skills/instruction-intake/SKILL.md);
       const instruction_answers = /ask-user-batch(batch);
@@ -21,7 +21,7 @@ stages:
   - contextKeys: [next_instruction]
     produceContextKeys: [result]
     logic: |
-      const patched = /mastermind(put-knowledge-manager-instruction, text: next_instruction);
+      const patched = /platform(put-knowledge-manager-instruction, text: next_instruction);
       const result = {
         applied: !!patched?.ok,
         text: next_instruction,

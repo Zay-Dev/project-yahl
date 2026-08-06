@@ -15,7 +15,7 @@ const clipText = (value: string, max: number) => {
 
 export const buildBrowserProxyBrief = (input: TBrowserProxyBriefInput): string => {
   const parts: string[] = [
-    "YAHL browse brief. Stagehand tools only — do not invent bash, mastermind, set_context, or nixery.",
+    "YAHL browse brief. Stagehand tools only — do not invent bash, platform, set_context, or nixery.",
     `mode: ${input.args.mode}`,
   ];
 

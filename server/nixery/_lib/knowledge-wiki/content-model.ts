@@ -6,7 +6,7 @@ export const WIKI_SUGGESTED_PAGES = {
   brief: 'Brief — personalized summary for the user',
   facts: 'Facts — structured key facts and analysis artifacts',
   sources: 'Sources — seed URLs, study plan, corpus assessment',
-  todo: 'Todo — refresh backlog for knowledge_refresh pickup',
+  todo: 'Todo — backlog for Knowledge Manager / operator follow-up',
 } as const;
 
 export const WIKI_TOPIC_PAGES = {

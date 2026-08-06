@@ -66,7 +66,7 @@ for each i of [1..5,+2] {
 
 - `~/…` — session scratch; `~/task-skills/…` — task-local skills
 - `CONTEXT:` / `IF:` / `ELSE:` / `END:` / `EXTENDS:` — VM and stage control
-- `/ask-user-batch(...)`, `/mastermind(...)`, `/nixery(...)` — platform tools
+- `/ask-user-batch(...)`, `/platform(...)`, `/nixery(...)` — platform tools
 - `*do_something(...)` — invent with the model (opt-in)
 
 Full syntax and authoring: [`handbook/yahl-syntax.md`](handbook/yahl-syntax.md).
@@ -77,7 +77,7 @@ Stage agents never mount the wiki or export corpus — only session scratch and 
 
 ## Run it (happy path)
 
-**Packages (Omniflex member):** `runtime/` · `server/` · `web/` · `mastermind/` · `worker/` — install from `../`.
+**Packages (Omniflex member):** `runtime/` · `server/` · `web/` · `worker/` — install from `../`.
 
 ```bash
 cd ..
@@ -89,7 +89,7 @@ Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI, option
 
 ```bash
 cd project-yahl
-pnpm run compose:up          # mongo, redis, onecli, mastermind, worker
+pnpm run compose:up          # mongo, redis, onecli, wiki, worker
 pnpm run doctor
 pnpm run compose:up:all      # optional: built server + web
 # or: pnpm run dev && pnpm run dev:web

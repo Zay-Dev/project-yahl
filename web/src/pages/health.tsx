@@ -28,13 +28,6 @@ export function HealthPage() {
         <div className="mt-3 space-y-2 text-sm">
           <p className="text-lg font-semibold">{health.ok ? "Healthy" : "Degraded"}</p>
           <p>Mongo: {health.mongo.ok ? "ok" : `failed (state ${health.mongo.readyState})`}</p>
-          <p>
-            Mastermind: {health.mastermind.ok ? "ok" : "failed"}
-            {health.mastermind.agent ? ` (${health.mastermind.agent})` : ""}
-          </p>
-          {health.mastermind.error ? (
-            <p className="text-destructive">{health.mastermind.error}</p>
-          ) : null}
         </div>
       ) : null}
     </div>

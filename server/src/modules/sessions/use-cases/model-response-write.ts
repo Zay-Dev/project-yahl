@@ -21,7 +21,10 @@ const isModelResponseTag = (value: unknown): value is TModelResponseTag => {
     return true;
   }
 
-  return value.startsWith('mastermind:') && value.length > 'mastermind:'.length;
+  return (
+    (value.startsWith('platform:') && value.length > 'platform:'.length)
+    || (value.startsWith('mastermind:') && value.length > 'mastermind:'.length)
+  );
 };
 
 const modelResponseTagSchema = Joi.string().custom((value, helpers) => {

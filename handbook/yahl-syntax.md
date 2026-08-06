@@ -29,7 +29,7 @@ Syntax reference:
 - `/ask-user-batch(...)` — pause for **`askUserBatch.v1`** (one or more questions per submit: text, radio, or checkbox MC).
 - `/stage(id)` — end this AI stage and jump-and-continue to a labeled stage declared in `goto` (tool: `goto_stage`; injects `stage_goto_reason` / `stage_goto_from`).
 - `/skill_name(...)` — call into a skill from the skills folder.
-- `/mastermind(...)` — topic registry, policies, tidy, notifications (deterministic + platform ops).
+- `/platform(...)` — dispatch runs, notification/knowledge-transfer proposals, KM instruction (session API).
 - `/nixery(...)` — knowledge writes, research, design-questions, extract-info (see `/opt/skills/nixery/SKILL.md`).
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 
@@ -130,7 +130,7 @@ The runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF
 
 ## Authoring tasks
 
-Tasks can ship their own SKILL files — handy when you want assess/synthesize rules without bloating `mastermind/skills/`. At run start the server snapshots `taskYahl` + `taskSkills` onto the session; the orchestrator echoes that bundle into the session workspace and the agent reads it under `~/task-skills/`. (Forget `task-mission/SKILL.md` and the run dies before stage 1 — ask me how I know.)
+Tasks can ship their own SKILL files — handy when you want assess/synthesize rules without bloating orchestrator SKILLS. At run start the server snapshots `taskYahl` + `taskSkills` onto the session; the orchestrator echoes that bundle into the session workspace and the agent reads it under `~/task-skills/`. (Forget `task-mission/SKILL.md` and the run dies before stage 1 — ask me how I know.)
 
 - **Layout:** `server/tasks/{taskId}/SKILL.yahl` + optional `server/tasks/{taskId}/skills/**/*.md`
 - **Snapshot:** `createRun` / `registerSession` persist `taskYahl` + `taskSkills` on the session document
@@ -138,7 +138,7 @@ Tasks can ship their own SKILL files — handy when you want assess/synthesize r
 - **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
 - **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` (untrusted hints banner). Planning via orchestrator `nixeryRun: plan` / `plan-study`.
-- **Examples:** `user_onboarding`, `knowledge_refresh`, `knowledge_manager` (see [`server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md`](server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md) for the read path)
+- **Examples:** `user_onboarding`, `knowledge_manager` (see [`server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md`](server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md) for the read path)
 
 ```
 server/tasks/my_task/

@@ -35,7 +35,7 @@ export const buildAskUserResumePrompt = (resumeFrom: TAskUserResumeFrom) => {
     'Re-execute the full stage.logic from the first line — the stage is not finished.',
     'Read prior answers with *answer_of(<id>) from Input context.context (already populated).',
     'Complete every produceContextKeys entry via set_context before ending the stage.',
-    'Call mastermind for every /mastermind(...) in logic.',
+    'Call platform for every /platform(...) in logic.',
     'Call nixery for every /nixery(...) in logic.',
     `batchId: ${JSON.stringify(resumeFrom.batch.batchId)}`,
     `batch title: ${JSON.stringify(resumeFrom.batch.title)}`,

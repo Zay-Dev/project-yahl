@@ -73,7 +73,7 @@ describe('resolveVerifyBannerState', () => {
     assert.equal(state, null);
   });
 
-  it('shows infra_busy for mastermind infrastructure feedback even when agent is active', () => {
+  it('shows infra_busy for verification infrastructure feedback even when agent is active', () => {
     const state = resolveVerifyBannerState(
       [{
         ...checkpoint('req-3', 0),

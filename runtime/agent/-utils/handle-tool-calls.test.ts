@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { handleToolCalls } from './handle-tool-calls';
+import { handleToolCalls, SET_CONTEXT_OK_TOOL_RESULT } from './handle-tool-calls';
 
 const toolCall = (
   id: string,
@@ -58,7 +58,7 @@ describe('handleToolCalls', () => {
     assert.match(toolCallMessages[0]?.content ?? '', /tool call error:/);
   });
 
-  it('emits OK for set_context success with newStorage', async () => {
+  it('emits applied OK nudge for set_context success with newStorage', async () => {
     const storage = emptyStorage();
 
     const { toolCallMessages } = await handleToolCalls({
@@ -75,7 +75,35 @@ describe('handleToolCalls', () => {
       toolCalls: [toolCall('tool-set-1', 'set_context')],
     });
 
-    assert.equal(toolCallMessages[0]?.content, 'tool call result: OK');
+    assert.equal(toolCallMessages[0]?.content, SET_CONTEXT_OK_TOOL_RESULT);
     assert.deepEqual(Object.fromEntries(storage.context.entries()), { user_region: { id: 'hko' } });
+  });
+
+  it('emits applied OK nudge for set_context success without newStorage', async () => {
+    const { toolCallMessages } = await handleToolCalls({
+      error: async () => {},
+      storage: emptyStorage(),
+      toolCall: async () => ({
+        hasError: false,
+        result: 'OK',
+      }),
+      toolCalls: [toolCall('tool-set-2', 'set_context')],
+    });
+
+    assert.equal(toolCallMessages[0]?.content, SET_CONTEXT_OK_TOOL_RESULT);
+  });
+
+  it('leaves set_context skipped result unchanged', async () => {
+    const { toolCallMessages } = await handleToolCalls({
+      error: async () => {},
+      storage: emptyStorage(),
+      toolCall: async () => ({
+        hasError: false,
+        result: 'skipped',
+      }),
+      toolCalls: [toolCall('tool-set-3', 'set_context')],
+    });
+
+    assert.equal(toolCallMessages[0]?.content, 'skipped');
   });
 });

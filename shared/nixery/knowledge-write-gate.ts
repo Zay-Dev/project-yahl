@@ -12,7 +12,6 @@ export type TKnowledgeWriteDef = (typeof KNOWLEDGE_WRITE_DEFS)[number];
 
 export const KNOWLEDGE_MANAGER_TASK_IDS = [
   'knowledge_manager',
-  'knowledge_refresh',
   'greets',
   'whatsapp_wiki_stack',
 ] as const;
@@ -63,7 +62,7 @@ export const assertNamespaceWriteAllowed = (params: {
     && defId !== 'upsert-whatsapp-page'
     && isKnowledgeWriteDef(defId)
   ) {
-    if (taskId !== 'knowledge_manager' && taskId !== 'knowledge_refresh') {
+    if (taskId !== 'knowledge_manager') {
       throw new Error('knowledge_write_forbidden');
     }
   }

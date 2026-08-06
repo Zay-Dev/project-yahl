@@ -99,9 +99,6 @@ export type TCompleteApplyPlan = (params: {
 const sessionApiBase = () =>
   (process.env.SESSION_API_BASE_URL?.trim() || 'http://server:4000').replace(/\/+$/, '');
 
-const mastermindApiBase = () =>
-  (process.env.MASTERMIND_API_URL?.trim() || 'http://mastermind:4100').replace(/\/+$/, '');
-
 export const readInstructionFile = async (): Promise<string> => {
   const registryPath = readKnowledgeWikiConfig().topicsRegistryPath;
   const filePath = path.join(path.dirname(registryPath), 'knowledge-manager-instruction.md');
@@ -592,21 +589,18 @@ const proposeTransfer = async (params: {
   sourceTopic: string;
 }): Promise<boolean> => {
   const body = {
-    args: {
-      claim: params.op.claim,
-      example: params.op.example,
-      evidence: params.op.evidence,
-      observationIds: params.op.observationIds,
-      rationale: params.op.rationale,
-      sourceTopic: params.sourceTopic,
-      targetTopic: params.op.targetTopic,
-    },
-    caller: 'stage-agent',
+    claim: params.op.claim,
+    example: params.op.example,
+    evidence: params.op.evidence,
+    observationIds: params.op.observationIds,
+    rationale: params.op.rationale,
     sessionId: params.sessionId,
+    sourceTopic: params.sourceTopic,
+    targetTopic: params.op.targetTopic,
   };
 
   try {
-    const res = await fetch(`${mastermindApiBase()}/v1/skills/propose-knowledge-transfer`, {
+    const res = await fetch(`${sessionApiBase()}/api/platform/proposals/knowledge-transfers`, {
       body: JSON.stringify(body),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',

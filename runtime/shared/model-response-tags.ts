@@ -2,9 +2,9 @@ export const MODEL_RESPONSE_TAGS = ["browse", "stagehand", "bash", "tool", "chat
 
 export type TModelResponseTag =
   | (typeof MODEL_RESPONSE_TAGS)[number]
-  | `mastermind:${string}`;
+  | `platform:${string}`;
 
-const TAG_ORDER: Array<TModelResponseTag | `mastermind:${string}`> = [
+const TAG_ORDER: Array<TModelResponseTag | `platform:${string}`> = [
   "browse",
   "stagehand",
   "bash",
@@ -16,12 +16,12 @@ const TAG_ORDER: Array<TModelResponseTag | `mastermind:${string}`> = [
 const TOOL_NAME_TAGS: Record<string, TModelResponseTag> = {
   ask_user: "tool",
   browser: "browse",
-  mastermind: "tool",
+  platform: "tool",
   run_bash: "bash",
   set_context: "tool",
 };
 
-const mastermindSkillTag = (rawArgs: string): `mastermind:${string}` | undefined => {
+const platformSkillTag = (rawArgs: string): `platform:${string}` | undefined => {
   try {
     const parsed = JSON.parse(rawArgs) as { skill?: unknown };
 
@@ -29,7 +29,7 @@ const mastermindSkillTag = (rawArgs: string): `mastermind:${string}` | undefined
       return undefined;
     }
 
-    return `mastermind:${parsed.skill.trim()}`;
+    return `platform:${parsed.skill.trim()}`;
   } catch {
     return undefined;
   }
@@ -93,8 +93,8 @@ export const deriveModelResponseTags = (message: TToolCallMessage): TModelRespon
       tags.add("unknown");
     }
 
-    if (name === 'mastermind') {
-      const skillTag = mastermindSkillTag(toolCallArguments(call));
+    if (name === 'platform') {
+      const skillTag = platformSkillTag(toolCallArguments(call));
 
       if (skillTag) {
         tags.add(skillTag);

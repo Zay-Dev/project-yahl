@@ -58,7 +58,7 @@ import {
   StageWaitTimeoutError,
 } from './stage-wait-timeout';
 
-const AGENT_LOCAL_TOOLS = new Set(['browser', 'mastermind', 'run_bash']);
+const AGENT_LOCAL_TOOLS = new Set(['browser', 'platform', 'run_bash']);
 
 const serializeStorageSnapshot = (storage: TStorage) => ({
   context: Object.fromEntries(storage.context.entries()),

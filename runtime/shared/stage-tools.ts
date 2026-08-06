@@ -216,8 +216,8 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(list-topic-policies|resolve-topic-policy|patch-topic-policy|dispatch-task-run|propose-notification, ...) in stage logic. Topic resolve, media-to-text, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
-      name: "mastermind",
+        "Invoke a platform skill against the session API. Use for /platform(dispatch-task-run|propose-notification|propose-knowledge-transfer|get-knowledge-manager-instruction|put-knowledge-manager-instruction, ...) in stage logic. Topic resolve, media-to-text, and LLM helpers use the nixery tool. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error }.",
+      name: "platform",
       parameters: {
         properties: {
           args: {
@@ -225,11 +225,8 @@ export const STAGE_TOOLS = [
             type: "object",
           },
           skill: {
-            description: "Helper skill name.",
+            description: "Platform skill name.",
             enum: [
-              "list-topic-policies",
-              "resolve-topic-policy",
-              "patch-topic-policy",
               "dispatch-task-run",
               "propose-notification",
               "propose-knowledge-transfer",
@@ -240,23 +237,6 @@ export const STAGE_TOOLS = [
           },
         },
         required: ["skill"],
-        type: "object",
-      },
-    },
-    type: "function" as const,
-  },
-  {
-    function: {
-      description:
-        "Poll mastermind request activity for the current session stage request. Use for debugging long skill calls — do not re-POST while status is queued or running. Returns { ok, agent, queueDepth, request: { status, skill, invocationId, startedAt, updatedAt } }.",
-      name: "mastermind_status",
-      parameters: {
-        properties: {
-          invocationId: {
-            description: "Optional invocation id from a prior mastermind tool response.",
-            type: "string",
-          },
-        },
         type: "object",
       },
     },
@@ -308,31 +288,7 @@ export const parseNixeryToolArguments = (
   };
 };
 
-export const parseMastermindStatusToolArguments = (
-  raw: string,
-): { invocationId?: string } => {
-  if (!raw.trim()) {
-    return {};
-  }
-
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch {
-    return {};
-  }
-
-  if (!isRecord(parsed)) return {};
-
-  const invocationId = typeof parsed.invocationId === 'string' && parsed.invocationId.trim()
-    ? parsed.invocationId.trim()
-    : undefined;
-
-  return invocationId ? { invocationId } : {};
-};
-
-export const parseMastermindToolArguments = (
+export const parsePlatformToolArguments = (
   raw: string,
 ): { args: Record<string, unknown>; skill: string } | null => {
   let parsed: unknown;

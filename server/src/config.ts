@@ -12,12 +12,28 @@ type TConfig = {
   corsOrigin: string[] | true;
   cwd: string;
   hideErrorStack: boolean;
-  mastermindApiUrl: string;
+  knowledgeDataRoot: string;
   mongoDb: {
     url: string;
   };
   requestTimeoutInSeconds: number;
   servers: Map<TServerType, { port: number }>;
+};
+
+const resolveKnowledgeDataRoot = (cwd: string): string => {
+  const explicit = process.env.KNOWLEDGE_DATA_ROOT?.trim();
+
+  if (explicit) {
+    return path.resolve(explicit);
+  }
+
+  const hostRoot = process.env.HOST_REPO_ROOT?.trim();
+
+  if (hostRoot) {
+    return path.join(hostRoot, 'data/mastermind');
+  }
+
+  return path.resolve(cwd, '../data/mastermind');
 };
 
 const corsOrigin = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean);
@@ -30,14 +46,16 @@ const servers: TConfig['servers'] = new Map([
   ['exposed', { port: parseInt(process.env.EXPOSED_SERVER_PORT || process.env.PORT || '4000', 10) }],
 ]);
 
+const cwd = path.resolve(import.meta.dirname, '..');
+
 export const config: TConfig = {
   cookieParser: {
     secret: process.env.COOKIE_PARSER_SECRET || 'dev-cookie-secret',
   },
   corsOrigin: corsOrigin.length > 0 ? corsOrigin : true,
-  cwd: path.resolve(import.meta.dirname, '..'),
+  cwd,
   hideErrorStack: process.env.HIDE_ERROR_STACK === 'true',
-  mastermindApiUrl: (process.env.MASTERMIND_API_URL?.trim() || 'http://mastermind:4100').replace(/\/+$/, ''),
+  knowledgeDataRoot: resolveKnowledgeDataRoot(cwd),
   mongoDb,
   requestTimeoutInSeconds: parseInt(process.env.REQUEST_TIMEOUT_IN_SECONDS || '60', 10),
   servers,

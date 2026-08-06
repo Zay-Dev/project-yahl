@@ -14,7 +14,6 @@ env:
   TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
   SESSION_API_BASE_URL: ""
-  MASTERMIND_API_URL: ""
 
 nixery:
   default: "true"

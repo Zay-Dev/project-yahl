@@ -16,11 +16,11 @@ describe('readTaskSkillsFromDisk', () => {
   });
 
   it('merges shared skills and prefers task-local overrides', async () => {
-    const files = await readTaskSkillsFromDisk('knowledge_refresh');
+    const files = await readTaskSkillsFromDisk('knowledge_manager');
 
     assert.ok(files.some((file) => file.path === 'locate-knowledge/SKILL.md'));
     assert.ok(files.some((file) => file.path === 'task-mission/SKILL.md'));
-    assert.ok(!files.some((file) => file.path.includes('knowledge_capture')));
+    assert.ok(files.some((file) => file.path === 'analyze-additional-instruction/SKILL.md'));
   });
 
   it('returns shared skills when task skills directory is missing', async () => {

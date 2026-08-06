@@ -33,12 +33,18 @@ export function KnowledgePoliciesPage() {
   }, []);
 
   const save = async () => {
+    const token = window.prompt("Approval token");
+
+    if (!token?.trim()) {
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSaved(false);
 
     try {
-      const next = await putKnowledgeManagerInstruction({ text });
+      const next = await putKnowledgeManagerInstruction({ text }, token);
       setText(next);
       setSaved(true);
     } catch (saveError) {
@@ -59,7 +65,7 @@ export function KnowledgePoliciesPage() {
           <h1 className="text-xl font-semibold">Knowledge Manager instruction</h1>
           <p className="text-sm text-muted-foreground">
             Global free-text do / don&apos;t / focus for overnight review of every topic.
-            Per-topic refresh intervals are retired.
+            Save requires PLATFORM_APPROVAL_TOKEN.
           </p>
         </div>
         <div className="flex gap-2">

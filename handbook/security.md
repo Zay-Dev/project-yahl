@@ -28,7 +28,7 @@ sequenceDiagram
 ### Outbound channels
 
 - **Worker-only volumes** — WhatsApp auth (`data/whatsapp_auth`) and inbox (`data/whatsapp_inbox`) mount into the worker container only. Stage agents never see them.
-- **Proposals stay on the server** — Mastermind never sends WhatsApp or email. Outbound goes through platform proposals; humans approve at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN` (`X-Approval-Token`).
+- **Proposals stay on the server** — Agents never send WhatsApp or email. Outbound goes through platform proposals; humans approve at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN` (`X-Approval-Token`).
 - **Whitelist pre-approve** — `WHATSAPP_WHITELIST` / `EMAIL_WHITELIST` matching recipients skip the approval queue for that channel.
 - **SMTP admin alert** — when WhatsApp is unavailable mid-send and SMTP is configured, the worker may email `SYSTEM_ADMIN_EMAIL`; it does not open a side channel for agents.
 

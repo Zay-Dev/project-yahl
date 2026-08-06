@@ -9,23 +9,23 @@ import {
   validateRunInputPayload,
 } from '@project-yahl/shared/yahl/run-input-keys';
 
-const knowledgeRefreshPath = path.resolve(
+const knowledgeManagerPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../../../server/tasks/knowledge_refresh/SKILL.yahl',
+  '../../../../../server/tasks/knowledge_manager/SKILL.yahl',
 );
 
 describe('create run runInput validation', () => {
-  it('reads runInputKeys from knowledge_refresh SKILL.yahl', () => {
-    const yahl = readFileSync(knowledgeRefreshPath, 'utf8');
+  it('reads runInputKeys from knowledge_manager SKILL.yahl', () => {
+    const yahl = readFileSync(knowledgeManagerPath, 'utf8');
     const keys = parseRunInputKeysFromYahl(yahl);
 
-    assert.deepEqual(keys, ['knowledge_topic', 'rerun_intent', 'additional_instruction']);
+    assert.deepEqual(keys, ['additional_instruction']);
   });
 
   it('accepts declared runInput keys', () => {
     const result = validateRunInputPayload(
-      { knowledge_topic: 'hk-weather' },
-      ['knowledge_topic', 'rerun_intent', 'additional_instruction'],
+      { additional_instruction: 'focus on hk-weather tonight' },
+      ['additional_instruction'],
     );
 
     assert.equal(result.ok, true);
@@ -34,27 +34,9 @@ describe('create run runInput validation', () => {
   it('accepts additional_instruction string in runInput', () => {
     const result = validateRunInputPayload(
       {
-        knowledge_topic: 'hk-weather',
         additional_instruction: 'all, try refresh from discussion https://example.com',
       },
-      ['knowledge_topic', 'rerun_intent', 'additional_instruction'],
-    );
-
-    assert.equal(result.ok, true);
-  });
-
-  it('accepts nested rerun_intent object in runInput', () => {
-    const result = validateRunInputPayload(
-      {
-        knowledge_topic: 'hk-weather',
-        rerun_intent: {
-          isRerun: true,
-          proceedMode: 'update_selected',
-          updateScope: ['studies', 'facts'],
-          addressOpenQuestions: false,
-        },
-      },
-      ['knowledge_topic', 'rerun_intent', 'additional_instruction'],
+      ['additional_instruction'],
     );
 
     assert.equal(result.ok, true);
@@ -63,7 +45,7 @@ describe('create run runInput validation', () => {
   it('rejects unknown runInput keys for keyed tasks', () => {
     const result = validateRunInputPayload(
       { topic: 'hk-weather' },
-      ['knowledge_topic'],
+      ['additional_instruction'],
     );
 
     assert.equal(result.ok, false);

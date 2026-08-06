@@ -1,6 +1,6 @@
 # nixery-upsert-knowledge-page
 
-**Deprecated for stage agents.** Narrative wiki writes are Knowledge Manager–only (`knowledge_manager` / `knowledge_refresh` via orchestrator `nixeryRun`).
+**Deprecated for stage agents.** Narrative wiki writes are Knowledge Manager–only (`knowledge_manager` via orchestrator `nixeryRun`).
 
 Stage agents must use `/nixery(submit-knowledge-observation, …)` — see `~/task-skills/submit-knowledge-observation/SKILL.md`.
 

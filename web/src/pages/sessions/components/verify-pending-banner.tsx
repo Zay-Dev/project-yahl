@@ -61,7 +61,7 @@ export function VerifyPendingBanner({
         ) : null}
         {infraBusy ? (
           <p className="mt-3 text-sm text-muted-foreground">
-            Mastermind could not run verification. Restart the mastermind service if this persists, then retry.
+            Verification service could not run. Retry when the nixery verify def is healthy.
           </p>
         ) : null}
         {showEditAnswer ? (

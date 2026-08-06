@@ -12,7 +12,7 @@ import {
 import config from "../config";
 
 const CONTEXT_PREAMBLE =
-  "You are answering a Stagehand browser-automation LLM request. A short YAHL browse brief may appear first. Complete the Stagehand task using only the tools Stagehand provided — do not invent bash, mastermind, set_context, or nixery.";
+  "You are answering a Stagehand browser-automation LLM request. A short YAHL browse brief may appear first. Complete the Stagehand task using only the tools Stagehand provided — do not invent bash, platform, set_context, or nixery.";
 
 type TProxyState = {
   brief: string | null;

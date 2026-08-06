@@ -41,7 +41,7 @@ Use the **`run_bash`** tool when you need command execution inside the `@agent/`
 
 Use the **`browser`** tool for all `/stagehand(...)` invocations (web search, page fetch, structured extract). Read `/opt/skills/stagehand/SKILL.md` for mode details. Stagehand’s internal LLM is answered via a localhost proxy with a short YAHL browse brief (not full stage chat history; thinking disabled). Persist knowledge yourself via **`set_context`** / **`nixery`** after browser results — Stagehand cannot.
 
-Use the **`mastermind`** tool for `/mastermind(...)` platform skills (list-topic-policies, resolve-topic-policy, patch-topic-policy, dispatch-task-run, propose-notification). Read `/opt/skills/mastermind/SKILL.md`. Use **`nixery`** for media-to-text and LLM helpers. **Do not use mastermind for verify** — stages with a `verify:` object (or `verify: true`) are scored by the orchestrator via nixery `verify.defId` after the stage finishes.
+Use the **`platform`** tool for `/platform(...)` skills (dispatch-task-run, propose-notification, propose-knowledge-transfer, get/put-knowledge-manager-instruction). Read `/opt/skills/platform/SKILL.md`. Use **`nixery`** for media-to-text and LLM helpers. **Do not use platform for verify** — stages with a `verify:` object (or `verify: true`) are scored by the orchestrator via nixery `verify.defId` after the stage finishes.
 
 Use the **`nixery`** tool for `/nixery(resolve-topic, …)`, `/nixery(upsert-knowledge-page, …)`, `/nixery(dedup-knowledge, …)`, `/nixery(research, …)`, `/nixery(design-questions, …)`, `/nixery(extract-info, …)`, `/nixery(consult-breaking-change, …)`, `/nixery(submit-knowledge-observation, …)`. Read `/opt/skills/nixery/SKILL.md`.
 

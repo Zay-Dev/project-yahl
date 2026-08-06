@@ -41,7 +41,7 @@ Other tasks calling these get `knowledge_write_forbidden` on `apply-manager-topi
 - `resolve-topic` (registry write)
 - `upsert-greets-page` / `upsert-whatsapp-page`
 
-Overnight Knowledge Manager is a **multi-stage** task: list topics → per-topic validate (`plan`/`research` → observation feedback) → `apply-manager-topic` → group topics → cross-topic `propose-knowledge-transfer` → `apply-approved-transfers`. Start via cron `taskPath: "knowledge_manager"` or `/mastermind(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
+Overnight Knowledge Manager is a **multi-stage** task: list topics → per-topic validate (`plan`/`research` → observation feedback) → `apply-manager-topic` → group topics → cross-topic `propose-knowledge-transfer` → `apply-approved-transfers`. Start via cron `taskPath: "knowledge_manager"` or `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
 
 ## Reads
 

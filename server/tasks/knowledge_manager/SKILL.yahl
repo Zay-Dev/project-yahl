@@ -2,9 +2,11 @@ name: knowledge-manager
 description: |
   Multi-stage overnight Knowledge Manager — per-topic validate/apply + cross-topic transfer proposals.
   Start via cron taskPath knowledge_manager (handbook/how-to-run.md) or
-  /mastermind(dispatch-task-run, taskId: knowledge_manager, runInput: {}).
+  /platform(dispatch-task-run, taskId: knowledge_manager, runInput: {}).
 background: true
 resultContextKey: result
+runInput:
+  - additional_instruction
 
 types: |
   type TReviewRecord = {
@@ -35,28 +37,38 @@ types: |
     topic_groups: TTopicGroup[];
     transfersProposed: number;
     approvedTransfersApplied: number;
+    additionalInstructionNotes?: string;
   };
 
 stages:
-  - produceContextKeys: [missionText, reviews_acc, transfers_proposed_acc]
+  - produceContextKeys: [missionText, reviews_acc, transfers_proposed_acc, instruction_followup]
+    contextKeys: [additional_instruction]
     logic: |
       const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
       const reviews_acc = [];
       const transfers_proposed_acc = 0;
+      const instruction_followup = *analyze_additional_instruction(
+        additional_instruction,
+        guideline: ~/task-skills/analyze-additional-instruction/SKILL.md,
+      );
 
   - nixeryRun: list-manager-topics
     nixeryInput:
       output: result.json
     logic: "(nixery)"
 
-  - produceContextKeys: [topics, instructionPreview]
+  - produceContextKeys: [topics, instructionPreview, missionText]
+    contextKeys: [missionText, instruction_followup]
     logic: |
       Read ~/nixery/list-manager-topics/result.json from the session workspace.
       Parse the gate JSON. If ok and topics is an array, set topics to that array and instructionPreview to instructionPreview or ''.
       Otherwise set topics to [] and instructionPreview to ''.
+      IF: instruction_followup && instruction_followup.actionable && instruction_followup.missionAddon;
+        const missionText = (missionText || '') + '\n\nThis-run additional_instruction:\n' + instruction_followup.missionAddon;
+      END:
 
   - loopSetup: for each topic of [topics]
-    contextKeys: [missionText, topic, topics, reviews_acc, transfers_proposed_acc]
+    contextKeys: [missionText, topic, topics, reviews_acc, transfers_proposed_acc, instruction_followup]
     updateContextKeys: [reviews_acc, transfers_proposed_acc]
     verify:
       defId: stage-verify
@@ -153,7 +165,7 @@ stages:
         const briefs = *load_group_briefs(group.topics);
         const candidates = *find_cross_topic_candidates(briefs, group, guideline: ~/task-skills/cross-topic-scan/SKILL.md);
         IF: candidates && candidates.length;
-          for each candidate of candidates: /mastermind(
+          for each candidate of candidates: /platform(
             propose-knowledge-transfer,
             sourceTopic: candidate.sourceTopic,
             targetTopic: candidate.targetTopic,
@@ -172,7 +184,7 @@ stages:
     logic: "(nixery)"
 
   - produceContextKeys: [result]
-    contextKeys: [instructionPreview, topics, reviews_acc, topic_groups, transfers_proposed_acc]
+    contextKeys: [instructionPreview, topics, reviews_acc, topic_groups, transfers_proposed_acc, instruction_followup]
     logic: |
       Read ~/nixery/apply-approved-transfers/result.json from the session workspace.
       Parse the gate JSON. Set approvedTransfersApplied to approvedTransfersApplied number or 0.
@@ -184,4 +196,7 @@ stages:
         topic_groups: topic_groups || [],
         transfersProposed: transfers_proposed_acc || 0,
         approvedTransfersApplied,
+        additionalInstructionNotes: instruction_followup && instruction_followup.actionable
+          ? instruction_followup.notes
+          : undefined,
       };

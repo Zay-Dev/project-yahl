@@ -63,10 +63,6 @@ const main = async () => {
     process.env.SESSION_API_BASE_URL = 'http://server:4000';
   }
 
-  if (!process.env.MASTERMIND_API_URL?.trim()) {
-    process.env.MASTERMIND_API_URL = 'http://mastermind:4100';
-  }
-
   try {
     const pending = await listPendingObservations(topic);
     const forceHeuristic = skipLlmPlan || shouldUseHeuristicApplyPlan(pending);
