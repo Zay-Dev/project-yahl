@@ -1,18 +1,58 @@
 export const LLM_CALL_RETRY_SLEEP_MS = 60_000;
 
+export const LLM_CALL_RETRY_SLEEP_GROWTH = 1.1;
+
 export const resolveLlmCallRetryMax = () => {
   const raw = Math.floor(Number(process.env.LLM_CALL_RETRY_MAX ?? 3));
 
   return Number.isFinite(raw) && raw > 0 ? raw : 3;
 };
 
-export const isRetryableLlmHttpError = (error: unknown) => {
-  if (!error || typeof error !== "object") return false;
+const coerceHttpStatus = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.trim());
+
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return undefined;
+};
+
+const parseHttpStatusFromMessage = (message: string): number | undefined => {
+  const angle = message.match(/<(\d{3})>/);
+  if (angle) {
+    return Number(angle[1]);
+  }
+
+  const leading = message.match(/^(\d{3})\b/);
+  if (leading) {
+    return Number(leading[1]);
+  }
+
+  return undefined;
+};
+
+export const resolveLlmHttpStatus = (error: unknown): number | undefined => {
+  if (!error || typeof error !== "object") return undefined;
 
   const record = error as Record<string, unknown>;
-  const status = record.status ?? record.statusCode;
+  const fromField = coerceHttpStatus(record.status ?? record.statusCode);
 
-  if (typeof status !== "number" || !Number.isFinite(status)) return false;
+  if (fromField !== undefined) return fromField;
+
+  const message = error instanceof Error ? error.message : String(error);
+
+  return parseHttpStatusFromMessage(message);
+};
+
+export const isRetryableLlmHttpError = (error: unknown) => {
+  const status = resolveLlmHttpStatus(error);
+
+  if (status === undefined) return false;
 
   return status === 408 || status === 429 || status >= 500;
 };
@@ -31,7 +71,7 @@ export const withLlmCallRetry = async <T>(
   },
 ): Promise<T> => {
   const maxAttempts = options?.maxAttempts ?? resolveLlmCallRetryMax();
-  const sleepMs = options?.sleepMs ?? LLM_CALL_RETRY_SLEEP_MS;
+  let sleepMs = options?.sleepMs ?? LLM_CALL_RETRY_SLEEP_MS;
   const sleep = options?.sleep ?? defaultSleep;
 
   let attempt = 0;
@@ -49,8 +89,7 @@ export const withLlmCallRetry = async <T>(
         throw error;
       }
 
-      const record = error as Record<string, unknown>;
-      const status = record.status ?? record.statusCode;
+      const status = resolveLlmHttpStatus(error);
       const message = error instanceof Error ? error.message : String(error);
 
       console.warn(
@@ -59,6 +98,7 @@ export const withLlmCallRetry = async <T>(
       );
 
       await sleep(sleepMs);
+      sleepMs = Math.floor(sleepMs * LLM_CALL_RETRY_SLEEP_GROWTH);
     }
   }
 

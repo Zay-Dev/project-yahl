@@ -4,11 +4,14 @@ Shared wiki contract for knowledge tasks. **Stage agents do not upsert narrative
 
 ## Agent path
 
-Submit atomic observations only:
+Submit atomic observations only when **worth persisting** (see `~/task-skills/worth-persisting-knowledge/SKILL.md`):
 
-`/nixery(submit-knowledge-observation, topic_hint: …, cue: …, claim: …, example|quote: …, evidence: …)`
+`/nixery(submit-knowledge-observation, cue: …, claim: …, example|quote: …, evidence: …, topic_hint?: …)`
 
 See `~/task-skills/submit-knowledge-observation/SKILL.md`.
+
+- Soft `topic_hint` (optional) — content-based best effort; never force the task domain slug for cross-cutting lessons
+- Knowledge Manager decides apply section **and** final topic
 
 ## Knowledge Manager path
 

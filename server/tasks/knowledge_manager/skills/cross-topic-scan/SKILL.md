@@ -10,3 +10,4 @@ Scan a topic group for claims that belong in another topic. Follow learning-mode
 4. **Never** upsert the target topic. **Never** whitelist-pre-approve.
 5. Prefer zero proposals over weak or speculative transfers.
 6. If unsure whether a claim is cross-topic vs same-topic PLACE/HOWTO, leave it for same-topic ApplyPlan — do not transfer.
+7. Cross-cutting lessons already re-homed by ApplyPlan `targetTopic` should not be duplicated as Pass B transfers unless ApplyPlan missed them and a peer topic exists.

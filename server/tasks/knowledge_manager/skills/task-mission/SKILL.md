@@ -11,7 +11,7 @@ Multi-stage overnight Knowledge Manager.
 ## Pass A — same-topic note-making
 
 1. `list-manager-topics` → every topic (Focus changes depth only; durable instruction file + optional `additional_instruction`).
-2. Per topic: `list-pending-observations` → optional `research` for doubtful PLACE/weak evidence → feedback via `submit-knowledge-observation` (quoted vs inferred) → `apply-manager-topic` (hone + ApplyPlan + consume).
+2. Per topic: `list-pending-observations` → optional `research` for doubtful PLACE/weak evidence → feedback via `submit-knowledge-observation` (quoted vs inferred) → `apply-manager-topic` (hone + ApplyPlan + consume). ApplyPlan may set `targetTopic` to re-home cross-cutting notes by content — do not force task domain slugs for cross-cutting lessons.
 3. Use unique per-topic nixery outputs (`intake-{topic}.json`, `research-{topic}.md`, `apply-{topic}.json`). Never fabricate a success review when apply gate is missing/`ok:false` — set `applyFailed` and fail verify.
 4. Skip `apply-manager-topic` when depth is `light` and both observations and needsValidation are empty (`skippedEmpty: true`). Focus topics still run apply (hone/quiz).
 5. Never invent PLACE facts in validate; never call `upsert-knowledge-page` from validate/feedback — ApplyPlan owns narrative writes.

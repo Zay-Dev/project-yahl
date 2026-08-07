@@ -46,17 +46,31 @@ describe('isRetryableLlmHttpError', () => {
     assert.equal(isRetryableLlmHttpError({ statusCode: 429 }), true);
   });
 
+  it('retries numeric string status and message-embedded 5xx', () => {
+    assert.equal(isRetryableLlmHttpError({ status: '503' }), true);
+    assert.equal(isRetryableLlmHttpError({ statusCode: '429' }), true);
+    assert.equal(
+      isRetryableLlmHttpError(
+        new Error('503 <503> ***.Algo: An error occurred in model serving'),
+      ),
+      true,
+    );
+    assert.equal(isRetryableLlmHttpError(new Error('<503> throttled')), true);
+  });
+
   it('does not retry other 4xx or missing status', () => {
     assert.equal(isRetryableLlmHttpError({ status: 400 }), false);
     assert.equal(isRetryableLlmHttpError({ status: 401 }), false);
     assert.equal(isRetryableLlmHttpError({ status: 403 }), false);
+    assert.equal(isRetryableLlmHttpError({ status: '400' }), false);
     assert.equal(isRetryableLlmHttpError(new Error('network')), false);
+    assert.equal(isRetryableLlmHttpError(new Error('400 bad request')), false);
     assert.equal(isRetryableLlmHttpError(null), false);
   });
 });
 
 describe('withLlmCallRetry', () => {
-  it('retries 429 then succeeds', async () => {
+  it('retries 429 then succeeds with ×1.1 sleep growth', async () => {
     let calls = 0;
     const sleeps: number[] = [];
 
@@ -80,7 +94,7 @@ describe('withLlmCallRetry', () => {
 
     assert.equal(result, 'ok');
     assert.equal(calls, 3);
-    assert.deepEqual(sleeps, [10, 10]);
+    assert.deepEqual(sleeps, [10, 11]);
   });
 
   it('retries 503 and 408', async () => {
@@ -105,6 +119,28 @@ describe('withLlmCallRetry', () => {
 
     assert.equal(result, 'ok');
     assert.equal(calls, 3);
+  });
+
+  it('retries message-only 503 then succeeds', async () => {
+    let calls = 0;
+
+    const result = await withLlmCallRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('503 <503> ***.Algo: throttled due to system capacity limits');
+        }
+        return 'ok';
+      },
+      {
+        maxAttempts: 3,
+        sleepMs: 10,
+        sleep: async () => {},
+      },
+    );
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 2);
   });
 
   it('throws 400 immediately without retry', async () => {

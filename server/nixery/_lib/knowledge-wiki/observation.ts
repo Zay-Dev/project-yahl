@@ -1,3 +1,5 @@
+import { OBSERVATION_INBOX_TOPIC } from './observation-topic.js';
+
 export const OBSERVATION_CONFIDENCE = ['observed', 'quoted', 'inferred'] as const;
 
 export type TObservationConfidence = (typeof OBSERVATION_CONFIDENCE)[number];
@@ -55,7 +57,10 @@ export const validateKnowledgeObservation = (
 
   const cue = asNonEmptyString(raw.cue);
   const claim = asNonEmptyString(raw.claim);
-  const topicHint = asNonEmptyString(raw.topic_hint) ?? asNonEmptyString(raw.topicHint);
+  const topicHint = asNonEmptyString(raw.topic_hint)
+    ?? asNonEmptyString(raw.topicHint)
+    ?? asNonEmptyString(raw.topic)
+    ?? OBSERVATION_INBOX_TOPIC;
   const example = asNonEmptyString(raw.example) ?? undefined;
   const quote = asNonEmptyString(raw.quote) ?? undefined;
   const confidenceRaw = asNonEmptyString(raw.confidence) ?? 'observed';
@@ -66,10 +71,6 @@ export const validateKnowledgeObservation = (
 
   if (!claim) {
     return { ok: false, error: 'claim is required' };
-  }
-
-  if (!topicHint) {
-    return { ok: false, error: 'topic_hint is required' };
   }
 
   if (!OBSERVATION_CONFIDENCE.includes(confidenceRaw as TObservationConfidence)) {

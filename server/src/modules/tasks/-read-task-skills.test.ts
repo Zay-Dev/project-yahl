@@ -21,6 +21,7 @@ describe('readTaskSkillsFromDisk', () => {
     assert.ok(files.some((file) => file.path === 'locate-knowledge/SKILL.md'));
     assert.ok(files.some((file) => file.path === 'task-mission/SKILL.md'));
     assert.ok(files.some((file) => file.path === 'analyze-additional-instruction/SKILL.md'));
+    assert.ok(files.some((file) => file.path === 'worth-persisting-knowledge/SKILL.md'));
   });
 
   it('returns shared skills when task skills directory is missing', async () => {

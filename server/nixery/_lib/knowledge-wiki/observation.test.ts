@@ -26,6 +26,20 @@ describe('validateKnowledgeObservation', () => {
     }
   });
 
+  it('defaults missing topic_hint to inbox', () => {
+    const result = validateKnowledgeObservation({
+      cue: 'platform tip',
+      claim: 'soft hint optional',
+      example: 'omitted topic_hint',
+      evidence: { tool: 'platform' },
+    });
+
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.observation.topic_hint, 'inbox');
+    }
+  });
+
   it('rejects claim without example or quote', () => {
     const result = validateKnowledgeObservation({
       topic_hint: 'traffic-monitor',

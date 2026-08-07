@@ -147,6 +147,28 @@ describe('buildHeuristicApplyPlan', () => {
     assert.match(String(plan.ops[0]?.content ?? ''), /Maple Court|River Station/);
     assert.equal(plan.ops[1]?.op, 'append_raw');
   });
+
+  it('rehomes when topicHint differs from managed topic', () => {
+    const plan = buildHeuristicApplyPlan('traffic-monitor', [
+      {
+        claim: 'propose-notification needs direction to_user and body',
+        confidence: 'observed',
+        content: '',
+        cue: 'WhatsApp propose-notification',
+        example: 'succeeded after adding direction',
+        id: 'n1',
+        needsValidation: false,
+        pagePath: 'n',
+        tags: ['HOWTO', 'TRICK'],
+        topicHint: 'notifications',
+        validationReasons: [],
+      },
+    ], { placePage: 'facts' });
+
+    assert.equal(plan.ops[0]?.op, 'merge');
+    assert.equal(plan.ops[0]?.targetTopic, 'notifications');
+    assert.equal(plan.ops[0]?.section, 'HOWTO');
+  });
 });
 
 describe('shouldUseHeuristicApplyPlan', () => {

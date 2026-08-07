@@ -11,6 +11,10 @@ import { readKnowledgeWikiConfig } from './config.js';
 import { WIKI_OBSERVATIONS_PREFIX } from './content-model.js';
 import { applyDedupAction } from './dedup.js';
 import {
+  OBSERVATION_INBOX_TOPIC,
+  resolveObservationTargetTopic,
+} from './observation-topic.js';
+import {
   listExportTopicFiles,
   stripYamlFrontmatter,
 } from './read-export-corpus.js';
@@ -231,10 +235,10 @@ const parseObservationMarkdown = (
 
   const claim = claimMatch?.[1]?.trim();
   const cue = cueMatch?.[1]?.trim();
-  const topicHint = topicMatch?.[1]?.trim();
+  const topicHint = topicMatch?.[1]?.trim() || OBSERVATION_INBOX_TOPIC;
   const status = statusMatch?.[1]?.trim().toLowerCase();
 
-  if (!claim || !cue || !topicHint) {
+  if (!claim || !cue) {
     return null;
   }
 
@@ -454,6 +458,18 @@ export const buildHeuristicApplyPlan = (
   const placePage = options?.placePage?.trim() || 'facts';
 
   for (const observation of observations) {
+    const targetTopic = resolveObservationTargetTopic({
+      claim: observation.claim,
+      cue: observation.cue,
+      example: observation.example,
+      quote: observation.quote,
+      tags: observation.tags,
+      topicHint: observation.topicHint,
+    }, topic);
+    const rehome = targetTopic !== topic
+      ? { targetTopic, rationaleSuffix: ` → rehome ${targetTopic}` }
+      : { targetTopic: undefined as string | undefined, rationaleSuffix: '' };
+
     if (observation.confidence === 'inferred') {
       ops.push({
         content: formatObservationApplyBody({
@@ -466,7 +482,8 @@ export const buildHeuristicApplyPlan = (
         observationIds: [observation.id],
         op: 'todo',
         page: 'todo',
-        rationale: 'inferred confidence → todo',
+        rationale: `inferred confidence → todo${rehome.rationaleSuffix}`,
+        targetTopic: rehome.targetTopic,
       });
       continue;
     }
@@ -486,7 +503,8 @@ export const buildHeuristicApplyPlan = (
         observationIds: [observation.id],
         op: 'append_raw',
         page: `raw/manager-${observation.id}`,
-        rationale: 'SUMMARY → append_raw only',
+        rationale: `SUMMARY → append_raw only${rehome.rationaleSuffix}`,
+        targetTopic: rehome.targetTopic,
       });
       continue;
     }
@@ -503,8 +521,9 @@ export const buildHeuristicApplyPlan = (
         observationIds: [observation.id],
         op: 'merge',
         page: placePage,
-        rationale: `promote PLACE ${observation.confidence}`,
+        rationale: `promote PLACE ${observation.confidence}${rehome.rationaleSuffix}`,
         section: 'PLACE',
+        targetTopic: rehome.targetTopic,
       });
       continue;
     }
@@ -521,8 +540,9 @@ export const buildHeuristicApplyPlan = (
         observationIds: [observation.id],
         op: 'merge',
         page: placePage,
-        rationale: `promote ${tag} ${observation.confidence}`,
+        rationale: `promote ${tag} ${observation.confidence}${rehome.rationaleSuffix}`,
         section: tag === 'TRICK' ? 'ops-log' : tag,
+        targetTopic: rehome.targetTopic,
       });
       continue;
     }
@@ -538,8 +558,9 @@ export const buildHeuristicApplyPlan = (
       observationIds: [observation.id],
       op: 'merge',
       page: 'facts',
-      rationale: `promote ${observation.confidence} observation`,
+      rationale: `promote ${observation.confidence} observation${rehome.rationaleSuffix}`,
       section,
+      targetTopic: rehome.targetTopic,
     });
   }
 
@@ -571,13 +592,15 @@ const mapOpToUpsert = async (topic: string, op: TApplyPlanOp): Promise<'applied'
   const mode = op.mode
     ?? (op.op === 'replace_section' ? 'replace' : 'append');
 
+  const writeTopic = op.targetTopic?.trim() || topic;
+
   const result = await runUpsertKnowledgePage({
     content: content
       ?? formatObservationApplyBody({ claim: op.claim ?? 'todo', cue: op.section }),
     mode: op.op === 'replace_section' ? 'replace' : mode,
     page,
     section: op.section,
-    topic,
+    topic: writeTopic,
   });
 
   return result.ok ? 'applied' : 'skipped';

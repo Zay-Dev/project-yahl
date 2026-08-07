@@ -562,10 +562,11 @@ stages:
         and summary_md / notification bodies use runInput origin and destination labels (not bound MTR/station proxies),
         and summary_md names the locked traffic_source (Google Maps only when traffic_source.is_fallback is true
         or url is the Maps directions template; otherwise name the city source from traffic_source.url / howto),
-        and every report upsert returned ok:true with canonicalTopic equal to knowledge_topic
+        and every report raw upsert returned ok:true with canonicalTopic equal to knowledge_topic
         (path under topics/traffic-monitor/ — never topics/general/).
         Fail when day_kind or summary_md is missing.
-        Fail when any report upsert omitted topic, returned ok:false, or landed outside traffic-monitor.
+        Fail when any report raw upsert omitted topic, returned ok:false, or landed outside traffic-monitor.
+        Do not require a SUMMARY submit-knowledge-observation.
         Day page may contain earlier same-day runs — do NOT fail solely because total `## HH:MM`
         count exceeds this run's fetch_count + miss_count. Require this-run sections (Origin/Destination
         matching context) to be present with Origin and Destination lines; count >= fetch+miss - 1.
@@ -609,29 +610,7 @@ stages:
           content: report_append_md,
         );
       END:
-      const summary_up = /nixery(
-        submit-knowledge-observation,
-        topic_hint: knowledge_topic,
-        cue: 'daily traffic summary',
-        claim: 'latest monitor narrative for manager brief promotion',
-        example: summary_md,
-        evidence: { task: traffic_monitor, kind: 'summary' },
-        confidence: observed,
-        tags: ['SUMMARY'],
-      );
-      IF: !*last_nixery_ok();
-        /nixery(
-          submit-knowledge-observation,
-          topic_hint: knowledge_topic,
-          cue: 'daily traffic summary retry',
-          claim: 'latest monitor narrative for manager brief promotion',
-          example: summary_md,
-          evidence: { task: traffic_monitor, kind: 'summary' },
-          confidence: observed,
-          tags: ['SUMMARY'],
-        );
-      END:
-      *assert_upsert_topic(report_up, summary_up, topic: knowledge_topic);
+      *assert_upsert_topic(report_up, topic: knowledge_topic);
       const result = {
         started_at,
         day_kind,

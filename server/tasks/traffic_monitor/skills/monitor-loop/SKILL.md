@@ -44,4 +44,4 @@ Independent proposals; do not coalesce kinds.
 
 ## Per-poll ops
 
-Draft 0–5 novel candidates from browser tool JSON → `*filter_novel_ops_notes` → `submit-knowledge-observation` (PLACE needs `claimed_place` + `bound_poi`). Empty novel → no submit. Never append into `howto_md`.
+Draft 0–5 novel candidates from browser tool JSON → `*filter_novel_ops_notes` → submit when worth persisting. Empty novel → no submit. Never append into `howto_md`. PLACE evidence needs `claimed_place` + `bound_poi` when tagged PLACE.

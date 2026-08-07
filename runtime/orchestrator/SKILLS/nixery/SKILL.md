@@ -11,7 +11,7 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 
 | Call | Result |
 |------|--------|
-| `/nixery(submit-knowledge-observation, …)` | observation under `raw/observations/…` |
+| `/nixery(submit-knowledge-observation, …)` | observation under `raw/observations/…` (soft optional `topic_hint`; KM owns final topic) |
 | `/nixery(append-raw-knowledge-page, topic: …, page: raw/…, …)` | machine timelines under `raw/` only |
 
 ## LLM helpers (inline)
@@ -56,5 +56,5 @@ Inline `{ ok: false, error }` (bad args or transient infra such as registry pull
 ## Rules
 
 - Never pass `source`, `file`, or `path` to knowledge write helpers.
-- Observations need `example` or `quote` plus `evidence`.
+- Observations need `example` or `quote` plus `evidence`. Soft optional `topic_hint` (defaults to `inbox`); never force the task domain slug for cross-cutting lessons — see `worth-persisting-knowledge`.
 - Before breaking stage procedure, call `consult-breaking-change`.

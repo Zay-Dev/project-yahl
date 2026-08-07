@@ -51,6 +51,11 @@ export {
   type TObservationConfidence,
 } from './observation.js';
 export {
+  OBSERVATION_INBOX_TOPIC,
+  resolveObservationTargetTopic,
+  type TObservationTopicSignals,
+} from './observation-topic.js';
+export {
   APPLY_PLAN_OPS,
   formatObservationApplyBody,
   validateApplyPlan,
