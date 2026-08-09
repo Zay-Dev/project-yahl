@@ -43,13 +43,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 export type SetContextToolArguments = SetContextToolCallEnvelope["arguments"];
 
-export const BROWSER_MODES = ["goto", "act", "extract", "observe", "agent"] as const;
+export const BROWSER_MODES = ["goto", "act", "extract", "observe"] as const;
 
 export type TBrowserMode = (typeof BROWSER_MODES)[number];
 
 export type BrowserToolArguments = {
   instruction: string;
-  maxSteps?: number;
   mode: TBrowserMode;
   schema?: Record<string, unknown>;
   url?: string;
@@ -132,20 +131,16 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Control a headless browser via Stagehand. Use for /stagehand(...) in stage logic: web search, page fetch, structured extract, observe elements, or multi-step agent tasks. Returns JSON { ok, data } or { ok: false, error }.",
+        "Control a headless browser via Stagehand. Use for /stagehand(...) in stage logic: navigate, act, extract, or observe. Pass url only with mode goto — including url on act/extract/observe reloads the page and clears form state. Returns JSON { ok, data } or { ok: false, error }.",
       name: "browser",
       parameters: {
         properties: {
           instruction: {
-            description: "Natural language instruction for act, extract, observe, or agent mode.",
+            description: "Natural language instruction for act, extract, or observe; or a short navigate note for goto.",
             type: "string",
           },
-          maxSteps: {
-            description: "Max agent steps when mode is agent. Default 15.",
-            type: "number",
-          },
           mode: {
-            description: "Stagehand operation mode.",
+            description: "Stagehand operation mode. Use goto to navigate; act/extract/observe operate on the current page.",
             enum: [...BROWSER_MODES],
             type: "string",
           },
@@ -154,7 +149,8 @@ export const STAGE_TOOLS = [
             type: "object",
           },
           url: {
-            description: "Required for goto; optional starting URL for other modes.",
+            description:
+              "Required for goto only. Omit for act, extract, and observe — passing url on those modes reloads the page.",
             type: "string",
           },
         },
@@ -342,16 +338,12 @@ export const parseBrowserToolArguments = (raw: string): BrowserToolArguments | n
   if (!parsed.instruction.trim()) return null;
 
   const url = typeof parsed.url === "string" && parsed.url.trim() ? parsed.url.trim() : undefined;
-  const maxSteps = typeof parsed.maxSteps === "number" && parsed.maxSteps > 0
-    ? parsed.maxSteps
-    : undefined;
   const schema = isRecord(parsed.schema) ? parsed.schema : undefined;
 
   if (parsed.mode === "goto" && !url) return null;
 
   return {
     instruction: parsed.instruction.trim(),
-    ...(maxSteps === undefined ? {} : { maxSteps }),
     mode: parsed.mode as TBrowserMode,
     ...(schema === undefined ? {} : { schema }),
     ...(url === undefined ? {} : { url }),

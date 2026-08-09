@@ -24,14 +24,14 @@ describe("browser-proxy-brief", () => {
     const brief = buildBrowserProxyBrief({
       args: {
         instruction: "Click the submit button",
-        mode: "agent",
+        mode: "act",
         url: "https://example.com/form",
       },
       extraBrief: "Prefer the primary CTA in the main landmark.",
     });
 
     assert.match(brief, /Stagehand tools only/);
-    assert.match(brief, /mode: agent/);
+    assert.match(brief, /mode: act/);
     assert.match(brief, /https:\/\/example\.com\/form/);
     assert.match(brief, /primary CTA/);
     assert.doesNotMatch(brief, /origin_resolved|traffic_source|source_ops_md|howto_excerpt/);

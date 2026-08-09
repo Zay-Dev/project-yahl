@@ -5,17 +5,23 @@ import { deriveModelResponseTags } from "./model-response-tags.ts";
 import { parseBrowserToolArguments } from "./stage-tools.ts";
 
 describe("parseBrowserToolArguments", () => {
-  it("parses agent mode with instruction", () => {
-    const result = parseBrowserToolArguments(JSON.stringify({
+  it("rejects agent mode", () => {
+    assert.equal(parseBrowserToolArguments(JSON.stringify({
       instruction: "Search for baby bottles",
       mode: "agent",
       maxSteps: 10,
+    })), null);
+  });
+
+  it("parses act mode without url", () => {
+    const result = parseBrowserToolArguments(JSON.stringify({
+      instruction: "Click the submit button",
+      mode: "act",
     }));
 
     assert.deepEqual(result, {
-      instruction: "Search for baby bottles",
-      maxSteps: 10,
-      mode: "agent",
+      instruction: "Click the submit button",
+      mode: "act",
     });
   });
 

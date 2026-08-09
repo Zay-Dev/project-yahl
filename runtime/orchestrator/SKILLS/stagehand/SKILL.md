@@ -1,6 +1,6 @@
 ---
 name: stagehand
-description: Browser automation via Stagehand — web search, page fetch, structured extract, observe, and multi-step agent tasks.
+description: Browser automation via Stagehand — web search, page fetch, structured extract, and observe.
 ---
 
 # stagehand — Browser automation (Stagehand)
@@ -9,6 +9,7 @@ description: Browser automation via Stagehand — web search, page fetch, struct
 
 - **Browse/search:** use `browser` only — no curl for page fetch, search, or scraping.
 - **Post-extraction validation:** after `browser` returns URLs, use `run_bash` with the curl HEAD pattern below to sanity-check reachability before `set_context`.
+- **`url` is only for `mode: "goto"`.** On `act` / `extract` / `observe`, omit `url`. Passing `url` on those modes **reloads the page** and wipes form state (typed text, autocomplete, open dialogs).
 
 ## Stage YAML: `stagehand`
 
@@ -18,14 +19,12 @@ Optional per-AI-stage overrides (defaults apply when omitted):
 stagehand:
   model: deepseek-v4-flash              # optional — default STAGEHAND_MODEL / LLM_MODEL
   apiBaseUrl: https://api.deepseek.com  # optional — default LLM_BASE_URL
-  preferScreenshot: false               # optional — default false
 ```
 
 | Key | Effect |
 |-----|--------|
 | `model` | Nested Stagehand LLM model (proxy outbound) |
 | `apiBaseUrl` | Nested Stagehand provider base URL (proxy outbound; API key stays env) |
-| `preferScreenshot` | When `false` (default), `mode: "agent"` excludes the Stagehand `screenshot` tool so the agent uses ariaTree / act instead of PNG base64 (avoids huge uncached token spikes) |
 
 Rebuild the agent image after changing this runtime so live sessions pick it up.
 
@@ -33,11 +32,10 @@ Rebuild the agent image after changing this runtime so live sessions pick it up.
 
 ```json
 {
-  "mode": "goto | act | extract | observe | agent",
+  "mode": "goto | act | extract | observe",
   "instruction": "<natural language>",
-  "url": "<optional URL>",
-  "schema": { "<JSON Schema for extract>" },
-  "maxSteps": 15
+  "url": "<required for goto only>",
+  "schema": { "<JSON Schema for extract>" }
 }
 ```
 
@@ -50,31 +48,58 @@ After a successful call, persist results with `set_context`.
 | Mode | Use when |
 |------|----------|
 | `goto` | Navigate to a URL (`url` required) |
-| `act` | Single natural-language action (click, type, scroll) |
-| `extract` | Pull structured or free-text data from the current page |
-| `observe` | List interactive elements / available actions |
-| `agent` | Multi-step research (search, navigate, collect results) |
+| `act` | Single natural-language action on the **current** page (click, type, scroll) — omit `url` |
+| `extract` | Pull structured or free-text data from the **current** page — omit `url` |
+| `observe` | List interactive elements / available actions on the **current** page — omit `url` |
 
 ## YAHL mapping
 
 | YAHL | `browser` call |
 |------|----------------|
-| `/stagehand(search, topic, ...)` | `mode: "agent"`, instruction describes search + required fields |
+| `/stagehand(search, topic, ...)` | `goto` a search entry URL (if needed), then discrete `act` / `extract` / `observe` **without** `url` |
 | `/stagehand(goto, url)` | `mode: "goto"`, `url` |
-| `/stagehand(extract, url, instruction)` | `mode: "goto"` then `mode: "extract"`, or goto URL first in prior call |
+| `/stagehand(extract, url, instruction)` | `mode: "goto"` then `mode: "extract"` **without** `url` |
 | `*browse(url)` | `goto` + `extract` for page text |
 
-## Search example
+## Canonical pattern (goto once, then act/extract)
 
 ```json
 {
-  "mode": "agent",
-  "instruction": "Search the web for '<topic>'. Return top 10 results with title, url, snippet, and publishedAt when available.",
-  "maxSteps": 15
+  "mode": "goto",
+  "url": "https://example.com/news",
+  "instruction": "navigate"
 }
 ```
 
-Prefer a follow-up `extract` with schema when you need typed JSON:
+Then — **do not** include `url`:
+
+```json
+{
+  "mode": "act",
+  "instruction": "Type the query into the search box and click the matching suggestion"
+}
+```
+
+```json
+{
+  "mode": "extract",
+  "instruction": "Extract news articles with title, url, date, and summary"
+}
+```
+
+**Anti-pattern:** repeating the same `url` on every `act` / `extract` / `observe` — each call reloads the page.
+
+## Search example
+
+Navigate to a search page (or engine) once, then act and extract on the current page:
+
+```json
+{
+  "mode": "goto",
+  "url": "https://www.google.com/search?q=<topic>",
+  "instruction": "navigate"
+}
+```
 
 ```json
 {
@@ -105,12 +130,12 @@ Prefer a follow-up `extract` with schema when you need typed JSON:
 Then validate URLs before persisting:
 
 1. Validate each `results[].url` with curl HEAD (see below).
-2. Apply agent judgment on status codes.
+2. Apply judgment on status codes.
 3. Call `set_context` with filtered or adjusted results.
 
 ## Validate extracted URLs
 
-After `agent` or `extract` returns one or more `url` / `source_url` fields, sanity-check reachability with `run_bash` — not `browser`.
+After `extract` returns one or more `url` / `source_url` fields, sanity-check reachability with `run_bash` — not `browser`.
 
 ```bash
 curl -s -o /dev/null -I -w "%{http_code}\n" \
@@ -129,32 +154,13 @@ curl -s -o /dev/null -I -w "%{http_code}\n" \
 
 ```mermaid
 flowchart LR
-  browserCall["browser agent/extract"]
+  browserCall["browser extract"]
   urls["URLs in data"]
   curlHead["run_bash curl HEAD"]
   judge["Agent judges status"]
   persist["set_context"]
 
   browserCall --> urls --> curlHead --> judge --> persist
-```
-
-## Structured scrape example
-
-```json
-{
-  "mode": "goto",
-  "url": "https://example.com/news",
-  "instruction": "navigate"
-}
-```
-
-Then:
-
-```json
-{
-  "mode": "extract",
-  "instruction": "Extract news articles with title, url, date, and summary"
-}
 ```
 
 ## Persistence pattern
@@ -166,14 +172,11 @@ Then:
 ## Timeouts
 
 - `goto`, `act`, `extract`, `observe`: ~120s
-- `agent`: up to ~300s; keep `maxSteps` ≤ 15 unless the stage requires more
 
 ## Notes
 
 - Chromium runs locally in the agent container (headless unless live view).
-- Stagehand’s LLM calls go through a **localhost-only OpenAI-compatible proxy** in the agent runtime. The proxy answers with a nested completion that includes a short **YAHL browse brief** (mode/url + optional opaque text) plus Stagehand’s act/observe/extract/agent prompt — not the full stage chat history. Thinking is forced off so provider `tool_choice` works. Stagehand is CU-only; YAHL persists knowledge after browser tool results.
-- By default `mode: "agent"` **excludes** the Stagehand `screenshot` tool (`preferScreenshot: false`). Opt in via stage `stagehand.preferScreenshot: true` only when visual confirmation is required.
-- `mode: "agent"` is supported for multi-step browse / search / form-fill tasks when a single instruction is clearer than many discrete `act` calls.
-- Reuse the same browser session within a stage; multiple `browser` calls share one Chromium instance.
+- Stagehand’s LLM calls go through a **localhost-only OpenAI-compatible proxy** in the agent runtime. The proxy answers with a nested completion that includes a short **YAHL browse brief** (mode/url + optional opaque text) plus Stagehand’s act/observe/extract prompt — not the full stage chat history. Thinking is forced off so provider `tool_choice` works. Stagehand is CU-only; YAHL persists knowledge after browser tool results.
+- Reuse the same browser session within a stage; multiple `browser` calls share one Chromium instance. Navigate with `goto` only when you need a new URL.
 - For large page text saved to `~/tmp/`, follow up with `/nixery(extract-info, source: ~/tmp/…, need: …)` per `/opt/skills/nixery/SKILL.md`.
 - HEAD may differ from full page load (paywalls, bot blocks, redirect chains without `-L`); use judgment — invalid HEAD does not always mean the URL is useless for a later `goto`.

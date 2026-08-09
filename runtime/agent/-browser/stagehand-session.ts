@@ -7,8 +7,6 @@ import type { BrowserToolArguments } from "@/shared/stage-tools";
 import type { TModelResponse } from "@/shared/transports/-types";
 import type { YahlStagehandConfig } from "@/shared/yahl-stage";
 
-import { normalizeAgentExecuteResult } from "./normalize-agent-result";
-import { resolveAgentExecuteOptions } from "./resolve-agent-execute-options";
 import {
   clearStagehandProxyBrief,
   clearStagehandProxyLlmOverrides,
@@ -21,11 +19,8 @@ import {
 } from "./stagehand-llm-proxy";
 import { resolveChromiumExecutablePath } from "./chromium-executable";
 
-const DEFAULT_AGENT_MAX_STEPS = 15;
-
 const STAGEHAND_CLOSE_TIMEOUT_MS = 30_000;
 
-const AGENT_TIMEOUT_MS = 300_000;
 const BROWSER_TIMEOUT_MS = 120_000;
 
 const CONSECUTIVE_FAILURES_BEFORE_RESET = 2;
@@ -183,7 +178,6 @@ export const closeStagehandSession = async () => {
 
 const executeBrowserCommand = async (
   args: BrowserToolArguments,
-  options?: { preferScreenshot?: boolean },
 ): Promise<TBrowserResult> => {
   const sh = await resolveStagehand();
   const page = sh.context.pages()[0];
@@ -241,22 +235,6 @@ const executeBrowserCommand = async (
     return { data: result, ok: true };
   }
 
-  if (mode === "agent") {
-    const maxSteps = args.maxSteps ?? DEFAULT_AGENT_MAX_STEPS;
-    const agent = sh.agent();
-    const result = await withTimeout(
-      agent.execute(resolveAgentExecuteOptions({
-        instruction: args.instruction,
-        maxSteps,
-        preferScreenshot: options?.preferScreenshot === true,
-      })),
-      AGENT_TIMEOUT_MS,
-      "browser.agent",
-    );
-
-    return { data: normalizeAgentExecuteResult(result), ok: true };
-  }
-
   return { error: `browser: unsupported mode ${mode}`, ok: false };
 };
 
@@ -296,15 +274,11 @@ export const runBrowserCommand = async (
   await ensureStagehandLlmProxy();
   applyBrowserProxyOptions(options);
 
-  const executeOptions = {
-    preferScreenshot: options?.stagehand?.preferScreenshot === true,
-  };
-
   try {
     let result: TBrowserResult;
 
     try {
-      result = await executeBrowserCommand(args, executeOptions);
+      result = await executeBrowserCommand(args);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -333,7 +307,7 @@ export const runBrowserCommand = async (
     applyBrowserProxyOptions(options);
 
     try {
-      result = await executeBrowserCommand(args, executeOptions);
+      result = await executeBrowserCommand(args);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
