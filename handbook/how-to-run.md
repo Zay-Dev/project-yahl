@@ -25,6 +25,8 @@ Copy [`.env.example`](.env.example) to `.env`. Set at minimum:
 - `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` — OneCLI proxy for LLM keys
 - `CURSOR_API_KEY` — required for nixery `media-to-text` (Cursor CLI); not used by worker
 
+Copy [`.env.nixery.example`](.env.nixery.example) to `.env.nixery` for nixery LLM defaults (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and optional phase URLs). Values may use `${LLM_BASE_URL}` / `${LLM_API_KEY}` from `.env`, or concrete URLs/keys. The orchestrator loads `.env.nixery` at startup in [`runtime/orchestrator/config.ts`](../runtime/orchestrator/config.ts) after `.env`; empty keys in `server/nixery/*/index.yml` inherit the same-named `process.env` value. For `compose:up:all`, the file is bind-mounted into the server (not via compose `env_file`) so the spawned orchestrator can read and expand it — the host file must exist.
+
 Copy `server/.env.example` to `server/.env` if you run the server standalone.
 
 ### Docker Compose

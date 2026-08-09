@@ -7,8 +7,8 @@ env:
   OPENAI_API_KEY: ""
   LLM_CALL_RETRY_MAX: ""
   OPENAI_BASE_URL: ""
-  OPENAI_BASE_URL_PLAN: "https://api.deepseek.com"
-  OPENAI_BASE_URL_EXECUTE: "https://api.deepseek.com"
+  OPENAI_BASE_URL_PLAN: ""
+  OPENAI_BASE_URL_EXECUTE: ""
   OPENAI_BASE_URL_REVIEW: ""
   OPENAI_MODEL_PLAN: deepseek-v4-pro
   OPENAI_MODEL_EXECUTE: deepseek-v4-flash

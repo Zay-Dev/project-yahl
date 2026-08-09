@@ -89,6 +89,7 @@ services:
       start_period: 30s
     volumes:
       - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
+      - ./.env.nixery:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env.nixery:ro
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
       - ./data/workspace:/workspace
       - ./data/mastermind:/data/mastermind

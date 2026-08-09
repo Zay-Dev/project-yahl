@@ -85,7 +85,7 @@ pnpm install
 pnpm -r --filter "./infras/**" run build
 ```
 
-Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI, optional `CURSOR_API_KEY`). Then:
+Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI, optional `CURSOR_API_KEY`), and [`.env.nixery.example`](.env.nixery.example) → `.env.nixery` for nixery LLM defaults. Then:
 
 ```bash
 cd project-yahl

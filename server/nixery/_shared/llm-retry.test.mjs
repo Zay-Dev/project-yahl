@@ -38,7 +38,11 @@ describe('resolveLlmCallRetryMax', () => {
 });
 
 describe('isRetryableLlmHttpError', () => {
-  it('retries 408, 429, and >=500', () => {
+  it('retries all 4xx and >=500', () => {
+    assert.equal(isRetryableLlmHttpError({ status: 400 }), true);
+    assert.equal(isRetryableLlmHttpError({ status: 401 }), true);
+    assert.equal(isRetryableLlmHttpError({ status: 402 }), true);
+    assert.equal(isRetryableLlmHttpError({ status: 403 }), true);
     assert.equal(isRetryableLlmHttpError({ status: 408 }), true);
     assert.equal(isRetryableLlmHttpError({ status: 429 }), true);
     assert.equal(isRetryableLlmHttpError({ status: 500 }), true);
@@ -46,9 +50,10 @@ describe('isRetryableLlmHttpError', () => {
     assert.equal(isRetryableLlmHttpError({ statusCode: 429 }), true);
   });
 
-  it('retries numeric string status and message-embedded 5xx', () => {
+  it('retries numeric string status and message-embedded 4xx/5xx', () => {
     assert.equal(isRetryableLlmHttpError({ status: '503' }), true);
     assert.equal(isRetryableLlmHttpError({ statusCode: '429' }), true);
+    assert.equal(isRetryableLlmHttpError({ status: '400' }), true);
     assert.equal(
       isRetryableLlmHttpError(
         new Error('503 <503> ***.Algo: An error occurred in model serving'),
@@ -56,15 +61,11 @@ describe('isRetryableLlmHttpError', () => {
       true,
     );
     assert.equal(isRetryableLlmHttpError(new Error('<503> throttled')), true);
+    assert.equal(isRetryableLlmHttpError(new Error('400 bad request')), true);
   });
 
-  it('does not retry other 4xx or missing status', () => {
-    assert.equal(isRetryableLlmHttpError({ status: 400 }), false);
-    assert.equal(isRetryableLlmHttpError({ status: 401 }), false);
-    assert.equal(isRetryableLlmHttpError({ status: 403 }), false);
-    assert.equal(isRetryableLlmHttpError({ status: '400' }), false);
+  it('does not retry missing status', () => {
     assert.equal(isRetryableLlmHttpError(new Error('network')), false);
-    assert.equal(isRetryableLlmHttpError(new Error('400 bad request')), false);
     assert.equal(isRetryableLlmHttpError(null), false);
   });
 });
@@ -143,14 +144,36 @@ describe('withLlmCallRetry', () => {
     assert.equal(calls, 2);
   });
 
-  it('throws 400 immediately without retry', async () => {
+  it('retries 402 then succeeds', async () => {
+    let calls = 0;
+
+    const result = await withLlmCallRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw Object.assign(new Error('Insufficient Balance'), { status: 402 });
+        }
+        return 'ok';
+      },
+      {
+        maxAttempts: 3,
+        sleepMs: 10,
+        sleep: async () => {},
+      },
+    );
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 2);
+  });
+
+  it('throws missing-status errors immediately without retry', async () => {
     let calls = 0;
 
     await assert.rejects(
       () => withLlmCallRetry(
         async () => {
           calls += 1;
-          throw Object.assign(new Error('bad request'), { status: 400 });
+          throw new Error('network');
         },
         {
           maxAttempts: 3,
@@ -160,7 +183,7 @@ describe('withLlmCallRetry', () => {
         },
       ),
       (error) => {
-        assert.equal(error.status, 400);
+        assert.equal(error instanceof Error && error.message, 'network');
         return true;
       },
     );

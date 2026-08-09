@@ -54,7 +54,7 @@ export const isRetryableLlmHttpError = (error: unknown) => {
 
   if (status === undefined) return false;
 
-  return status === 408 || status === 429 || status >= 500;
+  return status >= 400;
 };
 
 const defaultSleep = (ms: number) =>

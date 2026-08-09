@@ -1,15 +1,15 @@
+import { writeSharedOneCliOverride } from '@/orchestrator/-docker/compose-onecli';
 import {
   agentNoProxy,
   loadOneCliSnapshot,
   readOneCliComposeOverride,
 } from '@/orchestrator/-docker/onecli-snapshot';
-import { writeSharedOneCliOverride } from '@/orchestrator/-docker/compose-onecli';
 
 const PLACEHOLDER_KEYS = new Set(['', 'placeholder', 'sk-no-auth-required']);
 
 const isEnvSentinel = (value: string) => PLACEHOLDER_KEYS.has(value.trim().toLowerCase());
 
-const resolveDefEnv = (defEnv?: Record<string, string>) => {
+export const resolveDefEnv = (defEnv?: Record<string, string>) => {
   const resolved: Record<string, string> = {};
 
   for (const [key, rawValue] of Object.entries(defEnv ?? {})) {
