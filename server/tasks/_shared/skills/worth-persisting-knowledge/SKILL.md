@@ -20,7 +20,7 @@ Worth persisting (tag when clear; tags are hints only):
 
 ### Observed failures (any tool)
 
-A concrete tool failure **is** an observation (`confidence: observed`): `ok:false`, rejected args, bind miss, extract empty when UI showed data, etc. Submit it — do not wait for a later success. Prefer zero does **not** apply here.
+A concrete tool failure **is** an observation (`confidence: observed`): `ok:false`, rejected args, bind miss, extract empty when UI showed data, etc. Follow `resolve-errors-with-knowledge` immediately; its atomic resolver records the failure before searching existing knowledge. Do not wait for a later success and do not separately submit the same failure. Prefer zero does **not** apply here.
 
 ### Fail then succeed (any tool)
 
@@ -39,4 +39,4 @@ If you later find a working path after that failure, submit a **second**, separa
 
 Best-effort content slug, or omit (lands in `inbox`). Wrong hint is OK — Knowledge Manager re-homes by content.
 
-See `~/task-skills/submit-knowledge-observation/SKILL.md` and `~/task-skills/knowledge-wiki-style/SKILL.md`.
+For failures, see `~/task-skills/resolve-errors-with-knowledge/SKILL.md`. For other observations and the second success note, see `~/task-skills/submit-knowledge-observation/SKILL.md` and `~/task-skills/knowledge-wiki-style/SKILL.md`.

@@ -11,6 +11,7 @@ Use the **`nixery`** tool for `/nixery(...)` in stage logic.
 
 | Call | Result |
 |------|--------|
+| `/nixery(resolve-error-with-knowledge, tool: …, cue: …, claim: …, example\|quote: …, evidence: …)` | atomically persist failure, then return `found` / `not_found` / `unavailable` with citations and guidance |
 | `/nixery(submit-knowledge-observation, …)` | observation under `raw/observations/…` (soft optional `topic_hint`; KM owns final topic) |
 | `/nixery(append-raw-knowledge-page, topic: …, page: raw/…, …)` | machine timelines under `raw/` only |
 
@@ -45,7 +46,7 @@ Overnight Knowledge Manager is a **multi-stage** task: list topics → per-topic
 
 ## Reads
 
-Knowledge reads use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `list-manager-topics`, `group-manager-topics`).
+Knowledge reads use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `list-manager-topics`, `group-manager-topics`). `get-knowledge` and `search-knowledge` remain orchestrator-only (`inlineTool: false`).
 
 Def `output` contract (`server/nixery/<def>/index.yml`): `validate` (default `validation.mjs`), `default` output filename, optional `inlineTool`, and optional `retry` (max container re-runs after validation failure; default **3**; `0` = no re-run).
 

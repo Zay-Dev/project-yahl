@@ -29,6 +29,9 @@ describe('listInlineNixeryDefIds', () => {
       loadNixeryDefFromFile(path.join(nixeryRoot, defId, 'index.yml'))));
 
     assert.ok(defs.every((def) => resolveNixeryOutputSpec(def).inlineTool));
+    assert.ok(ids.includes('resolve-error-with-knowledge'));
+    assert.ok(!ids.includes('get-knowledge'));
+    assert.ok(!ids.includes('search-knowledge'));
     assert.ok(defs.length >= 1);
   });
 });

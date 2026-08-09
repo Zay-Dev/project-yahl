@@ -1,21 +1,30 @@
-id: submit-knowledge-observation
-description: Append a validated observation note under topics/{slug}/raw/observations — no mode/section merge
+id: resolve-error-with-knowledge
+description: Persist a tool failure observation, then search existing knowledge for a cited solution
 
-packages: [nodejs]
+packages: [shell, gnugrep, nodejs]
 
 env:
+  OPENAI_BASE_URL: ""
+  OPENAI_MODEL: deepseek-v4-pro
+  OPENAI_API_KEY: ""
+  LLM_CALL_RETRY_MAX: ""
+  OPENAI_TEMPERATURE: "0.2"
+  OPENAI_MAX_TOKENS: "4096"
   WIKI_GRAPHQL_URL: ""
   WIKI_API_TOKEN: ""
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
 
 nixery:
   default: "true"
-  tools: [shell, nodejs]
+  tools: [shell, gnugrep, nodejs]
   policies:
-    - tools: [shell, nodejs]
+    - tools: [shell, gnugrep, nodejs]
       mode: "true"
 
 input:
+  tool:
+    type: string
+    required: true
   topic:
     type: string
     required: false
@@ -24,10 +33,10 @@ input:
     required: false
   cue:
     type: string
-    required: false
+    required: true
   claim:
     type: string
-    required: false
+    required: true
   example:
     type: string
     required: false
@@ -36,17 +45,17 @@ input:
     required: false
   evidence:
     type: string
-    required: false
+    required: true
   confidence:
     type: string
     required: false
   tags:
     type: string
     required: false
-  observation:
+  sessionId:
     type: string
     required: false
-  sessionId:
+  requestId:
     type: string
     required: false
   output:

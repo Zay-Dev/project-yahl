@@ -37,6 +37,7 @@ export type TUpsertKnowledgePageInput = {
   page?: string;
   section?: string;
   seedUrls?: string[];
+  skipTopicRegistry?: boolean;
   title?: string;
   topic?: string;
   topicText?: string;
@@ -284,8 +285,16 @@ export const runUpsertKnowledgePage = async (
   }
 
   try {
-    const resolved = await resolveTopicForPersist({ seedUrls, topic, topicText });
-    const canonicalTopic = resolved.canonical;
+    const canonicalTopic = args.skipTopicRegistry
+      ? slugifyPageSegment(topic || topicText || '')
+      : (await resolveTopicForPersist({ seedUrls, topic, topicText })).canonical;
+
+    if (!canonicalTopic) {
+      return {
+        error: 'upsert-knowledge-page requires a resolvable topic',
+        ok: false,
+      };
+    }
 
     if (key) {
       const written = await upsertKnowledgeKey({

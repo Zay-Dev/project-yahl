@@ -1,6 +1,6 @@
 # submit-knowledge-observation
 
-Agent-facing **only** knowledge write. Submit an atomic observation note. Do **not** call `upsert-knowledge-page` or `dedup-knowledge`.
+Agent-facing write for general observations and verified success notes. Concrete tool failures go through `resolve-errors-with-knowledge`, which submits the failure before lookup. Do **not** call `upsert-knowledge-page` or `dedup-knowledge`.
 
 When to submit → `~/task-skills/worth-persisting-knowledge/SKILL.md`.
 
