@@ -36,7 +36,7 @@ For each route in bodies: `label` + ETA + **`path` when non-empty**. Prefer offi
 
 | Kind | When | Body |
 |------|------|------|
-| A Initial summary | Successful fetch #2 | All routes + path + recommendation |
+| A Initial summary | Successful fetches #1 and #2 | All routes + path + recommendation |
 | B Heartbeat | Every 15 min when `*proactivity_allows_heartbeat` | Short pulse + primary/alts paths briefly |
 | C Abnormal | `should_notify_abnormal` (fetch ≥ 2) | Spike / incident / cleared — never suppress for low proactivity |
 

@@ -60,10 +60,14 @@ const resolveTaskIdForSession = async (sessionId: string, taskId?: string) => {
   }
 };
 
-const toInlineError = (error: unknown) => {
+const toInlineError = (error: unknown, defRunCompleted = false) => {
   const message = error instanceof Error ? error.message : String(error);
 
-  return { ok: false as const, error: message };
+  return {
+    ok: false as const,
+    error: message,
+    ...(defRunCompleted ? { defRunCompleted: true as const } : {}),
+  };
 };
 
 export const runNixeryInlineTool = async (params: {
@@ -101,18 +105,26 @@ export const runNixeryInlineTool = async (params: {
       output,
     };
 
-    await runNixeryDef({
-      defId,
-      input,
-      sessionId: params.sessionId,
-      taskId,
-    });
+    try {
+      await runNixeryDef({
+        defId,
+        input,
+        sessionId: params.sessionId,
+        taskId,
+      });
+    } catch (error) {
+      return toInlineError(error, true);
+    }
 
     const outputPath = path.join(resolveSessionNixeryDir(params.sessionId, defId), output);
     const raw = await fs.readFile(outputPath, 'utf8');
     const parsed = await parseInlineToolPayload({ defId, outputPath, raw });
+    const result = resolveNixeryInlineToolResult(parsed);
 
-    return resolveNixeryInlineToolResult(parsed);
+    return {
+      ...result,
+      defRunCompleted: true as const,
+    };
   } catch (error) {
     return toInlineError(error);
   }

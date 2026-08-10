@@ -2,6 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { runSingleLlmCompletion } from '../_shared/llm-completion.mjs';
+import {
+  appendNixeryRetryUserMessage,
+  readNixeryRetryFeedback,
+} from '../_shared/nixery-retry-feedback.mjs';
 import { logProgress, resolveDefId } from '../_shared/run-agent.mjs';
 import { readSessionFile } from '../_shared/session-fs.mjs';
 
@@ -34,21 +38,25 @@ const main = async () => {
   logProgress(defId, `start source=${source.slice(0, 120)}`);
 
   const sourceContent = await readSessionFile(source);
+  const messages = [
+    {
+      content: 'You are the YAHL extract-info helper. Extract only what was requested. Return plain text or JSON.',
+      role: 'system',
+    },
+    {
+      content: [
+        `Need: ${need}`,
+        sourceContent ? `Source:\n${sourceContent}` : `Source path: ${source}`,
+      ].join('\n\n'),
+      role: 'user',
+    },
+  ];
+
+  appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
+
   const content = await runSingleLlmCompletion({
     defId,
-    messages: [
-      {
-        content: 'You are the YAHL extract-info helper. Extract only what was requested. Return plain text or JSON.',
-        role: 'system',
-      },
-      {
-        content: [
-          `Need: ${need}`,
-          sourceContent ? `Source:\n${sourceContent}` : `Source path: ${source}`,
-        ].join('\n\n'),
-        role: 'user',
-      },
-    ],
+    messages,
   });
 
   const gate = {

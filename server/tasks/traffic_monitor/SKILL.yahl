@@ -511,9 +511,9 @@ stages:
               mode: append,
               content: *format_fetch_section(fetch_with_status, analysis, origin: bind_origin, destination: bind_destination, timezone: timezone),
             );
-            IF: fetches.length === 2 && !summary_notified;
+            IF: fetches.length <== 2 && !summary_notified;
               *propose_kind_a_summary(fetches, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications);
-              summary_notified = true;
+              summary_notified = fetches.length >== 2;
               *set_context(summary_notified, notifications);
             END:
             IF: *heartbeat_due(notifyPreference, started_at, last_heartbeat_at);

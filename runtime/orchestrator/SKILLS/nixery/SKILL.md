@@ -48,11 +48,15 @@ Overnight Knowledge Manager is a **multi-stage** task: list topics → per-topic
 
 Knowledge reads use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `list-manager-topics`, `group-manager-topics`). `get-knowledge` and `search-knowledge` remain orchestrator-only (`inlineTool: false`).
 
-Def `output` contract (`server/nixery/<def>/index.yml`): `validate` (default `validation.mjs`), `default` output filename, optional `inlineTool`, and optional `retry` (max container re-runs after validation failure; default **3**; `0` = no re-run).
+Def `output` contract (`server/nixery/<def>/index.yml`): `validate` (default `validation.mjs`), `default` output filename, optional `inlineTool`, and optional `retry` (max attempts per def run; default **10**; `0` treated as **1** attempt).
 
-## Soft-fail then abandon
+## Soft-fail (unified)
 
-Inline `{ ok: false, error }` (bad args or transient infra such as registry pull blips) soft-fails up to `YAHL_NIXERY_INLINE_RETRY_MAX` (default **3**). While `retryRemaining > 0`, fix args and retry. After the budget: `{ ok: false, abandoned: true }` — **continue the stage** (skip that call / move on). Soft-fail never aborts the stage; orchestrator `nixeryRun` stages remain hard failures.
+Each nixery def run retries up to `output.retry` attempts (default **10**). On validation failure or gate `{ ok: false }`, the orchestrator restarts the container and injects `input.nixeryRetry.feedback` as a user message for in-container agents.
+
+After that budget is exhausted, inline calls return `{ ok: false, abandoned: true }` — **continue the stage**. Soft-fail never aborts the stage; orchestrator `nixeryRun` stages remain hard failures after exhaustion.
+
+Pre-run failures only (invalid tool argv, def not inline) use a thin stage budget (`YAHL_NIXERY_INLINE_RETRY_MAX`, default **1**).
 
 ## Rules
 

@@ -451,14 +451,19 @@ class YahlAgentRunner {
               requestId: this.requestId,
               sessionId: this.sessionId,
             });
+            const { defRunCompleted, ...gate } = result as Record<string, unknown> & {
+              defRunCompleted?: boolean;
+              ok: boolean;
+            };
 
-            if (!result.ok) {
+            if (!gate.ok && defRunCompleted !== true) {
               this.nixerySoftFails += 1;
             }
 
             return resolveNixerySoftFailToolResult({
+              abandonAfterDefRun: defRunCompleted === true,
               maxRetries: this.maxNixeryInlineRetries,
-              result,
+              result: gate as Record<string, unknown> & { ok: boolean },
               softFailCount: this.nixerySoftFails,
             });
           } catch (error) {

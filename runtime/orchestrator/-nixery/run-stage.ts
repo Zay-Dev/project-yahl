@@ -30,6 +30,13 @@ export type TNixeryRunResult = {
   containerName: string;
 };
 
+export type TNixeryRetryState = {
+  attempt: number;
+  feedback?: string;
+  isFinalAttempt: boolean;
+  maxAttempts: number;
+};
+
 let activeNixeryContainer: string | null = null;
 let sigtermHookRegistered = false;
 
@@ -58,6 +65,39 @@ const registerSigtermHook = () => {
 
 const resolveDiagnosticsLogPath = (sessionId: string, defId: string) =>
   path.join(workspaceRoot(), 'sessions', sessionId, 'diagnostics', `nixery-${defId}.log`);
+
+const resolveMaxAttempts = (defRetry: number) => (defRetry < 1 ? 1 : defRetry);
+
+const writeSessionInput = async (
+  sessionDir: string,
+  input: Record<string, unknown>,
+) => {
+  await fs.writeFile(
+    path.join(sessionDir, 'input.json'),
+    `${JSON.stringify(input, null, 2)}\n`,
+    'utf8',
+  );
+};
+
+const readOkFalseError = async (
+  sessionDir: string,
+  outputHint: string,
+): Promise<string | null> => {
+  try {
+    const raw = await fs.readFile(path.join(sessionDir, outputHint), 'utf8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+    if (parsed?.ok !== false) {
+      return null;
+    }
+
+    return typeof parsed.error === 'string' && parsed.error.trim()
+      ? parsed.error.trim()
+      : 'nixery failed';
+  } catch {
+    return null;
+  }
+};
 
 export const teardownNixeryContainer = async (
   containerName: string,
@@ -110,7 +150,9 @@ export const runNixeryDef = async (params: {
   const sessionDir = resolveSessionNixeryDir(params.sessionId, params.defId);
   const containerName = resolveNixeryContainerName(params.sessionId, params.defId);
   const diagnosticsLogPath = resolveDiagnosticsLogPath(params.sessionId, params.defId);
-  const maxRetries = resolveNixeryOutputRetry(def);
+  const maxAttempts = resolveMaxAttempts(resolveNixeryOutputRetry(def));
+  const baseInput = { ...params.input };
+  const outputHint = resolveNixeryOutputHint(def, baseInput);
 
   await fs.mkdir(sessionDir, { recursive: true });
   await fs.mkdir(path.dirname(diagnosticsLogPath), { recursive: true });
@@ -119,14 +161,6 @@ export const runNixeryDef = async (params: {
     `\n--- run ${new Date().toISOString()} def=${params.defId} container=${containerName} ---\n`,
     'utf8',
   );
-
-  await fs.writeFile(
-    path.join(sessionDir, 'input.json'),
-    JSON.stringify(params.input, null, 2),
-    'utf8',
-  );
-
-  const outputHint = resolveNixeryOutputHint(def, params.input);
 
   if (!def.run?.entry?.length) {
     throw new Error(`[nixery] def ${params.defId} requires run.entry`);
@@ -152,9 +186,23 @@ export const runNixeryDef = async (params: {
 
   let stopLogStream: (() => void) | undefined;
   let lastError: unknown;
+  let retryFeedback: string | undefined;
 
   try {
-    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const isFinalAttempt = attempt + 1 >= maxAttempts;
+      const nixeryRetry: TNixeryRetryState = {
+        attempt,
+        isFinalAttempt,
+        maxAttempts,
+        ...(retryFeedback ? { feedback: retryFeedback } : {}),
+      };
+
+      await writeSessionInput(sessionDir, {
+        ...baseInput,
+        nixeryRetry,
+      });
+
       await clearStaleNixeryOutput({
         defDefault: def.output?.default,
         outputHint,
@@ -164,7 +212,7 @@ export const runNixeryDef = async (params: {
       console.log(
         `[nixery] run start def=${params.defId} sessionId=${params.sessionId} `
         + `container=${containerName} image=${image}`
-        + (maxRetries > 0 ? ` attempt=${attempt + 1}/${maxRetries + 1}` : ''),
+        + ` attempt=${attempt + 1}/${maxAttempts}`,
       );
 
       try {
@@ -189,6 +237,20 @@ export const runNixeryDef = async (params: {
           sessionDir,
         });
 
+        const okFalseError = await readOkFalseError(sessionDir, outputHint);
+
+        if (okFalseError && !isFinalAttempt) {
+          stopLogStream?.();
+          stopLogStream = undefined;
+          await teardownNixeryContainer(containerName, params.sessionId, params.defId);
+          retryFeedback = okFalseError;
+          console.log(
+            `[nixery] ok:false soft-fail; retry attempt=${attempt + 1}/${maxAttempts} `
+            + `def=${params.defId} (${okFalseError})`,
+          );
+          continue;
+        }
+
         lastError = undefined;
         break;
       } catch (error) {
@@ -198,14 +260,15 @@ export const runNixeryDef = async (params: {
 
         await teardownNixeryContainer(containerName, params.sessionId, params.defId);
 
-        if (attempt >= maxRetries) {
+        if (isFinalAttempt) {
           throw error;
         }
 
         const reason = error instanceof Error ? error.message : String(error);
 
+        retryFeedback = reason;
         console.log(
-          `[nixery] validation failed; retry attempt=${attempt + 1}/${maxRetries} `
+          `[nixery] validation failed; retry attempt=${attempt + 1}/${maxAttempts} `
           + `def=${params.defId} (${reason})`,
         );
       }

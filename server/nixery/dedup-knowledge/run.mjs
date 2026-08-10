@@ -11,6 +11,10 @@ import {
   resolveDefId,
 } from '../_shared/run-agent.mjs';
 import {
+  appendNixeryRetryUserMessage,
+  readNixeryRetryFeedback,
+} from '../_shared/nixery-retry-feedback.mjs';
+import {
   callChatForPhase,
   resolvePhaseLlmConfig,
 } from '/opt/nixery/def/phase-llm.mjs';
@@ -184,6 +188,7 @@ const runAgentPhase = async ({
   maxRounds,
   phase,
   prompt,
+  retryFeedback,
   tools,
   toolHandler,
 }) => {
@@ -195,6 +200,8 @@ const runAgentPhase = async ({
     },
     { content: prompt, role: 'user' },
   ];
+
+  appendNixeryRetryUserMessage(messages, retryFeedback);
 
   if (!hasRealApiKey(config.apiKey) && !process.env.HTTPS_PROXY && !process.env.HTTP_PROXY) {
     throw new Error('OPENAI_API_KEY is required when OneCLI proxy env is not set');
@@ -338,11 +345,13 @@ const main = async () => {
   const executeTemplate = await readText(path.join(defRoot, 'prompt.execute.template.md'));
   const reviewTemplate = await readText(path.join(defRoot, 'prompt.review.template.md'));
   const scopeText = scope.length ? scope.join(', ') : '(all pages)';
+  const retryFeedback = readNixeryRetryFeedback(input);
 
   logProgress(defId, `plan start topic=${topic} dryRun=${dryRun}`);
 
   await runAgentPhase({
     defId,
+    retryFeedback,
     maxRounds: 12,
     phase: 'plan',
     prompt: renderTemplate(planTemplate, { purpose, scope: scopeText, topic }),
@@ -392,6 +401,7 @@ const main = async () => {
         purpose,
         topic,
       }),
+      retryFeedback,
       tools: [shellTool],
       toolHandler: async (name, args) => {
         if (name !== 'shell') {
@@ -439,6 +449,7 @@ const main = async () => {
         topic,
         workQueue: JSON.stringify(workQueue, null, 2),
       }),
+      retryFeedback,
       tools: [shellTool, wikiTool],
       toolHandler: async (name, args) => {
         if (name === 'shell') {
@@ -479,6 +490,7 @@ const main = async () => {
         purpose,
         topic,
       }),
+      retryFeedback,
       tools: [shellTool],
       toolHandler: async (name, args) => {
         if (name !== 'shell') {

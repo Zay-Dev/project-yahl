@@ -2,6 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { runSingleLlmCompletion } from '../_shared/llm-completion.mjs';
+import {
+  appendNixeryRetryUserMessage,
+  readNixeryRetryFeedback,
+} from '../_shared/nixery-retry-feedback.mjs';
 import { logProgress, resolveDefId } from '../_shared/run-agent.mjs';
 import {
   parseJsonValue,
@@ -39,33 +43,37 @@ const main = async () => {
 
   logProgress(defId, `start topic=${topic.slice(0, 120)} source=${source.slice(0, 120)}`);
 
+  const messages = [
+    {
+      content: 'You are the YAHL research helper. Return Markdown with sections: Summary, Key points, Quotes/data, Open questions, Source URL.',
+      role: 'system',
+    },
+    {
+      content: [
+        mission
+          ? `Mission (do NOT describe the YAHL task process):\n${mission}`
+          : '',
+        direction ? `Direction: ${direction}` : '',
+        url ? `Source URL: ${url}` : '',
+        topic ? `Topic: ${topic}` : '',
+        sourceContent
+          ? `Reference source — study according to direction:\n${sourceContent}`
+          : '',
+        guidelineContent,
+        facts ? `Facts:\n${JSON.stringify(facts, null, 2).slice(0, 8_000)}` : '',
+        typeof input.need === 'string' && input.need.trim()
+          ? `Need: ${input.need.trim()}`
+          : '',
+      ].filter(Boolean).join('\n\n'),
+      role: 'user',
+    },
+  ];
+
+  appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
+
   const markdown = await runSingleLlmCompletion({
     defId,
-    messages: [
-      {
-        content: 'You are the YAHL research helper. Return Markdown with sections: Summary, Key points, Quotes/data, Open questions, Source URL.',
-        role: 'system',
-      },
-      {
-        content: [
-          mission
-            ? `Mission (do NOT describe the YAHL task process):\n${mission}`
-            : '',
-          direction ? `Direction: ${direction}` : '',
-          url ? `Source URL: ${url}` : '',
-          topic ? `Topic: ${topic}` : '',
-          sourceContent
-            ? `Reference source — study according to direction:\n${sourceContent}`
-            : '',
-          guidelineContent,
-          facts ? `Facts:\n${JSON.stringify(facts, null, 2).slice(0, 8_000)}` : '',
-          typeof input.need === 'string' && input.need.trim()
-            ? `Need: ${input.need.trim()}`
-            : '',
-        ].filter(Boolean).join('\n\n'),
-        role: 'user',
-      },
-    ],
+    messages,
   });
 
   if (sessionOutput) {

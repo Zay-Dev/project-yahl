@@ -2,6 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { runSingleLlmCompletion } from '../_shared/llm-completion.mjs';
+import {
+  appendNixeryRetryUserMessage,
+  readNixeryRetryFeedback,
+} from '../_shared/nixery-retry-feedback.mjs';
 import { logProgress, resolveDefId } from '../_shared/run-agent.mjs';
 
 const DEFAULT_RUBRIC =
@@ -201,22 +205,28 @@ const main = async () => {
 
     const content = await runSingleLlmCompletion({
       defId,
-      messages: [
-        { content: buildSystemPrompt({ classifyResume, minScore }), role: 'system' },
-        {
-          content: [
-            '## Rubric\n',
-            rubricText,
-            '\n## Context snapshot\n',
-            JSON.stringify(contextSnapshot, null, 2),
-            stageSnapshot
-              ? `\n## Stage snapshot\n${JSON.stringify(stageSnapshot, null, 2)}`
-              : '',
-            buildRebuttalSection(contextSnapshot),
-          ].join('\n'),
-          role: 'user',
-        },
-      ],
+      messages: (() => {
+        const messages = [
+          { content: buildSystemPrompt({ classifyResume, minScore }), role: 'system' },
+          {
+            content: [
+              '## Rubric\n',
+              rubricText,
+              '\n## Context snapshot\n',
+              JSON.stringify(contextSnapshot, null, 2),
+              stageSnapshot
+                ? `\n## Stage snapshot\n${JSON.stringify(stageSnapshot, null, 2)}`
+                : '',
+              buildRebuttalSection(contextSnapshot),
+            ].join('\n'),
+            role: 'user',
+          },
+        ];
+
+        appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
+
+        return messages;
+      })(),
     });
 
     const parsed = parseVerifyContent({

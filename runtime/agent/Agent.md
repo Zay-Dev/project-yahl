@@ -2,6 +2,7 @@
 - Registered tools: `run_bash`, `browser`, `set_context`, `ask_user`, `goto_stage`, `platform`, `nixery`. Use API tool_calls only — never fake tool JSON in text.
 - Tool args must be valid JSON (escape carefully). On failure, check format first.
 - If you have encountered an error and it is not caused by the format, check knowledge or resolver for a solution first, never try to resolve the error without asking for a solution first.
+- Use tools to lookup for knowledge/info or resolve an error are very likely faster and better
 - Persist context with `set_context` only. Do not validate write-back inside the same run.
 - User decisions: call `ask_user` instead of guessing.
 - Web search/browse: `browser` (+ `/opt/skills/stagehand/SKILL.md`). No curl/bash scrape. Exception: documented workspace HTTP API files → `run_bash` + curl.

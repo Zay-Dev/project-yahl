@@ -2,6 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { runSingleLlmCompletion } from '../_shared/llm-completion.mjs';
+import {
+  appendNixeryRetryUserMessage,
+  readNixeryRetryFeedback,
+} from '../_shared/nixery-retry-feedback.mjs';
 import { logProgress, resolveDefId } from '../_shared/run-agent.mjs';
 import { extractJsonFromText, parseJsonValue } from '../_shared/session-fs.mjs';
 
@@ -32,35 +36,39 @@ const main = async () => {
 
   logProgress(defId, `start stage=${JSON.stringify(stage)}`);
 
+  const messages = [
+    {
+      content: [
+        'You are the YAHL design-questions helper.',
+        'Return JSON only: {"batches":[{"batchId":"...","title":"...","questions":[...]}],"done":boolean}',
+        'Each batch must contain only independently answerable questions (unique questionRef per batch).',
+        'Prefer multipleChoice over text when 2–6 discrete answers fit; use text only for open-ended gaps.',
+        'Question kinds: "text" or "multipleChoice" (radio when allowMultiple false, checkboxes when true).',
+        'multipleChoice requires at least 2 options with non-empty id and label.',
+        'Do not include allowFreeText — free-text counter-option is built into the UI.',
+        'Group independent gaps into one batch; dependent questions go in a later batch (done:false).',
+      ].join(' '),
+      role: 'system',
+    },
+    {
+      content: [
+        mission
+          ? `Mission (do NOT ask about the task process — ask about the subject/user goal):\n${mission}`
+          : '',
+        `Stage: ${JSON.stringify(stage)}`,
+        `Gaps: ${JSON.stringify(gaps, null, 2).slice(0, 8_000)}`,
+        `Prior Q&A: ${JSON.stringify(priorQa, null, 2).slice(0, 8_000)}`,
+        goal ? `Goal: ${goal}` : '',
+      ].filter(Boolean).join('\n\n'),
+      role: 'user',
+    },
+  ];
+
+  appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
+
   const content = await runSingleLlmCompletion({
     defId,
-    messages: [
-      {
-        content: [
-          'You are the YAHL design-questions helper.',
-          'Return JSON only: {"batches":[{"batchId":"...","title":"...","questions":[...]}],"done":boolean}',
-          'Each batch must contain only independently answerable questions (unique questionRef per batch).',
-          'Prefer multipleChoice over text when 2–6 discrete answers fit; use text only for open-ended gaps.',
-          'Question kinds: "text" or "multipleChoice" (radio when allowMultiple false, checkboxes when true).',
-          'multipleChoice requires at least 2 options with non-empty id and label.',
-          'Do not include allowFreeText — free-text counter-option is built into the UI.',
-          'Group independent gaps into one batch; dependent questions go in a later batch (done:false).',
-        ].join(' '),
-        role: 'system',
-      },
-      {
-        content: [
-          mission
-            ? `Mission (do NOT ask about the task process — ask about the subject/user goal):\n${mission}`
-            : '',
-          `Stage: ${JSON.stringify(stage)}`,
-          `Gaps: ${JSON.stringify(gaps, null, 2).slice(0, 8_000)}`,
-          `Prior Q&A: ${JSON.stringify(priorQa, null, 2).slice(0, 8_000)}`,
-          goal ? `Goal: ${goal}` : '',
-        ].filter(Boolean).join('\n\n'),
-        role: 'user',
-      },
-    ],
+    messages,
   });
 
   const parsed = extractJsonFromText(content);

@@ -5,6 +5,9 @@ import { validateKnowledgeObservation } from '/opt/nixery/knowledge-wiki/index.j
 
 import { resolveErrorWithKnowledge } from '../_shared/error-knowledge-resolver.mjs';
 import { runKnowledgeSearchAgent } from '../_shared/knowledge-search-agent.mjs';
+import {
+  readNixeryRetryMeta,
+} from '../_shared/nixery-retry-feedback.mjs';
 import { resolveObservationIncidentId } from '../_shared/observation-incident.mjs';
 import { buildObservationInput } from '../_shared/observation-input.mjs';
 import { logProgress, resolveDefId } from '../_shared/run-agent.mjs';
@@ -45,6 +48,7 @@ const main = async () => {
     : 'result.json';
   const outputPath = path.join(workspace, outputName);
   const lookupPath = path.join(workspace, LOOKUP_OUTPUT);
+  const { isFinalAttempt } = readNixeryRetryMeta(input);
 
   const gate = await resolveErrorWithKnowledge({
     buildObservationInput,
@@ -91,6 +95,14 @@ const main = async () => {
 
   if (gate.status === 'unavailable') {
     logProgress(defId, `lookup unavailable error=${gate.lookupError}`);
+
+    if (!isFinalAttempt) {
+      logProgress(
+        defId,
+        'lookup incomplete on non-final attempt; exiting for orchestrator soft-fail restart',
+      );
+      process.exit(1);
+    }
   }
 
   await writeGate(outputPath, gate);

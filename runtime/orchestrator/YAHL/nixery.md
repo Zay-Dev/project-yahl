@@ -8,11 +8,27 @@ Plug-and-play defs for `/nixery(defId, …)`. The set of defs can change — tre
 - **Orchestrator `nixeryRun`**: non-inline defs (e.g. knowledge reads). After the stage, read `~/nixery/{defId}/{output}` when the task/stage expects it.
 - If a `defId` is missing, not inline-enabled, or forbidden for this task: fix args, pick another path from the skill, or skip — do not invent defs.
 
-## Soft-fail then abandon
+## Soft-fail (unified)
 
-Inline `{ ok: false, error }` (bad args or transient infra such as registry pull blips) soft-fails up to `YAHL_NIXERY_INLINE_RETRY_MAX` (default **3**). While `retryRemaining > 0`, fix args and retry. After the budget: `{ ok: false, abandoned: true }` — **continue the stage** (skip that call / move on). Soft-fail never aborts the stage; orchestrator `nixeryRun` stages remain hard failures.
+Each `runNixeryDef` call retries up to `output.retry` **attempts** (default **10**, override in the def `index.yml`). On validation failure or gate `{ ok: false }`, the orchestrator rewrites `input.json` with:
 
-Def YAML `output.retry` (default **3**) controls container re-runs after validation failure (separate from inline soft-fail).
+```json
+"nixeryRetry": {
+  "attempt": 0,
+  "maxAttempts": 10,
+  "isFinalAttempt": false,
+  "feedback": "<error text>"
+}
+```
+
+In-container LLM agents append `feedback` as a **user** message and re-run. Pure Node defs ignore it safely.
+
+After the attempt budget is exhausted:
+
+- **Inline**: tool result `{ ok: false, error, abandoned: true }` — **continue the stage** (skip that call / move on). Soft-fail never aborts the stage.
+- **`nixeryRun`**: hard failure.
+
+Pre-run failures only (invalid `/nixery` argv, def not inline, namespace gate) still use a thin stage soft-fail budget (`YAHL_NIXERY_INLINE_RETRY_MAX`, default **1**).
 
 ## Policy pointers
 

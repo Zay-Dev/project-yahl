@@ -11,6 +11,10 @@ import {
   resolveDefId,
 } from '../_shared/run-agent.mjs';
 import {
+  appendNixeryRetryUserMessage,
+  readNixeryRetryFeedback,
+} from '../_shared/nixery-retry-feedback.mjs';
+import {
   handleWriteWorkspaceFileCall,
   writeWorkspaceFileTool,
 } from '../_shared/workspace-write.mjs';
@@ -253,6 +257,8 @@ const main = async () => {
       role: 'user',
     },
   ];
+
+  appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const json = await callChatWithLog(defId, round, () => callChat({
