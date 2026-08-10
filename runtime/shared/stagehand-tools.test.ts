@@ -25,6 +25,16 @@ describe("parseBrowserToolArguments", () => {
     });
   });
 
+  it("rejects url on act extract and observe", () => {
+    for (const mode of ["act", "extract", "observe"] as const) {
+      assert.equal(parseBrowserToolArguments(JSON.stringify({
+        instruction: "do something",
+        mode,
+        url: "https://example.com",
+      })), null);
+    }
+  });
+
   it("requires url for goto mode", () => {
     assert.equal(parseBrowserToolArguments(JSON.stringify({
       instruction: "navigate",

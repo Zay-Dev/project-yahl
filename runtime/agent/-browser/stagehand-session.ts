@@ -201,10 +201,6 @@ const executeBrowserCommand = async (
     };
   }
 
-  if (args.url?.trim()) {
-    await navigate(page, args.url);
-  }
-
   if (mode === "act") {
     const result = await withTimeout(
       sh.act(args.instruction),

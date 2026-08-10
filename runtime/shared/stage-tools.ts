@@ -341,6 +341,7 @@ export const parseBrowserToolArguments = (raw: string): BrowserToolArguments | n
   const schema = isRecord(parsed.schema) ? parsed.schema : undefined;
 
   if (parsed.mode === "goto" && !url) return null;
+  if (parsed.mode !== "goto" && url) return null;
 
   return {
     instruction: parsed.instruction.trim(),
