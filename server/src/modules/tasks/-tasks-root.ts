@@ -1,6 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 
+export const TASK_YAHL_FILENAMES = ['SKILL.yaml', 'SKILL.yml'] as const;
+
+export const TASK_YAHL_WRITE_FILENAME = TASK_YAHL_FILENAMES[0];
+
 const _findProjectYahlRoot = (startDir: string) => {
   let current = path.resolve(startDir);
 
@@ -26,8 +30,20 @@ const _findProjectYahlRoot = (startDir: string) => {
 export const resolveTasksRoot = () =>
   path.join(_findProjectYahlRoot(process.cwd()), 'server', 'tasks');
 
+export const resolveTaskYahlFilename = (taskId: string) => {
+  const taskDir = path.join(resolveTasksRoot(), taskId);
+
+  for (const filename of TASK_YAHL_FILENAMES) {
+    if (fs.existsSync(path.join(taskDir, filename))) {
+      return filename;
+    }
+  }
+
+  return TASK_YAHL_WRITE_FILENAME;
+};
+
 export const taskYahlRelativePath = (taskId: string) =>
-  `server/tasks/${taskId}/SKILL.yahl`;
+  `server/tasks/${taskId}/${resolveTaskYahlFilename(taskId)}`;
 
 export const taskYahlAbsolutePath = (taskId: string) =>
-  path.join(resolveTasksRoot(), taskId, 'SKILL.yahl');
+  path.join(resolveTasksRoot(), taskId, resolveTaskYahlFilename(taskId));

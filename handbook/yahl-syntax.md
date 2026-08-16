@@ -33,9 +33,9 @@ Syntax reference:
 - `/nixery(...)` — knowledge writes, research, design-questions, extract-info (see `/opt/skills/nixery/SKILL.md`).
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 
-## SKILL.yahl file format
+## SKILL.yaml file format
 
-Each task lives in `server/tasks/<id>/SKILL.yahl` as one YAML document:
+Each task lives in `server/tasks/<id>/SKILL.yaml` (or `SKILL.yml`) as one YAML document:
 
 - `name`, `description` — task metadata
 - `types` (optional) — multiline type definitions (`|`), emitted as the first AI stage
@@ -112,7 +112,7 @@ verify:
 Runs in isolated-vm — **not** the agent. Prior context keys are **not** bare variables; read them as `context.context.{key}`.
 
 ```yaml
-# Reference: server/tasks/test/SKILL.yahl
+# Reference: server/tasks/test/SKILL.yaml
 - contextMode: true
   contextKeys: [c, i]
   updateContextKeys: [c]
@@ -132,17 +132,17 @@ The runtime compiles stages into the agent-facing script (loops, `CONTEXT:`, `IF
 
 Tasks can ship their own SKILL files — handy when you want assess/synthesize rules without bloating orchestrator SKILLS. At run start the server snapshots `taskYahl` + `taskSkills` onto the session; the orchestrator echoes that bundle into the session workspace and the agent reads it under `~/task-skills/`. (Forget `task-mission/SKILL.md` and the run dies before stage 1 — ask me how I know.)
 
-- **Layout:** `server/tasks/{taskId}/SKILL.yahl` + optional `server/tasks/{taskId}/skills/**/*.md`
+- **Layout:** `server/tasks/{taskId}/SKILL.yaml` (or `SKILL.yml`) + optional `server/tasks/{taskId}/skills/**/*.md`
 - **Snapshot:** `createRun` / `registerSession` persist `taskYahl` + `taskSkills` on the session document
 - **Echo:** orchestrator writes the session snapshot → `data/workspace/sessions/{sessionId}/task-skills/` (agent `~/task-skills/`)
-- **Hard requirement:** if `SKILL.yahl` contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
+- **Hard requirement:** if the task YAML contains `~/task-skills/` anywhere, you **must** ship `skills/task-mission/SKILL.md` — verified at run start; missing file → `task-skills echo incomplete`
 - **System prompt:** orchestrator injects `task-mission` content via `mergeTaskSystemAppend`
 - **Mastermind:** optional `guidelinePath: ~/task-skills/…/SKILL.md` on `research` (untrusted hints banner). Planning via orchestrator `nixeryRun: plan` / `plan-study`.
 - **Examples:** `user_onboarding`, `knowledge_manager` (see [`server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md`](server/tasks/_shared/skills/nixery-get-knowledge/SKILL.md) for the read path)
 
 ```
 server/tasks/my_task/
-  SKILL.yahl
+  SKILL.yaml
   skills/
     task-mission/SKILL.md   ← required when YAML references ~/task-skills/
     my-helper/SKILL.md

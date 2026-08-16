@@ -37,4 +37,4 @@ Pre-run failures only (invalid `/nixery` argv, def not inline, namespace gate) s
 
 ## Breaking changes
 
-Before any **breaking change** to stage procedure (sleep/wait protocol, window length, adaptive thresholds, editing `SKILL.yahl` / task-skills), read the nixery skill and call the current catalog’s consult def if it exists. If that call returns `agree: false`, follow `alternatives` — do not proceed.
+Before any **breaking change** to stage procedure (sleep/wait protocol, window length, adaptive thresholds, editing `SKILL.yaml` / `SKILL.yml` / task-skills), read the nixery skill and call the current catalog’s consult def if it exists. If that call returns `agree: false`, follow `alternatives` — do not proceed.

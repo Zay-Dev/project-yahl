@@ -12,7 +12,7 @@ import type { TYahlStage } from './-types';
 import { buildForkPatchedParsedStages } from './-fork-patched-pipeline';
 
 const testTaskYahl = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '../../../tasks/test/SKILL.yahl'),
+  join(dirname(fileURLToPath(import.meta.url)), '../../../tasks/test/SKILL.yaml'),
   'utf8',
 );
 

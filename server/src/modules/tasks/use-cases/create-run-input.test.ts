@@ -11,11 +11,11 @@ import {
 
 const knowledgeManagerPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../../../server/tasks/knowledge_manager/SKILL.yahl',
+  '../../../../../server/tasks/knowledge_manager/SKILL.yaml',
 );
 
 describe('create run runInput validation', () => {
-  it('reads runInputKeys from knowledge_manager SKILL.yahl', () => {
+  it('reads runInputKeys from knowledge_manager SKILL.yaml', () => {
     const yahl = readFileSync(knowledgeManagerPath, 'utf8');
     const keys = parseRunInputKeysFromYahl(yahl);
 

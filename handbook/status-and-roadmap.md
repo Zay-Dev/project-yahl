@@ -8,7 +8,7 @@ But more importantly — it does feel like patching in the right direction. No m
 |---------|--------|-------------|
 | Redis transport | Works | Transport between orchestrator and stage agent. |
 | Task catalog | Works | Tasks from `server/tasks/` via the tasks API; orchestrator loads YAML through the server with `--task-id`. |
-| Tasks web UI | Works | Browse, create, and edit `SKILL.yahl` at `/tasks`, `/tasks/new`, and `/tasks/:taskId`. In Docker, the server bind-mounts `./server/tasks` so edits persist on the host repo. |
+| Tasks web UI | Works | Browse, create, and edit `SKILL.yaml` (or `.yml`) at `/tasks`, `/tasks/new`, and `/tasks/:taskId`. In Docker, the server bind-mounts `./server/tasks` so edits persist on the host repo. |
 | Tasks API | Works | `GET/POST /api/tasks`, `GET/PUT /api/tasks/:taskId`, `POST /api/runs`. |
 | askUserBatch.v1 | Works | Multi-question ask-user pauses (text + radio/checkbox MC); scrollable drawer UI. Stages pause for a real user decision and continue with deterministic answer ids. If the orchestrator times out waiting, the session saves a checkpoint; after you answer, **Resume from checkpoint** in Session Detail kicks off continuation (Redis push wakes an in-flight wait faster when `REDIS_URL` is aligned). |
 | Session / event tracking | Works | Replayable step history and usage/cost visibility. |

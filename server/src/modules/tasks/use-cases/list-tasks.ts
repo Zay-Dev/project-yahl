@@ -6,7 +6,7 @@ import { Middlewares } from '@omni-infra/express';
 
 import type { TResponseTaskListItem } from '../-api-types';
 import { parseTaskMetadata } from '../-parse-task-metadata';
-import { resolveTasksRoot, taskYahlRelativePath } from '../-tasks-root';
+import { resolveTasksRoot, taskYahlAbsolutePath, taskYahlRelativePath } from '../-tasks-root';
 
 export const listTasks = [
   Middlewares.Chainable
@@ -21,10 +21,9 @@ export const listTasks = [
         }
 
         const taskId = entry.name;
-        const yahlPath = `${tasksRoot}/${taskId}/SKILL.yahl`;
 
         try {
-          const yahl = await fs.readFile(yahlPath, 'utf8');
+          const yahl = await fs.readFile(taskYahlAbsolutePath(taskId), 'utf8');
           const { background, description, name } = parseTaskMetadata(yahl);
           const runInputKeys = parseRunInputKeysFromYahl(yahl);
 

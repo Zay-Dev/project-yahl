@@ -19,11 +19,11 @@ import { fileURLToPath } from "node:url";
 
 const testSkillPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../../../server/tasks/test/SKILL.yahl",
+  "../../../../server/tasks/test/SKILL.yaml",
 );
 
 describe("parseYahlDocument", () => {
-  it("parses test SKILL.yahl", () => {
+  it("parses test SKILL.yaml", () => {
     const text = readFileSync(testSkillPath, "utf-8");
     const doc = parseYahlDocument(text);
 
@@ -175,7 +175,7 @@ describe("compileStageLines", () => {
 });
 
 describe("parseYahlTask", () => {
-  it("returns stages and resultContextKey from test SKILL.yahl", () => {
+  it("returns stages and resultContextKey from test SKILL.yaml", () => {
     const text = readFileSync(testSkillPath, "utf-8");
     const { resultContextKey, stages } = parseYahlTask(text);
 

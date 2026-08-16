@@ -118,7 +118,7 @@ export function TaskDetailPage() {
       ) : null}
 
       <label className="flex flex-col gap-2 text-sm">
-        <span className="font-medium">SKILL.yahl</span>
+        <span className="font-medium">SKILL.yaml</span>
         <textarea
           className="min-h-[520px] rounded-md border bg-background px-3 py-2 font-mono text-xs"
           onChange={(event) => setYahl(event.target.value)}

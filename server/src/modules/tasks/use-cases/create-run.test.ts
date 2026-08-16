@@ -7,7 +7,7 @@ describe('create run task metadata', () => {
   it('uses server/tasks relative path for pending session stub', () => {
     assert.equal(
       taskYahlRelativePath('verify_test'),
-      'server/tasks/verify_test/SKILL.yahl',
+      'server/tasks/verify_test/SKILL.yaml',
     );
   });
 });

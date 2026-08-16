@@ -7,7 +7,7 @@ import { Middlewares } from '@omni-infra/express';
 
 import type { TResponseCreateTask } from '../-api-types';
 import { taskExists } from '../-read-task-file';
-import { resolveTasksRoot } from '../-tasks-root';
+import { resolveTasksRoot, TASK_YAHL_WRITE_FILENAME } from '../-tasks-root';
 
 export type TRequestCreateTaskBody = {
   taskId: string;
@@ -32,7 +32,7 @@ export const createTask = [
       const taskDir = path.join(resolveTasksRoot(), body.taskId);
 
       await fs.mkdir(taskDir, { recursive: true });
-      await fs.writeFile(path.join(taskDir, 'SKILL.yahl'), body.yahl, 'utf8');
+      await fs.writeFile(path.join(taskDir, TASK_YAHL_WRITE_FILENAME), body.yahl, 'utf8');
 
       express.res.status(201);
       express.respondOne<TResponseCreateTask>({ ok: true, taskId: body.taskId });

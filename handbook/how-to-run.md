@@ -289,7 +289,7 @@ Edit focus via `/platform/knowledge-policies` or task `knowledge_settings`. Manu
 
 #### Example: traffic monitor cron
 
-Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`traffic_monitor`](../server/tasks/traffic_monitor/SKILL.yahl) at 08:00 HKT:
+Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`traffic_monitor`](../server/tasks/traffic_monitor/SKILL.yaml) at 08:00 HKT:
 
 ```json
 {
