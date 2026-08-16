@@ -114,9 +114,10 @@ stages:
     nixeryRun: get-knowledge
     nixeryInput:
       purpose: |
-        Seed from raw page bodies only — prefer cat of
-        topics/{topic}/source-ops-{city_slug}.md (full markdown body after frontmatter)
-        and lean sources-{city_slug}.md bullets when present.
+        Seed from processed knowledge only — prefer verbatim cat of
+        topics/{canonical}/source-ops-{city_slug}.md (full markdown body after frontmatter)
+        and lean sources-{city_slug}.md bullets when present (also check registry aliases).
+        Do NOT explore raw/ or raw/observations/. If those processed pages are missing, write absent:true.
         Do NOT synthesize Overview/History essays, multi-OD scrapbooks, or budget/exhausted/quota objects.
         Write the source-ops page body first in source-knowledge.md (verbatim sections HOWTO/PLACE/Q&A/ops-log).
         Prior BUDGET/HISTORY lines are avoid-list history, not a live research stop.
@@ -131,7 +132,7 @@ stages:
       If missing or empty after trim, set source_ops_md to '<none>'.
       Otherwise set source_ops_md to the source-ops-{city_slug} page body only
       (strip any Overview/History/sources preamble the extract may have added; keep HOWTO/PLACE/Q&A/ops-log).
-      Do not keep a multi-OD essay scrapbook — prefer the raw wiki page body.
+      Do not keep a multi-OD essay scrapbook — prefer the verbatim wiki page body.
 
   - contextKeys: [origin, destination, city, holidays_topic, holidays_file_prefix, traffic_source_file]
     nixeryRun: plan
@@ -150,7 +151,9 @@ stages:
     nixeryRun: get-knowledge
     nixeryInput:
       purpose: |
-        Read holidays topic for the current calendar year when present; write holidays.md.
+        Read processed holidays pages for the current calendar year when present; write holidays.md.
+        Prefer topics/{canonical}/ calendar / facts / overview pages — do not explore raw/.
+        If no dated holiday rows exist for the year, write absent:true.
       topic: holidays_topic
       output: holidays.md
     logic: "(nixery)"

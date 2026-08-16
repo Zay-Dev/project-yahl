@@ -8,17 +8,17 @@ describe('pendingSessionUpdateDoc', () => {
     const now = new Date('2026-06-21T00:00:00.000Z');
     const update = pendingSessionUpdateDoc({
       sessionId: 'sess-1',
-      taskId: 'media_to_text_test',
-      taskYahl: 'name: media\nstages: []',
+      taskId: 'verify_test',
+      taskYahl: 'name: verify\nstages: []',
     }, now);
 
     assert.deepEqual(update, {
       $set: {
         isBackground: false,
         runInput: {},
-        taskId: 'media_to_text_test',
+        taskId: 'verify_test',
         taskSkills: [],
-        taskYahl: 'name: media\nstages: []',
+        taskYahl: 'name: verify\nstages: []',
         updatedAt: now,
       },
       $setOnInsert: {

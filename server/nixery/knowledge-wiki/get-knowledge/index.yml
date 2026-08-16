@@ -1,0 +1,58 @@
+id: get-knowledge
+description: Prompt-driven knowledge extract agent with shell tools over wiki export
+
+packages: [shell, gnugrep, nodejs]
+
+env:
+  OPENAI_BASE_URL: ""
+  OPENAI_MODEL: deepseek-v4-pro
+  OPENAI_API_KEY: ""
+  LLM_CALL_RETRY_MAX: ""
+  OPENAI_TEMPERATURE: "0.2"
+  OPENAI_MAX_TOKENS: "8192"
+  TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
+
+nixery:
+  default: "true"
+  tools: [shell, gnugrep, nodejs]
+  policies:
+    - tools: [shell, gnugrep, nodejs]
+      mode: "true"
+
+input:
+  purpose:
+    type: string
+    required: true
+  topic:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: ro
+  /data/mastermind:
+    host: data/mastermind
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: output.md
+  validate: validation.mjs
+  inlineTool: false

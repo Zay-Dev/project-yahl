@@ -1,0 +1,56 @@
+id: plan
+description: General markdown execution planner — replaces mastermind plan skill
+
+packages: [nodejs]
+
+env:
+  OPENAI_BASE_URL: ""
+  OPENAI_MODEL: deepseek-v4-pro
+  OPENAI_API_KEY: ""
+  LLM_CALL_RETRY_MAX: ""
+  OPENAI_TEMPERATURE: "0.2"
+  OPENAI_MAX_TOKENS: "8192"
+
+nixery:
+  default: "true"
+  tools: [nodejs]
+  policies:
+    - tools: [nodejs]
+      mode: "true"
+
+input:
+  goal:
+    type: string
+    required: true
+  stageLogic:
+    type: string
+    required: false
+  context:
+    type: string
+    required: false
+  guideline:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: plan.md
+  validate: validation.mjs
+  inlineTool: false

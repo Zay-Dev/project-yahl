@@ -29,9 +29,10 @@ export type TNixeryInputField = {
   type: 'string';
 };
 
+export type TNixeryRuntime = 'node' | 'tsx' | 'python';
+
 export type TNixeryDef = {
   description?: string;
-  dockerfile?: string;
   env?: Record<string, string>;
   id: string;
   input?: Record<string, TNixeryInputField>;
@@ -40,6 +41,23 @@ export type TNixeryDef = {
   output?: TNixeryOutputSpec;
   packages: string[];
   run?: {
-    entry: string[];
+    entry: string;
+    runtime: TNixeryRuntime;
   };
+};
+
+export type TNixeryPluginMeta = {
+  description?: string;
+  name?: string;
+  prompts?: string[];
+  skills?: string[];
+  task_skills?: string[];
+};
+
+export type TNixeryAbilityLocation = {
+  abilityId: string;
+  abilityDir: string;
+  indexPath: string;
+  pluginDir: string;
+  pluginId: string;
 };

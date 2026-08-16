@@ -212,7 +212,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke a platform skill against the session API. Use for /platform(dispatch-task-run|propose-notification|propose-knowledge-transfer|get-knowledge-manager-instruction|put-knowledge-manager-instruction, ...) in stage logic. Topic resolve, media-to-text, and LLM helpers use the nixery tool. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error }.",
+        "Invoke a platform skill against the session API. Use for /platform(dispatch-task-run|propose-notification|propose-knowledge-transfer|get-knowledge-manager-instruction|put-knowledge-manager-instruction, ...) in stage logic. Topic resolve and LLM helpers use the nixery tool. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error }.",
       name: "platform",
       parameters: {
         properties: {
@@ -241,7 +241,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Run a nixery def inline from stage logic. Use for /nixery(defId, …) where the def has output.inlineTool: true in server/nixery/{defId}/index.yml. Returns JSON { ok, data } or { ok: false, error }.",
+        "Run a nixery ability inline from stage logic. Use for /nixery(defId, …) where the ability has output.inlineTool: true under server/nixery/{plugin}/{abilityId}/index.yml. Returns JSON { ok, data } or { ok: false, error }.",
       name: "nixery",
       parameters: {
         properties: {
@@ -250,7 +250,7 @@ export const STAGE_TOOLS = [
             type: "object",
           },
           defId: {
-            description: "Nixery def id under server/nixery/ with output.inlineTool: true.",
+            description: "Nixery ability id (globally unique under server/nixery/{plugin}/) with output.inlineTool: true.",
             type: "string",
           },
         },

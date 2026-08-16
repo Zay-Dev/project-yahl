@@ -2,7 +2,6 @@ import { Middlewares } from '@omni-infra/express';
 
 import type { TResponseNixeryListItem } from '../-api-types';
 import { listNixeryDefIds, readNixeryDef } from '../-read-nixery-def';
-import { nixeryIndexRelativePath } from '../-nixery-root';
 
 export const listNixery = [
   Middlewares.Chainable
@@ -12,12 +11,12 @@ export const listNixery = [
 
       for (const id of ids) {
         try {
-          const { def } = await readNixeryDef(id);
+          const { def, path } = await readNixeryDef(id);
 
           items.push({
             description: def.description,
             id,
-            path: nixeryIndexRelativePath(id),
+            path,
           });
         } catch {
           continue;

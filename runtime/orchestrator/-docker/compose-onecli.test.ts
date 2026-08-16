@@ -18,7 +18,7 @@ describe('writeAgentSessionOverride', () => {
     }
   });
 
-  it('bind-mounts task workspace to session ~/data', async () => {
+  it('bind-mounts task workspace, YAHL, and plugin skill overlays', async () => {
     previousHostRepoRoot = process.env.HOST_REPO_ROOT;
     const repoRoot = await mkdtemp(path.join(tmpdir(), 'yahl-compose-override-'));
     runtimeAgentsRoot = path.join(repoRoot, 'runtime', '.agents');
@@ -27,10 +27,39 @@ describe('writeAgentSessionOverride', () => {
 
     const sessionId = 'sess-mount';
     const taskId = 'hk_weather';
-    const overridePath = await writeAgentSessionOverride({ sessionId, taskId });
+    const skillSrc = path.join(repoRoot, 'server', 'nixery', 'fixture', 'SKILLS', 'nixery');
+    const promptSrc = path.join(repoRoot, 'server', 'nixery', 'fixture', 'prompts', 'nixery.md');
+
+    const overridePath = await writeAgentSessionOverride({
+      pluginInstalls: [
+        {
+          basename: 'nixery',
+          containerDest: '/opt/skills/nixery',
+          destAbs: path.join(repoRoot, 'runtime', 'orchestrator', 'SKILLS', 'nixery'),
+          destRel: 'runtime/orchestrator/SKILLS/nixery',
+          kind: 'skills',
+          pluginId: 'fixture',
+          srcAbs: skillSrc,
+          srcRel: 'server/nixery/fixture/SKILLS/nixery',
+        },
+        {
+          basename: 'nixery.md',
+          containerDest: '/opt/yahl/nixery.md',
+          destAbs: path.join(repoRoot, 'runtime', 'orchestrator', 'YAHL', 'nixery.md'),
+          destRel: 'runtime/orchestrator/YAHL/nixery.md',
+          kind: 'prompts',
+          pluginId: 'fixture',
+          srcAbs: promptSrc,
+          srcRel: 'server/nixery/fixture/prompts/nixery.md',
+        },
+      ],
+      sessionId,
+      taskId,
+    });
     const content = await readFile(overridePath, 'utf8');
 
     assert.match(content, /AGENT_SESSION_HOME: "\/workspace\/sessions\/sess-mount"/);
+    assert.match(content, /AGENT_YAHL_DIR: "\/opt\/yahl"/);
     assert.match(
       content,
       new RegExp(
@@ -38,5 +67,14 @@ describe('writeAgentSessionOverride', () => {
         + ':/workspace/sessions/sess-mount/data:rw',
       ),
     );
+    assert.match(
+      content,
+      new RegExp(
+        `${path.join(repoRoot, 'runtime', 'orchestrator', 'YAHL').replaceAll('/', '[/\\\\]')}`
+        + ':/opt/yahl:ro',
+      ),
+    );
+    assert.match(content, /\/opt\/skills\/nixery:ro/);
+    assert.match(content, /\/opt\/yahl\/nixery\.md:ro/);
   });
 });

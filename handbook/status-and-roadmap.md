@@ -19,22 +19,23 @@ But more importantly — it does feel like patching in the right direction. No m
 | Rerun fast-forward | Works | Rerun can fast-forward prefix stages from saved `contextAfter` snapshots instead of re-running everything from zero. |
 | isolated-vm | Works | VM client runs on `isolated-vm` for stronger sandbox boundaries. |
 | Orchestrator debugger | Works | Attach the orchestrator to a debugger, hit breakpoints, and poke variables while tracing execution. |
-| Platform + worker | Works | Worker (cron/approvals + channels) in `docker compose`; stage agents use `/platform(...)` → server for dispatch/proposals/KM instruction; stage verify via nixery `verify.defId`; `/nixery(...)` for knowledge, topic resolve, media-to-text, LLM helpers. |
+| Platform + worker | Works | Worker (cron/approvals + channels) in `docker compose`; stage agents use `/platform(...)` → server for dispatch/proposals/KM instruction; stage verify via nixery `verify.defId`; `/nixery(...)` for knowledge, topic resolve, LLM helpers. |
 | WhatsApp channel | Works | Worker owns `whatsapp-web.js` (QR in console when `WHATSAPP_ENABLED=true`); send/receive are pure runtime. `WHATSAPP_WHITELIST` match on propose = pre-approved. Volumes `data/whatsapp_auth` / `data/whatsapp_inbox` (outside agent workspace). Nixery: `whatsapp-register-channel`, `whatsapp-inbox`, get/upsert greets & whatsapp pages, `resolve-notification-target`. |
 | Greets + wiki stack | Works | Task `greets` writes `greets/{entity}/` + `whatsapp/{slug}/` and optionally registers inbox capture; cron `whatsapp_wiki_stack` stacks onboarded inbox text into wiki then clears (media logged/skipped). Not under `topics/`. |
 | Outbound email (SMTP) | Works | Real SMTP on the worker (`SMTP_*`, `EMAIL_WHITELIST`). When WhatsApp is unavailable mid-send, worker can email `SYSTEM_ADMIN_EMAIL` if SMTP is configured. |
 | Cron `runInput` | Works | Cron jobs accept a string-map `runInput` validated against the task’s defaults; web cron form has schedule presets (daily / hourly / every N minutes / weekday / custom). |
-| Nixery tools | Works | Orchestrator-direct reads (`nixeryRun: get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `plan-study`); inline defs (`resolve-topic`, `upsert-knowledge-page`, `dedup-knowledge`, `research`, `design-questions`, `extract-info`, `consult-breaking-change`, `submit-knowledge-observation`); manager defs (`apply-manager-topic`, …); stage gate `stage-verify` via YAHL `verify.defId`. |
+| Nixery tools | Works | Plugin folders under `server/nixery/{plugin}/` each expose abilities (`{plugin}/{ability}/index.yml`). Orchestrator-direct reads (`nixeryRun: get-knowledge`, …); inline abilities (`research`, `submit-knowledge-observation`, …); manager writes (`apply-manager-topic`, `merge-topic`, …); stage gate `stage-verify`. Packages-only images (no ability Dockerfiles). Concepts: [nixery.md](nixery.md). |
 | design-questions | Works | Nixery inline def for dynamic ask-user batches (pass `mission:` for subject framing). |
 | verify.autoRetry | Works | Orchestrator in-process verify loop on stages with `verify.autoRetry: true`. |
 | Task-local skills | Works | Echoed from session snapshot to agent `~/task-skills/`; see [yahl-syntax.md](yahl-syntax.md). |
 | Knowledge store | Works | Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see the root README and [security.md](security.md). |
-| Topic governance | Works | Global Knowledge Manager instruction + overnight cron `knowledge_manager` (full corpus); observations inbox; cross-topic `knowledge_transfer` approvals. |
+| Topic governance | Works | Global Knowledge Manager instruction + overnight cron `knowledge_manager` (full corpus); observations inbox; cross-topic `knowledge_transfer` approvals; within-topic `dedup-knowledge` after approved transfers. |
 | Background sessions | Works | Cron/utility runs hidden by default on `/sessions` (toggle to show). |
 | Platform UI | Works | `/platform/approvals` (`PLATFORM_APPROVAL_TOKEN` / `X-Approval-Token`); `/platform/cron-jobs` create/edit/delete (worker ticks via `POST /api/runs`). Example: `traffic_monitor` at `0 8 * * *` / `Asia/Hong_Kong` with `runInput` — see [how-to-run.md](how-to-run.md). |
 | Direct user ↔ assistant chat | Planned | Deferred for v1; skills stay stateless for now. |
 | A2UI | Planned | Real structured UI payloads — earlier bolt-on attempt failed; avoid another half-measure. |
 | Go to stage | Planned | Today resume only picks up at the failed stage. Want Mastermind (or the UI) to restart a session at an earlier stage so you can fix poisoned context upstream instead of fork-and-pray at the failure point (`go to stage <id>`). |
+| Media understanding | Planned | Image/PDF → text via **capable stage agents** (multimodal / tool-capable), not a dedicated nixery ability or custom container image. |
 | Per-stage I/O visibility | Ongoing | Good enough to debug most days, never quite "done." |
 | OneCLI integration | Ongoing | Polish for safer secret handling. |
 | YAHL authoring UI | Ongoing | Polish around authoring and inspecting YAHL scripts. |

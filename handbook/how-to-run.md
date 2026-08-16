@@ -23,7 +23,6 @@ Copy [`.env.example`](.env.example) to `.env`. Set at minimum:
 
 - `HOST_REPO_ROOT` — absolute path to this repo (required for agent workspace bind mounts)
 - `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` — OneCLI proxy for LLM keys
-- `CURSOR_API_KEY` — required for nixery `media-to-text` (Cursor CLI); not used by worker
 
 Copy [`.env.nixery.example`](.env.nixery.example) to `.env.nixery` for nixery LLM defaults (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and optional phase URLs). Values may use `${LLM_BASE_URL}` / `${LLM_API_KEY}` from `.env`, or concrete URLs/keys. The orchestrator loads `.env.nixery` at startup in [`runtime/orchestrator/config.ts`](../runtime/orchestrator/config.ts) after `.env`; empty keys in `server/nixery/*/index.yml` inherit the same-named `process.env` value. For `compose:up:all`, the file is bind-mounted into the server (not via compose `env_file`) so the spawned orchestrator can read and expand it — the host file must exist.
 
@@ -212,9 +211,6 @@ curl -sf http://127.0.0.1:4000/__/health
 # Worker health (in-container loopback; compose healthcheck uses this)
 docker compose exec worker node -e "fetch('http://127.0.0.1:4091/health').then(r=>process.exit(r.ok?0:1))"
 
-# Full stack doctor (host)
-pnpm run doctor
-
 # Runtime
 pnpm run orchestrate
 ```
@@ -277,7 +273,7 @@ pnpm run orchestrate
 
 #### Example: Knowledge Manager overnight
 
-Schedule full-corpus review (global instruction; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers):
+Schedule full-corpus review (global instruction; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers → within-topic dedup):
 
 ```json
 {

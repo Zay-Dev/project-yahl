@@ -85,12 +85,11 @@ pnpm install
 pnpm -r --filter "./infras/**" run build
 ```
 
-Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI, optional `CURSOR_API_KEY`), and [`.env.nixery.example`](.env.nixery.example) → `.env.nixery` for nixery LLM defaults. Then:
+Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI), and [`.env.nixery.example`](.env.nixery.example) → `.env.nixery` for nixery LLM defaults. Then:
 
 ```bash
 cd project-yahl
 pnpm run compose:up          # mongo, redis, onecli, wiki, worker
-pnpm run doctor
 pnpm run compose:up:all      # optional: built server + web
 # or: pnpm run dev && pnpm run dev:web
 curl -sS -X POST "http://127.0.0.1:4000/api/runs" \

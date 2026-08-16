@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "build": "pnpm --filter ./server --filter ./shared --filter ./runtime --filter ./web --filter ./worker --filter @project-yahl/nixery-knowledge-wiki build",
+    "build": "pnpm --filter ./server --filter ./shared --filter ./runtime --filter ./web --filter ./worker build",
     "build:shared": "pnpm --filter @project-yahl/shared build",
     "compose:down": "docker compose down",
     "compose:up": "docker compose up -d mongo redis onecli onecli_postgres wiki_postgres wiki worker",
@@ -13,6 +13,7 @@
     "dev:runtime": "pnpm --filter @project-yahl/runtime run dev",
     "dev:server": "pnpm --filter @project-yahl/server run dev",
     "dev:web": "pnpm --filter web run dev",
+    "nixery:link": "pnpm --filter @project-yahl/shared run build && node shared/nixery/nixery-link.mjs",
     "orchestrate": "pnpm --filter runtime run orchestrate",
     "test": "pnpm --filter runtime run test",
     "test:server": "pnpm --filter @project-yahl/server run test",

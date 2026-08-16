@@ -25,6 +25,8 @@ RUN pnpm install --frozen-lockfile --filter @project-yahl/runtime...
 
 COPY ${OMNIFLEX_APP_DIR}/shared ./${OMNIFLEX_APP_DIR}/shared
 
+RUN pnpm --filter @project-yahl/shared run build
+
 WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/runtime
 
 COPY ${OMNIFLEX_APP_DIR}/runtime/agent ./agent

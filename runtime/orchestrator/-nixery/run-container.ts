@@ -1,7 +1,5 @@
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
-import path from 'node:path';
 
 const GRACEFUL_WAIT_MS = 20_000;
 const STOP_TIMEOUT_SEC = 15;
@@ -167,12 +165,6 @@ export const resolveNixeryImage = (registry: string, packages: string[]) => {
   return `${registry}/${deduped.join('/')}`;
 };
 
-export const resolveCustomNixeryImageTag = (defId: string, dockerfileBytes: string | Buffer) => {
-  const hash = createHash('md5').update(dockerfileBytes).digest('hex');
-
-  return `custom-nixery-${defId}:v${hash}`;
-};
-
 export const DOCKER_PULL_MAX_ATTEMPTS = 3;
 export const DOCKER_PULL_BACKOFF_MS = 1_000;
 
@@ -245,39 +237,13 @@ const prefetchNixeryPackages = async (packages: string[]) => {
 };
 
 export const prepareNixeryImage = async (params: {
-  defId: string;
-  dockerfile?: string;
-  nixeryRoot: string;
   packages: string[];
 }) => {
   const composedImage = await prefetchNixeryPackages(params.packages);
-  const dockerfileName = params.dockerfile?.trim();
-
-  if (!dockerfileName) {
-    return {
-      cleanup: async () => undefined,
-      image: composedImage,
-    };
-  }
-
-  const dockerfilePath = path.join(params.nixeryRoot, params.defId, dockerfileName);
-  const dockerfileBytes = fs.readFileSync(dockerfilePath);
-  const tag = resolveCustomNixeryImageTag(params.defId, dockerfileBytes);
-
-  await runDocker([
-    'build',
-    '-t',
-    tag,
-    '--build-arg',
-    `NIXERY_BASE=${composedImage}`,
-    '-f',
-    dockerfilePath,
-    params.nixeryRoot,
-  ]);
 
   return {
     cleanup: async () => undefined,
-    image: tag,
+    image: composedImage,
   };
 };
 

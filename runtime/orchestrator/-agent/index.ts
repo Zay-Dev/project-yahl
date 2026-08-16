@@ -614,7 +614,7 @@ class YahlAgentRunner {
         throw new Error('nixeryRun stage requires nixeryInput');
       }
 
-      const def = await loadNixeryDef(nixeryRun);
+      const { def } = await loadNixeryDef(nixeryRun);
 
       const { containerName } = await runNixeryDef({
         defId: nixeryRun,

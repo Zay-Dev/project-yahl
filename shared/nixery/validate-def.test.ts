@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import { listNixeryDefIds } from './list-defs';
+import { listNixeryDefIds, resolveNixeryAbilityLocation } from './list-defs';
 import { loadNixeryDefFromFile } from './load-def';
 import { resolveNixeryPolicy } from './resolve-policy';
 import { validateNixeryArgv } from './validate-argv';
-import { validateNixeryDef } from './validate-def';
+import { validateNixeryDef, validateNixeryPluginMeta } from './validate-def';
 
 test('validateNixeryDef accepts read-def shape', () => {
   const def = validateNixeryDef({
@@ -24,11 +24,13 @@ test('validateNixeryDef accepts read-def shape', () => {
       '/workspace': { host: 'session', mode: 'rw' },
     },
     run: {
-      entry: ['node', '/opt/nixery/def/run.mjs'],
+      runtime: 'node',
+      entry: 'run.mjs',
     },
   });
 
   assert.equal(def.id, 'read-def-fixture');
+  assert.equal(def.run?.runtime, 'node');
 });
 
 test('validateNixeryDef coerces YAML boolean policy modes', () => {
@@ -45,7 +47,7 @@ test('validateNixeryDef coerces YAML boolean policy modes', () => {
   assert.equal(def.nixery?.policies?.[0]?.mode, 'true');
 });
 
-test('validateNixeryDef accepts write-def shape with lib mount', () => {
+test('validateNixeryDef accepts write-def shape with plugin mount', () => {
   const def = validateNixeryDef({
     id: 'write-def-fixture',
     packages: ['nodejs'],
@@ -55,11 +57,12 @@ test('validateNixeryDef accepts write-def shape with lib mount', () => {
       value: { type: 'string', required: false },
     },
     mount: {
-      '/opt/nixery/knowledge-wiki': { host: 'lib/knowledge-wiki', mode: 'ro' },
+      '/opt/nixery/plugin': { host: 'plugin', mode: 'ro' },
       '/workspace': { host: 'session', mode: 'rw' },
     },
     run: {
-      entry: ['node', '/opt/nixery/def/run.mjs'],
+      runtime: 'node',
+      entry: 'run.mjs',
     },
   });
 
@@ -77,7 +80,8 @@ test('validateNixeryDef accepts output block', () => {
       validate: 'validation.mjs',
     },
     run: {
-      entry: ['node', '/opt/nixery/def/run.mjs'],
+      runtime: 'node',
+      entry: 'run.mjs',
     },
   });
 
@@ -85,6 +89,17 @@ test('validateNixeryDef accepts output block', () => {
   assert.equal(def.output?.inlineTool, true);
   assert.equal(def.output?.retry, 2);
   assert.equal(def.output?.validate, 'validation.mjs');
+});
+
+test('validateNixeryDef rejects absolute run.entry', () => {
+  assert.throws(() => validateNixeryDef({
+    id: 'bad-entry',
+    packages: ['nodejs'],
+    run: {
+      runtime: 'node',
+      entry: '/opt/nixery/def/run.mjs',
+    },
+  }));
 });
 
 test('validateNixeryDef rejects negative output.retry', () => {
@@ -124,22 +139,15 @@ test('validateNixeryDef rejects empty packages', () => {
   }));
 });
 
-test('validateNixeryDef accepts dockerfile filename', () => {
-  const def = validateNixeryDef({
-    id: 'dockerfile-fixture',
-    packages: ['shell', 'nodejs'],
-    dockerfile: 'Dockerfile',
-  });
-
-  assert.equal(def.dockerfile, 'Dockerfile');
-});
-
-test('validateNixeryDef rejects dockerfile path segments', () => {
-  assert.throws(() => validateNixeryDef({
-    id: 'bad-dockerfile',
-    packages: ['nodejs'],
-    dockerfile: '../Dockerfile',
-  }));
+test('validateNixeryDef rejects dockerfile key', () => {
+  assert.throws(
+    () => validateNixeryDef({
+      id: 'dockerfile-fixture',
+      packages: ['shell', 'nodejs'],
+      dockerfile: 'Dockerfile',
+    }),
+    /dockerfile is not supported/,
+  );
 });
 
 test('validateNixeryDef parses all live index.yml files', async () => {
@@ -149,12 +157,27 @@ test('validateNixeryDef parses all live index.yml files', async () => {
   assert.ok(defIds.length >= 1);
 
   for (const defId of defIds) {
-    const def = await loadNixeryDefFromFile(path.join(nixeryRoot, defId, 'index.yml'));
+    const location = await resolveNixeryAbilityLocation(nixeryRoot, defId);
+    const def = await loadNixeryDefFromFile(location.indexPath);
 
     assert.equal(def.id, defId);
     assert.equal(def.output?.validate, 'validation.mjs');
     assert.ok(def.output?.default);
+    assert.equal(def.run?.runtime, 'node');
+    assert.equal(def.run?.entry, 'run.mjs');
   }
+});
+
+test('validateNixeryPluginMeta rejects parent-path artifacts', () => {
+  assert.throws(() => validateNixeryPluginMeta({
+    skills: ['../escape'],
+  }));
+});
+
+test('validateNixeryPluginMeta rejects absolute artifact paths', () => {
+  assert.throws(() => validateNixeryPluginMeta({
+    prompts: ['/tmp/prompt.md'],
+  }));
 });
 
 test('validateNixeryArgv rejects docker flags', () => {

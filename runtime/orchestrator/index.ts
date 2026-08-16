@@ -117,7 +117,7 @@ runCommand.action(async options => {
     acquireOrchestratorRunLock(sessionId);
 
     try {
-      const def = await loadNixeryDef(nixeryDef);
+      const { def } = await loadNixeryDef(nixeryDef);
       const input = parseNixeryRunInputJson(
         typeof options.nixeryInput === 'string' && options.nixeryInput.trim()
           ? options.nixeryInput

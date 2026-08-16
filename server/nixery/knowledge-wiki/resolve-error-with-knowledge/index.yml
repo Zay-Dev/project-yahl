@@ -1,0 +1,86 @@
+id: resolve-error-with-knowledge
+description: Persist a tool failure observation, then search existing knowledge for a cited solution
+
+packages: [shell, gnugrep, nodejs]
+
+env:
+  OPENAI_BASE_URL: ""
+  OPENAI_MODEL: deepseek-v4-pro
+  OPENAI_API_KEY: ""
+  LLM_CALL_RETRY_MAX: ""
+  OPENAI_TEMPERATURE: "0.2"
+  OPENAI_MAX_TOKENS: "4096"
+  WIKI_GRAPHQL_URL: ""
+  WIKI_API_TOKEN: ""
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
+
+nixery:
+  default: "true"
+  tools: [shell, gnugrep, nodejs]
+  policies:
+    - tools: [shell, gnugrep, nodejs]
+      mode: "true"
+
+input:
+  tool:
+    type: string
+    required: true
+  topic:
+    type: string
+    required: false
+  topic_hint:
+    type: string
+    required: false
+  cue:
+    type: string
+    required: true
+  claim:
+    type: string
+    required: true
+  example:
+    type: string
+    required: false
+  quote:
+    type: string
+    required: false
+  evidence:
+    type: string
+    required: true
+  confidence:
+    type: string
+    required: false
+  tags:
+    type: string
+    required: false
+  sessionId:
+    type: string
+    required: false
+  requestId:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: true

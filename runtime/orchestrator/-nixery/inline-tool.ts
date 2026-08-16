@@ -6,13 +6,6 @@ import {
   resolveNixeryOutputHint,
 } from '@project-yahl/shared/nixery/output-contract';
 import { loadDefValidationModule } from '@project-yahl/shared/nixery/load-validation';
-import {
-  assertNamespaceWriteAllowed,
-  isKnowledgeManagerTask,
-  isKnowledgeWriteDef,
-} from '@project-yahl/shared/nixery/knowledge-write-gate';
-
-import { fetchSession } from '@/orchestrator/-ask-user/session-api';
 
 import { loadNixeryDef, resolveNixeryRoot } from './load-def';
 import { runNixeryDef, resolveSessionNixeryDir } from './run-stage';
@@ -42,24 +35,6 @@ const parseInlineToolPayload = async (params: {
   return JSON.parse(params.raw) as Record<string, unknown>;
 };
 
-const resolveTaskIdForSession = async (sessionId: string, taskId?: string) => {
-  if (taskId?.trim()) {
-    return taskId.trim();
-  }
-
-  if (!sessionId.trim()) {
-    return '';
-  }
-
-  try {
-    const session = await fetchSession(sessionId);
-
-    return session.taskId?.trim() ?? '';
-  } catch {
-    return '';
-  }
-};
-
 const toInlineError = (error: unknown, defRunCompleted = false) => {
   const message = error instanceof Error ? error.message : String(error);
 
@@ -75,22 +50,13 @@ export const runNixeryInlineTool = async (params: {
   defId: string;
   requestId?: string;
   sessionId: string;
-  taskId?: string;
 }) => {
   try {
     const defId = params.defId.trim();
-    const def = await loadNixeryDef(defId);
-    const taskId = await resolveTaskIdForSession(params.sessionId, params.taskId);
-    const managerWriteBypass = isKnowledgeWriteDef(defId) && isKnowledgeManagerTask(taskId);
+    const { def } = await loadNixeryDef(defId);
 
-    if (!def.output?.inlineTool && !managerWriteBypass) {
+    if (!def.output?.inlineTool) {
       return toInlineError(new Error(`[nixery] def ${defId} is not enabled for inline tool calls`));
-    }
-
-    try {
-      assertNamespaceWriteAllowed({ defId, taskId });
-    } catch (error) {
-      return toInlineError(error);
     }
 
     const output = resolveNixeryOutputHint(def, params.args);
@@ -110,7 +76,6 @@ export const runNixeryInlineTool = async (params: {
         defId,
         input,
         sessionId: params.sessionId,
-        taskId,
       });
     } catch (error) {
       return toInlineError(error, true);

@@ -3,21 +3,24 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import { listInlineNixeryDefIds, listNixeryDefIds } from './list-defs';
+import { listInlineNixeryDefIds, listNixeryDefIds, resolveNixeryAbilityLocation } from './list-defs';
 import { resolveNixeryOutputSpec } from './output-contract';
 import { loadNixeryDefFromFile } from './load-def';
 
 const nixeryRoot = path.join(import.meta.dirname, '..', '..', 'server', 'nixery');
 
 describe('listNixeryDefIds', () => {
-  it('discovers defs with index.yml and skips underscore folders', async () => {
+  it('discovers abilities under plugins and skips underscore folders', async () => {
     const ids = await listNixeryDefIds(nixeryRoot);
 
     assert.ok(ids.length >= 1);
     assert.ok(!ids.some((id) => id.startsWith('_')));
 
     for (const defId of ids) {
-      await fs.access(path.join(nixeryRoot, defId, 'index.yml'));
+      const location = await resolveNixeryAbilityLocation(nixeryRoot, defId);
+
+      await fs.access(location.indexPath);
+      await fs.access(path.join(location.pluginDir, 'plugin.yml'));
     }
   });
 });
@@ -25,8 +28,11 @@ describe('listNixeryDefIds', () => {
 describe('listInlineNixeryDefIds', () => {
   it('returns only defs with output.inlineTool: true', async () => {
     const ids = await listInlineNixeryDefIds(nixeryRoot);
-    const defs = await Promise.all(ids.map((defId) =>
-      loadNixeryDefFromFile(path.join(nixeryRoot, defId, 'index.yml'))));
+    const defs = await Promise.all(ids.map(async (defId) => {
+      const location = await resolveNixeryAbilityLocation(nixeryRoot, defId);
+
+      return loadNixeryDefFromFile(location.indexPath);
+    }));
 
     assert.ok(defs.every((def) => resolveNixeryOutputSpec(def).inlineTool));
     assert.ok(ids.includes('resolve-error-with-knowledge'));

@@ -22,13 +22,13 @@ stages:
   - contextKeys: [notification_test]
     produceContextKeys: [proposals]
     logic: |
-      const email = /mastermind(propose-notification,
+      const email = /platform(propose-notification,
         channel: email,
         direction: to_user,
         to: notification_test.email.to,
         body: notification_test.email.body
       );
-      const whatsapp = /mastermind(propose-notification,
+      const whatsapp = /platform(propose-notification,
         channel: whatsapp,
         direction: to_user,
         to: notification_test.whatsapp.to,

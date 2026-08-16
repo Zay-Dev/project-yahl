@@ -1,4 +1,4 @@
-import type { TNixeryDef, TNixeryMountSpec } from '@project-yahl/shared/nixery/types';
+import type { TNixeryAbilityLocation, TNixeryDef, TNixeryMountSpec } from '@project-yahl/shared/nixery/types';
 
 import path from 'node:path';
 
@@ -36,7 +36,6 @@ const allowedDockerHostPrefixes = () => [
   path.join(resolveDockerHostRepoRoot(), 'data', 'mastermind'),
   path.join(resolveDockerHostRepoRoot(), 'data', 'whatsapp_inbox'),
   path.join(resolveDockerHostRepoRoot(), 'server', 'nixery'),
-  path.join(resolveDockerHostRepoRoot(), 'server', 'nixery', '_lib'),
   path.join(resolveDockerHostRepoRoot(), 'shared', 'dist'),
 ];
 
@@ -47,6 +46,7 @@ const isAllowedPath = (resolved: string, prefixes: string[]) =>
 const resolveMountHost = (params: {
   defId: string;
   host: string;
+  location: TNixeryAbilityLocation;
   sessionId: string;
 }) => {
   const token = params.host.trim();
@@ -60,7 +60,22 @@ const resolveMountHost = (params: {
   }
 
   if (token === 'def') {
-    return path.join(resolveDockerHostRepoRoot(), 'server', 'nixery', params.defId);
+    return path.join(
+      resolveDockerHostRepoRoot(),
+      'server',
+      'nixery',
+      params.location.pluginId,
+      params.location.abilityId,
+    );
+  }
+
+  if (token === 'plugin') {
+    return path.join(
+      resolveDockerHostRepoRoot(),
+      'server',
+      'nixery',
+      params.location.pluginId,
+    );
   }
 
   if (token.startsWith('data/')) {
@@ -73,21 +88,23 @@ const resolveMountHost = (params: {
     return path.join(resolveDockerHostRepoRoot(), 'shared', 'dist', pkg);
   }
 
-  if (token.startsWith('lib/')) {
-    const libName = token.slice('lib/'.length);
-
-    return path.join(resolveDockerHostRepoRoot(), 'server', 'nixery', '_lib', libName, 'dist');
-  }
-
   throw new Error(`[nixery] unsupported mount host token: ${params.host}`);
 };
 
 export const resolveMounts = (params: {
   def: TNixeryDef;
   defId: string;
+  location: TNixeryAbilityLocation;
   sessionId: string;
 }) => {
-  const mounts = params.def.mount ?? {};
+  const mounts: Record<string, TNixeryMountSpec> = {
+    ...(params.def.mount ?? {}),
+  };
+
+  if (!mounts['/opt/nixery/plugin']) {
+    mounts['/opt/nixery/plugin'] = { host: 'plugin', mode: 'ro' };
+  }
+
   const volumeMounts: { containerPath: string; hostPath: string; mode: 'ro' | 'rw' }[] = [];
 
   for (const [containerPath, spec] of Object.entries(mounts)) {
@@ -95,6 +112,7 @@ export const resolveMounts = (params: {
     const hostPath = resolveMountHost({
       defId: params.defId,
       host: mountSpec.host,
+      location: params.location,
       sessionId: params.sessionId,
     });
 

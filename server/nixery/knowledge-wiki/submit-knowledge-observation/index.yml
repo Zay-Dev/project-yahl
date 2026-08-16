@@ -1,0 +1,77 @@
+id: submit-knowledge-observation
+description: Append a validated observation note under topics/{slug}/raw/observations — no mode/section merge
+
+packages: [nodejs]
+
+env:
+  WIKI_GRAPHQL_URL: ""
+  WIKI_API_TOKEN: ""
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  topic:
+    type: string
+    required: false
+  topic_hint:
+    type: string
+    required: false
+  cue:
+    type: string
+    required: false
+  claim:
+    type: string
+    required: false
+  example:
+    type: string
+    required: false
+  quote:
+    type: string
+    required: false
+  evidence:
+    type: string
+    required: false
+  confidence:
+    type: string
+    required: false
+  tags:
+    type: string
+    required: false
+  observation:
+    type: string
+    required: false
+  sessionId:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: true

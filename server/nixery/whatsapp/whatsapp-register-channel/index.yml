@@ -1,0 +1,57 @@
+id: whatsapp-register-channel
+description: Register an onboarded WhatsApp chat for inbox capture (channels.json)
+
+packages: [nodejs]
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  channelRef:
+    type: string
+    required: true
+  displayName:
+    type: string
+    required: false
+  summary:
+    type: string
+    required: false
+  greetsEntity:
+    type: string
+    required: false
+  agentPhone:
+    type: string
+    required: false
+  assistantName:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+  /whatsapp/inbox:
+    host: data/whatsapp_inbox
+    mode: rw
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: true
