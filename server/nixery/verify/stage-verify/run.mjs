@@ -2,19 +2,32 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { runSingleLlmCompletion } from '../lib/llm-completion.mjs';
+import {
+  callChat,
+  callChatWithLog,
+  logProgress,
+  resolveDefId,
+} from '../lib/run-agent.mjs';
+import {
+  VERIFY_TOOLS,
+  handleVerifyToolCall,
+} from '../lib/verify-tools.mjs';
+import { resolveLlmMessageText } from '../lib/llm-completion.mjs';
+import {
+  buildVerifyUserMessage,
+  resolveSnapshotBuckets,
+} from '../lib/snapshot-catalog.mjs';
 import {
   appendNixeryRetryUserMessage,
   readNixeryRetryFeedback,
 } from '../lib/nixery-retry-feedback.mjs';
-import { logProgress, resolveDefId } from '../lib/run-agent.mjs';
 
 const DEFAULT_RUBRIC =
   'Score completeness, correctness, and adherence to produceContextKeys.';
 
 const RESUME_ACTIONS = new Set(['rerun', 'edit_answer', 'reask', 'follow_up']);
 const MAX_REBUTTALS = 2;
-const MAX_PARSE_ATTEMPTS = 3;
+const MAX_TOOL_ROUNDS = 8;
 
 const readJson = async (filePath) => {
   const raw = await fs.readFile(filePath, 'utf8');
@@ -70,6 +83,9 @@ export const resolveClassifyResume = (verifyResume, stageSnapshot) => {
 };
 
 export const buildSystemPrompt = (params) => {
+  const outputName = typeof params.outputName === 'string' && params.outputName.trim()
+    ? params.outputName.trim()
+    : 'result.json';
   const resumeFields = params.classifyResume
     ? ',"resumeAction":"rerun"|"edit_answer"|"reask"|"follow_up","askUserRef":"<id when edit_answer, reask, or follow_up>"'
     : '';
@@ -84,9 +100,11 @@ export const buildSystemPrompt = (params) => {
     ].join('\n')
     : '';
 
+
   return [
     'You are a YAHL stage output verifier.',
-    'Return a single compact JSON object only. No markdown fences, no prose outside JSON.',
+    'Read only the context/type keys the rubric needs via read_context_key / read_type_key.',
+    `Write the gate JSON with write_workspace_file path=${outputName}, or reply with a single compact JSON object only. No markdown fences, no prose outside JSON.`,
     `Schema: {"score":0-1,"pass":boolean,"feedback":"...","failedChecks":[{"id":"<short-id>","reason":"..."}]${resumeFields}}`,
     'Keep feedback <= 200 characters. Prefer short failedChecks reasons.',
     `Minimum score to pass: ${params.minScore}`,
@@ -157,51 +175,112 @@ export const parseVerifyContent = (params) => {
   };
 };
 
-const buildRebuttalSection = (contextSnapshot) => {
-  const ctx = contextSnapshot?.context && typeof contextSnapshot.context === 'object'
-    ? contextSnapshot.context
-    : {};
-  const rebuttal = ctx.verify_rebuttal;
-  const priorChecks = ctx.verify_failed_checks;
-  const count = Number(ctx.verify_rebuttal_count ?? 0);
+const resolveChatParams = () => {
+  const baseUrl = process.env.OPENAI_BASE_URL?.trim() ?? 'http://llm-proxy:4100/v1';
+  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o';
+  const temperature = Number(process.env.OPENAI_TEMPERATURE ?? '0.2');
+  const maxTokens = process.env.OPENAI_MAX_TOKENS
+    ? Number(process.env.OPENAI_MAX_TOKENS)
+    : 8192;
 
-  if (!rebuttal && !(Array.isArray(priorChecks) && priorChecks.length)) {
-    return '';
-  }
-
-  return [
-    '\n## Prior verify fail / agent rebuttal\n',
-    `verify_rebuttal_count: ${Number.isFinite(count) ? count : 0} (max ${MAX_REBUTTALS})`,
-    priorChecks ? `\nprior verify_failed_checks:\n${JSON.stringify(priorChecks, null, 2)}` : '',
-    rebuttal ? `\nverify_rebuttal:\n${JSON.stringify(rebuttal, null, 2)}` : '',
-  ].join('\n');
+  return {
+    baseUrl,
+    maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
+    model,
+    temperature: Number.isFinite(temperature) ? temperature : 0.2,
+  };
 };
 
-export const runVerifyWithParseRetries = async (params) => {
+export const runVerifyWithTools = async (params) => {
   const messages = [...params.messages];
+  const chat = resolveChatParams();
   let lastError = 'stage-verify: empty LLM content';
 
-  for (let attempt = 0; attempt < MAX_PARSE_ATTEMPTS; attempt += 1) {
-    const content = await runSingleLlmCompletion({
-      defId: params.defId,
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+    const json = await callChatWithLog(params.defId, round, () => callChat({
+      ...chat,
       messages,
-      round: attempt,
-    });
+      tools: VERIFY_TOOLS,
+    }));
+    const choice = json.choices?.[0]?.message;
+    const finishReason = typeof json.choices?.[0]?.finish_reason === 'string'
+      ? json.choices[0].finish_reason
+      : '';
+
+    if (!choice) {
+      throw new Error('openai chat returned no message');
+    }
+
+    messages.push(choice);
+
+    const toolCalls = Array.isArray(choice.tool_calls) ? choice.tool_calls : [];
+
+    if (toolCalls.length > 0) {
+      let parsedFromWrite = null;
+
+      for (const toolCall of toolCalls) {
+        const name = toolCall.function?.name ?? '';
+
+        logProgress(params.defId, `tool round=${round} ${name}`);
+
+        let handled;
+
+        try {
+          handled = await handleVerifyToolCall({
+            outputName: params.outputName,
+            parseVerify: (text) => parseVerifyContent({
+              classifyResume: params.classifyResume,
+              minScore: params.minScore,
+              text,
+            }),
+            snapshot: params.snapshot,
+            toolCall,
+            workspace: params.workspace,
+          });
+        } catch (error) {
+          handled = {
+            message: error instanceof Error ? error.message : 'tool failed',
+            parsed: null,
+          };
+        }
+
+        logProgress(
+          params.defId,
+          `tool round=${round} result_chars=${handled.message.length}`,
+        );
+
+        if (handled.parsed) {
+          parsedFromWrite = handled.parsed;
+        }
+
+        messages.push({
+          content: handled.message,
+          role: 'tool',
+          tool_call_id: toolCall.id,
+        });
+      }
+
+      if (parsedFromWrite) {
+        return parsedFromWrite;
+      }
+
+      continue;
+    }
 
     try {
       return parseVerifyContent({
         classifyResume: params.classifyResume,
         minScore: params.minScore,
-        text: content,
+        text: resolveLlmMessageText({ choice, finishReason }),
       });
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       logProgress(
         params.defId,
-        `parse retry attempt=${attempt + 1}/${MAX_PARSE_ATTEMPTS} error=${lastError}`,
+        `parse retry round=${round + 1}/${MAX_TOOL_ROUNDS} error=${lastError}`,
       );
 
-      if (attempt + 1 >= MAX_PARSE_ATTEMPTS) {
+      if (round + 1 >= MAX_TOOL_ROUNDS) {
         break;
       }
 
@@ -209,7 +288,7 @@ export const runVerifyWithParseRetries = async (params) => {
         content: [
           'Previous reply was not valid compact JSON for the verify schema.',
           `Parse error: ${lastError}`,
-          'Reply again with a single JSON object only (no markdown). Keep feedback <= 200 characters.',
+          `Write ${params.outputName} with write_workspace_file, or reply with a single JSON object only.`,
         ].join('\n'),
         role: 'user',
       });
@@ -217,6 +296,19 @@ export const runVerifyWithParseRetries = async (params) => {
   }
 
   throw new Error(lastError);
+};
+
+const writeSnapshotFiles = async (workspace, snapshot) => {
+  await fs.writeFile(
+    path.join(workspace, 'context.json'),
+    `${JSON.stringify(snapshot.context)}\n`,
+    'utf8',
+  );
+  await fs.writeFile(
+    path.join(workspace, 'types.json'),
+    `${JSON.stringify(snapshot.types)}\n`,
+    'utf8',
+  );
 };
 
 const main = async () => {
@@ -252,34 +344,39 @@ const main = async () => {
       process.exit(1);
     }
 
+    const snapshot = resolveSnapshotBuckets(contextSnapshot);
     const rubricText = await resolveRubricText(
       typeof input.rubric === 'string' ? input.rubric : undefined,
     );
 
+    await writeSnapshotFiles(workspace, snapshot);
+
     const messages = [
-      { content: buildSystemPrompt({ classifyResume, minScore }), role: 'system' },
       {
-        content: [
-          '## Rubric\n',
+        content: buildSystemPrompt({ classifyResume, minScore, outputName }),
+        role: 'system',
+      },
+      {
+        content: buildVerifyUserMessage({
+          context: snapshot.context,
           rubricText,
-          '\n## Context snapshot\n',
-          JSON.stringify(contextSnapshot, null, 2),
-          stageSnapshot
-            ? `\n## Stage snapshot\n${JSON.stringify(stageSnapshot, null, 2)}`
-            : '',
-          buildRebuttalSection(contextSnapshot),
-        ].join('\n'),
+          stageSnapshot,
+          types: snapshot.types,
+        }),
         role: 'user',
       },
     ];
 
     appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
 
-    const parsed = await runVerifyWithParseRetries({
+    const parsed = await runVerifyWithTools({
       classifyResume,
       defId,
       messages,
       minScore,
+      outputName,
+      snapshot,
+      workspace,
     });
 
     await writeResult(parsed);

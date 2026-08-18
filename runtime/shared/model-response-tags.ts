@@ -2,7 +2,8 @@ export const MODEL_RESPONSE_TAGS = ["browse", "stagehand", "bash", "tool", "chat
 
 export type TModelResponseTag =
   | (typeof MODEL_RESPONSE_TAGS)[number]
-  | `platform:${string}`;
+  | `platform:${string}`
+  | `nixery:${string}`;
 
 const TAG_ORDER: Array<TModelResponseTag | `platform:${string}`> = [
   "browse",
@@ -16,9 +17,16 @@ const TAG_ORDER: Array<TModelResponseTag | `platform:${string}`> = [
 const TOOL_NAME_TAGS: Record<string, TModelResponseTag> = {
   ask_user: "tool",
   browser: "browse",
+  goto_stage: "tool",
+  nixery: "tool",
   platform: "tool",
+  read_context_key: "tool",
+  read_type_key: "tool",
   run_bash: "bash",
   set_context: "tool",
+  shell: "bash",
+  wiki: "tool",
+  write_workspace_file: "tool",
 };
 
 const platformSkillTag = (rawArgs: string): `platform:${string}` | undefined => {
@@ -33,6 +41,28 @@ const platformSkillTag = (rawArgs: string): `platform:${string}` | undefined => 
   } catch {
     return undefined;
   }
+};
+
+const nixeryDefTag = (rawArgs: string): `nixery:${string}` | undefined => {
+  try {
+    const parsed = JSON.parse(rawArgs) as { defId?: unknown };
+
+    if (typeof parsed.defId !== 'string' || !parsed.defId.trim()) {
+      return undefined;
+    }
+
+    return `nixery:${parsed.defId.trim()}`;
+  } catch {
+    return undefined;
+  }
+};
+
+const dropUnknownIfOthers = (tags: Set<TModelResponseTag>) => {
+  if (tags.size > 1) {
+    tags.delete("unknown");
+  }
+
+  return tags;
 };
 
 const sortTags = (tags: Set<TModelResponseTag>) => {
@@ -100,6 +130,14 @@ export const deriveModelResponseTags = (message: TToolCallMessage): TModelRespon
         tags.add(skillTag);
       }
     }
+
+    if (name === 'nixery') {
+      const defTag = nixeryDefTag(toolCallArguments(call));
+
+      if (defTag) {
+        tags.add(defTag);
+      }
+    }
   }
 
   if (tags.size === 0) {
@@ -108,5 +146,5 @@ export const deriveModelResponseTags = (message: TToolCallMessage): TModelRespon
     return content ? ["chat"] : ["unknown"];
   }
 
-  return sortTags(tags);
+  return sortTags(dropUnknownIfOthers(tags));
 };
