@@ -155,6 +155,7 @@ const toListItem = (
   toolCallCount: number,
   tokenTotals: TResponseStageListItem['tokenTotals'],
   domains: TResponseStageListItem['domains'],
+  byModel: TResponseStageListItem['byModel'],
   timing: {
     lastModelDurationMs: number;
     lastModelResponseAt?: string;
@@ -181,6 +182,7 @@ const toListItem = (
   requestId: stage.requestId,
   stageId: stage._id.toString(),
   status: resolveStageStatus(stage),
+  byModel,
   domains,
   tokenTotals,
   toolCallCount,
@@ -212,6 +214,7 @@ export const resolveSessionStagesList = async (sessionId: string) => {
       toolStats?.count ?? 0,
       usage.tokenTotals,
       usage.domains,
+      usage.byModel,
       {
         lastModelDurationMs: usage.lastModelDurationMs,
         lastModelResponseAt: usage.lastModelResponseAt,
@@ -316,6 +319,7 @@ export const getSessionStage = [
         toolCallCount,
         usage.tokenTotals,
         usage.domains,
+        usage.byModel,
         {
           lastModelDurationMs: usage.lastModelDurationMs,
           lastModelResponseAt: usage.lastModelResponseAt,

@@ -11,6 +11,7 @@ const stage = (
   overrides: Partial<Parameters<typeof resolveCurrentStage>[0][number]> = {},
 ) => ({
   createdAt: "2026-08-19T01:00:00.000Z",
+  byModel: [],
   domains: [],
   lastModelDurationMs: 0,
   logicPreview: "",

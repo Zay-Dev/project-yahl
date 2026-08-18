@@ -1,4 +1,4 @@
-import type { TResponseGetSession } from "@project-yahl/server/modules/sessions/-api-types";
+import type { TResponseGetSession, TResponseModelUsageByModel } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { Link } from "react-router";
 
@@ -20,17 +20,19 @@ const formatDate = (value: string | undefined) => {
 };
 
 const UsageGroup = ({
+  byModel,
   defId,
   domains,
   label,
   totals,
 }: {
+  byModel?: TResponseModelUsageByModel[];
   defId?: string;
   domains?: string[];
   label: string;
   totals: TResponseGetSession["tokenTotals"];
 }) => {
-  if (!totals && (!domains || domains.length === 0)) {
+  if (!totals && (!domains || domains.length === 0) && (!byModel || byModel.length === 0)) {
     return null;
   }
 
@@ -41,7 +43,12 @@ const UsageGroup = ({
         <p className="mt-0.5 font-mono text-xs text-muted-foreground">{defId}</p>
       ) : null}
       <div className="mt-2">
-        <TokenStatsRow compact={false} domains={domains} totals={totals} />
+        <TokenStatsRow
+          byModel={byModel}
+          compact={false}
+          domains={domains}
+          totals={totals}
+        />
       </div>
     </div>
   );
@@ -50,14 +57,16 @@ const UsageGroup = ({
 export function SessionOverview({ session }: TSessionOverviewProps) {
   const totals = session.tokenTotals;
   const domains = session.domains;
+  const stageUsage = session.stageUsage;
   const nixeryGroups = (session.nixeryUsage ?? []).filter(
-    (group) => group.tokenTotals || group.domains.length > 0,
+    (group) => group.tokenTotals || group.domains.length > 0 || group.byModel.length > 0,
   );
   const hasUsage = Boolean(
     totals
-    || session.stageTokenTotals
+    || stageUsage?.tokenTotals
     || nixeryGroups.length > 0
-    || domains.length > 0,
+    || domains.length > 0
+    || (session.byModel ?? []).length > 0,
   );
 
   return (
@@ -111,16 +120,20 @@ export function SessionOverview({ session }: TSessionOverviewProps) {
       {hasUsage ? (
         <div className="mt-4 space-y-3">
           <UsageGroup
+            byModel={session.byModel}
             domains={domains}
             label="All"
             totals={totals}
           />
           <UsageGroup
+            byModel={stageUsage?.byModel}
+            domains={stageUsage?.domains}
             label="Stages"
-            totals={session.stageTokenTotals}
+            totals={stageUsage?.tokenTotals ?? null}
           />
           {nixeryGroups.map((group) => (
             <UsageGroup
+              byModel={group.byModel}
               defId={group.defId}
               domains={group.domains}
               key={group.defId}

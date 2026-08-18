@@ -21,6 +21,7 @@ const checkpoint = (requestId: string, score = 0.72) => ({
 
 const stage = (requestId: string, status: 'finished' | 'running' | 'verifying') => ({
   createdAt: '2026-06-21T12:00:00.000Z',
+  byModel: [],
   lastModelDurationMs: 0,
   logicPreview: 'logic',
   modelCallCount: 1,

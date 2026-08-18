@@ -15,10 +15,20 @@ import type {
 
 export type TResponseTokenTotals = TTokenTotals;
 
-export type TResponseNixeryUsageGroup = {
-  defId: string;
+export type TResponseModelUsageByModel = {
+  domains: string[];
+  model: string;
+  tokenTotals: TResponseTokenTotals | null;
+};
+
+export type TResponseModelUsageSummary = {
+  byModel: TResponseModelUsageByModel[];
   domains: string[];
   tokenTotals: TResponseTokenTotals | null;
+};
+
+export type TResponseNixeryUsageGroup = TResponseModelUsageSummary & {
+  defId: string;
 };
 
 export type TResponseGetSession = {
@@ -39,10 +49,11 @@ export type TResponseGetSession = {
   taskId: string;
   taskSkills: TTaskSkillFile[];
   taskYahl: string;
+  byModel: TResponseModelUsageByModel[];
   domains: string[];
   lastModelResponseAt?: string;
   nixeryUsage: TResponseNixeryUsageGroup[];
-  stageTokenTotals: TResponseTokenTotals | null;
+  stageUsage: TResponseModelUsageSummary;
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
@@ -80,6 +91,7 @@ export type TResponseStageListItem = {
   requestId: string;
   stageId: string;
   status: TResponseStageStatus;
+  byModel: TResponseModelUsageByModel[];
   domains: string[];
   tokenTotals: TTokenTotals | null;
   toolCallCount: number;

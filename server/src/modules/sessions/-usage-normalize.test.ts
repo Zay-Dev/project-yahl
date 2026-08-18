@@ -104,7 +104,8 @@ describe('summarizeSessionUsageFromDocs', () => {
     ]);
 
     assert.equal(summary.tokenTotals?.totalTokens, 50);
-    assert.equal(summary.stageTokenTotals?.totalTokens, 30);
+    assert.equal(summary.stageUsage.tokenTotals?.totalTokens, 30);
+    assert.deepEqual(summary.stageUsage.domains, ['api.openai.com']);
     assert.deepEqual(
       summary.nixeryUsage.map((group) => [group.defId, group.tokenTotals?.totalTokens]),
       [
@@ -124,9 +125,58 @@ describe('summarizeSessionUsageFromDocs', () => {
       },
     ]);
 
-    assert.equal(summary.stageTokenTotals?.totalTokens, 30);
+    assert.equal(summary.stageUsage.tokenTotals?.totalTokens, 30);
     assert.deepEqual(summary.nixeryUsage, []);
     assert.equal(summary.lastModelResponseAt, '2026-08-19T03:00:00.000Z');
+  });
+
+  it('groups the same domain by model and splits nested nixery models', () => {
+    const summary = summarizeSessionUsageFromDocs([
+      {
+        domain: 'kuaipao.ai',
+        response: {
+          model: 'deepseek-v4-flash-0731',
+          usage: stageUsage,
+        },
+        tags: ['chat'],
+      },
+      {
+        domain: 'kuaipao.ai',
+        response: {
+          model: 'deepseek-v4-flash-0731',
+          usage: nixeryUsage,
+        },
+        tags: ['tool', 'nixery:resolve-error-with-knowledge'],
+      },
+      {
+        domain: 'kuaipao.ai',
+        response: {
+          model: 'deepseek-v4-pro-0813',
+          usage: nixeryUsage,
+        },
+        tags: ['bash', 'nixery:resolve-error-with-knowledge'],
+      },
+    ]);
+
+    assert.deepEqual(
+      summary.byModel.map((row) => [row.model, row.tokenTotals?.totalTokens, row.domains]),
+      [
+        ['deepseek-v4-flash-0731', 40, ['kuaipao.ai']],
+        ['deepseek-v4-pro-0813', 10, ['kuaipao.ai']],
+      ],
+    );
+    assert.deepEqual(summary.stageUsage.domains, ['kuaipao.ai']);
+    assert.deepEqual(
+      summary.stageUsage.byModel.map((row) => [row.model, row.tokenTotals?.totalTokens]),
+      [['deepseek-v4-flash-0731', 30]],
+    );
+    assert.deepEqual(
+      summary.nixeryUsage[0]?.byModel.map((row) => [row.model, row.tokenTotals?.totalTokens]),
+      [
+        ['deepseek-v4-flash-0731', 10],
+        ['deepseek-v4-pro-0813', 10],
+      ],
+    );
   });
 });
 
@@ -158,5 +208,38 @@ describe('summarizeRequestIdUsagesFromDocs', () => {
     assert.equal(r1?.tokenTotals?.totalTokens, 12);
     assert.equal(r2?.modelDurationMs, 0);
     assert.equal(r2?.tokenTotals, null);
+    assert.deepEqual(r2?.byModel, []);
+  });
+
+  it('splits request usage by model', () => {
+    const byRequestId = summarizeRequestIdUsagesFromDocs(
+      [
+        {
+          domain: 'kuaipao.ai',
+          requestId: 'r1',
+          response: {
+            model: 'deepseek-v4-flash-0731',
+            usage: { completion_tokens: 1, prompt_tokens: 2, total_tokens: 3 },
+          },
+        },
+        {
+          domain: 'kuaipao.ai',
+          requestId: 'r1',
+          response: {
+            model: 'deepseek-v4-pro-0813',
+            usage: { completion_tokens: 4, prompt_tokens: 5, total_tokens: 9 },
+          },
+        },
+      ],
+      ['r1'],
+    );
+
+    assert.deepEqual(
+      byRequestId.get('r1')?.byModel.map((row) => [row.model, row.tokenTotals?.totalTokens]),
+      [
+        ['deepseek-v4-flash-0731', 3],
+        ['deepseek-v4-pro-0813', 9],
+      ],
+    );
   });
 });

@@ -64,9 +64,10 @@ const toResponse = (
   taskSkills: session.taskSkills ?? [],
   taskYahl: session.taskYahl ?? '',
   domains: usage.domains,
+  byModel: usage.byModel,
   ...(usage.lastModelResponseAt ? { lastModelResponseAt: usage.lastModelResponseAt } : {}),
   nixeryUsage: usage.nixeryUsage,
-  stageTokenTotals: usage.stageTokenTotals,
+  stageUsage: usage.stageUsage,
   tokenTotals: usage.tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });

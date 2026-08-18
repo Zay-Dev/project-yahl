@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   isSetContextArgs,
   parseToolArgumentsDetailed,
+  parseToolSummaries,
   summarizeRawArguments,
 } from './tool-call-parse';
 
@@ -29,6 +30,24 @@ describe('parseToolArgumentsDetailed', () => {
 
     assert.ok(isSetContextArgs(result.parsed));
     assert.equal(result.parseError, undefined);
+  });
+});
+
+describe('parseToolSummaries', () => {
+  it('maps OpenAI tool call shape', () => {
+    const tools = parseToolSummaries([
+      {
+        function: {
+          arguments: '{"command":"ls"}',
+          name: 'shell',
+        },
+        id: 'call_1',
+      },
+    ]);
+
+    assert.equal(tools[0]?.id, 'call_1');
+    assert.equal(tools[0]?.name, 'shell');
+    assert.deepEqual(tools[0]?.arguments, { command: 'ls' });
   });
 });
 

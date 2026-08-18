@@ -4,21 +4,26 @@ import { Types } from 'mongoose';
 
 import { modelModelResponse } from './models';
 
-export type TNixeryUsageGroup = {
-  defId: string;
+export type TModelUsageByModel = {
   domains: string[];
+  model: string;
   tokenTotals: TTokenTotals | null;
 };
 
 export type TModelUsageSummary = {
+  byModel: TModelUsageByModel[];
   domains: string[];
   tokenTotals: TTokenTotals | null;
+};
+
+export type TNixeryUsageGroup = TModelUsageSummary & {
+  defId: string;
 };
 
 export type TSessionUsageSummary = TModelUsageSummary & {
   lastModelResponseAt?: string;
   nixeryUsage: TNixeryUsageGroup[];
-  stageTokenTotals: TTokenTotals | null;
+  stageUsage: TModelUsageSummary;
 };
 
 export type TRequestIdUsageSummary = TModelUsageSummary & {
@@ -37,6 +42,7 @@ type TUsageDoc = {
 };
 
 const NIXERY_TAG_PREFIX = 'nixery:';
+const UNKNOWN_MODEL = 'unknown';
 
 const num = (value: unknown) =>
   (typeof value === 'number' && Number.isFinite(value) ? value : 0);
@@ -114,11 +120,13 @@ const hasTokenUsage = (totals: TTokenTotals) =>
   || totals.totalTokens > 0;
 
 export const emptyUsageSummary = (): TModelUsageSummary => ({
+  byModel: [],
   domains: [],
   tokenTotals: null,
 });
 
 export const emptyRequestIdUsageSummary = (): TRequestIdUsageSummary => ({
+  byModel: [],
   domains: [],
   lastModelDurationMs: 0,
   modelDurationMs: 0,
@@ -188,12 +196,19 @@ const maxIso = (left?: string, right?: string) => {
   return left >= right ? left : right;
 };
 
+type TModelBucket = {
+  domains: Set<string>;
+  totals: TTokenTotals;
+};
+
 type TUsageAccumulator = {
+  byModel: Map<string, Map<string, TModelBucket>>;
   domains: Map<string, Set<string>>;
   totals: Map<string, TTokenTotals>;
 };
 
 const createUsageAccumulator = (): TUsageAccumulator => ({
+  byModel: new Map(),
   domains: new Map(),
   totals: new Map(),
 });
@@ -232,6 +247,41 @@ const accumulateDomain = (
   acc.domains.set(key, existing);
 };
 
+const accumulateByModel = (
+  acc: TUsageAccumulator,
+  key: string,
+  model: string,
+  domain: unknown,
+  usage: unknown,
+) => {
+  const models = acc.byModel.get(key) ?? new Map<string, TModelBucket>();
+  const existing = models.get(model) ?? {
+    domains: new Set<string>(),
+    totals: emptyTokenTotals(),
+  };
+
+  if (typeof domain === 'string') {
+    const trimmed = domain.trim();
+
+    if (trimmed) {
+      existing.domains.add(trimmed);
+    }
+  }
+
+  const normalized = normalizeUsageToTokenTotals(usage);
+
+  if (normalized) {
+    addTokenTotals(existing.totals, normalized);
+  }
+
+  if (existing.domains.size === 0 && !hasTokenUsage(existing.totals)) {
+    return;
+  }
+
+  models.set(model, existing);
+  acc.byModel.set(key, models);
+};
+
 const toNullableTotals = (totals: TTokenTotals | undefined) => {
   if (!totals || !hasTokenUsage(totals)) {
     return null;
@@ -240,10 +290,28 @@ const toNullableTotals = (totals: TTokenTotals | undefined) => {
   return totals;
 };
 
+const toByModel = (acc: TUsageAccumulator, key: string): TModelUsageByModel[] => {
+  const models = acc.byModel.get(key);
+
+  if (!models) {
+    return [];
+  }
+
+  return [...models.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([model, bucket]) => ({
+      domains: uniqueSortedDomains([...bucket.domains]),
+      model,
+      tokenTotals: toNullableTotals(bucket.totals),
+    }))
+    .filter((row) => row.tokenTotals || row.domains.length > 0);
+};
+
 const toUsageSummary = (
   acc: TUsageAccumulator,
   key: string,
 ): TModelUsageSummary => ({
+  byModel: toByModel(acc, key),
   domains: uniqueSortedDomains([...(acc.domains.get(key) ?? [])]),
   tokenTotals: toNullableTotals(acc.totals.get(key)),
 });
@@ -252,6 +320,25 @@ const responseUsageOf = (doc: TUsageDoc) => {
   const response = (doc.response ?? {}) as Record<string, unknown>;
 
   return response.usage;
+};
+
+const responseModelOf = (doc: TUsageDoc) => {
+  const response = (doc.response ?? {}) as Record<string, unknown>;
+  const model = typeof response.model === 'string' ? response.model.trim() : '';
+
+  return model || UNKNOWN_MODEL;
+};
+
+const accumulateDoc = (
+  acc: TUsageAccumulator,
+  key: string,
+  doc: TUsageDoc,
+) => {
+  const usage = responseUsageOf(doc);
+
+  accumulateDomain(acc, key, doc.domain);
+  accumulateResponseUsage(acc, key, usage);
+  accumulateByModel(acc, key, responseModelOf(doc), doc.domain, usage);
 };
 
 export const summarizeSessionUsageFromDocs = (docs: TUsageDoc[]): TSessionUsageSummary => {
@@ -263,23 +350,19 @@ export const summarizeSessionUsageFromDocs = (docs: TUsageDoc[]): TSessionUsageS
   let lastModelResponseAt: string | undefined;
 
   docs.forEach((doc) => {
-    const usage = responseUsageOf(doc);
     const at = toIsoTime(doc.createdAt);
 
     lastModelResponseAt = maxIso(lastModelResponseAt, at);
-    accumulateDomain(all, allKey, doc.domain);
-    accumulateResponseUsage(all, allKey, usage);
+    accumulateDoc(all, allKey, doc);
 
     const defId = nixeryDefIdFromTags(doc.tags);
 
     if (defId) {
-      accumulateDomain(nixery, defId, doc.domain);
-      accumulateResponseUsage(nixery, defId, usage);
+      accumulateDoc(nixery, defId, doc);
       return;
     }
 
-    accumulateDomain(stages, stageKey, doc.domain);
-    accumulateResponseUsage(stages, stageKey, usage);
+    accumulateDoc(stages, stageKey, doc);
   });
 
   const defIds = [...new Set([...nixery.totals.keys(), ...nixery.domains.keys()])].sort();
@@ -288,14 +371,13 @@ export const summarizeSessionUsageFromDocs = (docs: TUsageDoc[]): TSessionUsageS
       defId,
       ...toUsageSummary(nixery, defId),
     }))
-    .filter((group) => group.tokenTotals || group.domains.length > 0);
+    .filter((group) => group.tokenTotals || group.domains.length > 0 || group.byModel.length > 0);
 
   return {
-    domains: uniqueSortedDomains([...(all.domains.get(allKey) ?? [])]),
+    ...toUsageSummary(all, allKey),
     ...(lastModelResponseAt ? { lastModelResponseAt } : {}),
     nixeryUsage,
-    stageTokenTotals: toNullableTotals(stages.totals.get(stageKey)),
-    tokenTotals: toNullableTotals(all.totals.get(allKey)),
+    stageUsage: toUsageSummary(stages, stageKey),
   };
 };
 
@@ -316,8 +398,7 @@ export const summarizeRequestIdUsagesFromDocs = (
       return;
     }
 
-    accumulateDomain(acc, requestId, doc.domain);
-    accumulateResponseUsage(acc, requestId, responseUsageOf(doc));
+    accumulateDoc(acc, requestId, doc);
 
     const ms = num(doc.durationMs);
 
@@ -398,8 +479,7 @@ export const sumModelResponseUsagesBySessionRef = async (sessionRefs: Types.Obje
   docs.forEach((doc) => {
     const sessionKey = String(doc.session);
 
-    accumulateDomain(acc, sessionKey, doc.domain);
-    accumulateResponseUsage(acc, sessionKey, responseUsageOf(doc));
+    accumulateDoc(acc, sessionKey, doc);
   });
 
   sessionRefs.forEach((sessionRef) => {

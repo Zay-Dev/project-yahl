@@ -7,6 +7,7 @@ const stage = (
   overrides: Partial<Parameters<typeof buildStageLabels>[0][number]> = {},
 ) => ({
   createdAt: '',
+  byModel: [],
   lastModelDurationMs: 0,
   logicPreview: '',
   modelCallCount: 0,

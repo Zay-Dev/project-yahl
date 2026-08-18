@@ -1,4 +1,4 @@
-import type { TResponseStageDetail } from "@project-yahl/server/modules/sessions/-api-types";
+import type { TResponseStageDetail, TResponseStageModelResponseItem } from "@project-yahl/server/modules/sessions/-api-types";
 import type { TParsedStage } from "@project-yahl/server/modules/sessions/-types";
 
 import { StageContextCompare } from "@/pages/sessions/components/stage-context-compare";
@@ -8,6 +8,8 @@ import { StageModelResponseCard } from "@/pages/sessions/components/stage-model-
 import { StageSetupJsonSheet } from "@/pages/sessions/components/stage-setup-json-sheet";
 import { ToolCallList } from "@/pages/sessions/components/tool-calls/tool-call-list";
 
+import { groupModelResponsesByNixery } from "@/pages/sessions/lib/group-model-responses";
+
 type TStageDetailPanelProps = {
   baselineAfter?: Record<string, unknown>;
   detail: TResponseStageDetail;
@@ -15,12 +17,26 @@ type TStageDetailPanelProps = {
   sessionId: string;
 };
 
+const ModelResponseList = ({
+  responses,
+}: {
+  responses: TResponseStageModelResponseItem[];
+}) => (
+  <ul className="mt-2 space-y-2">
+    {responses.map((response) => (
+      <StageModelResponseCard key={response._id} response={response} />
+    ))}
+  </ul>
+);
+
 export function StageDetailPanel({
   baselineAfter,
   detail,
   originalStages,
   sessionId,
 }: TStageDetailPanelProps) {
+  const { nixeryGroups, untagged } = groupModelResponsesByNixery(detail.modelResponses);
+
   return (
     <div className="space-y-4 border-t bg-background/60 px-4 py-4 text-sm">
       <div className="flex justify-end">
@@ -47,13 +63,21 @@ export function StageDetailPanel({
         </pre>
       </div>
       {detail.modelResponses.length > 0 ? (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">Model responses</p>
-          <ul className="mt-2 space-y-2">
-            {detail.modelResponses.map((response) => (
-              <StageModelResponseCard key={response._id} response={response} />
-            ))}
-          </ul>
+        <div className="space-y-4">
+          {untagged.length > 0 ? (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Model responses</p>
+              <ModelResponseList responses={untagged} />
+            </div>
+          ) : null}
+          {nixeryGroups.map((group) => (
+            <div key={group.defId}>
+              <p className="text-xs font-medium text-muted-foreground">
+                nixery:{group.defId}
+              </p>
+              <ModelResponseList responses={group.responses} />
+            </div>
+          ))}
         </div>
       ) : null}
       <ToolCallList toolCalls={detail.toolCalls} />
