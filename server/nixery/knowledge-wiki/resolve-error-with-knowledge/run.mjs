@@ -3,17 +3,16 @@ import path from 'node:path';
 
 import { validateKnowledgeObservation } from '/opt/nixery/plugin/lib/dist/index.js';
 
-import { resolveErrorWithKnowledge } from '../lib/error-knowledge-resolver.mjs';
-import { runKnowledgeSearchAgent } from '../lib/knowledge-search-agent.mjs';
-import {
-  readNixeryRetryMeta,
-} from '../lib/nixery-retry-feedback.mjs';
-import { resolveObservationIncidentId } from '../lib/observation-incident.mjs';
-import { buildObservationInput } from '../lib/observation-input.mjs';
 import { logProgress, resolveDefId } from '../lib/run-agent.mjs';
+import { buildObservationInput } from '../lib/observation-input.mjs';
+import { readNixeryRetryMeta } from '../lib/nixery-retry-feedback.mjs';
+import { grepKnowledgeCorpus } from '../lib/error-knowledge-corpus-grep.mjs';
+import { runKnowledgeSearchAgent } from '../lib/knowledge-search-agent.mjs';
 import { submitKnowledgeObservation } from '../lib/submit-observation.mjs';
+import { resolveErrorWithKnowledge } from '../lib/error-knowledge-resolver.mjs';
+import { resolveObservationIncidentId } from '../lib/observation-incident.mjs';
+import { LOOKUP_OUTPUT, buildLookupPrompt } from '../lib/error-knowledge-lookup-prompt.mjs';
 
-const LOOKUP_OUTPUT = 'lookup-result.json';
 const MAX_LOOKUP_ROUNDS = 8;
 
 const readJson = async (filePath) => {
@@ -21,18 +20,6 @@ const readJson = async (filePath) => {
 
   return JSON.parse(raw);
 };
-
-const buildLookupPrompt = (params) => [
-  'Search the read-only wiki export at /data/knowledge_export for an existing, reusable solution to this concrete tool failure.',
-  'Use shell ls, grep, and cat before deciding. Prefer HOWTO, TRICK, Q&A, applied observations, and evidence-backed successful paths over failure-only notes.',
-  `Exclude the newly written observation path from results: ${params.excludedPath}`,
-  'Do not modify the knowledge export.',
-  `Failure context:\n${JSON.stringify(params.failure, null, 2)}`,
-  `Write exactly one JSON object to /workspace/${LOOKUP_OUTPUT} with write_workspace_file.`,
-  'Found shape: {"status":"found","solution":"actionable steps","citations":[{"path":"corpus path","excerpt":"supporting text"}]}.',
-  'Not-found shape: {"status":"not_found","solution":null,"citations":[],"reason":"where and how you searched"}.',
-  'Do not claim found without at least one real path and excerpt read from the corpus.',
-].join('\n\n');
 
 const writeGate = async (outputPath, gate) => {
   await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
@@ -61,6 +48,15 @@ const main = async () => {
         defId,
         `observed incident=${incidentId} topic=${observationGate.topic} path=${observationGate.path}`,
       );
+      const candidates = await grepKnowledgeCorpus({
+        claim: observation.claim,
+        cue: observation.cue,
+        excludedPath: observationGate.path,
+        root: process.env.KNOWLEDGE_EXPORT_ROOT?.trim() || '/data/knowledge_export',
+        tool: input.tool,
+      });
+
+      logProgress(defId, `corpus grep hits=${candidates.length}`);
       await fs.rm(lookupPath, { force: true });
       await runKnowledgeSearchAgent({
         defId,
@@ -71,10 +67,12 @@ const main = async () => {
         systemContent: [
           'You are a bounded error-resolution knowledge agent.',
           'Search existing knowledge only; do not invent a solution.',
+          'Prefer the seeded corpus grep candidates. Cat those files before grepping the whole tree.',
           'Use shell to inspect the corpus and write the requested JSON result with write_workspace_file.',
           'Stop immediately after writing the result.',
         ].join(' '),
         userPrompt: buildLookupPrompt({
+          candidates,
           excludedPath: observationGate.path,
           failure: {
             tool: input.tool,

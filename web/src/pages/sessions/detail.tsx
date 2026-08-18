@@ -129,6 +129,7 @@ export function SessionDetailPage() {
             error={stagesError}
             isLoading={stagesLoading}
             lastEvent={lastEvent}
+            originalStages={session.parsedStages ?? []}
             sessionId={session.sessionId}
             stages={stages}
             startingRun={!session.parsedStages?.length && stages.length === 0}

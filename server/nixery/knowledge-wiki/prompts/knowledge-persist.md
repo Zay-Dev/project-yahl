@@ -22,7 +22,7 @@ Read those `~/task-skills/…/SKILL.md` files when present. Do **not** invent fi
 
 ## The Librarian
 
-`/nixery(resolve-error-with-knowledge, …)` is the system's **Librarian**. Ask it before inventing a search. Do **not** scan `/workspace/sessions/*`, `find /`, or other runs for a spec.
+`/nixery(resolve-error-with-knowledge, …)` is the system's **Librarian**. Ask it before inventing a search. Do **not** scan `/workspace/sessions/*`, `find /`, or other runs for a spec. It support not only error, instead, it will be able to provide most of the info, and it is your responsbility to contribute back if it failed to provide the info, so DO **NOT** feel hesitated to use it.
 
 The ticket is `observation.observationId` (e.g. `error-a1b2c3d4e5f6`). Keep it until you post back.
 

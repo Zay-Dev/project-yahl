@@ -20,7 +20,6 @@ import { copySessionWorkspace } from '../-workspace-paths';
 import { modelForkSession, modelSession } from '../models';
 import { yahlStageSchema } from '../stage-schema';
 import { isStageFinished } from '../-stage-status';
-import { mergeForkSessionSetups } from './merge-fork-setups';
 import { validateForkSourceBundle, ForkSourceBundleError } from '../-fork-source-bundle';
 import { resolveSessionStagesReplay } from './stage-read';
 import { spawnOrchestrate } from './spawn-orchestrate';
@@ -44,6 +43,7 @@ const loopMetaSchema = Joi.object({
 const setupSchema = Joi.object<TForkSessionStageSetup>({
   context: Joi.object().required(),
   loopMeta: loopMetaSchema.optional(),
+  parsedStageIndex: Joi.number().integer().min(0).optional(),
   stage: yahlStageSchema.required(),
   stageId: Joi.string().trim().required(),
 });
@@ -95,9 +95,9 @@ export const createForkSession = [
         throw errors.badRequest('Setups must include the anchor stage');
       }
 
-      for (const setup of body.setups) {
-        if (!replayById.has(setup.stageId)) {
-          throw errors.badRequest(`Unknown stage id: ${setup.stageId}`);
+      for (const setup of body.setups.slice(1)) {
+        if (setup.parsedStageIndex == null) {
+          throw errors.badRequest('Later setups must include parsedStageIndex');
         }
       }
 
@@ -129,7 +129,7 @@ export const createForkSession = [
         }
       }
 
-      const setups = mergeForkSessionSetups(replayRows, anchorIndex, body.setups);
+      const setups = body.setups;
 
       let sourceTaskId: string;
 

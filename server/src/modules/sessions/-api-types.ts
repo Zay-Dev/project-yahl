@@ -76,6 +76,7 @@ export type TResponseStageListItem = {
   loopValue?: unknown;
   modelCallCount: number;
   modelDurationMs: number;
+  parsedStageIndex?: number;
   requestId: string;
   stageId: string;
   status: TResponseStageStatus;
@@ -222,6 +223,7 @@ export type TStageListSource = {
   createdAt: Date | string;
   finishedAt?: Date | string;
   loopMeta?: TStageLoopMeta;
+  parsedStageIndex?: number;
   requestId: string;
   stage: TYahlStage;
   temperature?: number;

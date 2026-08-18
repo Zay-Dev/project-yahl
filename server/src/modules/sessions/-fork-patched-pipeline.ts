@@ -1,3 +1,6 @@
+import type { TForkSessionStageSetup, TParsedStage, TStageLoopMeta } from './-types';
+import type { TResponseStageReplayItem } from './-api-types';
+
 import {
   resetAskUserStageForRerun,
   stripAskUserAnswersFromContext,
@@ -6,9 +9,6 @@ import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
 import { compileForkRunStage } from '@project-yahl/shared/yahl/stage-compile';
 import { dedupeReplayRowsByStageSlot } from '@project-yahl/shared/yahl/replay-dedupe';
 import { mergeContextPayloadIntoRecord } from '@project-yahl/shared/yahl/storage-merge';
-
-import type { TForkSessionStageSetup, TParsedStage, TStageLoopMeta } from './-types';
-import type { TResponseStageReplayItem } from './-api-types';
 
 const _countUniqueParsedStageIndices = (rows: { parsedStageIndex?: number }[]) => {
   const seen = new Set<number>();
@@ -20,24 +20,6 @@ const _countUniqueParsedStageIndices = (rows: { parsedStageIndex?: number }[]) =
   }
 
   return seen.size;
-};
-
-const _dedupeTailRowsByParsedStageIndex = <T extends { parsedStageIndex?: number }>(rows: T[]) => {
-  const seen = new Set<number>();
-  const result: T[] = [];
-
-  for (const row of rows) {
-    const parsedStageIndex = row.parsedStageIndex;
-
-    if (parsedStageIndex == null || seen.has(parsedStageIndex)) {
-      continue;
-    }
-
-    seen.add(parsedStageIndex);
-    result.push(row);
-  }
-
-  return result;
 };
 
 export class ForkPatchedPipelineError extends Error {}
@@ -120,12 +102,26 @@ const _compileForkSetupParsedStage = (
     : compiled;
 };
 
-const _setupFromReplayRow = (replayRow: TResponseStageReplayItem): TForkSessionStageSetup => ({
-  context: replayRow.context ?? {},
-  loopMeta: replayRow.loopMeta,
-  stage: replayRow.stage,
-  stageId: replayRow.stageId,
-});
+const _withoutLoopMeta = (setup: TForkSessionStageSetup): TForkSessionStageSetup => {
+  const { loopMeta: _loopMeta, ...rest } = setup;
+
+  return rest;
+};
+
+const _resolveAnchorParsedStageIndex = (
+  replayRows: TResponseStageReplayItem[],
+  anchorIndex: number,
+  anchorStageId: string,
+) => {
+  const anchorRow = replayRows.find((row) => row.stageId === anchorStageId)
+    ?? replayRows[anchorIndex];
+
+  if (anchorRow?.parsedStageIndex != null) {
+    return anchorRow.parsedStageIndex;
+  }
+
+  return _countUniqueParsedStageIndices(replayRows.slice(0, anchorIndex));
+};
 
 export const deriveForkStorageSeed = (
   replayRows: TResponseStageReplayItem[],
@@ -139,7 +135,7 @@ export const deriveForkStorageSeed = (
     ? { ...lastPrefix.contextAfter }
     : { context: {}, types: {} };
 
-  if (anchorSetup.stageId === anchorSetup.stageId && anchorSetup.context) {
+  if (anchorSetup.context) {
     storageSeed = mergeContextPayloadIntoRecord(
       storageSeed,
       stripAskUserAnswersFromContext(anchorSetup.context) ?? {},
@@ -159,34 +155,61 @@ export const buildForkPatchedParsedStages = (params: {
   const { anchorIndex, anchorStageId, replayRows, setups, taskYahl } = params;
   const baselineStages = parseYahlTask(taskYahl).stages;
   const nextStages = [...baselineStages];
+  const anchorSetup = setups[0];
 
-  const anchorSlotOrdinal = _countUniqueParsedStageIndices(replayRows.slice(0, anchorIndex));
-  const tailDeduped = _dedupeTailRowsByParsedStageIndex(replayRows.slice(anchorIndex));
+  if (!anchorSetup) {
+    throw new ForkPatchedPipelineError('fork: setups must include the anchor stage');
+  }
 
-  if (anchorSlotOrdinal + tailDeduped.length > baselineStages.length) {
+  const anchorParsedStageIndex = _resolveAnchorParsedStageIndex(
+    replayRows,
+    anchorIndex,
+    anchorStageId,
+  );
+
+  if (anchorParsedStageIndex < 0 || anchorParsedStageIndex >= baselineStages.length) {
     throw new ForkPatchedPipelineError(
-      `fork: tail slots exceed parsedStages length `
-      + `(anchor=${anchorSlotOrdinal} tail=${tailDeduped.length} stages=${baselineStages.length})`,
+      `fork: anchor parsedStageIndex ${anchorParsedStageIndex} is out of range `
+      + `(stages=${baselineStages.length})`,
     );
   }
 
-  const anchorInTail = tailDeduped.some((row) => row.stageId === anchorStageId);
-
-  if (!anchorInTail) {
-    throw new ForkPatchedPipelineError(`fork: anchor stage ${anchorStageId} not found in tail slots`);
-  }
-
-  const setupByStageId = new Map(setups.map((setup) => [setup.stageId, setup]));
   const loopStageIndex = _resolveLoopStageIndex(baselineStages);
   const loopStage = loopStageIndex >= 0 ? baselineStages[loopStageIndex] : undefined;
 
-  for (let slotIndex = 0; slotIndex < tailDeduped.length; slotIndex += 1) {
-    const replayRow = tailDeduped[slotIndex]!;
-    const parsedStageIndex = anchorSlotOrdinal + slotIndex;
-    const setup = setupByStageId.get(replayRow.stageId) ?? _setupFromReplayRow(replayRow);
+  nextStages[anchorParsedStageIndex] = _compileForkSetupParsedStage(
+    anchorSetup,
+    baselineStages,
+    anchorParsedStageIndex,
+    loopStageIndex,
+    loopStage,
+  );
+
+  const seenLater = new Set<number>();
+
+  for (const setup of setups.slice(1)) {
+    const parsedStageIndex = setup.parsedStageIndex;
+
+    if (parsedStageIndex == null) {
+      throw new ForkPatchedPipelineError('fork: later setup missing parsedStageIndex');
+    }
+
+    if (parsedStageIndex <= anchorParsedStageIndex || parsedStageIndex >= nextStages.length) {
+      throw new ForkPatchedPipelineError(
+        `fork: later parsedStageIndex ${parsedStageIndex} is out of range`,
+      );
+    }
+
+    if (seenLater.has(parsedStageIndex)) {
+      throw new ForkPatchedPipelineError(
+        `fork: duplicate later parsedStageIndex ${parsedStageIndex}`,
+      );
+    }
+
+    seenLater.add(parsedStageIndex);
 
     nextStages[parsedStageIndex] = _compileForkSetupParsedStage(
-      setup,
+      _withoutLoopMeta(setup),
       baselineStages,
       parsedStageIndex,
       loopStageIndex,
@@ -195,7 +218,7 @@ export const buildForkPatchedParsedStages = (params: {
   }
 
   return {
-    anchorParsedStageIndex: anchorSlotOrdinal,
+    anchorParsedStageIndex,
     parsedStages: nextStages,
   };
 };

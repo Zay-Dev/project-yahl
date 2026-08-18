@@ -1,21 +1,34 @@
-import type { TResponseStageListItem } from "@project-yahl/server/modules/sessions/-api-types";
+import type { TParsedStage } from "@project-yahl/server/modules/sessions/-types";
 
-export const filterLaterStagesForRerun = (
-  stages: TResponseStageListItem[],
-  anchor: TResponseStageListItem,
-) => {
-  const anchorIndex = stages.findIndex((item) => item.stageId === anchor.stageId);
+export type TLaterOriginalStage = {
+  parsed: TParsedStage;
+  parsedStageIndex: number;
+};
 
-  if (anchorIndex < 0) {
+export const laterOriginalStagesForRerun = (
+  originalStages: TParsedStage[],
+  anchorParsedStageIndex: number | undefined,
+): TLaterOriginalStage[] => {
+  if (anchorParsedStageIndex == null || anchorParsedStageIndex < 0) {
     return [];
   }
 
-  const later = stages.slice(anchorIndex + 1);
-  const loopSetup = anchor.loopSetup?.trim();
+  return originalStages.slice(anchorParsedStageIndex + 1).map((parsed, offset) => ({
+    parsed,
+    parsedStageIndex: anchorParsedStageIndex + 1 + offset,
+  }));
+};
 
-  if (!loopSetup) {
-    return later;
+export const laterOriginalStageLabel = (
+  parsed: TParsedStage,
+  parsedStageIndex: number,
+) => {
+  const slot = `task #${parsedStageIndex + 1}`;
+  const id = parsed.spec.id?.trim();
+
+  if (id) {
+    return `${id} (${slot})`;
   }
 
-  return later.filter((item) => item.loopSetup?.trim() !== loopSetup);
+  return slot;
 };

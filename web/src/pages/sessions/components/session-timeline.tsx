@@ -1,4 +1,5 @@
 import type { TResponseStageDetail, TResponseStageListItem, TSessionLiveEvent } from "@project-yahl/server/modules/sessions/-api-types";
+import type { TParsedStage } from "@project-yahl/server/modules/sessions/-types";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -24,6 +25,7 @@ type TSessionTimelineProps = {
   error: string | null;
   isLoading: boolean;
   lastEvent: TSessionLiveEvent | null;
+  originalStages: TParsedStage[];
   sessionId: string;
   stages: TResponseStageListItem[];
   startingRun?: boolean;
@@ -64,9 +66,9 @@ type TStageRowProps = {
   item: TResponseStageListItem;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  originalStages: TParsedStage[];
   sessionId: string;
   stageLabel: string;
-  stages: TResponseStageListItem[];
 };
 
 const StageRow = ({
@@ -77,9 +79,9 @@ const StageRow = ({
   item,
   onOpenChange,
   open,
+  originalStages,
   sessionId,
   stageLabel,
-  stages,
 }: TStageRowProps) => (
   <Collapsible
     className="rounded-lg border bg-background"
@@ -127,8 +129,8 @@ const StageRow = ({
         <StageDetailPanel
           baselineAfter={baselineAfter}
           detail={detail}
+          originalStages={originalStages}
           sessionId={sessionId}
-          stages={stages}
         />
       ) : null}
     </CollapsibleContent>
@@ -139,6 +141,7 @@ export function SessionTimeline({
   error,
   isLoading,
   lastEvent,
+  originalStages,
   sessionId,
   stages,
   startingRun = false,
@@ -362,9 +365,9 @@ export function SessionTimeline({
             detailLoading={loadingIds.has(item.requestId)}
             item={item}
             key={item.requestId}
+            originalStages={originalStages}
             sessionId={sessionId}
             stageLabel={stageLabels[index] ?? `#${index + 1}`}
-            stages={stages}
             onOpenChange={(next) => {
               setOpenIds((current) => {
                 const updated = new Set(current);

@@ -171,6 +171,37 @@ const shellTool = {
   type: 'function',
 };
 
+export const SEARCH_AGENT_PHASE = {
+  explore: 'explore',
+  finalWrite: 'final_write',
+};
+
+export const selectSearchAgentTools = (phase) => {
+  if (phase === SEARCH_AGENT_PHASE.finalWrite) {
+    return [writeWorkspaceFileTool];
+  }
+
+  return [shellTool, writeWorkspaceFileTool];
+};
+
+export const buildFinalWriteUserMessage = (outputName) => ({
+  content: [
+    `Write ${outputName} now with write_workspace_file from what you already saw.`,
+    'Do not search more. Do not call shell.',
+  ].join(' '),
+  role: 'user',
+});
+
+const outputExists = async (outputPath) => {
+  try {
+    await fs.stat(outputPath);
+
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const handleToolCall = async (toolCall, round, defId) => {
   const name = toolCall.function?.name ?? '';
   let args = {};
@@ -270,14 +301,18 @@ export const runKnowledgeSearchAgent = async (params = {}) => {
 
   appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
 
-  for (let round = 0; round < maxToolRounds; round += 1) {
+  const chatParams = {
+    baseUrl,
+    maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
+    model,
+    temperature: Number.isFinite(temperature) ? temperature : 0.2,
+  };
+
+  const runRound = async (round, phase) => {
     const json = await callChatWithLog(defId, round, () => callChat({
-        baseUrl,
-      maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
+      ...chatParams,
       messages,
-      model,
-      temperature: Number.isFinite(temperature) ? temperature : 0.2,
-      tools: [shellTool, writeWorkspaceFileTool],
+      tools: selectSearchAgentTools(phase),
     }));
     const choice = json.choices?.[0]?.message;
 
@@ -288,10 +323,6 @@ export const runKnowledgeSearchAgent = async (params = {}) => {
     messages.push(choice);
 
     const toolCalls = choice.tool_calls ?? [];
-
-    if (toolCalls.length === 0) {
-      break;
-    }
 
     for (const toolCall of toolCalls) {
       let output = '<error>';
@@ -308,6 +339,24 @@ export const runKnowledgeSearchAgent = async (params = {}) => {
         tool_call_id: toolCall.id,
       });
     }
+
+    return toolCalls.length;
+  };
+
+  let round = 0;
+
+  for (; round < maxToolRounds; round += 1) {
+    const toolCallCount = await runRound(round, SEARCH_AGENT_PHASE.explore);
+
+    if (await outputExists(outputPath) || toolCallCount === 0) {
+      break;
+    }
+  }
+
+  if (!(await outputExists(outputPath))) {
+    messages.push(buildFinalWriteUserMessage(outputName));
+    logProgress(defId, `final write turn output=${outputName}`);
+    await runRound(round, SEARCH_AGENT_PHASE.finalWrite);
   }
 
   const stat = await fs.stat(outputPath);

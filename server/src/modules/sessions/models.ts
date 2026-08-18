@@ -51,6 +51,7 @@ const runCursorSchema = new Schema({
 const forkSessionSetupSchema = new Schema({
   context: model.d.mixed(),
   loopMeta: loopMetaSchema,
+  parsedStageIndex: model.d.optionalNumber(),
   stage: model.d.mixed(),
   stageId: model.d.requiredString(),
 }, { _id: false });

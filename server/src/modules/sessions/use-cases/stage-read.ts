@@ -177,6 +177,7 @@ const toListItem = (
   loopValue: stage.loopMeta?.value,
   modelCallCount,
   modelDurationMs: timing.modelDurationMs,
+  ...(typeof stage.parsedStageIndex === 'number' ? { parsedStageIndex: stage.parsedStageIndex } : {}),
   requestId: stage.requestId,
   stageId: stage._id.toString(),
   status: resolveStageStatus(stage),

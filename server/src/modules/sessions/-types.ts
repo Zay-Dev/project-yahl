@@ -105,6 +105,7 @@ export type TSessionRunCursor = {
 export type TForkSessionStageSetup = {
   context: Record<string, unknown>;
   loopMeta?: TStageLoopMeta;
+  parsedStageIndex?: number;
   stage: TYahlStage;
   stageId: string;
 };
