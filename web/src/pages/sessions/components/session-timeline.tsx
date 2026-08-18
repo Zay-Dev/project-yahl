@@ -13,6 +13,11 @@ import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
 import { fetchWithConcurrency } from "@/pages/sessions/lib/fetch-with-concurrency";
 import { fetchSessionStageDetail } from "@/pages/sessions/lib/sessions-api";
 import { buildStageLabels } from "@/pages/sessions/lib/stage-label";
+import {
+  formatElapsedMs,
+  resolveCurrentStage,
+  resolveStageElapsed,
+} from "@/pages/sessions/lib/stage-live-status";
 import { summarizeValue } from "@/pages/sessions/lib/tool-call-parse";
 
 type TSessionTimelineProps = {
@@ -23,6 +28,13 @@ type TSessionTimelineProps = {
   stages: TResponseStageListItem[];
   startingRun?: boolean;
 };
+
+const StatusBadge = ({ label, value }: { label: string; value: string }) => (
+  <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+    <span className="text-muted-foreground">{label}</span>{" "}
+    <span className="font-mono">{value}</span>
+  </span>
+);
 
 const DETAIL_FETCH_CONCURRENCY = 5;
 
@@ -136,6 +148,7 @@ export function SessionTimeline({
   const [detailErrors, setDetailErrors] = useState<Map<string, string>>(() => new Map());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(() => new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const detailsRef = useRef(details);
   const inFlightRef = useRef<Set<string>>(new Set());
   const lastProcessedEventRef = useRef<TSessionLiveEvent | null>(null);
@@ -263,12 +276,32 @@ export function SessionTimeline({
   };
 
   const stageLabels = useMemo(() => buildStageLabels(stages), [stages]);
+  const hasLiveStage = stages.some((item) => item.status !== "finished");
+
+  useEffect(() => {
+    if (!hasLiveStage) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [hasLiveStage]);
+
+  const currentStage = resolveCurrentStage(stages);
+  const currentElapsed = currentStage
+    ? resolveStageElapsed(currentStage.stage, nowMs)
+    : null;
 
   return (
     <div className="rounded-xl bg-muted/50 p-4">
       <p className="text-sm text-muted-foreground">Execution timeline</p>
       {stages.length > 0 ? (
-        <div className="sticky top-0 z-20 -mx-4 mt-3 flex flex-wrap gap-2 border-b border-border/60 bg-muted/95 px-4 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-muted/80">
+        <div className="sticky top-0 z-20 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/95 px-4 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-muted/80">
           <Button
             disabled={bulkLoading || allOpen}
             onClick={() => void handleExpandAll()}
@@ -287,6 +320,24 @@ export function SessionTimeline({
           >
             Collapse all
           </Button>
+          {currentStage ? (
+            <>
+              <StatusBadge
+                label="stage"
+                value={stageLabels[currentStage.index] ?? `#${currentStage.index + 1}`}
+              />
+              <StatusBadge
+                label="calls"
+                value={String(currentStage.stage.modelCallCount)}
+              />
+              {currentElapsed ? (
+                <StatusBadge
+                  label="elapsed"
+                  value={`${formatElapsedMs(currentElapsed.currentMs)}/${formatElapsedMs(currentElapsed.totalMs)}`}
+                />
+              ) : null}
+            </>
+          ) : null}
         </div>
       ) : null}
       {isLoading ? <p className="mt-3 text-sm">Loading stages…</p> : null}

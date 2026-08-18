@@ -17,7 +17,7 @@ import type {
 } from '../-api-types';
 import type { IStage, TModelResponseTag, TParsedStage, TYahlStage } from '../-types';
 import {
-  emptyUsageSummary,
+  emptyRequestIdUsageSummary,
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
 } from '../-usage-normalize';
@@ -110,19 +110,22 @@ const countByRequestId = async (
   sessionRef: Types.ObjectId,
   requestIds: string[],
 ) => {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { count: number; lastCreatedAt?: string }>();
 
   if (requestIds.length === 0) {
     return counts;
   }
 
-  const rows = await model.aggregate<{ _id: string; count: number }>([
+  const rows = await model.aggregate<{ _id: string; count: number; lastCreatedAt?: Date }>([
     { $match: { requestId: { $in: requestIds }, session: sessionRef } },
-    { $group: { _id: '$requestId', count: { $sum: 1 } } },
+    { $group: { _id: '$requestId', count: { $sum: 1 }, lastCreatedAt: { $max: '$createdAt' } } },
   ]);
 
   rows.forEach((row) => {
-    counts.set(row._id, row.count);
+    counts.set(row._id, {
+      count: row.count,
+      lastCreatedAt: toIso(row.lastCreatedAt),
+    });
   });
 
   return counts;
@@ -152,6 +155,12 @@ const toListItem = (
   toolCallCount: number,
   tokenTotals: TResponseStageListItem['tokenTotals'],
   domains: TResponseStageListItem['domains'],
+  timing: {
+    lastModelDurationMs: number;
+    lastModelResponseAt?: string;
+    lastToolCallAt?: string;
+    modelDurationMs: number;
+  },
 ): TResponseStageListItem => ({
   createdAt: toIso(stage.createdAt as Date) ?? '',
   finishedAt: toIso(stage.finishedAt),
@@ -159,11 +168,15 @@ const toListItem = (
     spec: stage.stage,
     type: stage.stage.loopSetup ? 'loop' : 'plain',
   }),
+  lastModelDurationMs: timing.lastModelDurationMs,
+  ...(timing.lastModelResponseAt ? { lastModelResponseAt: timing.lastModelResponseAt } : {}),
+  ...(timing.lastToolCallAt ? { lastToolCallAt: timing.lastToolCallAt } : {}),
   logicPreview: logicPreviewFrom(stage.stage?.logic),
   loopSetup: stage.stage?.loopSetup,
   loopIndex: stage.loopMeta?.index,
   loopValue: stage.loopMeta?.value,
   modelCallCount,
+  modelDurationMs: timing.modelDurationMs,
   requestId: stage.requestId,
   stageId: stage._id.toString(),
   status: resolveStageStatus(stage),
@@ -188,14 +201,22 @@ export const resolveSessionStagesList = async (sessionId: string) => {
   ]);
 
   return stages.map((stage) => {
-    const usage = usageByRequestId.get(stage.requestId) ?? emptyUsageSummary();
+    const usage = usageByRequestId.get(stage.requestId) ?? emptyRequestIdUsageSummary();
+    const modelStats = modelCounts.get(stage.requestId);
+    const toolStats = toolCounts.get(stage.requestId);
 
     return toListItem(
       stage,
-      modelCounts.get(stage.requestId) ?? 0,
-      toolCounts.get(stage.requestId) ?? 0,
+      modelStats?.count ?? 0,
+      toolStats?.count ?? 0,
       usage.tokenTotals,
       usage.domains,
+      {
+        lastModelDurationMs: usage.lastModelDurationMs,
+        lastModelResponseAt: usage.lastModelResponseAt,
+        lastToolCallAt: toolStats?.lastCreatedAt,
+        modelDurationMs: usage.modelDurationMs,
+      },
     );
   });
 };
@@ -286,14 +307,22 @@ export const getSessionStage = [
         sessionRef,
         [params.requestId],
       );
-      const usage = usageByRequestId.get(params.requestId) ?? emptyUsageSummary();
-
+      const usage = usageByRequestId.get(params.requestId) ?? emptyRequestIdUsageSummary();
+      const lastToolCallDoc = toolCallDocs[toolCallDocs.length - 1];
       const listItem = toListItem(
         stage,
         modelCallCount,
         toolCallCount,
         usage.tokenTotals,
         usage.domains,
+        {
+          lastModelDurationMs: usage.lastModelDurationMs,
+          lastModelResponseAt: usage.lastModelResponseAt,
+          lastToolCallAt: lastToolCallDoc
+            ? toIso(lastToolCallDoc.createdAt as Date)
+            : undefined,
+          modelDurationMs: usage.modelDurationMs,
+        },
       );
 
       const detail: TResponseStageDetail = {

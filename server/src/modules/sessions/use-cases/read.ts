@@ -10,7 +10,7 @@ import type {
   TResponseSessionListItem,
 } from '../-api-types';
 import type { ISession } from '../-types';
-import type { TModelUsageSummary } from '../-usage-normalize';
+import type { TModelUsageSummary, TSessionUsageSummary } from '../-usage-normalize';
 import {
   emptyUsageSummary,
   sumModelResponseUsagesBySessionRef,
@@ -43,7 +43,7 @@ const toIso = (value: Date | string | undefined | null) => {
 
 const toResponse = (
   session: ISession & { _id: unknown },
-  usage: TModelUsageSummary,
+  usage: TSessionUsageSummary,
   runState: TResponseGetSession['runState'],
 ): TResponseGetSession => ({
   _id: String(session._id),
@@ -64,6 +64,9 @@ const toResponse = (
   taskSkills: session.taskSkills ?? [],
   taskYahl: session.taskYahl ?? '',
   domains: usage.domains,
+  ...(usage.lastModelResponseAt ? { lastModelResponseAt: usage.lastModelResponseAt } : {}),
+  nixeryUsage: usage.nixeryUsage,
+  stageTokenTotals: usage.stageTokenTotals,
   tokenTotals: usage.tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });

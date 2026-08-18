@@ -8,9 +8,11 @@ describe('filterLaterStagesForRerun', () => {
     const stages = [
       {
         createdAt: '',
+        lastModelDurationMs: 0,
         logicPreview: '',
         loopSetup: 'for each i of [1..2]',
         modelCallCount: 0,
+        modelDurationMs: 0,
         requestId: 'r1',
         stageId: 's1',
         status: 'finished' as const,
@@ -21,10 +23,12 @@ describe('filterLaterStagesForRerun', () => {
       },
       {
         createdAt: '',
+        lastModelDurationMs: 0,
         logicPreview: '',
         loopIndex: 0,
         loopSetup: 'for each i of [1..2]',
         modelCallCount: 0,
+        modelDurationMs: 0,
         requestId: 'r2',
         stageId: 's2',
         status: 'finished' as const,
@@ -35,10 +39,12 @@ describe('filterLaterStagesForRerun', () => {
       },
       {
         createdAt: '',
+        lastModelDurationMs: 0,
         logicPreview: '',
         loopIndex: 1,
         loopSetup: 'for each i of [1..2]',
         modelCallCount: 0,
+        modelDurationMs: 0,
         requestId: 'r3',
         stageId: 's3',
         status: 'finished' as const,
@@ -49,8 +55,10 @@ describe('filterLaterStagesForRerun', () => {
       },
       {
         createdAt: '',
+        lastModelDurationMs: 0,
         logicPreview: '',
         modelCallCount: 0,
+        modelDurationMs: 0,
         requestId: 'r4',
         stageId: 's4',
         status: 'finished' as const,
