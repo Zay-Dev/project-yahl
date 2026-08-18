@@ -17,6 +17,7 @@ import type {
 } from '../-api-types';
 import type { IStage, TModelResponseTag, TParsedStage, TYahlStage } from '../-types';
 import {
+  emptyUsageSummary,
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
 } from '../-usage-normalize';
@@ -150,6 +151,7 @@ const toListItem = (
   modelCallCount: number,
   toolCallCount: number,
   tokenTotals: TResponseStageListItem['tokenTotals'],
+  domains: TResponseStageListItem['domains'],
 ): TResponseStageListItem => ({
   createdAt: toIso(stage.createdAt as Date) ?? '',
   finishedAt: toIso(stage.finishedAt),
@@ -165,6 +167,7 @@ const toListItem = (
   requestId: stage.requestId,
   stageId: stage._id.toString(),
   status: resolveStageStatus(stage),
+  domains,
   tokenTotals,
   toolCallCount,
   updatedAt: toIso(stage.updatedAt as Date) ?? '',
@@ -178,18 +181,23 @@ export const resolveSessionStagesList = async (sessionId: string) => {
 
   const requestIds = stages.map((stage) => stage.requestId);
 
-  const [modelCounts, tokenTotalsByRequestId, toolCounts] = await Promise.all([
+  const [modelCounts, usageByRequestId, toolCounts] = await Promise.all([
     countByRequestId(modelModelResponse, sessionRef, requestIds),
     sumModelResponseUsagesByRequestId(sessionRef, requestIds),
     countByRequestId(modelToolCall, sessionRef, requestIds),
   ]);
 
-  return stages.map((stage) => toListItem(
-    stage,
-    modelCounts.get(stage.requestId) ?? 0,
-    toolCounts.get(stage.requestId) ?? 0,
-    tokenTotalsByRequestId.get(stage.requestId) ?? null,
-  ));
+  return stages.map((stage) => {
+    const usage = usageByRequestId.get(stage.requestId) ?? emptyUsageSummary();
+
+    return toListItem(
+      stage,
+      modelCounts.get(stage.requestId) ?? 0,
+      toolCounts.get(stage.requestId) ?? 0,
+      usage.tokenTotals,
+      usage.domains,
+    );
+  });
 };
 
 export const resolveSessionStagesReplay = async (sessionId: string) => {
@@ -274,16 +282,18 @@ export const getSessionStage = [
           .lean(),
       ]);
 
-      const tokenTotalsByRequestId = await sumModelResponseUsagesByRequestId(
+      const usageByRequestId = await sumModelResponseUsagesByRequestId(
         sessionRef,
         [params.requestId],
       );
+      const usage = usageByRequestId.get(params.requestId) ?? emptyUsageSummary();
 
       const listItem = toListItem(
         stage,
         modelCallCount,
         toolCallCount,
-        tokenTotalsByRequestId.get(params.requestId) ?? null,
+        usage.tokenTotals,
+        usage.domains,
       );
 
       const detail: TResponseStageDetail = {
@@ -298,6 +308,9 @@ export const getSessionStage = [
             _id: String(doc._id),
             contentPreview: extractContentPreview(response),
             createdAt: toIso(doc.createdAt as Date) ?? '',
+            ...(typeof doc.domain === 'string' && doc.domain.trim()
+              ? { domain: doc.domain.trim() }
+              : {}),
             durationMs: doc.durationMs,
             model: typeof response.model === 'string' ? response.model : undefined,
             response,

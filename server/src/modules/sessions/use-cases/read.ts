@@ -9,8 +9,13 @@ import type {
   TResponseGetSession,
   TResponseSessionListItem,
 } from '../-api-types';
-import type { ISession, TTokenTotals } from '../-types';
-import { sumModelResponseUsagesBySessionRef, sumModelResponseUsagesForSession } from '../-usage-normalize';
+import type { ISession } from '../-types';
+import type { TModelUsageSummary } from '../-usage-normalize';
+import {
+  emptyUsageSummary,
+  sumModelResponseUsagesBySessionRef,
+  sumModelResponseUsagesForSession,
+} from '../-usage-normalize';
 import { resolveSessionRunState } from '../-session-run-state';
 import { modelSession, modelStage } from '../models';
 
@@ -38,7 +43,7 @@ const toIso = (value: Date | string | undefined | null) => {
 
 const toResponse = (
   session: ISession & { _id: unknown },
-  tokenTotals: TTokenTotals | null,
+  usage: TModelUsageSummary,
   runState: TResponseGetSession['runState'],
 ): TResponseGetSession => ({
   _id: String(session._id),
@@ -58,13 +63,14 @@ const toResponse = (
   taskId: session.taskId ?? '',
   taskSkills: session.taskSkills ?? [],
   taskYahl: session.taskYahl ?? '',
-  tokenTotals,
+  domains: usage.domains,
+  tokenTotals: usage.tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });
 
 const toListResponse = (
   session: ISession & { _id: unknown },
-  tokenTotals: TTokenTotals | null,
+  usage: TModelUsageSummary,
 ): TResponseSessionListItem => ({
   _id: String(session._id),
   createdAt: toIso(session.createdAt) ?? '',
@@ -72,7 +78,8 @@ const toListResponse = (
   isBackground: session.isBackground === true,
   sessionId: session.sessionId,
   taskId: session.taskId,
-  tokenTotals,
+  domains: usage.domains,
+  tokenTotals: usage.tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });
 
@@ -101,11 +108,11 @@ const resolveSessionsList = async () => {
     .limit(100);
 
   const sessionRefs = sessions.map((session) => session._id);
-  const tokenTotalsBySessionRef = await sumModelResponseUsagesBySessionRef(sessionRefs);
+  const usageBySessionRef = await sumModelResponseUsagesBySessionRef(sessionRefs);
 
   return sessions.map((session) => toListResponse(
     session as ISession & { _id: unknown },
-    tokenTotalsBySessionRef.get(String(session._id)) ?? null,
+    usageBySessionRef.get(String(session._id)) ?? emptyUsageSummary(),
   ));
 };
 
@@ -157,7 +164,7 @@ export const getSession = [
     .validate(({ req }) => joi.getValidatedOrThrow(paramsSchema, req.params))
     .next(async (express, params) => {
       const session = await Queries.hasExactOne(modelSession, { sessionId: params.sessionId });
-      const [tokenTotals, stages] = await Promise.all([
+      const [usage, stages] = await Promise.all([
         sumModelResponseUsagesForSession(session._id),
         Queries.queryBy(
           modelStage,
@@ -171,7 +178,7 @@ export const getSession = [
         stages,
       });
 
-      express.respondOne<TResponseGetSession>(toResponse(session, tokenTotals, runState));
+      express.respondOne<TResponseGetSession>(toResponse(session, usage, runState));
     })
     .toMiddleware(),
 ];

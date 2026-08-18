@@ -39,6 +39,8 @@ declare global {
   var publisher: IPublisher;
 
   var sessionTracker: ReturnType<typeof createSessionEventTracker>;
+
+  var orchestratorFailureCursor: { kind: 'pipeline'; stageIndex: number } | undefined;
 }
 
 const redis = new Redis(config.redisUrl, {
@@ -206,7 +208,32 @@ runCommand.action(async options => {
       await tracker.flush();
       exitCode = 0;
     } else {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error && error.stack
+        ? (error.stack.length > 800 ? `${error.stack.slice(0, 800)}…` : error.stack)
+        : '-';
+
       console.error('[orchestrator] run failed:', error);
+      console.log(
+        `[yahl-diag] run failed sessionId=${sessionId} errorMessage=${errorMessage} stack=${errorStack}`,
+      );
+
+      const failureCursor = globalThis.orchestratorFailureCursor;
+
+      if (failureCursor) {
+        try {
+          globalThis.sessionTracker?.patchSession?.(sessionId, {
+            runCursor: failureCursor,
+          });
+          await tracker.flush();
+          console.log(
+            `[orchestrator] patched runCursor sessionId=${sessionId} stageIndex=${failureCursor.stageIndex}`,
+          );
+        } catch (patchError) {
+          console.error('[orchestrator] failed to patch runCursor:', patchError);
+        }
+      }
+
       exitCode = 1;
     }
   } finally {

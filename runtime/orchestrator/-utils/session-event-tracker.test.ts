@@ -108,6 +108,39 @@ describe('createSessionEventTracker', () => {
     );
   });
 
+  it('surfaces HTTP failures from createStage via flush', async () => {
+    process.env.SESSION_API_BASE_URL = 'http://localhost:4000';
+
+    const tracker = createSessionEventTracker();
+
+    await withMockFetch(
+      (url, init) => {
+        if (init?.method === 'POST' && url.endsWith('/stages')) {
+          return new Response('not found', { status: 404, statusText: 'Not Found' });
+        }
+
+        return new Response(JSON.stringify({ ok: true }), { status: 202 });
+      },
+      async () => {
+        tracker.createStage('sess-missing-stage', {
+          context: { context: {}, types: {} },
+          requestId: 'stage-req-missing',
+          stage: { logic: 'goals logic' },
+        });
+
+        await assert.rejects(
+          tracker.flush(),
+          (error: unknown) => {
+            assert.ok(error instanceof SessionEventTrackerError);
+            assert.equal(error.status, 404);
+
+            return true;
+          },
+        );
+      },
+    );
+  });
+
   it('POSTs parsedStageIndex and sourceStartLine on createStage', async () => {
     process.env.SESSION_API_BASE_URL = 'http://localhost:4000';
 

@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { assertSessionRunAllowed } from '../-agent-run-active';
-import { resolveWorkspaceRoot } from '../-workspace-paths';
+import { resolveWorkspaceRoot, sessionWorkspaceRoot } from '../-workspace-paths';
 import { waitForOrchestratorIdle } from '../-orchestrator-run-lock';
 import { resolveSessionBySessionId } from '../-resolve-session';
 
@@ -170,6 +170,40 @@ const _loadRootEnv = () => {
   return dotenv.parse(fs.readFileSync(rootEnvPath));
 };
 
+const _expandEnvValue = (raw: string, env: Record<string, string>) =>
+  raw.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, name: string) => {
+    const value = env[name];
+
+    return value === undefined ? match : value;
+  });
+
+const _loadNixeryEnv = (baseEnv: Record<string, string>) => {
+  const nixeryEnvPath = path.join(resolveRepoRoot(), '.env.nixery');
+
+  if (!fs.existsSync(nixeryEnvPath)) {
+    return {};
+  }
+
+  const parsed = dotenv.parse(fs.readFileSync(nixeryEnvPath));
+  const out: Record<string, string> = {};
+
+  for (const [key, raw] of Object.entries(parsed)) {
+    if (baseEnv[key] !== undefined) {
+      continue;
+    }
+
+    const expanded = _expandEnvValue(raw, baseEnv).trim();
+
+    if (!expanded) {
+      continue;
+    }
+
+    out[key] = expanded;
+  }
+
+  return out;
+};
+
 const resolveSessionApiBaseUrl = () => {
   const explicit = process.env.SESSION_API_BASE_URL?.trim();
 
@@ -246,6 +280,8 @@ export const spawnOrchestrate = async (
 
   const redisUrl = process.env.REDIS_URL?.trim() || 'redis://redis:6379';
   const rootParsed = _loadRootEnv();
+  const mergedBase = { ...rootParsed, ...process.env } as Record<string, string>;
+  const nixeryParsed = _loadNixeryEnv(mergedBase);
 
   const child = spawn(spawnSpec.cmd, spawnSpec.args, {
     cwd: spawnSpec.cwd,
@@ -253,6 +289,7 @@ export const spawnOrchestrate = async (
     env: {
       ...rootParsed,
       ...process.env,
+      ...nixeryParsed,
       REDIS_URL: redisUrl,
       SESSION_API_BASE_URL: sessionApiBaseUrl,
       WORKSPACE_ROOT: resolveOrchestratorWorkspaceRoot(),
@@ -285,7 +322,9 @@ export const spawnOrchestrate = async (
       return;
     }
 
-    const message = `orchestrator exited sessionId=${sessionId} code=${code ?? 'null'} signal=${signal ?? 'null'} log=${logPath}`;
+    const agentLogPath = path.join(sessionWorkspaceRoot(sessionId), 'diagnostics', 'agent.log');
+    const message = `orchestrator exited sessionId=${sessionId} code=${code ?? 'null'} signal=${signal ?? 'null'} `
+      + `log=${logPath} agentLog=${agentLogPath}`;
 
     console.error(message);
     logger.error(message);

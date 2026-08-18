@@ -249,12 +249,16 @@ export const callPlatformSkill = async (
   name: string,
   args: Record<string, unknown>,
   sessionId?: string,
+  requestId?: string,
 ): Promise<TPlatformSkillResponse> => {
   const startedAt = Date.now();
   const baseUrl = sessionApiBaseUrl();
+  const argsPreview = JSON.stringify(args);
+  const truncatedArgs = argsPreview.length > 200 ? `${argsPreview.slice(0, 200)}…` : argsPreview;
 
   console.log(
-    `[platform-client] skill=${name} url=${baseUrl} sessionId=${sessionId ?? '-'}`,
+    `[platform-client] skill=${name} url=${baseUrl} sessionId=${sessionId ?? '-'} `
+    + `requestId=${requestId ?? '-'} args=${truncatedArgs}`,
   );
 
   try {
@@ -281,14 +285,29 @@ export const callPlatformSkill = async (
     }
 
     console.log(
-      `[platform-client] ${name} ok=${result.ok} durationMs=${Date.now() - startedAt}`,
+      `[platform-client] ${name} ok=${result.ok} durationMs=${Date.now() - startedAt} `
+      + `sessionId=${sessionId ?? '-'} requestId=${requestId ?? '-'}`,
     );
+
+    if (!result.ok && result.error) {
+      const errorPreview = result.error.length > 200
+        ? `${result.error.slice(0, 200)}…`
+        : result.error;
+
+      console.log(
+        `[platform-client] ${name} errorBody sessionId=${sessionId ?? '-'} requestId=${requestId ?? '-'} `
+        + `error=${errorPreview}`,
+      );
+    }
 
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'platform skill failed';
 
-    console.log(`[platform-client] ${name} failed durationMs=${Date.now() - startedAt} error=${message}`);
+    console.log(
+      `[platform-client] ${name} failed durationMs=${Date.now() - startedAt} error=${message} `
+      + `sessionId=${sessionId ?? '-'} requestId=${requestId ?? '-'}`,
+    );
 
     return failure(message);
   }

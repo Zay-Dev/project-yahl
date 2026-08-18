@@ -101,7 +101,7 @@ const StageRow = ({
           <span>{item.modelCallCount} model</span>
           <span>{item.toolCallCount} tools</span>
         </div>
-        <TokenStatsRow totals={item.tokenTotals} />
+        <TokenStatsRow domains={item.domains} totals={item.tokenTotals} />
       </div>
     </CollapsibleTrigger>
     <CollapsibleContent>

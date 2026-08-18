@@ -3,6 +3,7 @@ import { afterEach, describe, it } from 'node:test';
 
 import {
   isRetryableLlmHttpError,
+  isRetryableLlmTransportError,
   resolveLlmCallRetryMax,
   withLlmCallRetry,
 } from './-retry';
@@ -65,8 +66,31 @@ describe('isRetryableLlmHttpError', () => {
   });
 
   it('does not retry missing status', () => {
-    assert.equal(isRetryableLlmHttpError(new Error('network')), false);
+    assert.equal(isRetryableLlmHttpError(new Error('invalid json')), false);
     assert.equal(isRetryableLlmHttpError(null), false);
+  });
+
+  it('retries undici transport failures and proxy 500 transport messages', () => {
+    assert.equal(
+      isRetryableLlmTransportError(new Error('fetch failed | UND_ERR_SOCKET other side closed')),
+      true,
+    );
+    assert.equal(
+      isRetryableLlmHttpError(new Error('500 fetch failed | UND_ERR_SOCKET other side closed')),
+      true,
+    );
+  });
+
+  it('retries request and headers timeouts', () => {
+    assert.equal(isRetryableLlmTransportError(new Error('Request timed out.')), true);
+    assert.equal(isRetryableLlmHttpError(new Error('Request timed out.')), true);
+    assert.equal(
+      isRetryableLlmTransportError(Object.assign(new Error('Headers Timeout Error'), {
+        code: 'UND_ERR_HEADERS_TIMEOUT',
+        name: 'TimeoutError',
+      })),
+      true,
+    );
   });
 });
 
@@ -166,14 +190,14 @@ describe('withLlmCallRetry', () => {
     assert.equal(calls, 2);
   });
 
-  it('throws missing-status errors immediately without retry', async () => {
+  it('throws non-retryable errors immediately without retry', async () => {
     let calls = 0;
 
     await assert.rejects(
       () => withLlmCallRetry(
         async () => {
           calls += 1;
-          throw new Error('network');
+          throw new Error('invalid json');
         },
         {
           maxAttempts: 3,
@@ -183,12 +207,56 @@ describe('withLlmCallRetry', () => {
         },
       ),
       (error: unknown) => {
-        assert.equal(error instanceof Error && error.message, 'network');
+        assert.equal(error instanceof Error && error.message, 'invalid json');
         return true;
       },
     );
 
     assert.equal(calls, 1);
+  });
+
+  it('retries transport errors then succeeds', async () => {
+    let calls = 0;
+
+    const result = await withLlmCallRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('500 fetch failed | UND_ERR_SOCKET other side closed');
+        }
+        return 'ok';
+      },
+      {
+        maxAttempts: 3,
+        sleepMs: 10,
+        sleep: async () => {},
+      },
+    );
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 2);
+  });
+
+  it('retries Request timed out then succeeds', async () => {
+    let calls = 0;
+
+    const result = await withLlmCallRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('Request timed out.');
+        }
+        return 'ok';
+      },
+      {
+        maxAttempts: 3,
+        sleepMs: 10,
+        sleep: async () => {},
+      },
+    );
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 2);
   });
 
   it('exhausts attempt budget on repeated 429', async () => {

@@ -3,12 +3,11 @@ import { createServer } from "node:http";
 
 import type OpenAI from "openai";
 
-import type { TModelResponse } from "@/shared/transports/-types";
-
 import {
   chatCompletionForStagehandProxy,
   type TStagehandProxyCompletionInput,
 } from "../-utils/llm-client";
+import { withLlmRequestContext } from "../-utils/llm-request-context";
 import config from "../config";
 
 const CONTEXT_PREAMBLE =
@@ -18,37 +17,47 @@ type TProxyState = {
   brief: string | null;
   llmOverrides: TStagehandProxyLlmOverrides | null;
   port: number;
+  requestId: string | null;
   server: Server;
+  sessionId: string | null;
 };
 
 type TCompletionFn = (
   input: TStagehandProxyCompletionInput,
 ) => Promise<OpenAI.Chat.Completions.ChatCompletion>;
 
-export type TStagehandProxyReporter = {
-  onModelResponse: (response: TModelResponse) => Promise<void>;
-};
-
 export type TStagehandProxyLlmOverrides = {
   apiBaseUrl?: string;
   model?: string;
 };
 
+export type TStagehandProxySessionContext = {
+  requestId?: string;
+  sessionId?: string;
+};
+
 let proxyState: TProxyState | null = null;
 let startPromise: Promise<TProxyState> | null = null;
 let completionFn: TCompletionFn = chatCompletionForStagehandProxy;
-let proxyReporter: TStagehandProxyReporter | null = null;
 
 export const setStagehandProxyCompletionFnForTests = (fn: TCompletionFn | null) => {
   completionFn = fn ?? chatCompletionForStagehandProxy;
 };
 
-export const setStagehandProxyReporter = (reporter: TStagehandProxyReporter | null) => {
-  proxyReporter = reporter;
+export const setStagehandProxySessionContext = (
+  next: TStagehandProxySessionContext | null | undefined,
+) => {
+  if (!proxyState) return;
+
+  proxyState.sessionId = next?.sessionId?.trim() || null;
+  proxyState.requestId = next?.requestId?.trim() || null;
 };
 
-export const clearStagehandProxyReporter = () => {
-  proxyReporter = null;
+export const clearStagehandProxySessionContext = () => {
+  if (!proxyState) return;
+
+  proxyState.sessionId = null;
+  proxyState.requestId = null;
 };
 
 export const mergeStagehandProxyMessages = (
@@ -209,33 +218,21 @@ const handleChatCompletions = async (req: IncomingMessage, res: ServerResponse) 
       );
     }
 
-    const startedAt = Date.now();
-    const completion = await completionFn({
-      ...(llmOverrides?.apiBaseUrl ? { apiBaseUrl: llmOverrides.apiBaseUrl } : {}),
-      messages,
-      model,
-      ...(llmOverrides?.model ? { modelOverride: llmOverrides.model } : {}),
-      temperature,
-      tool_choice,
-      tools,
-    });
-    const durationMs = Date.now() - startedAt;
-
-    if (proxyReporter) {
-      try {
-        await proxyReporter.onModelResponse({
-          ...completion,
-          durationMs,
-          tags: ["stagehand"],
-          thinkingMode: false,
-        });
-      } catch (reportError) {
-        const reportMessage =
-          reportError instanceof Error ? reportError.message : String(reportError);
-
-        console.error(`[stagehand-llm-proxy] onModelResponse failed: ${reportMessage}\n`);
-      }
-    }
+    const completion = await withLlmRequestContext(
+      {
+        requestId: proxyState?.requestId || undefined,
+        sessionId: proxyState?.sessionId || config.cliOptions.sessionId,
+        tags: ["stagehand"],
+      },
+      () => completionFn({
+        messages,
+        model,
+        ...(llmOverrides?.model ? { modelOverride: llmOverrides.model } : {}),
+        temperature,
+        tool_choice,
+        tools,
+      }),
+    );
 
     writeJson(res, 200, completion);
   } catch (error) {
@@ -285,7 +282,9 @@ const startProxyServer = async (): Promise<TProxyState> =>
         brief: null,
         llmOverrides: null,
         port: address.port,
+        requestId: null,
         server,
+        sessionId: null,
       });
     });
   });

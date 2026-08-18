@@ -113,6 +113,7 @@ export const runVerifyGate = async (params: {
   let result = await nixeryVerifyApi.run({
     defId: verify.defId,
     input: verifyInput,
+    requestId: params.requestId,
     sessionId: params.sessionId,
   });
 
@@ -121,6 +122,7 @@ export const runVerifyGate = async (params: {
     result = await nixeryVerifyApi.run({
       defId: verify.defId,
       input: verifyInput,
+      requestId: params.requestId,
       sessionId: params.sessionId,
     });
   }

@@ -12,6 +12,7 @@ const stage = (
   requestId: 'r1',
   stageId: 's1',
   status: 'running' as const,
+  domains: [],
   tokenTotals: null,
   toolCallCount: 0,
   updatedAt: '',

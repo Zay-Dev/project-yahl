@@ -29,6 +29,14 @@ describe('writeAgentSessionOverride', () => {
     const taskId = 'hk_weather';
     const skillSrc = path.join(repoRoot, 'server', 'nixery', 'fixture', 'SKILLS', 'nixery');
     const promptSrc = path.join(repoRoot, 'server', 'nixery', 'fixture', 'prompts', 'nixery.md');
+    const persistSrc = path.join(
+      repoRoot,
+      'server',
+      'nixery',
+      'fixture',
+      'prompts',
+      'knowledge-persist.md',
+    );
 
     const overridePath = await writeAgentSessionOverride({
       pluginInstalls: [
@@ -51,6 +59,16 @@ describe('writeAgentSessionOverride', () => {
           pluginId: 'fixture',
           srcAbs: promptSrc,
           srcRel: 'server/nixery/fixture/prompts/nixery.md',
+        },
+        {
+          basename: 'knowledge-persist.md',
+          containerDest: '/opt/yahl/knowledge-persist.md',
+          destAbs: path.join(repoRoot, 'runtime', 'orchestrator', 'YAHL', 'knowledge-persist.md'),
+          destRel: 'runtime/orchestrator/YAHL/knowledge-persist.md',
+          kind: 'prompts',
+          pluginId: 'fixture',
+          srcAbs: persistSrc,
+          srcRel: 'server/nixery/fixture/prompts/knowledge-persist.md',
         },
       ],
       sessionId,
@@ -76,5 +94,6 @@ describe('writeAgentSessionOverride', () => {
     );
     assert.match(content, /\/opt\/skills\/nixery:ro/);
     assert.match(content, /\/opt\/yahl\/nixery\.md:ro/);
+    assert.match(content, /\/opt\/yahl\/knowledge-persist\.md:ro/);
   });
 });

@@ -1,7 +1,6 @@
 import {
   callChat,
   callChatWithLog,
-  hasRealApiKey,
   logProgress,
 } from './run-agent.mjs';
 
@@ -56,8 +55,7 @@ export const resolveLlmMessageText = (params) => {
 };
 
 export const runSingleLlmCompletion = async (params) => {
-  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? '';
-  const baseUrl = process.env.OPENAI_BASE_URL?.trim() ?? 'https://api.openai.com/v1';
+  const baseUrl = process.env.OPENAI_BASE_URL?.trim() ?? 'http://llm-proxy:4100/v1';
   const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o';
   const temperature = Number(process.env.OPENAI_TEMPERATURE ?? '0.2');
   const maxTokens = process.env.OPENAI_MAX_TOKENS
@@ -65,12 +63,7 @@ export const runSingleLlmCompletion = async (params) => {
     : 8192;
   const round = Number.isFinite(params.round) ? params.round : 0;
 
-  if (!hasRealApiKey(apiKey) && !process.env.HTTPS_PROXY && !process.env.HTTP_PROXY) {
-    throw new Error('OPENAI_API_KEY is required when OneCLI proxy env is not set');
-  }
-
   const json = await callChatWithLog(params.defId, round, () => callChat({
-    apiKey,
     baseUrl,
     maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
     messages: params.messages,

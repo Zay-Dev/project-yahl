@@ -1,8 +1,15 @@
+import type { TNixeryDef } from '@project-yahl/shared/nixery/types';
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { writeSharedOneCliOverride } from '@/orchestrator/-docker/compose-onecli';
 import { workspaceRoot } from '@/orchestrator/-utils/workspace-paths';
+import {
+  resolveNixeryOutputHint,
+  resolveNixeryOutputRetry,
+} from '@project-yahl/shared/nixery/output-contract';
+import { resolveNixeryDefEntryArgv } from '@project-yahl/shared/nixery/resolve-entry';
 
 import { loadNixeryDef } from './load-def';
 import { resolveNixeryEnv } from './resolve-def-env';
@@ -15,11 +22,6 @@ import {
   startNixeryLogStream,
 } from './run-container';
 import { clearStaleNixeryOutput, waitForNixeryOutput } from './validate-output';
-import {
-  resolveNixeryOutputHint,
-  resolveNixeryOutputRetry,
-} from '@project-yahl/shared/nixery/output-contract';
-import { resolveNixeryDefEntryArgv } from '@project-yahl/shared/nixery/resolve-entry';
 
 export const resolveSessionNixeryDir = (sessionId: string, defId: string) =>
   path.join(workspaceRoot(), 'sessions', sessionId, 'nixery', defId);
@@ -65,6 +67,20 @@ const resolveDiagnosticsLogPath = (sessionId: string, defId: string) =>
   path.join(workspaceRoot(), 'sessions', sessionId, 'diagnostics', `nixery-${defId}.log`);
 
 const resolveMaxAttempts = (defRetry: number) => (defRetry < 1 ? 1 : defRetry);
+
+export const resolveNixeryRunMaxAttempts = (def: TNixeryDef) => {
+  if (def.output?.inlineTool === true) {
+    const retry = def.output.retry;
+
+    if (typeof retry === 'number' && Number.isInteger(retry) && retry >= 1) {
+      return retry;
+    }
+
+    return 1;
+  }
+
+  return resolveMaxAttempts(resolveNixeryOutputRetry(def));
+};
 
 const writeSessionInput = async (
   sessionDir: string,
@@ -120,9 +136,29 @@ export const teardownNixeryContainer = async (
   }
 };
 
+export const resolveNixeryRequestId = (params: {
+  input: Record<string, unknown>;
+  requestId?: string;
+}): string | undefined => {
+  const fromParams = params.requestId?.trim();
+
+  if (fromParams) {
+    return fromParams;
+  }
+
+  const fromInput = params.input.requestId;
+
+  if (typeof fromInput === 'string' && fromInput.trim()) {
+    return fromInput.trim();
+  }
+
+  return undefined;
+};
+
 export const runNixeryDef = async (params: {
   defId: string;
   input: Record<string, unknown>;
+  requestId?: string;
   sessionId: string;
   skipTeardown?: boolean;
 }): Promise<TNixeryRunResult> => {
@@ -133,7 +169,7 @@ export const runNixeryDef = async (params: {
   const sessionDir = resolveSessionNixeryDir(params.sessionId, params.defId);
   const containerName = resolveNixeryContainerName(params.sessionId, params.defId);
   const diagnosticsLogPath = resolveDiagnosticsLogPath(params.sessionId, params.defId);
-  const maxAttempts = resolveMaxAttempts(resolveNixeryOutputRetry(def));
+  const maxAttempts = resolveNixeryRunMaxAttempts(def);
   const baseInput = { ...params.input };
   const outputHint = resolveNixeryOutputHint(def, baseInput);
   const entry = resolveNixeryDefEntryArgv(def);
@@ -147,6 +183,15 @@ export const runNixeryDef = async (params: {
   );
 
   const { env, volumeMounts: oneCliMounts } = await resolveNixeryEnv(def.env);
+  const requestId = resolveNixeryRequestId(params);
+
+  if (params.sessionId.trim() && !requestId) {
+    console.warn(
+      `[nixery] YAHL_REQUEST_ID missing def=${params.defId} sessionId=${params.sessionId}; `
+      + 'llm usage will not postback to session UI',
+    );
+  }
+
   const defMounts = resolveMounts({
     def,
     defId: params.defId,
@@ -195,6 +240,8 @@ export const runNixeryDef = async (params: {
           env: {
             ...env,
             NIXERY_DEF_ID: params.defId,
+            YAHL_SESSION_ID: params.sessionId,
+            ...(requestId ? { YAHL_REQUEST_ID: requestId } : {}),
           },
           image,
           volumeMounts: [...defMounts, ...oneCliMounts],
@@ -270,6 +317,7 @@ export const runNixeryDef = async (params: {
 export const runNixeryStage = async (params: {
   defId: string;
   input: Record<string, unknown>;
+  requestId?: string;
   sessionId: string;
 }) => {
   await runNixeryDef(params);

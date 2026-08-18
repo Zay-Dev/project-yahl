@@ -75,6 +75,7 @@ export const runNixeryInlineTool = async (params: {
       await runNixeryDef({
         defId,
         input,
+        ...(params.requestId?.trim() ? { requestId: params.requestId.trim() } : {}),
         sessionId: params.sessionId,
       });
     } catch (error) {

@@ -81,6 +81,12 @@ export const resolveNixeryEnv = async (defEnv?: Record<string, string>) => {
     ...resolveDefEnv(defEnv),
   };
 
+  const proxyToken = process.env.LLM_PROXY_TOKEN?.trim() ?? '';
+
+  if (proxyToken) {
+    env.LLM_PROXY_TOKEN = proxyToken;
+  }
+
   if (snapshot) {
     env.NO_PROXY = agentNoProxy;
     env.no_proxy = agentNoProxy;

@@ -271,6 +271,11 @@ export const runStageSession = async (
           }
 
           if (bashCalls >= maxBashCalls) {
+            console.warn(
+              `[agent-daemon] maxBashCalls exhausted sessionId=${config.cliOptions.sessionId} `
+              + `requestId=${options.requestId ?? '-'} maxBashCalls=${maxBashCalls}`,
+            );
+
             stageMessages.push({
               content: toolErrorContent(`run_bash: exceeded max calls (${maxBashCalls})`),
               role: "tool",
@@ -285,7 +290,10 @@ export const runStageSession = async (
             stageInput.stage.agentOverrides?.bashTimeoutMs ?? config.bashTimeoutMs;
           const preview = command.length > 200 ? `${command.slice(0, 200)}…` : command;
 
-          console.log(`[RUN_BASH] start timeoutMs=${bashTimeoutMs} command=${preview}`);
+          console.log(
+            `[RUN_BASH] start sessionId=${config.cliOptions.sessionId} requestId=${options.requestId ?? '-'} `
+            + `timeoutMs=${bashTimeoutMs} command=${preview}`,
+          );
           await options.onLocalToolStart?.({ call, timeoutMs: bashTimeoutMs });
 
           const startedAt = Date.now();
@@ -296,8 +304,17 @@ export const runStageSession = async (
             ? `${commandResult.slice(0, 120)}…`
             : commandResult;
 
+          if (timedOut) {
+            console.warn(
+              `[RUN_BASH] timedOut sessionId=${config.cliOptions.sessionId} requestId=${options.requestId ?? '-'} `
+              + `durationMs=${durationMs} command=${preview}`,
+            );
+          }
+
           console.log(
-            `[RUN_BASH] done durationMs=${durationMs} ${timedOut ? 'timedOut' : 'ok'} command=${preview} resultPreview=${JSON.stringify(resultPreview)}`,
+            `[RUN_BASH] done sessionId=${config.cliOptions.sessionId} requestId=${options.requestId ?? '-'} `
+            + `durationMs=${durationMs} ${timedOut ? 'timedOut' : 'ok'} command=${preview} `
+            + `resultPreview=${JSON.stringify(resultPreview)}`,
           );
 
           if (config.debug) {
@@ -349,8 +366,9 @@ export const runStageSession = async (
 
           const browserStartedAt = Date.now();
           const browserResult = await runBrowserCommand(browserArgs, {
-            onModelResponse: options.onModelResponse,
             proxyBrief: buildBrowserProxyBrief({ args: browserArgs }),
+            requestId: options.requestId,
+            sessionId: config.cliOptions.sessionId,
             stagehand: stageInput.stage.stagehand,
           });
           const browserDurationMs = Date.now() - browserStartedAt;
@@ -394,6 +412,7 @@ export const runStageSession = async (
             platformArgs.skill,
             platformArgs.args,
             config.cliOptions.sessionId,
+            options.requestId,
           );
 
           const platformContent = JSON.stringify(platformResult);
@@ -449,6 +468,11 @@ export const runStageSession = async (
 
       return finalizeEnvelope(assistantMessage.at(-1)?.content || '');
     }
+
+    console.warn(
+      `[agent-daemon] maxTurns exhausted sessionId=${config.cliOptions.sessionId} `
+      + `requestId=${options.requestId ?? '-'} maxTurns=${maxTurns}`,
+    );
 
     return {
       output: `执行失败 stage对话轮次超过限制 ${maxTurns}`,

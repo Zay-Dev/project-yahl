@@ -6,7 +6,6 @@ import { promisify } from 'node:util';
 import { applyDedupAction } from '/opt/nixery/plugin/lib/dist/dedup.js';
 import {
   callChatWithLog,
-  hasRealApiKey,
   logProgress,
   resolveDefId,
 } from '../lib/run-agent.mjs';
@@ -202,10 +201,6 @@ const runAgentPhase = async ({
   ];
 
   appendNixeryRetryUserMessage(messages, retryFeedback);
-
-  if (!hasRealApiKey(config.apiKey) && !process.env.HTTPS_PROXY && !process.env.HTTP_PROXY) {
-    throw new Error('OPENAI_API_KEY is required when OneCLI proxy env is not set');
-  }
 
   for (let round = 0; round < maxRounds; round += 1) {
     const json = await callChatWithLog(defId, round, () => callChatForPhase(phase, {

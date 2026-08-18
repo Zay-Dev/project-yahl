@@ -6,7 +6,6 @@ import { promisify } from 'node:util';
 import {
   callChat,
   callChatWithLog,
-  hasRealApiKey,
   logProgress,
   resolveDefId,
 } from './run-agent.mjs';
@@ -237,18 +236,13 @@ export const runKnowledgeSearchAgent = async (params = {}) => {
     ? await readText(params.templatePath ?? path.join(defRoot, 'prompt.template.md'))
     : '';
   const userPrompt = params.userPrompt ?? renderTemplate(template, templateValues);
-  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? '';
-  const baseUrl = process.env.OPENAI_BASE_URL?.trim() ?? 'https://api.openai.com/v1';
+  const baseUrl = process.env.OPENAI_BASE_URL?.trim() ?? 'http://llm-proxy:4100/v1';
   const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o';
   const temperature = Number(process.env.OPENAI_TEMPERATURE ?? '0.2');
   const maxTokens = process.env.OPENAI_MAX_TOKENS
     ? Number(process.env.OPENAI_MAX_TOKENS)
     : 8192;
   const maxToolRounds = params.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
-
-  if (!hasRealApiKey(apiKey) && !process.env.HTTPS_PROXY && !process.env.HTTP_PROXY) {
-    throw new Error('OPENAI_API_KEY is required when OneCLI proxy env is not set');
-  }
 
   if (!userPrompt.trim()) {
     throw new Error('knowledge search prompt is required');
@@ -278,8 +272,7 @@ export const runKnowledgeSearchAgent = async (params = {}) => {
 
   for (let round = 0; round < maxToolRounds; round += 1) {
     const json = await callChatWithLog(defId, round, () => callChat({
-      apiKey,
-      baseUrl,
+        baseUrl,
       maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
       messages,
       model,

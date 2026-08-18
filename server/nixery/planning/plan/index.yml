@@ -5,6 +5,8 @@ packages: [nodejs]
 
 env:
   OPENAI_BASE_URL: ""
+  LLM_PROXY_TOKEN: ""
+  OPENAI_PROVIDER_DOMAIN: ""
   OPENAI_MODEL: deepseek-v4-pro
   OPENAI_API_KEY: ""
   LLM_CALL_RETRY_MAX: ""

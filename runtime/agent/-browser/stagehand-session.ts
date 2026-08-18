@@ -4,17 +4,16 @@ import { jsonSchemaToZod, Stagehand } from "@browserbasehq/stagehand";
 import { z } from "zod";
 
 import type { BrowserToolArguments } from "@/shared/stage-tools";
-import type { TModelResponse } from "@/shared/transports/-types";
 import type { YahlStagehandConfig } from "@/shared/yahl-stage";
 
 import {
   clearStagehandProxyBrief,
   clearStagehandProxyLlmOverrides,
-  clearStagehandProxyReporter,
+  clearStagehandProxySessionContext,
   ensureStagehandLlmProxy,
   setStagehandProxyBrief,
   setStagehandProxyLlmOverrides,
-  setStagehandProxyReporter,
+  setStagehandProxySessionContext,
   stopStagehandLlmProxy,
 } from "./stagehand-llm-proxy";
 import { resolveChromiumExecutablePath } from "./chromium-executable";
@@ -35,8 +34,9 @@ type TBrowserResult =
   | { error: string; ok: false };
 
 export type TRunBrowserCommandOptions = {
-  onModelResponse?: (response: TModelResponse) => Promise<void>;
   proxyBrief?: string;
+  requestId?: string;
+  sessionId?: string;
   stagehand?: YahlStagehandConfig;
 };
 
@@ -243,9 +243,10 @@ const shouldResetBrowser = (_args: BrowserToolArguments, error: string) => {
 };
 
 const applyBrowserProxyOptions = (options?: TRunBrowserCommandOptions) => {
-  if (options?.onModelResponse) {
-    setStagehandProxyReporter({ onModelResponse: options.onModelResponse });
-  }
+  setStagehandProxySessionContext({
+    requestId: options?.requestId,
+    sessionId: options?.sessionId || config.cliOptions.sessionId,
+  });
 
   if (options?.proxyBrief !== undefined) {
     setStagehandProxyBrief(options.proxyBrief);
@@ -320,6 +321,6 @@ export const runBrowserCommand = async (
   } finally {
     clearStagehandProxyBrief();
     clearStagehandProxyLlmOverrides();
-    clearStagehandProxyReporter();
+    clearStagehandProxySessionContext();
   }
 };

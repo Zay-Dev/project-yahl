@@ -33,12 +33,14 @@ const readVerifyResult = async (
 export const runNixeryVerifyImpl = async (params: {
   defId: string;
   input: Record<string, unknown>;
+  requestId?: string;
   sessionId: string;
 }): Promise<TVerifyResponse> => {
   try {
     await runNixeryDef({
       defId: params.defId,
       input: params.input,
+      ...(params.requestId?.trim() ? { requestId: params.requestId.trim() } : {}),
       sessionId: params.sessionId,
     });
 

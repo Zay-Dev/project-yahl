@@ -46,6 +46,13 @@ const _normalizeContextAfter = (contextAfter: TStorage | Record<string, unknown>
 const _isDisposedConnectionError = (disposed: boolean, reason: string) =>
   disposed && reason === 'Connection is closed.';
 
+const flushSessionTracker = async () => {
+  const tracker = (globalThis as { sessionTracker?: { flush?: () => Promise<void> } })
+    .sessionTracker;
+
+  await tracker?.flush?.();
+};
+
 class RedisTransport {
   protected readonly connections: Redis[] = [];
 
@@ -181,10 +188,13 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
         });
       }
 
+      await flushSessionTracker();
+
       await this.redis.lpush(this.requestQueue,
         JSON.stringify({
           context: _serializeStorage(context),
           contextAfter: _serializeStorage(contextAfter),
+          parsedStageIndex,
           requestId,
           resumeFrom,
           stage,
@@ -237,6 +247,8 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
       wait: async () => {
         await this._drainModelResponses(requestId);
 
+        const waitStartedAt = Date.now();
+
         console.log(`[yahl-diag] reply wait start requestId=${requestId} pid=${process.pid}`);
 
         while (true) {
@@ -244,17 +256,47 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
             const raw = await this._brpop(redis, replyQueue, timeoutSeconds);
 
             if (raw === 'END') {
-              console.log(`[yahl-diag] reply wait end requestId=${requestId} raw=END pid=${process.pid}`);
+              console.log(
+                `[yahl-diag] reply wait end requestId=${requestId} raw=END pid=${process.pid} `
+                + `elapsedMs=${Date.now() - waitStartedAt}`,
+              );
               break;
             }
 
             if (raw) {
               try {
-                const parsed = JSON.parse(raw) as { type?: string; output?: { message?: string } };
+                const parsed = JSON.parse(raw) as {
+                  type?: string;
+                  output?: {
+                    error?: { message?: string; name?: string; stack?: string };
+                    message?: string;
+                  };
+                };
 
                 if (parsed.type === 'error') {
-                  throw new Error(parsed.output?.message ?? 'agent stage error');
+                  const errorMessage = parsed.output?.message
+                    ?? parsed.output?.error?.message
+                    ?? 'agent stage error';
+                  const errorName = parsed.output?.error?.name ?? 'Error';
+                  const errorStack = parsed.output?.error?.stack ?? '';
+                  const stackPreview = errorStack.length > 500
+                    ? `${errorStack.slice(0, 500)}…`
+                    : errorStack;
+
+                  console.log(
+                    `[yahl-diag] reply error requestId=${requestId} elapsedMs=${Date.now() - waitStartedAt} `
+                    + `message=${errorMessage} name=${errorName} stack=${stackPreview || '-'}`,
+                  );
+
+                  throw new Error(errorMessage);
                 }
+
+                const rawPreview = raw.length > 200 ? `${raw.slice(0, 200)}…` : raw;
+
+                console.log(
+                  `[yahl-diag] reply interim requestId=${requestId} elapsedMs=${Date.now() - waitStartedAt} `
+                  + `raw=${rawPreview}`,
+                );
               } catch (error) {
                 if (error instanceof SyntaxError) {
                   continue;

@@ -7,6 +7,7 @@ import {
   addTokenTotals,
   emptyTokenTotals,
   normalizeUsageToTokenTotals,
+  uniqueSortedDomains,
 } from './-usage-normalize';
 
 describe('token totals from model-response usage', () => {
@@ -41,5 +42,12 @@ describe('token totals from model-response usage', () => {
   it('returns null when no usage fields are present', () => {
     assert.equal(normalizeUsageToTokenTotals(undefined), null);
     assert.equal(normalizeUsageToTokenTotals({}), null);
+  });
+
+  it('collects unique sorted domains and drops blanks', () => {
+    assert.deepEqual(
+      uniqueSortedDomains(['api.openai.com', ' api.deepseek.com ', '', 'api.deepseek.com', '  ']),
+      ['api.deepseek.com', 'api.openai.com'],
+    );
   });
 });

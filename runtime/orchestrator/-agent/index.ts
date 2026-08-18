@@ -57,6 +57,7 @@ import {
   resolveStageWaitMaxMs,
   StageWaitTimeoutError,
 } from './stage-wait-timeout';
+import { startStageWaitHeartbeat } from './stage-wait-heartbeat';
 
 const AGENT_LOCAL_TOOLS = new Set(['browser', 'platform', 'run_bash']);
 
@@ -537,6 +538,14 @@ class YahlAgentRunner {
       + (stageWaitMaxMs == null ? '' : ` stageWaitMaxMs=${stageWaitMaxMs}`),
     );
 
+    const heartbeat = startStageWaitHeartbeat({
+      getElapsedMs: () => Date.now() - waitStartedAt,
+      requestId: this.requestId,
+      sessionId: this.sessionId,
+      stageId: this.activeStage?.spec?.id,
+      stageIndex: this.pipelineStageIndex,
+    });
+
     try {
       await Promise.race([
         wait(),
@@ -544,18 +553,30 @@ class YahlAgentRunner {
         ...(stageWaitTimeoutPromise ? [stageWaitTimeoutPromise] : []),
       ]);
     } catch (error) {
+      heartbeat.clear();
       disposeWait();
       toolCallHandlers.dispose();
       await toolCallPromise.catch(() => {});
 
       const errorName = error instanceof Error ? error.name : 'unknown';
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error && error.stack
+        ? (error.stack.length > 500 ? `${error.stack.slice(0, 500)}…` : error.stack)
+        : '-';
 
       console.log(
         `[orchestrator] stage wait end requestId=${this.requestId} durationMs=${Date.now() - waitStartedAt} outcome=error`,
       );
       console.log(
-        `[yahl-diag] race error requestId=${this.requestId} errorName=${errorName} pid=${process.pid}`,
+        `[yahl-diag] race error requestId=${this.requestId} errorName=${errorName} errorMessage=${errorMessage} `
+        + `stack=${errorStack} stageIndex=${this.pipelineStageIndex} `
+        + `stageId=${this.activeStage?.spec?.id ?? '-'} sessionId=${this.sessionId} endReceived=false pid=${process.pid}`,
       );
+
+      globalThis.orchestratorFailureCursor = {
+        kind: 'pipeline',
+        stageIndex: this.pipelineStageIndex,
+      };
 
       if (error instanceof AskUserPausedError) {
         throw error;
@@ -563,6 +584,8 @@ class YahlAgentRunner {
 
       throw error;
     } finally {
+      heartbeat.clear();
+
       if (stageWaitTimer) {
         clearTimeout(stageWaitTimer);
       }
@@ -587,7 +610,7 @@ class YahlAgentRunner {
     return Boolean(this.options.verifyFastForward && this.options.contextAfter);
   }
 
-  private async finishOrchestratorDirectStage() {
+  private persistOrchestratorDirectStage() {
     globalThis.sessionTracker?.createStage(this.sessionId, {
       context: serializeStorageSnapshot(this.filteredStorage),
       parsedStageIndex: this.boundParsedStageIndex,
@@ -596,6 +619,10 @@ class YahlAgentRunner {
       stage: toAgentStage(this.activeStage.spec),
       temperature: this.temperature,
     });
+  }
+
+  private async finishOrchestratorDirectStage() {
+    this.persistOrchestratorDirectStage();
 
     publisher.emitStageFinish({
       requestId: this.requestId,
@@ -616,14 +643,22 @@ class YahlAgentRunner {
 
       const { def } = await loadNixeryDef(nixeryRun);
 
+      this.persistOrchestratorDirectStage();
+      await globalThis.sessionTracker?.flush?.();
+
       const { containerName } = await runNixeryDef({
         defId: nixeryRun,
         input: resolveNixeryStageInput(this.filteredStorage, nixeryInput, def.input),
+        requestId: this.requestId,
         sessionId: this.sessionId,
         skipTeardown: true,
       });
 
-      await this.finishOrchestratorDirectStage();
+      publisher.emitStageFinish({
+        requestId: this.requestId,
+        contextAfter: this.storage,
+      });
+      await globalThis.sessionTracker?.flush?.();
       await teardownNixeryContainer(containerName, this.sessionId, nixeryRun);
       return undefined;
     }

@@ -163,10 +163,12 @@ export type TModelResponseTag =
   | 'tool'
   | 'unknown'
   | `platform:${string}`
-  | `mastermind:${string}`;
+  | `mastermind:${string}`
+  | `nixery:${string}`;
 
 export interface IModelResponse extends TWithTimestamps {
   _id: string;
+  domain?: string;
   session: string;
   requestId: string;
   durationMs?: number;

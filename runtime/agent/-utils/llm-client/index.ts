@@ -10,7 +10,7 @@ import { STAGE_TOOLS } from "@/shared/stage-tools";
 
 import { effectiveApiKey, normalizeLlmBaseUrl, openAiFetch } from "../llm-transport";
 
-import { withLlmCallRetry } from "./-retry";
+import { withLlmCallRetry } from './-retry';
 import * as Utils from "./-utils";
 
 export type TStagehandProxyCompletionInput = {
@@ -52,38 +52,39 @@ export const buildStagehandProxyLlmCreateParams = (
     : {}),
 });
 
+const createClient = (apiBaseUrl?: string) =>
+  new OpenAI({
+    apiKey: effectiveApiKey(),
+    baseURL: normalizeLlmBaseUrl(apiBaseUrl || config.apiBaseUrl),
+    fetch: openAiFetch({ providerDomain: config.providerDomain }),
+    maxRetries: 0,
+  });
+
 export const chatWithTools = async (
   messages: ChatApiMessage[],
   options?: { temperature?: number },
-): Promise<ChatAssistantMessage> => {
-  return await _chat(messages, { allowTools: true, ...options });
-};
+): Promise<ChatAssistantMessage> =>
+  withLlmCallRetry(() => _chat(messages, { allowTools: true, ...options }));
 
 export const chatCompletionForStagehandProxy = async (
   input: TStagehandProxyCompletionInput,
-): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
-  const client = input.apiBaseUrl
-    ? new OpenAI({
-        apiKey: effectiveApiKey(config.apiKey),
-        baseURL: normalizeLlmBaseUrl(input.apiBaseUrl),
-        fetch: openAiFetch(config.apiKey),
-        maxRetries: 0,
-      })
-    : _client;
+): Promise<OpenAI.Chat.Completions.ChatCompletion> =>
+  withLlmCallRetry(async () => {
+    if (!config.providerDomain) {
+      throw new Error("LLM_PROVIDER_DOMAIN is required for llm-proxy calls");
+    }
 
-  const response = await withLlmCallRetry(
-    () => client.chat.completions.create(
+    const client = createClient(input.apiBaseUrl);
+    const response = await client.chat.completions.create(
       buildStagehandProxyLlmCreateParams(input) as any,
-    ),
-    { maxAttempts: config.llmCallRetryMax },
-  );
+    );
 
-  if (!response.choices?.[0]?.message) {
-    throw new Error("LLM API returned no message");
-  }
+    if (!response.choices?.[0]?.message) {
+      throw new Error("LLM API returned no message");
+    }
 
-  return response;
-};
+    return response;
+  });
 
 const _chat = async (
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
@@ -93,23 +94,24 @@ const _chat = async (
   } = {},
 ) => {
   try {
-    const response = await withLlmCallRetry(
-      () => _client.chat.completions.create({
-        messages,
-        model: config.model,
-        stream: false,
+    if (!config.providerDomain) {
+      throw new Error("LLM_PROVIDER_DOMAIN is required for llm-proxy calls");
+    }
 
-        ...options.allowTools && {
-          tool_choice: "auto",
-          tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
-        },
+    const response = await _client.chat.completions.create({
+      messages,
+      model: config.model,
+      stream: false,
 
-        ...options.temperature !== undefined && { temperature: options.temperature },
+      ...options.allowTools && {
+        tool_choice: "auto",
+        tools: STAGE_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
+      },
 
-        thinking: { type: config.thinkingMode ? "enabled" : "disabled" },
-      } as any),
-      { maxAttempts: config.llmCallRetryMax },
-    );
+      ...options.temperature !== undefined && { temperature: options.temperature },
+
+      thinking: { type: config.thinkingMode ? "enabled" : "disabled" },
+    } as any);
 
     const message = response.choices?.[0]?.message || null;
 
@@ -134,9 +136,4 @@ const _chat = async (
   }
 };
 
-const _client = new OpenAI({
-  apiKey: effectiveApiKey(config.apiKey),
-  baseURL: config.apiBaseUrl,
-  fetch: openAiFetch(config.apiKey),
-  maxRetries: 0,
-});
+const _client = createClient();

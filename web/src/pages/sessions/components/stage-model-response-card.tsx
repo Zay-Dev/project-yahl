@@ -25,6 +25,7 @@ const contentFromResponse = (response: TResponseStageModelResponseItem) => {
 
 export function StageModelResponseCard({ response }: TStageModelResponseCardProps) {
   const content = contentFromResponse(response);
+  const domains = response.domain?.trim() ? [response.domain.trim()] : [];
 
   return (
     <li className="rounded-md border bg-background p-2">
@@ -46,9 +47,9 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
         ) : null}
         {response.thinkingMode ? <span>thinking</span> : null}
       </div>
-      {response.usage ? (
+      {response.usage || domains.length > 0 ? (
         <div className="mt-2">
-          <TokenStatsRow totals={response.usage} />
+          <TokenStatsRow domains={domains} totals={response.usage} />
         </div>
       ) : null}
       {content ? (

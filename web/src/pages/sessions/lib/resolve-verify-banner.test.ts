@@ -26,6 +26,7 @@ const stage = (requestId: string, status: 'finished' | 'running' | 'verifying') 
   requestId,
   stageId: requestId,
   status,
+  domains: [],
   tokenTotals: null,
   toolCallCount: 0,
   updatedAt: '2026-06-21T12:00:00.000Z',

@@ -33,6 +33,7 @@ export type TResponseGetSession = {
   taskId: string;
   taskSkills: TTaskSkillFile[];
   taskYahl: string;
+  domains: string[];
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
@@ -46,6 +47,7 @@ export type TResponseSessionListItem = {
   isBackground?: boolean;
   sessionId: string;
   taskId?: string;
+  domains: string[];
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
@@ -64,6 +66,7 @@ export type TResponseStageListItem = {
   requestId: string;
   stageId: string;
   status: TResponseStageStatus;
+  domains: string[];
   tokenTotals: TTokenTotals | null;
   toolCallCount: number;
   updatedAt: string;
@@ -93,6 +96,7 @@ export type TResponseStageModelResponseItem = {
   _id: string;
   contentPreview: string;
   createdAt: string;
+  domain?: string;
   durationMs?: number;
   model?: string;
   response?: Record<string, unknown>;

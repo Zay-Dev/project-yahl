@@ -66,6 +66,7 @@ export type TAskUserResumeFrom = {
 export type TRequestEnvelope = {
   context: TStorage;
   contextAfter?: TStorage;
+  parsedStageIndex?: number;
   requestId: string;
   resumeFrom?: TAskUserResumeFrom;
   stage: YahlStage;

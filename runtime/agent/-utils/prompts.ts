@@ -9,21 +9,34 @@ export const readFileUtf8 = async (filePath: string) => {
   }
 };
 
-export const readFolderUtf8 = async (dirPath: string) => {
+export const listReadableUtf8Files = async (dirPath: string) => {
   try {
     const entries = await fs.readdir(dirPath, {
       withFileTypes: true,
     });
+    const resolved = await Promise.all(entries.map(async (entry) => {
+      const abs = path.resolve(dirPath, entry.name);
 
-    const files = entries
-      .filter((entry) => entry.isFile())
-      .map((entry) => path.resolve(dirPath, entry.name))
+      try {
+        const st = await fs.stat(abs);
+
+        return st.isFile() ? abs : null;
+      } catch {
+        return null;
+      }
+    }));
+
+    return resolved
+      .filter((value): value is string => Boolean(value))
       .sort((a, b) => a.localeCompare(b));
-
-    const contents = await Promise.all(files.map(readFileUtf8));
-
-    return contents.filter(Boolean).join("\n\n");
   } catch {
-    return "";
+    return [];
   }
+};
+
+export const readFolderUtf8 = async (dirPath: string) => {
+  const files = await listReadableUtf8Files(dirPath);
+  const contents = await Promise.all(files.map(readFileUtf8));
+
+  return contents.filter(Boolean).join("\n\n");
 };

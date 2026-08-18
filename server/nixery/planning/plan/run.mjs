@@ -4,7 +4,6 @@ import path from 'node:path';
 import {
   callChat,
   callChatWithLog,
-  hasRealApiKey,
   logProgress,
   resolveDefId,
 } from '../lib/run-agent.mjs';
@@ -88,8 +87,7 @@ const main = async () => {
     output: outputName,
     stageLogicBlock: formatOptionalBlock('Stage logic', input.stageLogic),
   });
-  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? '';
-  const baseUrl = process.env.OPENAI_BASE_URL?.trim() ?? 'https://api.openai.com/v1';
+  const baseUrl = process.env.OPENAI_BASE_URL?.trim() ?? 'http://llm-proxy:4100/v1';
   const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o';
   const temperature = Number(process.env.OPENAI_TEMPERATURE ?? '0.2');
   const maxTokens = process.env.OPENAI_MAX_TOKENS
@@ -98,10 +96,6 @@ const main = async () => {
 
   if (!goal) {
     throw new Error('plan requires goal');
-  }
-
-  if (!hasRealApiKey(apiKey) && !process.env.HTTPS_PROXY && !process.env.HTTP_PROXY) {
-    throw new Error('OPENAI_API_KEY is required when OneCLI proxy env is not set');
   }
 
   logProgress(defId, `start goal=${goal.slice(0, 120)} output=${outputName}`);
@@ -122,8 +116,7 @@ const main = async () => {
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const json = await callChatWithLog(defId, round, () => callChat({
-      apiKey,
-      baseUrl,
+        baseUrl,
       maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
       messages,
       model,

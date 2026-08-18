@@ -11,7 +11,32 @@ import {
   onecliSharedComposeOverrideFile,
 } from './paths';
 
-export const agentNoProxy = 'localhost,127.0.0.1,::1,redis,server,mongo,onecli,wiki,wiki_postgres,worker,host.docker.internal';
+const LEGACY_ONECLI_PROXY_HOST = 'host.docker.internal:10255';
+const ONECLI_PROXY_HOST = 'onecli:10255';
+
+export const remapOneCliProxyHost = (value: string) =>
+  value.replaceAll(LEGACY_ONECLI_PROXY_HOST, ONECLI_PROXY_HOST);
+
+const remapTransportEnvValue = (value: string) => {
+  const remapped = remapOneCliProxyHost(value);
+
+  if (remapped === '/tmp/onecli-gateway-ca.pem') {
+    return '/onecli/proxy-ca.pem';
+  }
+
+  if (remapped === '/tmp/onecli-combined-ca.pem') {
+    return '/onecli/combined-ca.pem';
+  }
+
+  return remapped;
+};
+
+const remapTransportEnv = (env: Record<string, string>) =>
+  Object.fromEntries(
+    Object.entries(env).map(([key, value]) => [key, remapTransportEnvValue(value)]),
+  );
+
+export const agentNoProxy = 'localhost,127.0.0.1,::1,redis,server,mongo,onecli,wiki,wiki_postgres,worker,llm-proxy,host.docker.internal';
 
 export type TOneCliVolumeMount = {
   containerPath: string;
@@ -191,7 +216,7 @@ const buildSnapshotFromConfig = async (config: {
   ];
 
   return {
-    transportEnv: toStringEnv(configEnv),
+    transportEnv: remapTransportEnv(toStringEnv(configEnv)),
     volumeMounts,
     sslCertFile: hasCombinedBundle ? '/tmp/onecli-combined-ca.pem' : undefined,
   } satisfies TOneCliSnapshot;
@@ -202,7 +227,11 @@ const snapshotMetaFile = path.join(onecliRuntimePath, 'snapshot-meta.json');
 
 export const persistOneCliSnapshot = async (snapshot: TOneCliSnapshot) => {
   await fs.mkdir(onecliRuntimePath, { recursive: true });
-  await fs.writeFile(transportEnvCacheFile, JSON.stringify(snapshot.transportEnv), 'utf-8');
+  await fs.writeFile(
+    transportEnvCacheFile,
+    JSON.stringify(remapTransportEnv(snapshot.transportEnv)),
+    'utf-8',
+  );
   await fs.writeFile(snapshotMetaFile, JSON.stringify({
     caContainerPath: snapshot.volumeMounts[0]?.containerPath,
     sslCertFile: snapshot.sslCertFile,
@@ -263,7 +292,7 @@ export const fetchOneCliContainerConfig = async () => {
 };
 
 const snapshotFromComposeOverride = (override: TOneCliComposeOverride): TOneCliSnapshot => ({
-  transportEnv: override.transportEnv,
+  transportEnv: remapTransportEnv(override.transportEnv),
   volumeMounts: override.volumeMounts,
   sslCertFile: override.transportEnv.SSL_CERT_FILE
     || override.transportEnv.DENO_CERT
@@ -316,7 +345,7 @@ export const loadOneCliSnapshot = async (): Promise<TOneCliSnapshot | undefined>
 
   return {
     transportEnv: Object.keys(cachedTransportEnv).length > 0
-      ? cachedTransportEnv
+      ? remapTransportEnv(cachedTransportEnv)
       : {},
     volumeMounts,
     sslCertFile: meta.sslCertFile ?? (hasCombinedBundle ? '/tmp/onecli-combined-ca.pem' : undefined),

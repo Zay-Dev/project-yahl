@@ -14,12 +14,17 @@ services:
       AGENT_REDIS_URL: redis://redis:6379
       AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}
       DISPLAY: ${STAGEHAND_LIVEVIEW_DISPLAY:-:99}
-      NO_PROXY: localhost,127.0.0.1,::1,redis,server,mongo,onecli,host.docker.internal
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://llm-proxy:4100/v1}
+      LLM_PROVIDER_DOMAIN: ${LLM_PROVIDER_DOMAIN:-api.deepseek.com}
+      LLM_PROXY_TOKEN: ${LLM_PROXY_TOKEN:-}
+      NO_PROXY: localhost,127.0.0.1,::1,redis,server,mongo,onecli,wiki,wiki_postgres,worker,llm-proxy,host.docker.internal
       PLATFORM_APPROVAL_TOKEN: ${PLATFORM_APPROVAL_TOKEN:-}
+      RUNTIME_REPO_ROOT: /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime
       SESSION_API_BASE_URL: ${AGENT_SESSION_API_BASE_URL:-http://server:4000}
       STAGEHAND_CHROME_PATH: ${STAGEHAND_CHROME_PATH:-}
       STAGEHAND_LIVEVIEW: ${STAGEHAND_LIVEVIEW:-0}
-      no_proxy: localhost,127.0.0.1,::1,redis,server,mongo,onecli,host.docker.internal
+      WORKSPACE_ROOT: /workspace
+      no_proxy: localhost,127.0.0.1,::1,redis,server,mongo,onecli,wiki,wiki_postgres,worker,llm-proxy,host.docker.internal
     shm_size: 2gb
     extra_hosts:
       - "host.docker.internal:host-gateway"

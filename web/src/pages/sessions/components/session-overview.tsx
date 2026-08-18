@@ -27,6 +27,7 @@ const TokenStat = ({ label, value }: { label: string; value: number }) => (
 
 export function SessionOverview({ session }: TSessionOverviewProps) {
   const totals = session.tokenTotals;
+  const domains = session.domains;
 
   return (
     <div className="rounded-xl bg-muted/50 p-4">
@@ -72,14 +73,26 @@ export function SessionOverview({ session }: TSessionOverviewProps) {
           <dd className="mt-0.5">{formatDate(session.updatedAt)}</dd>
         </div>
       </dl>
-      {totals ? (
+      {totals || domains.length > 0 ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <TokenStat label="Total tokens" value={totals.totalTokens} />
-          <TokenStat label="Prompt" value={totals.promptTokens} />
-          <TokenStat label="Completion" value={totals.completionTokens} />
-          <TokenStat label="Reasoning" value={totals.reasoningTokens} />
-          <TokenStat label="Cache hit" value={totals.cacheHitTokens} />
-          <TokenStat label="Cache miss" value={totals.cacheMissTokens} />
+          {domains.length > 0 ? (
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted-foreground">
+                {domains.length === 1 ? "Domain" : "Domains"}
+              </p>
+              <p className="mt-1 text-lg font-semibold break-all">{domains.join(", ")}</p>
+            </div>
+          ) : null}
+          {totals ? (
+            <>
+              <TokenStat label="Total tokens" value={totals.totalTokens} />
+              <TokenStat label="Prompt" value={totals.promptTokens} />
+              <TokenStat label="Completion" value={totals.completionTokens} />
+              <TokenStat label="Reasoning" value={totals.reasoningTokens} />
+              <TokenStat label="Cache hit" value={totals.cacheHitTokens} />
+              <TokenStat label="Cache miss" value={totals.cacheMissTokens} />
+            </>
+          ) : null}
         </div>
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">No token usage recorded yet.</p>

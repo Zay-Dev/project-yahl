@@ -9,13 +9,13 @@ import { buildBrowserProxyBrief } from "./browser-proxy-brief";
 import {
   clearStagehandProxyBrief,
   clearStagehandProxyLlmOverrides,
-  clearStagehandProxyReporter,
+  clearStagehandProxySessionContext,
   ensureStagehandLlmProxy,
   mergeStagehandProxyMessages,
   setStagehandProxyBrief,
   setStagehandProxyCompletionFnForTests,
   setStagehandProxyLlmOverrides,
-  setStagehandProxyReporter,
+  setStagehandProxySessionContext,
   stopStagehandLlmProxy,
 } from "./stagehand-llm-proxy";
 
@@ -58,7 +58,7 @@ describe("stagehand-llm-proxy", () => {
   after(async () => {
     clearStagehandProxyBrief();
     clearStagehandProxyLlmOverrides();
-    clearStagehandProxyReporter();
+    clearStagehandProxySessionContext();
     setStagehandProxyCompletionFnForTests(null);
     await stopStagehandLlmProxy();
   });
@@ -181,7 +181,7 @@ describe("stagehand-llm-proxy", () => {
     );
   });
 
-  it("forwards stagehand llm overrides into nested completion input", async () => {
+  it("forwards stagehand model override into nested completion input", async () => {
     process.env.STAGEHAND_LLM_PROXY_PORT = "0";
 
     let nestedInput: TStagehandProxyCompletionInput | null = null;
@@ -228,15 +228,13 @@ describe("stagehand-llm-proxy", () => {
     assert.equal(res.status, 200);
     assert.ok(nestedInput);
     assert.equal(nestedInput.modelOverride, "custom-model");
-    assert.equal(nestedInput.apiBaseUrl, "https://api.example.com/v1");
+    assert.equal(nestedInput.apiBaseUrl, undefined);
 
     clearStagehandProxyLlmOverrides();
   });
 
-  it("posts onModelResponse with usage and stagehand tag after each completion", async () => {
+  it("accepts session context without local usage reporter", async () => {
     process.env.STAGEHAND_LLM_PROXY_PORT = "0";
-
-    const reported: Array<Record<string, unknown>> = [];
 
     setStagehandProxyCompletionFnForTests(async () => {
       const completion: OpenAI.Chat.Completions.ChatCompletion = {
@@ -266,74 +264,12 @@ describe("stagehand-llm-proxy", () => {
       return completion;
     });
 
-    setStagehandProxyReporter({
-      onModelResponse: async (response) => {
-        reported.push(response as unknown as Record<string, unknown>);
-      },
-    });
-
     const { port } = await ensureStagehandLlmProxy();
 
-    const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
-      body: JSON.stringify({
-        messages: [{ content: "act", role: "user" }],
-        model: "openai/deepseek-v4-flash",
-      }),
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
+    setStagehandProxySessionContext({
+      requestId: "req-1",
+      sessionId: "sess-1",
     });
-
-    assert.equal(res.status, 200);
-    assert.equal(reported.length, 1);
-    assert.equal(reported[0]?.thinkingMode, false);
-    assert.deepEqual(reported[0]?.tags, ["stagehand"]);
-    assert.equal(
-      (reported[0]?.usage as { prompt_tokens?: number } | undefined)?.prompt_tokens,
-      42,
-    );
-    assert.equal(typeof reported[0]?.durationMs, "number");
-
-    clearStagehandProxyReporter();
-  });
-
-  it("still returns completion when onModelResponse throws", async () => {
-    process.env.STAGEHAND_LLM_PROXY_PORT = "0";
-
-    setStagehandProxyCompletionFnForTests(async () => {
-      const completion: OpenAI.Chat.Completions.ChatCompletion = {
-        choices: [
-          {
-            finish_reason: "stop",
-            index: 0,
-            logprobs: null,
-            message: {
-              content: "still-ok",
-              role: "assistant",
-              refusal: null,
-            },
-          },
-        ],
-        created: Math.floor(Date.now() / 1000),
-        id: "chatcmpl-reporter-fail",
-        model: "deepseek-v4-flash",
-        object: "chat.completion",
-        usage: {
-          completion_tokens: 1,
-          prompt_tokens: 2,
-          total_tokens: 3,
-        },
-      };
-
-      return completion;
-    });
-
-    setStagehandProxyReporter({
-      onModelResponse: async () => {
-        throw new Error("reporter boom");
-      },
-    });
-
-    const { port } = await ensureStagehandLlmProxy();
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
       body: JSON.stringify({
@@ -348,9 +284,9 @@ describe("stagehand-llm-proxy", () => {
 
     const payload = await res.json() as OpenAI.Chat.Completions.ChatCompletion;
 
-    assert.equal(payload.choices[0]?.message?.content, "still-ok");
+    assert.equal(payload.choices[0]?.message?.content, "ok");
 
-    clearStagehandProxyReporter();
+    clearStagehandProxySessionContext();
   });
 });
 

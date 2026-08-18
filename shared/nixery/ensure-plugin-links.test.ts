@@ -143,4 +143,18 @@ test('live plugin destinations for declared artifacts are symlinks', async () =>
 
     assert.equal(st.isSymbolicLink(), true, install.destAbs);
   }
+
+  const persist = installs.find((install) => (
+    install.kind === 'prompts' && install.basename === 'knowledge-persist.md'
+  ));
+
+  assert.ok(persist);
+  assert.equal(persist.containerDest, `${AGENT_YAHL_CONTAINER_DIR}/knowledge-persist.md`);
+
+  const volumes = formatAgentPluginVolumeLines({
+    hostRepoRoot: repoRoot,
+    installs,
+  }).join('\n');
+
+  assert.match(volumes, /\/opt\/yahl\/knowledge-persist\.md:ro/);
 });

@@ -99,6 +99,7 @@ const stageSchema = new Schema<TDbStage>({
 stageSchema.index({ requestId: 1, session: 1 }, { unique: true });
 
 const modelResponseSchema = new Schema<TDbModelResponse>({
+  domain: model.d.optionalString(),
   durationMs: model.d.optionalNumber(),
   requestId: model.d.requiredString(),
   response: model.d.mixed(),

@@ -47,7 +47,35 @@ export class SessionEventTrackerError extends Error {
 
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
 
+const parseSessionIdFromUrl = (url: string) => {
+  const match = url.match(/\/sessions\/([^/]+)/);
+
+  return match?.[1];
+};
+
+const parseRequestIdFromUrl = (url: string) => {
+  const match = url.match(/\/stages\/([^/]+)/);
+
+  return match?.[1];
+};
+
+const isUndiciFetchError = (error: unknown) => {
+  const text = String(error);
+
+  if (text.includes('UND_ERR_')) {
+    return true;
+  }
+
+  if (!(error instanceof Error) || !error.cause) {
+    return false;
+  }
+
+  return String(error.cause).includes('UND_ERR_');
+};
+
 const _request = async (url: string, init: RequestInit) => {
+  const sessionId = parseSessionIdFromUrl(url);
+  const requestId = parseRequestIdFromUrl(url);
   let response: Response;
 
   try {
@@ -60,8 +88,12 @@ const _request = async (url: string, init: RequestInit) => {
     });
   } catch (error) {
     const message = `failed ${init.method ?? 'GET'} ${url}: ${String(error)}`;
+    const undiciHint = isUndiciFetchError(error) ? ' undici=yes' : '';
 
-    console.error(`[ERROR] session-event-tracker ${message}\n`);
+    console.error(
+      `[ERROR] session-event-tracker ${message} sessionId=${sessionId ?? '-'} `
+      + `requestId=${requestId ?? '-'}${undiciHint}\n`,
+    );
     throw new SessionEventTrackerError(message, url);
   }
 
@@ -69,7 +101,10 @@ const _request = async (url: string, init: RequestInit) => {
     const detail = await response.text().catch(() => '');
     const message = `${init.method ?? 'GET'} ${url} failed with ${response.status} ${response.statusText}: ${detail || '<empty body>'}`;
 
-    console.error(`[ERROR] session-event-tracker ${message}\n`);
+    console.error(
+      `[ERROR] session-event-tracker ${message} sessionId=${sessionId ?? '-'} `
+      + `requestId=${requestId ?? '-'}\n`,
+    );
     throw new SessionEventTrackerError(message, url, response.status);
   }
 };
@@ -142,7 +177,7 @@ export const createSessionEventTracker = () => {
         stage: envelope.stage,
         ...(temperature === undefined ? {} : { temperature }),
       });
-    });
+    }, true);
   };
 
   const appendToolCall = (sessionId: string, envelope: TToolCallEnvelope) => {

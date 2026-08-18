@@ -2,6 +2,7 @@ import type { TResponseTokenTotals } from "@project-yahl/server/modules/sessions
 
 type TTokenStatsRowProps = {
   compact?: boolean;
+  domains?: string[];
   totals: TResponseTokenTotals | null;
 };
 
@@ -12,7 +13,7 @@ const TokenChip = ({
 }: {
   compact?: boolean;
   label: string;
-  value: number;
+  value: number | string;
 }) => (
   <span
     className={
@@ -22,26 +23,39 @@ const TokenChip = ({
     }
   >
     <span className="text-muted-foreground">{label}</span>
-    <span className="font-medium tabular-nums">{value.toLocaleString()}</span>
+    <span className={typeof value === "number" ? "font-medium tabular-nums" : "font-medium"}>
+      {typeof value === "number" ? value.toLocaleString() : value}
+    </span>
   </span>
 );
 
-export function TokenStatsRow({ compact = true, totals }: TTokenStatsRowProps) {
-  if (!totals) {
+export function TokenStatsRow({ compact = true, domains, totals }: TTokenStatsRowProps) {
+  const hosts = (domains ?? [])
+    .map((domain) => domain.trim())
+    .filter((domain) => domain.length > 0);
+
+  if (!totals && hosts.length === 0) {
     return null;
   }
 
   return (
     <div className={`flex flex-wrap gap-1.5 ${compact ? "" : "gap-2"}`}>
-      <TokenChip compact={compact} label="Input" value={totals.promptTokens} />
-      <TokenChip compact={compact} label="Cached" value={totals.cacheHitTokens} />
-      <TokenChip compact={compact} label="Uncached" value={totals.cacheMissTokens} />
-      <TokenChip compact={compact} label="Output" value={totals.completionTokens} />
-      {totals.reasoningTokens > 0 ? (
-        <TokenChip compact={compact} label="Reasoning" value={totals.reasoningTokens} />
-      ) : null}
-      {!compact ? (
-        <TokenChip compact={compact} label="Total" value={totals.totalTokens} />
+      {hosts.map((host) => (
+        <TokenChip compact={compact} key={host} label="Domain" value={host} />
+      ))}
+      {totals ? (
+        <>
+          <TokenChip compact={compact} label="Input" value={totals.promptTokens} />
+          <TokenChip compact={compact} label="Cached" value={totals.cacheHitTokens} />
+          <TokenChip compact={compact} label="Uncached" value={totals.cacheMissTokens} />
+          <TokenChip compact={compact} label="Output" value={totals.completionTokens} />
+          {totals.reasoningTokens > 0 ? (
+            <TokenChip compact={compact} label="Reasoning" value={totals.reasoningTokens} />
+          ) : null}
+          {!compact ? (
+            <TokenChip compact={compact} label="Total" value={totals.totalTokens} />
+          ) : null}
+        </>
       ) : null}
     </div>
   );
