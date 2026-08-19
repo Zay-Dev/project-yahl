@@ -1,20 +1,28 @@
+import type { TNixeryPluginInstall } from '@project-yahl/shared/nixery/ensure-plugin-links';
+import type { ComposeDownOptions, ComposeUpOptions } from '@/orchestrator/-utils/yahl/types';
+
 import { spawn } from "child_process";
 import path from "path";
 import { promises as fs } from "fs";
+
+import {
+  AGENT_YAHL_CONTAINER_DIR,
+  ensureNixeryPluginLinks,
+  formatAgentPluginVolumeLines,
+} from '@project-yahl/shared/nixery/ensure-plugin-links';
 
 import {
   formatOneCliComposeOverride,
   loadOneCliSnapshot,
   persistOneCliSnapshot,
 } from "./onecli-snapshot";
-
-import type { ComposeDownOptions, ComposeUpOptions } from '@/orchestrator/-utils/yahl/types';
 import {
   agentSessionComposeOverrideFile,
   agentSessionRuntimePath,
   composeFile,
   onecliSharedComposeOverrideFile,
   repoRoot,
+  resolveDockerHostRepoRoot,
   resolveDockerHostWorkspacePath,
 } from "./paths";
 
@@ -108,6 +116,7 @@ export const writeSharedOneCliOverride = async () => {
 };
 
 export type TAgentSessionOverrideOptions = {
+  pluginInstalls?: TNixeryPluginInstall[];
   publishVnc?: boolean;
   sessionId: string;
   taskId: string;
@@ -115,19 +124,31 @@ export type TAgentSessionOverrideOptions = {
 
 export const writeAgentSessionOverride = async (opts: TAgentSessionOverrideOptions) => {
   const sessionHome = `/workspace/sessions/${opts.sessionId}`;
+  const hostRepoRoot = resolveDockerHostRepoRoot();
   const hostTaskData = path.join(
     resolveDockerHostWorkspacePath(),
     'tasks',
     opts.taskId.trim(),
   );
   const containerTaskData = `/workspace/sessions/${opts.sessionId}/data`;
+  const pluginInstalls = opts.pluginInstalls ?? await ensureNixeryPluginLinks({
+    nixeryRoot: path.join(repoRoot, 'server', 'nixery'),
+    repoRoot,
+  });
+  const pluginVolumes = formatAgentPluginVolumeLines({
+    hostRepoRoot,
+    installs: pluginInstalls,
+  });
+
   const lines = [
     "services:",
     "  agent:",
     "    environment:",
     `      AGENT_SESSION_HOME: ${yamlQuote(sessionHome)}`,
+    `      AGENT_YAHL_DIR: ${yamlQuote(AGENT_YAHL_CONTAINER_DIR)}`,
     "    volumes:",
     `      - ${yamlQuote(`${hostTaskData}:${containerTaskData}:rw`)}`,
+    ...pluginVolumes,
   ];
 
   if (opts.publishVnc) {

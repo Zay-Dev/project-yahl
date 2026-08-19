@@ -14,6 +14,7 @@ const createSessionTrackerStub = (
 ): TSessionTracker => ({
   appendModelResponse: () => {},
   appendToolCall: () => {},
+  appendToolResult: () => {},
   createStage: () => {},
   flush: async () => {},
   patchSession: () => {},

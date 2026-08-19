@@ -89,7 +89,7 @@ export const waitForNixeryOutput = async (params: {
   pollMs?: number;
   sessionDir: string;
 }): Promise<void> => {
-  const def = await loadNixeryDef(params.defId);
+  const { def } = await loadNixeryDef(params.defId);
   const input = await readSessionInput(params.sessionDir);
   const outputName = params.outputHint?.trim() || resolveNixeryOutputHint(def, input);
   const outputFile = path.join(params.sessionDir, outputName);

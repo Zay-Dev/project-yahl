@@ -3,7 +3,7 @@ import "dotenv/config";
 import url from "url";
 import path from "path";
 
-import { normalizeStagehandModel } from "./-utils/llm-transport";
+import { normalizeProviderDomain, normalizeStagehandModel } from "./-utils/llm-transport";
 
 const _moduleDir = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -37,7 +37,10 @@ const normalizeBaseUrl = (value: string) =>
     .replace(/\/v1\/chat\/completions$/, "")
     .replace(/\/chat\/completions$/, "");
 
-const rawBaseUrl = process.env.LLM_BASE_URL || "https://api.deepseek.com";
+const rawBaseUrl = process.env.LLM_BASE_URL || "http://llm-proxy:4100/v1";
+const rawProviderDomain = process.env.LLM_PROVIDER_DOMAIN
+  || process.env.LLM_UPSTREAM_DOMAIN
+  || "";
 
 const isTruthyEnv = (value: string | undefined) => {
   const normalized = value?.trim().toLowerCase();
@@ -87,6 +90,7 @@ export const config = {
   apiBaseUrl: normalizeBaseUrl(rawBaseUrl),
   apiKey: process.env.LLM_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.API_KEY || "",
   model: process.env.LLM_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
+  providerDomain: normalizeProviderDomain(rawProviderDomain),
   stagehandLiveview: isTruthyEnv(process.env.STAGEHAND_LIVEVIEW),
   stagehandModel: normalizeStagehandModel(
     process.env.STAGEHAND_MODEL?.trim()
@@ -98,10 +102,6 @@ export const config = {
   bashTimeoutMs: Math.max(
     1,
     Number(process.env.AGENT_BASH_TIMEOUT_MS?.trim() || "60000") || 60_000,
-  ),
-  llmCallRetryMax: Math.max(
-    1,
-    Math.floor(Number(process.env.LLM_CALL_RETRY_MAX ?? 3)) || 3,
   ),
   thinkingMode: (process.env.LLM_THINKING_MODE || process.env.DEEPSEEK_THINKING_MODE || "disabled")
     .trim()

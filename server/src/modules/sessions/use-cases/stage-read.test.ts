@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  collectToolResultById,
   parseToolArguments,
   parseToolSummaries,
   resolveToolCallRawArguments,
@@ -112,5 +113,35 @@ describe('parseToolSummaries', () => {
     ]);
 
     assert.equal((tool.arguments as Record<string, unknown>).scope, 'context');
+  });
+});
+
+describe('collectToolResultById', () => {
+  it('maps result content by tool call id', () => {
+    const byId = collectToolResultById([
+      { results: [{ content: 'skill body', id: 'call-1' }] },
+      { results: [{ content: 'ok', id: 'call-2' }] },
+    ]);
+
+    assert.equal(byId.get('call-1'), 'skill body');
+    assert.equal(byId.get('call-2'), 'ok');
+  });
+
+  it('keeps real stdout when a later stub row arrives', () => {
+    const byId = collectToolResultById([
+      { results: [{ content: 'OK', id: 'call-1' }] },
+      { results: [{ content: '# monitor-loop\n', id: 'call-1' }] },
+    ]);
+
+    assert.equal(byId.get('call-1'), '# monitor-loop\n');
+  });
+
+  it('does not replace real stdout with a later stub', () => {
+    const byId = collectToolResultById([
+      { results: [{ content: '# monitor-loop\n', id: 'call-1' }] },
+      { results: [{ content: 'OK', id: 'call-1' }] },
+    ]);
+
+    assert.equal(byId.get('call-1'), '# monitor-loop\n');
   });
 });

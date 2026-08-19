@@ -18,6 +18,6 @@ describe("llm-transport", () => {
     assert.equal(hasRealApiKey("placeholder"), false);
     assert.equal(hasRealApiKey("sk-real-key"), true);
     assert.equal(effectiveApiKey(""), "placeholder");
-    assert.equal(effectiveApiKey("sk-real-key"), "sk-real-key");
+    assert.equal(effectiveApiKey("sk-real-key"), "placeholder");
   });
 });

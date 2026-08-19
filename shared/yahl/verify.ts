@@ -6,4 +6,8 @@ export type TYahlVerifySpec = {
   minScore?: number;
   resume?: boolean;
   rubric?: string;
+  skipWarmUp?: boolean;
 };
+
+export const resolveVerifySkipWarmUp = (verify?: TYahlVerifySpec): boolean =>
+  verify?.skipWarmUp !== false;

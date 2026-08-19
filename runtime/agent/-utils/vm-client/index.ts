@@ -104,3 +104,25 @@ export const runConditionScript = async (
 
   return stages[result].script;
 };
+
+export const runPredicateScript = async (
+  expression: string,
+  _context: TStorage,
+) => {
+  const trimmed = expression.trim();
+
+  if (!trimmed) {
+    return false;
+  }
+
+  const { result } = await runScript(
+    `result = !!(eval(context.stage.expression))`,
+    {
+      types: new Map<string, unknown>(),
+      context: new Map(_context.context || []),
+      stage: new Map<string, unknown>([['expression', trimmed]]),
+    },
+  );
+
+  return Boolean(result);
+};

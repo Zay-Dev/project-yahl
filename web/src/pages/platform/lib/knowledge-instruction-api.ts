@@ -36,10 +36,14 @@ export const getKnowledgeManagerInstruction = async (): Promise<string> => {
 
 export const putKnowledgeManagerInstruction = async (
   body: TRequestPutKnowledgeManagerInstructionBody,
+  approvalToken: string,
 ): Promise<string> => {
   const res = await fetch(instructionBase, {
     body: JSON.stringify(body),
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Approval-Token": approvalToken.trim(),
+    },
     method: "PUT",
   });
 

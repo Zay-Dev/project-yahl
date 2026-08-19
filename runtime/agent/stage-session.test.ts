@@ -141,4 +141,66 @@ describe("runStageSession", () => {
     assert.equal(envelope.type, "result");
     assert.match(envelope.output, /context length exceeded/);
   });
+
+  it('places the warmup note and prefix before Input', async () => {
+    let firstMessages: { role: string; content?: string | null }[] | undefined;
+    const prefix = [assistant('warmup already did binds')];
+
+    await runStageSession(
+      {
+        context: emptyContext(),
+        stage: { logic: 'poll' },
+      },
+      [{ content: 'system', role: 'system' }],
+      {
+        chatWithTools: async (messages) => {
+          firstMessages = messages.map((message) => ({
+            content: 'content' in message ? message.content : null,
+            role: message.role,
+          }));
+          return [assistant(JSON.stringify({ output: 'ok', type: 'result' }))];
+        },
+        runCommand: async () => '',
+      },
+      {
+        maxTurns: 2,
+        prefixMessages: prefix,
+      },
+    );
+
+    assert.equal(firstMessages?.[0]?.role, 'system');
+    assert.equal(firstMessages?.[1]?.role, 'user');
+    assert.match(String(firstMessages?.[1]?.content ?? ''), /Warm-up already ran/);
+    assert.equal(firstMessages?.[2]?.role, 'assistant');
+    assert.equal(firstMessages?.[3]?.role, 'user');
+    assert.match(String(firstMessages?.[3]?.content ?? ''), /Input:/);
+  });
+
+  it('does not add the warmup note for a user-only prefix', async () => {
+    let firstMessages: { role: string }[] | undefined;
+
+    await runStageSession(
+      {
+        context: emptyContext(),
+        stage: { logic: 'poll' },
+      },
+      [{ content: 'system', role: 'system' }],
+      {
+        chatWithTools: async (messages) => {
+          firstMessages = messages.map((message) => ({ role: message.role }));
+          return [assistant(JSON.stringify({ output: 'ok', type: 'result' }))];
+        },
+        runCommand: async () => '',
+      },
+      {
+        maxTurns: 2,
+        prefixMessages: [{
+          content: 'user-only prefix',
+          role: 'user',
+        }],
+      },
+    );
+
+    assert.deepEqual(firstMessages?.map((message) => message.role), ['system', 'user', 'user']);
+  });
 });

@@ -27,13 +27,20 @@ const walkSkillsDir = async (
 
   await Promise.all(entries.map(async (entry) => {
     const absolute = path.join(dir, entry.name);
+    let st;
 
-    if (entry.isDirectory()) {
+    try {
+      st = await fs.stat(absolute);
+    } catch {
+      return;
+    }
+
+    if (st.isDirectory()) {
       await walkSkillsDir(absolute, root, files);
       return;
     }
 
-    if (!entry.isFile()) {
+    if (!st.isFile()) {
       return;
     }
 

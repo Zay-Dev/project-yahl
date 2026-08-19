@@ -60,6 +60,36 @@ describe('verify finish order', () => {
     assert.match(resetBody, /this\.boundSourceStartLine = stage\.sourceStartLine/);
   });
 
+  it('resetStageContext refreshes today and now_iso before filtering', () => {
+    const src = readFileSync(agentIndexPath, 'utf8');
+    const resetStart = src.indexOf('private resetStageContext(');
+
+    assert.ok(resetStart >= 0);
+
+    const resetBody = src.slice(resetStart, resetStart + 1800);
+    const seedIdx = resetBody.indexOf('seedDefaultContext(this.storage)');
+    const filterIdx = resetBody.indexOf('this.filteredStorage = filterStorageForStage');
+
+    assert.ok(seedIdx >= 0, 'seedDefaultContext missing from resetStageContext');
+    assert.ok(filterIdx >= 0, 'filterStorageForStage missing from resetStageContext');
+    assert.ok(seedIdx < filterIdx, 'seedDefaultContext must run before filterStorageForStage');
+  });
+
+  it('runWhileWithParentVerify wraps handleWhile before suffix stages', () => {
+    const src = readFileSync(agentIndexPath, 'utf8');
+    const whileDispatch = src.indexOf("stage.type === 'while'");
+
+    assert.ok(whileDispatch >= 0);
+
+    const whileBody = src.slice(whileDispatch, whileDispatch + 1800);
+
+    assert.match(whileBody, /runWhileWithParentVerify/);
+    assert.match(whileBody, /isPostLoopWhileResume/);
+    assert.match(whileBody, /firstPass:/);
+    assert.match(whileBody, /rerun:/);
+    assert.match(whileBody, /handleWhile\(/);
+  });
+
   it('verify auto-retry rotates requestId when stage doc was created for wrong slot', () => {
     const src = readFileSync(agentIndexPath, 'utf8');
     const runOneStageStart = src.indexOf('private async runOneStage()');

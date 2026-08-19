@@ -51,7 +51,7 @@ export const loadCheckpointResumeContext = async (sessionId: string, verifyId: s
   const parsedSnapshot = checkpoint.parsedStageSnapshot as {
     lines: string;
     sourceStartLine: number;
-    type: 'loop' | 'plain';
+    type: 'loop' | 'plain' | 'while';
   } | undefined;
 
   const stageFromSnapshot = parsedSnapshot

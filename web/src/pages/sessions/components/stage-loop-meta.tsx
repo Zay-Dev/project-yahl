@@ -7,7 +7,60 @@ type TStageLoopMetaProps = {
   loopMeta: TStageLoopMeta;
 };
 
+const RemainingBudget = ({ loopMeta }: { loopMeta: TStageLoopMeta }) => (
+  <>
+    {typeof loopMeta.remainingTurns === "number" ? (
+      <div>
+        <dt className="text-muted-foreground">Remaining turns</dt>
+        <dd className="font-mono">{loopMeta.remainingTurns}</dd>
+      </div>
+    ) : null}
+    {typeof loopMeta.remainingBashCalls === "number" ? (
+      <div>
+        <dt className="text-muted-foreground">Remaining bash calls</dt>
+        <dd className="font-mono">{loopMeta.remainingBashCalls}</dd>
+      </div>
+    ) : null}
+  </>
+);
+
 export function StageLoopMeta({ loopMeta }: TStageLoopMetaProps) {
+  const kind = loopMeta.kind ?? "for";
+
+  if (kind === "warmup") {
+    return (
+      <div>
+        <p className="text-xs font-medium text-muted-foreground">Loop meta</p>
+        <dl className="mt-2 grid gap-3 rounded-md border bg-background p-3 text-xs sm:grid-cols-2">
+          <div>
+            <dt className="text-muted-foreground">Kind</dt>
+            <dd className="font-mono">warmup</dd>
+          </div>
+          <RemainingBudget loopMeta={loopMeta} />
+        </dl>
+      </div>
+    );
+  }
+
+  if (kind === "while") {
+    return (
+      <div>
+        <p className="text-xs font-medium text-muted-foreground">Loop meta</p>
+        <dl className="mt-2 grid gap-3 rounded-md border bg-background p-3 text-xs sm:grid-cols-2">
+          <div>
+            <dt className="text-muted-foreground">Kind</dt>
+            <dd className="font-mono">while</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Iteration</dt>
+            <dd className="font-mono">{loopMeta.index ?? 0}</dd>
+          </div>
+          <RemainingBudget loopMeta={loopMeta} />
+        </dl>
+      </div>
+    );
+  }
+
   return (
     <div>
       <p className="text-xs font-medium text-muted-foreground">Loop meta</p>
@@ -50,11 +103,12 @@ export function StageLoopMeta({ loopMeta }: TStageLoopMetaProps) {
             <dd className="font-mono">{loopMeta.step}</dd>
           </div>
         ) : null}
+        <RemainingBudget loopMeta={loopMeta} />
       </dl>
-      {loopMeta.arraySnapshot.length > 0 ? (
+      {(loopMeta.arraySnapshot?.length ?? 0) > 0 ? (
         <div className="mt-2">
           <SessionJsonFallback
-            label={`Array snapshot (${loopMeta.arraySnapshot.length})`}
+            label={`Array snapshot (${loopMeta.arraySnapshot?.length})`}
             value={loopMeta.arraySnapshot}
           />
         </div>

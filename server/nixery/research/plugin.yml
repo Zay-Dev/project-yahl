@@ -1,0 +1,7 @@
+name: Research
+description: Research and extract helpers
+task_skills:
+  - task-skills/nixery-research
+  - task-skills/nixery-extract-info
+  - task-skills/nixery-design-questions
+  - task-skills/nixery-consult-breaking-change

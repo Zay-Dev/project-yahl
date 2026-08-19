@@ -14,11 +14,10 @@ import {
   type ChatAssistantMessage,
   type ChatToolCall,
   parseBrowserToolArguments,
-  parseMastermindStatusToolArguments,
-  parseMastermindToolArguments,
+  parsePlatformToolArguments,
   parseRunBashToolArguments,
 } from "@/shared/stage-tools";
-import { callMastermindSkill, fetchMastermindRequestStatus } from "@/shared/mastermind-client";
+import { callPlatformSkill } from "@/shared/platform-client";
 
 import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
 import { buildBrowserProxyBrief } from "./-browser/browser-proxy-brief";
@@ -57,10 +56,14 @@ type StageSessionOptions = {
   onLocalToolCall?: (record: TLocalToolCallRecord) => Promise<void>;
   onLocalToolStart?: (record: TLocalToolStartRecord) => Promise<void>;
   onModelResponse?: (response: TModelResponse) => Promise<void>;
+  prefixMessages?: ChatApiMessage[];
   requestId?: string;
   resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
 };
+
+export const WARMUP_CONTINUE_NOTE =
+  'Warm-up already ran; do not re-read /opt/skills or ~/task-skills; do not find / for schemas; do not repeat opening reads/binds; execute this Input only';
 
 const toApiMessages = (messages: BootstrapMessage[]): ChatApiMessage[] =>
   messages.map((message) => ({
@@ -170,6 +173,22 @@ const finalizeEnvelope = (content: string | null): StageEnvelope => {
   };
 };
 
+const withUsage = (
+  envelope: StageEnvelope,
+  turns: number,
+  bashCalls: number,
+): StageEnvelope => {
+  if (Array.isArray(envelope) || envelope.type !== 'result') {
+    return envelope;
+  }
+
+  return {
+    ...envelope,
+    bashCalls,
+    turns,
+  };
+};
+
 const toolErrorContent = (message: string) =>
   JSON.stringify({
     error: message,
@@ -207,8 +226,21 @@ export const runStageSession = async (
     },
   }, null, 2);
 
+  const prefixMessages = options.prefixMessages ?? [];
+  const hasWarmupTranscript = prefixMessages.some((message) => message.role === 'assistant');
+  const warmupPrefix: ChatApiMessage[] = hasWarmupTranscript
+    ? [
+      {
+        content: WARMUP_CONTINUE_NOTE,
+        role: 'user',
+      },
+      ...prefixMessages,
+    ]
+    : prefixMessages;
+
   const stageMessages: ChatApiMessage[] = [
     ...toApiMessages(messages),
+    ...warmupPrefix,
     {
       role: "user",
       content: [
@@ -241,10 +273,10 @@ export const runStageSession = async (
 
           console.error(`[agent-daemon] context length exceeded turn=${turns}: ${message}\n`);
 
-          return {
+          return withUsage({
             output: `执行失败 model context length exceeded: ${message.slice(0, 240)}`,
             type: "result",
-          };
+          }, turns, bashCalls);
         }
 
         throw error;
@@ -272,6 +304,11 @@ export const runStageSession = async (
           }
 
           if (bashCalls >= maxBashCalls) {
+            console.warn(
+              `[agent-daemon] maxBashCalls exhausted sessionId=${config.cliOptions.sessionId} `
+              + `requestId=${options.requestId ?? '-'} maxBashCalls=${maxBashCalls}`,
+            );
+
             stageMessages.push({
               content: toolErrorContent(`run_bash: exceeded max calls (${maxBashCalls})`),
               role: "tool",
@@ -286,7 +323,10 @@ export const runStageSession = async (
             stageInput.stage.agentOverrides?.bashTimeoutMs ?? config.bashTimeoutMs;
           const preview = command.length > 200 ? `${command.slice(0, 200)}…` : command;
 
-          console.log(`[RUN_BASH] start timeoutMs=${bashTimeoutMs} command=${preview}`);
+          console.log(
+            `[RUN_BASH] start sessionId=${config.cliOptions.sessionId} requestId=${options.requestId ?? '-'} `
+            + `timeoutMs=${bashTimeoutMs} command=${preview}`,
+          );
           await options.onLocalToolStart?.({ call, timeoutMs: bashTimeoutMs });
 
           const startedAt = Date.now();
@@ -297,8 +337,17 @@ export const runStageSession = async (
             ? `${commandResult.slice(0, 120)}…`
             : commandResult;
 
+          if (timedOut) {
+            console.warn(
+              `[RUN_BASH] timedOut sessionId=${config.cliOptions.sessionId} requestId=${options.requestId ?? '-'} `
+              + `durationMs=${durationMs} command=${preview}`,
+            );
+          }
+
           console.log(
-            `[RUN_BASH] done durationMs=${durationMs} ${timedOut ? 'timedOut' : 'ok'} command=${preview} resultPreview=${JSON.stringify(resultPreview)}`,
+            `[RUN_BASH] done sessionId=${config.cliOptions.sessionId} requestId=${options.requestId ?? '-'} `
+            + `durationMs=${durationMs} ${timedOut ? 'timedOut' : 'ok'} command=${preview} `
+            + `resultPreview=${JSON.stringify(resultPreview)}`,
           );
 
           if (config.debug) {
@@ -350,8 +399,9 @@ export const runStageSession = async (
 
           const browserStartedAt = Date.now();
           const browserResult = await runBrowserCommand(browserArgs, {
-            onModelResponse: options.onModelResponse,
             proxyBrief: buildBrowserProxyBrief({ args: browserArgs }),
+            requestId: options.requestId,
+            sessionId: config.cliOptions.sessionId,
             stagehand: stageInput.stage.stagehand,
           });
           const browserDurationMs = Date.now() - browserStartedAt;
@@ -378,12 +428,12 @@ export const runStageSession = async (
           continue;
         }
 
-        if (name === "mastermind") {
-          const mastermindArgs = parseMastermindToolArguments(rawArgs);
+        if (name === "platform") {
+          const platformArgs = parsePlatformToolArguments(rawArgs);
 
-          if (!mastermindArgs) {
+          if (!platformArgs) {
             stageMessages.push({
-              content: toolErrorContent("mastermind: invalid arguments"),
+              content: toolErrorContent("platform: invalid arguments"),
               role: "tool",
               tool_call_id: call.id,
             });
@@ -391,55 +441,22 @@ export const runStageSession = async (
             continue;
           }
 
-          const mastermindResult = await callMastermindSkill(
-            mastermindArgs.skill,
-            mastermindArgs.args,
+          const platformResult = await callPlatformSkill(
+            platformArgs.skill,
+            platformArgs.args,
             config.cliOptions.sessionId,
             options.requestId,
           );
 
-          const mastermindContent = JSON.stringify(mastermindResult);
+          const platformContent = JSON.stringify(platformResult);
 
           stageMessages.push({
-            content: mastermindContent,
+            content: platformContent,
             role: "tool",
             tool_call_id: call.id,
           });
 
-          await options.onLocalToolCall?.({ call, resultContent: mastermindContent });
-
-          continue;
-        }
-
-        if (name === "mastermind_status") {
-          const statusArgs = parseMastermindStatusToolArguments(rawArgs);
-          const sessionId = config.cliOptions.sessionId?.trim();
-          const requestId = options.requestId?.trim();
-
-          if (!sessionId || !requestId) {
-            stageMessages.push({
-              content: toolErrorContent("mastermind_status: sessionId and requestId required"),
-              role: "tool",
-              tool_call_id: call.id,
-            });
-
-            continue;
-          }
-
-          const statusResult = await fetchMastermindRequestStatus({
-            ...(statusArgs.invocationId ? { invocationId: statusArgs.invocationId } : {}),
-            requestId,
-            sessionId,
-          });
-          const statusContent = JSON.stringify(statusResult);
-
-          stageMessages.push({
-            content: statusContent,
-            role: "tool",
-            tool_call_id: call.id,
-          });
-
-          await options.onLocalToolCall?.({ call, resultContent: statusContent });
+          await options.onLocalToolCall?.({ call, resultContent: platformContent });
 
           continue;
         }
@@ -471,7 +488,7 @@ export const runStageSession = async (
           if (parsed.ok === true && parsed.transfer === true) {
             console.log(`[agent-daemon] stage finalize turn=${turns} goto_stage transfer\n`);
 
-            return finalizeEnvelope("");
+            return withUsage(finalizeEnvelope(""), turns, bashCalls);
           }
         } catch {
           // fall through — invalid/error result continues the stage
@@ -482,13 +499,18 @@ export const runStageSession = async (
 
       console.log(`[agent-daemon] stage finalize turn=${turns} toolCalls=0\n`);
 
-      return finalizeEnvelope(assistantMessage.at(-1)?.content || '');
+      return withUsage(finalizeEnvelope(assistantMessage.at(-1)?.content || ''), turns, bashCalls);
     }
 
-    return {
+    console.warn(
+      `[agent-daemon] maxTurns exhausted sessionId=${config.cliOptions.sessionId} `
+      + `requestId=${options.requestId ?? '-'} maxTurns=${maxTurns}`,
+    );
+
+    return withUsage({
       output: `执行失败 stage对话轮次超过限制 ${maxTurns}`,
       type: "result",
-    };
+    }, turns, bashCalls);
   } finally {
     if (browserCalls > 0) {
       await closeStagehandSession();

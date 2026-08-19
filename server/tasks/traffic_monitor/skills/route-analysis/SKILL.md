@@ -4,7 +4,7 @@ Fetch and compare multi-route driving ETAs for resolved origin → destination.
 
 ## Place resolution
 
-Resolve brands/abbrevs/malls before probe. Prefer `origin_resolved` / `destination_resolved` for every bind. Reject autocomplete that changes district/landmark. **Estate ≠ nearby transit hub** unless PLACE has `verified_proxy`. Implausible distance → geocode fail (not a multi-route source fail). Persist novel PLACE notes.
+Resolve brands/abbrevs/malls before probe. Prefer `origin_resolved` / `destination_resolved` for every bind. Reject autocomplete that changes district/landmark. **Estate ≠ nearby transit hub** unless PLACE has `verified_proxy`. Implausible distance → geocode fail (not a multi-route source fail). Novel PLACE identity → submit when worth persisting.
 
 ## Fetch
 

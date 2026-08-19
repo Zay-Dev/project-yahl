@@ -6,8 +6,25 @@ export type TToolCallMessage = {
   tool_call_id: string;
 };
 
+export const SET_CONTEXT_OK_TOOL_RESULT =
+  'tool call result: OK. That set_context call succeeded and was applied. Do not call set_context again with the same scope/key/value.';
+
+export const EXTEND_CONTEXT_OK_TOOL_RESULT =
+  'tool call result: OK. That extend_context call succeeded and was applied. Do not call extend_context again with the same scope/key/value.';
+
+const setContextSuccessContent = (name: string, result: string) => {
+  if (name === 'set_context' && result === 'OK') {
+    return SET_CONTEXT_OK_TOOL_RESULT;
+  }
+
+  if (name === 'extend_context' && result === 'OK') {
+    return EXTEND_CONTEXT_OK_TOOL_RESULT;
+  }
+
+  return null;
+};
+
 export const handleToolCalls = async (params: {
-  error: (error: Error) => Promise<void>;
   storage: TStorage;
   toolCall: (call: TChatToolCall) => Promise<TToolCallResult>;
   toolCalls: TChatToolCall[];
@@ -17,10 +34,9 @@ export const handleToolCalls = async (params: {
   for (const call of params.toolCalls) {
     const result = await params.toolCall(call);
     const baseMessage = { role: 'tool' as const, tool_call_id: call.id };
+    const name = call.function.name;
 
     if (result.hasError) {
-      await params.error(new Error(result.result));
-
       toolCallMessages.push({ ...baseMessage, content: `tool call error: ${result.result}` });
 
       continue;
@@ -39,12 +55,19 @@ export const handleToolCalls = async (params: {
       replace('context');
       replace('types');
 
-      toolCallMessages.push({ ...baseMessage, content: 'tool call result: OK' });
+      toolCallMessages.push({
+        ...baseMessage,
+        content: setContextSuccessContent(name, result.result || 'OK')
+          ?? 'tool call result: OK',
+      });
 
       continue;
     }
 
-    toolCallMessages.push({ ...baseMessage, content: result.result });
+    toolCallMessages.push({
+      ...baseMessage,
+      content: setContextSuccessContent(name, result.result) ?? result.result,
+    });
   }
 
   return { toolCallMessages };

@@ -1,4 +1,5 @@
 import type { TResponseStageDetail, TResponseStageListItem, TSessionLiveEvent } from "@project-yahl/server/modules/sessions/-api-types";
+import type { TParsedStage } from "@project-yahl/server/modules/sessions/-types";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -12,17 +13,30 @@ import { StageDetailPanel } from "@/pages/sessions/components/stage-detail-panel
 import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
 import { fetchWithConcurrency } from "@/pages/sessions/lib/fetch-with-concurrency";
 import { fetchSessionStageDetail } from "@/pages/sessions/lib/sessions-api";
-import { buildStageLabels } from "@/pages/sessions/lib/stage-label";
+import { buildStageLabels, loopSetupHint, resolveLoopKind } from "@/pages/sessions/lib/stage-label";
+import {
+  formatElapsedMs,
+  resolveCurrentStage,
+  resolveStageElapsed,
+} from "@/pages/sessions/lib/stage-live-status";
 import { summarizeValue } from "@/pages/sessions/lib/tool-call-parse";
 
 type TSessionTimelineProps = {
   error: string | null;
   isLoading: boolean;
   lastEvent: TSessionLiveEvent | null;
+  originalStages: TParsedStage[];
   sessionId: string;
   stages: TResponseStageListItem[];
   startingRun?: boolean;
 };
+
+const StatusBadge = ({ label, value }: { label: string; value: string }) => (
+  <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+    <span className="text-muted-foreground">{label}</span>{" "}
+    <span className="font-mono">{value}</span>
+  </span>
+);
 
 const DETAIL_FETCH_CONCURRENCY = 5;
 
@@ -52,9 +66,18 @@ type TStageRowProps = {
   item: TResponseStageListItem;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  originalStages: TParsedStage[];
   sessionId: string;
+  setupHint?: string;
   stageLabel: string;
-  stages: TResponseStageListItem[];
+};
+
+const loopKindBadge = (kind: ReturnType<typeof resolveLoopKind>) => {
+  if (!kind) {
+    return null;
+  }
+
+  return kind === "warmup" ? "warmUp" : kind;
 };
 
 const StageRow = ({
@@ -65,10 +88,15 @@ const StageRow = ({
   item,
   onOpenChange,
   open,
+  originalStages,
   sessionId,
+  setupHint,
   stageLabel,
-  stages,
-}: TStageRowProps) => (
+}: TStageRowProps) => {
+  const loopKind = resolveLoopKind(item);
+  const badge = loopKindBadge(loopKind);
+
+  return (
   <Collapsible
     className="rounded-lg border bg-background"
     onOpenChange={onOpenChange}
@@ -85,13 +113,28 @@ const StageRow = ({
           >
             {item.status}
           </span>
-          {item.loopValue !== undefined ? (
+          {badge ? (
+            <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+              {badge}
+            </span>
+          ) : null}
+          {loopKind === "while" && typeof item.remainingTurns === "number" ? (
+            <span className="font-mono text-xs text-muted-foreground">
+              {item.remainingTurns} turns left
+            </span>
+          ) : null}
+          {loopKind === "for" && item.loopValue !== undefined ? (
             <span className="font-mono text-xs text-muted-foreground">
               {summarizeValue(item.loopValue, 40)}
             </span>
           ) : null}
         </div>
         <p className="mt-1 font-mono text-xs text-muted-foreground">{item.requestId}</p>
+        {setupHint ? (
+          <p className="mt-1 font-mono text-xs text-muted-foreground line-clamp-1">
+            {setupHint}
+          </p>
+        ) : null}
         <p className="mt-1 line-clamp-5 text-sm whitespace-pre-wrap">
           {item.logicPreview || "—"}
         </p>
@@ -101,7 +144,7 @@ const StageRow = ({
           <span>{item.modelCallCount} model</span>
           <span>{item.toolCallCount} tools</span>
         </div>
-        <TokenStatsRow totals={item.tokenTotals} />
+        <TokenStatsRow byModel={item.byModel} domains={item.domains} totals={item.tokenTotals} />
       </div>
     </CollapsibleTrigger>
     <CollapsibleContent>
@@ -115,18 +158,20 @@ const StageRow = ({
         <StageDetailPanel
           baselineAfter={baselineAfter}
           detail={detail}
+          originalStages={originalStages}
           sessionId={sessionId}
-          stages={stages}
         />
       ) : null}
     </CollapsibleContent>
   </Collapsible>
-);
+  );
+};
 
 export function SessionTimeline({
   error,
   isLoading,
   lastEvent,
+  originalStages,
   sessionId,
   stages,
   startingRun = false,
@@ -136,6 +181,7 @@ export function SessionTimeline({
   const [detailErrors, setDetailErrors] = useState<Map<string, string>>(() => new Map());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(() => new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const detailsRef = useRef(details);
   const inFlightRef = useRef<Set<string>>(new Set());
   const lastProcessedEventRef = useRef<TSessionLiveEvent | null>(null);
@@ -263,12 +309,32 @@ export function SessionTimeline({
   };
 
   const stageLabels = useMemo(() => buildStageLabels(stages), [stages]);
+  const hasLiveStage = stages.some((item) => item.status !== "finished");
+
+  useEffect(() => {
+    if (!hasLiveStage) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [hasLiveStage]);
+
+  const currentStage = resolveCurrentStage(stages);
+  const currentElapsed = currentStage
+    ? resolveStageElapsed(currentStage.stage, nowMs)
+    : null;
 
   return (
     <div className="rounded-xl bg-muted/50 p-4">
       <p className="text-sm text-muted-foreground">Execution timeline</p>
       {stages.length > 0 ? (
-        <div className="sticky top-0 z-20 -mx-4 mt-3 flex flex-wrap gap-2 border-b border-border/60 bg-muted/95 px-4 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-muted/80">
+        <div className="sticky top-0 z-20 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/95 px-4 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-muted/80">
           <Button
             disabled={bulkLoading || allOpen}
             onClick={() => void handleExpandAll()}
@@ -287,6 +353,24 @@ export function SessionTimeline({
           >
             Collapse all
           </Button>
+          {currentStage ? (
+            <>
+              <StatusBadge
+                label="stage"
+                value={stageLabels[currentStage.index] ?? `#${currentStage.index + 1}`}
+              />
+              <StatusBadge
+                label="calls"
+                value={String(currentStage.stage.modelCallCount)}
+              />
+              {currentElapsed ? (
+                <StatusBadge
+                  label="elapsed"
+                  value={`${formatElapsedMs(currentElapsed.currentMs)}/${formatElapsedMs(currentElapsed.totalMs)}`}
+                />
+              ) : null}
+            </>
+          ) : null}
         </div>
       ) : null}
       {isLoading ? <p className="mt-3 text-sm">Loading stages…</p> : null}
@@ -311,9 +395,10 @@ export function SessionTimeline({
             detailLoading={loadingIds.has(item.requestId)}
             item={item}
             key={item.requestId}
+            originalStages={originalStages}
             sessionId={sessionId}
+            setupHint={loopSetupHint(stages, index)}
             stageLabel={stageLabels[index] ?? `#${index + 1}`}
-            stages={stages}
             onOpenChange={(next) => {
               setOpenIds((current) => {
                 const updated = new Set(current);

@@ -21,11 +21,15 @@ const checkpoint = (requestId: string, score = 0.72) => ({
 
 const stage = (requestId: string, status: 'finished' | 'running' | 'verifying') => ({
   createdAt: '2026-06-21T12:00:00.000Z',
+  byModel: [],
+  lastModelDurationMs: 0,
   logicPreview: 'logic',
   modelCallCount: 1,
+  modelDurationMs: 0,
   requestId,
   stageId: requestId,
   status,
+  domains: [],
   tokenTotals: null,
   toolCallCount: 0,
   updatedAt: '2026-06-21T12:00:00.000Z',
@@ -73,7 +77,7 @@ describe('resolveVerifyBannerState', () => {
     assert.equal(state, null);
   });
 
-  it('shows infra_busy for mastermind infrastructure feedback even when agent is active', () => {
+  it('shows infra_busy for verification infrastructure feedback even when agent is active', () => {
     const state = resolveVerifyBannerState(
       [{
         ...checkpoint('req-3', 0),

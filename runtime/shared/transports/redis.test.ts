@@ -10,18 +10,36 @@ const storage = {
   types: new Map<string, unknown>(),
 };
 
-const createMockRedis = (brpop: () => Promise<unknown>) => {
+const createMockRedis = (
+  brpop: () => Promise<unknown>,
+  options?: { onLpush?: () => void },
+) => {
   const duplicateRedis = {
     brpop: brpop as Redis['brpop'],
-    disconnect: () => {},
+    disconnected: false,
+    disconnect: () => {
+      duplicateRedis.disconnected = true;
+    },
     removeAllListeners: () => {},
     quit: async () => 'OK' as const,
   };
 
+  duplicateRedis.brpop = (async (...args: unknown[]) => {
+    if (duplicateRedis.disconnected) {
+      throw new Error('Connection is closed.');
+    }
+
+    return brpop(...args);
+  }) as Redis['brpop'];
+
   return {
     duplicate: () => duplicateRedis,
     lpop: async () => null,
-    lpush: async () => 1,
+    lpush: async () => {
+      options?.onLpush?.();
+
+      return 1;
+    },
     ping: async () => 'PONG' as const,
     removeAllListeners: () => {},
     quit: async () => 'OK' as const,
@@ -46,6 +64,8 @@ describe('RedisPublisher getWaitForToolCall', () => {
     disposeWait();
 
     await waitPromise;
+
+    disposeWait();
   });
 
   it('returns cleanly when disposed closes the brpop connection', async () => {
@@ -54,7 +74,7 @@ describe('RedisPublisher getWaitForToolCall', () => {
     });
     const publisher = new RedisPublisher(redis, 'sess-dispose');
 
-    const { getWaitForToolCall } = await publisher.pushRequest(
+    const { disposeWait, getWaitForToolCall } = await publisher.pushRequest(
       storage,
       { logic: 'const x = 1;' },
       'req-dispose',
@@ -70,6 +90,71 @@ describe('RedisPublisher getWaitForToolCall', () => {
     handlers.dispose();
 
     await waitPromise;
+
+    disposeWait();
+  });
+
+  it('logs error envelope before throw', async () => {
+    const logs: string[] = [];
+    const origLog = console.log;
+
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map(String).join(' '));
+      origLog(...args);
+    };
+
+    let callCount = 0;
+    const redis = createMockRedis(async () => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        return [
+          'yahl:reply:req-error-log',
+          JSON.stringify({
+            output: {
+              error: {
+                message: 'fetch failed',
+                name: 'Error',
+                stack: 'Error: fetch failed\n    at wait',
+              },
+              message: 'fetch failed',
+            },
+            type: 'error',
+          }),
+        ];
+      }
+
+      return null;
+    });
+    const publisher = new RedisPublisher(redis, 'sess-error-log');
+
+    const { disposeWait, wait } = await publisher.pushRequest(
+      storage,
+      { logic: 'const x = 1;' },
+      'req-error-log',
+    );
+
+    try {
+      await assert.rejects(
+        () => wait(),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.equal(error.message, 'fetch failed');
+
+          return true;
+        },
+      );
+
+      const errorLog = logs.find((line) => line.includes('[yahl-diag] reply error'));
+
+      assert.ok(errorLog);
+      assert.match(errorLog!, /requestId=req-error-log/);
+      assert.match(errorLog!, /elapsedMs=/);
+      assert.match(errorLog!, /message=fetch failed/);
+    } finally {
+      disposeWait();
+      console.log = origLog;
+    }
   });
 
   it('throws when connection closes before dispose', async () => {
@@ -78,7 +163,7 @@ describe('RedisPublisher getWaitForToolCall', () => {
     });
     const publisher = new RedisPublisher(redis, 'sess-unexpected');
 
-    const { getWaitForToolCall } = await publisher.pushRequest(
+    const { disposeWait, getWaitForToolCall } = await publisher.pushRequest(
       storage,
       { logic: 'const x = 1;' },
       'req-unexpected',
@@ -89,14 +174,159 @@ describe('RedisPublisher getWaitForToolCall', () => {
       result: 'ok',
     }));
 
-    await assert.rejects(
-      () => handlers.wait(),
-      (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.equal(error.message, 'Connection is closed.');
+    try {
+      await assert.rejects(
+        () => handlers.wait(),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.equal(error.message, 'Connection is closed.');
 
-        return true;
+          return true;
+        },
+      );
+    } finally {
+      handlers.dispose();
+      disposeWait();
+    }
+  });
+
+  it('awaits sessionTracker.flush before lpush', async () => {
+    const previousTracker = (globalThis as { sessionTracker?: { flush?: () => Promise<void> } })
+      .sessionTracker;
+    let flushResolved = false;
+    let lpushAfterFlush = false;
+
+    (globalThis as { sessionTracker?: { flush?: () => Promise<void> } }).sessionTracker = {
+      flush: async () => {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 20);
+        });
+        flushResolved = true;
+      },
+    };
+
+    const redis = createMockRedis(
+      async () => null,
+      {
+        onLpush: () => {
+          lpushAfterFlush = flushResolved;
+        },
       },
     );
+    const publisher = new RedisPublisher(redis, 'sess-flush-before-lpush');
+
+    try {
+      const { disposeWait } = await publisher.pushRequest(
+        storage,
+        { logic: 'const x = 1;' },
+        'req-flush-before-lpush',
+        { skipStageCreate: true },
+      );
+
+      assert.equal(flushResolved, true);
+      assert.equal(lpushAfterFlush, true);
+
+      disposeWait();
+    } finally {
+      (globalThis as { sessionTracker?: { flush?: () => Promise<void> } }).sessionTracker =
+        previousTracker;
+    }
+  });
+});
+
+describe('RedisPublisher local tool results', () => {
+  it('emits persisted stdout for agent-local tools', async () => {
+    const sessionId = 'sess-local-tool';
+    const requestId = 'req-local-tool';
+    const toolCallChannel = `yahl:tool:${sessionId}:${requestId}`;
+    const localResultChannel = `yahl:local-tool-result:${sessionId}:${requestId}`;
+    const toolCall = {
+      function: { arguments: '{"command":"cat SKILL.md"}', name: 'run_bash' },
+      id: 'call-local-1',
+      type: 'function',
+    };
+    const modelResponseChannel = `yahl:model-response:${sessionId}:${requestId}`;
+    let waitCalls = 0;
+    let disconnected = false;
+    const emitted: { result: string; toolCallId: string }[] = [];
+
+    const redis = {
+      duplicate: () => ({
+        brpop: async (...args: unknown[]) => {
+          if (disconnected) {
+            throw new Error('Connection is closed.');
+          }
+
+          const firstKey = args[0] as string;
+
+          if (firstKey === toolCallChannel) {
+            waitCalls += 1;
+
+            return [toolCallChannel, JSON.stringify(toolCall)];
+          }
+
+          if (firstKey === localResultChannel) {
+            return [
+              localResultChannel,
+              JSON.stringify({
+                hasError: false,
+                result: '# route-analysis\n',
+                toolCallId: toolCall.id,
+              }),
+            ];
+          }
+
+          if (firstKey === modelResponseChannel) {
+            return null;
+          }
+
+          return null;
+        },
+        disconnect: () => {
+          disconnected = true;
+        },
+        quit: async () => 'OK' as const,
+      }),
+      lpop: async () => null,
+      lpush: async () => 1,
+      ping: async () => 'PONG' as const,
+      removeAllListeners: () => {},
+      quit: async () => 'OK' as const,
+    } as unknown as Redis;
+
+    const publisher = new RedisPublisher(redis, sessionId);
+
+    publisher.on('toolCallResult', (envelope) => {
+      emitted.push(envelope);
+    });
+
+    const { disposeWait, getWaitForToolCall } = await publisher.pushRequest(
+      storage,
+      { logic: 'const x = 1;' },
+      requestId,
+      { skipStageCreate: true },
+    );
+
+    const handlers = getWaitForToolCall(async () => ({
+      hasError: true,
+      result: 'orchestrator callback should not run for local tools',
+    }));
+
+    const waitPromise = handlers.wait();
+
+    await new Promise<void>((resolve) => {
+      publisher.once('toolCallResult', () => {
+        resolve();
+      });
+    });
+
+    handlers.dispose();
+    disposeWait();
+    await waitPromise;
+
+    assert.equal(waitCalls, 1);
+    assert.equal(emitted.length, 1);
+    assert.equal(emitted[0]?.toolCallId, toolCall.id);
+    assert.equal(emitted[0]?.result, '# route-analysis\n');
   });
 });

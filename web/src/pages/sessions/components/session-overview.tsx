@@ -1,10 +1,11 @@
-import type { TResponseGetSession } from "@project-yahl/server/modules/sessions/-api-types";
+import type { TResponseGetSession, TResponseModelUsageByModel } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { Link } from "react-router";
 
+import { SessionTitle } from "@/pages/sessions/components/session-title";
+import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
 import { SessionDeleteDialog } from "@/pages/sessions/components/session-delete-dialog";
 import { SessionLiveViewMenu } from "@/pages/sessions/components/session-live-view-menu";
-import { SessionTitle } from "@/pages/sessions/components/session-title";
 
 type TSessionOverviewProps = {
   session: TResponseGetSession;
@@ -18,15 +19,55 @@ const formatDate = (value: string | undefined) => {
   return new Date(value).toLocaleString();
 };
 
-const TokenStat = ({ label, value }: { label: string; value: number }) => (
-  <div className="rounded-lg border bg-background p-3">
-    <p className="text-xs text-muted-foreground">{label}</p>
-    <p className="mt-1 text-lg font-semibold tabular-nums">{value.toLocaleString()}</p>
-  </div>
-);
+const UsageGroup = ({
+  byModel,
+  defId,
+  domains,
+  label,
+  totals,
+}: {
+  byModel?: TResponseModelUsageByModel[];
+  defId?: string;
+  domains?: string[];
+  label: string;
+  totals: TResponseGetSession["tokenTotals"];
+}) => {
+  if (!totals && (!domains || domains.length === 0) && (!byModel || byModel.length === 0)) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-lg border bg-background p-3">
+      <p className="text-sm font-medium">{label}</p>
+      {defId ? (
+        <p className="mt-0.5 font-mono text-xs text-muted-foreground">{defId}</p>
+      ) : null}
+      <div className="mt-2">
+        <TokenStatsRow
+          byModel={byModel}
+          compact={false}
+          domains={domains}
+          totals={totals}
+        />
+      </div>
+    </div>
+  );
+};
 
 export function SessionOverview({ session }: TSessionOverviewProps) {
   const totals = session.tokenTotals;
+  const domains = session.domains;
+  const stageUsage = session.stageUsage;
+  const nixeryGroups = (session.nixeryUsage ?? []).filter(
+    (group) => group.tokenTotals || group.domains.length > 0 || group.byModel.length > 0,
+  );
+  const hasUsage = Boolean(
+    totals
+    || stageUsage?.tokenTotals
+    || nixeryGroups.length > 0
+    || domains.length > 0
+    || (session.byModel ?? []).length > 0,
+  );
 
   return (
     <div className="rounded-xl bg-muted/50 p-4">
@@ -71,15 +112,35 @@ export function SessionOverview({ session }: TSessionOverviewProps) {
           <dt className="text-muted-foreground">Updated</dt>
           <dd className="mt-0.5">{formatDate(session.updatedAt)}</dd>
         </div>
+        <div>
+          <dt className="text-muted-foreground">Last Response</dt>
+          <dd className="mt-0.5">{formatDate(session.lastModelResponseAt)}</dd>
+        </div>
       </dl>
-      {totals ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <TokenStat label="Total tokens" value={totals.totalTokens} />
-          <TokenStat label="Prompt" value={totals.promptTokens} />
-          <TokenStat label="Completion" value={totals.completionTokens} />
-          <TokenStat label="Reasoning" value={totals.reasoningTokens} />
-          <TokenStat label="Cache hit" value={totals.cacheHitTokens} />
-          <TokenStat label="Cache miss" value={totals.cacheMissTokens} />
+      {hasUsage ? (
+        <div className="mt-4 space-y-3">
+          <UsageGroup
+            byModel={session.byModel}
+            domains={domains}
+            label="All"
+            totals={totals}
+          />
+          <UsageGroup
+            byModel={stageUsage?.byModel}
+            domains={stageUsage?.domains}
+            label="Stages"
+            totals={stageUsage?.tokenTotals ?? null}
+          />
+          {nixeryGroups.map((group) => (
+            <UsageGroup
+              byModel={group.byModel}
+              defId={group.defId}
+              domains={group.domains}
+              key={group.defId}
+              label={group.defId.replaceAll("-", " ")}
+              totals={group.tokenTotals}
+            />
+          ))}
         </div>
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">No token usage recorded yet.</p>

@@ -1,22 +1,22 @@
-import type { TStorage } from "@/shared/transports/-types";
 import type { YahlStage } from "@/shared/yahl-stage";
+
+import path from "path";
 
 import config from "./config";
 
-import { readFileUtf8, readFolderUtf8 } from "./-utils/prompts";
+import { listReadableUtf8Files, readFileUtf8 } from "./-utils/prompts";
 
 import { handleToolCalls } from './-utils/handle-tool-calls';
 import { isOrchestratorHandledTool } from './-utils/orchestrator-handled-tools';
 import { buildResumeStageMessages } from './-utils/resume-messages';
 import { runBashCommand } from './-utils/run-bash-command';
 import { runStageSession } from "./stage-session";
-
-import { deriveModelResponseTags } from "@/shared/model-response-tags";
-
 import { fastForward, type TContextBuckets } from './-utils/ff-client';
 import { chatWithTools } from "./-utils/llm-client";
+import { withLlmRequestContext } from "./-utils/llm-request-context";
 import { isVmConditionBranch, wrapVmLogic } from "./condition-branch";
 import { runScript, runConditionScript } from "./-utils/vm-client";
+import { startAgentDiagnosticsLog } from './-utils/agent-diagnostics-log';
 
 type TFastModel = 'vm' | 'fast-forward';
 
@@ -64,14 +64,17 @@ const _toSetContextToolCalls = (
 };
 
 export const startRedisDaemon = async () => {
-  if (!config.apiKey) {
-    console.warn("[WARN] Running without API KEY\n");
+  if (!process.env.LLM_PROXY_TOKEN?.trim()) {
+    console.warn("[WARN] Running without LLM_PROXY_TOKEN\n");
   }
 
   const cli = config.cliOptions;
 
   const agentmd = await readFileUtf8(cli.agentMdPath);
-  const yahlPrompt = await readFolderUtf8(cli.yahlDirPath);
+  const yahlFiles = await listReadableUtf8Files(cli.yahlDirPath);
+  const yahlPrompt = (await Promise.all(yahlFiles.map(readFileUtf8)))
+    .filter(Boolean)
+    .join("\n\n");
 
   const messages = [
     {
@@ -81,15 +84,35 @@ export const startRedisDaemon = async () => {
   ];
 
   await subscriber.waitForReady();
+  await startAgentDiagnosticsLog(config.cliOptions.sessionId);
+  console.log(
+    `[agent-daemon] yahl prompts sessionId=${cli.sessionId} `
+    + `dir=${cli.yahlDirPath} files=${yahlFiles.map((file) => path.basename(file)).join(",") || "-"}`,
+  );
   console.log(`[agent-daemon] listening on ${config.redisUrl}\n`);
 
   while (true) {
     const envelope = await subscriber.waitForRequest();
     if (!envelope) continue;
 
-    const { context, contextAfter, requestId, resumeFrom, stage, systemAppend, temperature } = envelope;
+    const {
+      context,
+      contextAfter,
+      parsedStageIndex,
+      prefixMessages,
+      requestId,
+      resumeFrom,
+      stage,
+      systemAppend,
+      temperature,
+    } = envelope;
     const effectiveTemperature = temperature ?? stage.temperature;
-    const { end, error, toolCall, onModelResponse } = subscriber.getReply(requestId);
+    const { end, error, onModelResponse, reportLocalToolCall, toolCall } = subscriber.getReply(requestId);
+
+    console.log(
+      `[agent-daemon] stage start sessionId=${config.cliOptions.sessionId} requestId=${requestId} `
+      + `stageId=${stage.id ?? '-'} parsedStageIndex=${parsedStageIndex ?? '-'}`,
+    );
 
     const stageMessages = systemAppend
       ? [
@@ -108,7 +131,6 @@ export const startRedisDaemon = async () => {
       const calls = _toSetContextToolCalls(model, requestId, buckets);
 
       await handleToolCalls({
-        error,
         storage: context,
         toolCall,
         toolCalls: calls,
@@ -161,7 +183,7 @@ export const startRedisDaemon = async () => {
 
         let chatTurn = 0;
 
-        await runStageSession(
+        const envelope = await runStageSession(
           {
             context,
             stage: stageSpec,
@@ -177,28 +199,26 @@ export const startRedisDaemon = async () => {
 
               console.log(`[agent-daemon] chat turn start requestId=${requestId} turn=${turn}\n`);
 
-              const result = await chatWithTools(messages, opts);
+              const result = await withLlmRequestContext(
+                {
+                  requestId,
+                  sessionId: config.cliOptions.sessionId,
+                },
+                () => chatWithTools(messages, opts),
+              );
               const durationMs = Date.now() - start;
-              const assistantMessage = result.response.choices?.[0]?.message;
               const toolCallCount = (result.tool_calls || []).length;
 
               console.log(
                 `[agent-daemon] chat turn end requestId=${requestId} turn=${turn} durationMs=${durationMs} toolCalls=${toolCallCount}\n`,
               );
 
-              await onModelResponse({
-                ...result.response,
-                durationMs,
-                tags: assistantMessage ? deriveModelResponseTags(assistantMessage) : ["unknown"],
-                thinkingMode: config.thinkingMode,
-              });
-
+              const orchestratorCalls = (result.tool_calls || [])
+                .filter(tool => isOrchestratorHandledTool(tool.function.name));
               const { toolCallMessages } = await handleToolCalls({
-                error,
                 storage: context,
                 toolCall,
-                toolCalls: (result.tool_calls || [])
-                  .filter(tool => isOrchestratorHandledTool(tool.function.name)),
+                toolCalls: orchestratorCalls,
               });
 
               return [
@@ -208,16 +228,19 @@ export const startRedisDaemon = async () => {
             },
           },
           {
-            onLocalToolCall: async ({ call }) => {
-              await toolCall(call);
+            onLocalToolCall: async ({ call, resultContent }) => {
+              await reportLocalToolCall(call, {
+                hasError: false,
+                result: resultContent,
+              });
             },
-            onLocalToolStart: async ({ call, timeoutMs }) => {
+            onLocalToolStart: async ({ timeoutMs }) => {
               console.log(
                 `[agent-daemon] run_bash start requestId=${requestId} timeoutMs=${timeoutMs}`,
               );
-              await toolCall(call);
             },
             onModelResponse,
+            prefixMessages,
             requestId,
             resumeFrom,
             resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,
@@ -233,13 +256,29 @@ export const startRedisDaemon = async () => {
         console.log(`[agent-daemon] stage session done requestId=${requestId}\n`);
         console.log(`[agent-daemon] stage end requestId=${requestId} pushing END\n`);
 
-        return await end();
+        const usage = envelope && !Array.isArray(envelope) && envelope.type === 'result'
+          ? {
+            bashCalls: envelope.bashCalls ?? 0,
+            turns: envelope.turns ?? 0,
+          }
+          : undefined;
+
+        return await end(usage);
       };
 
       await _runStage();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error && err.stack
+        ? (err.stack.length > 500 ? `${err.stack.slice(0, 500)}…` : err.stack)
+        : '-';
+
+      console.error(
+        `[agent-daemon] stage failed sessionId=${config.cliOptions.sessionId} requestId=${requestId} `
+        + `message=${message} stack=${stack}`,
+      );
       console.error(err);
-      await error(err);
+      await error(err instanceof Error ? err : new Error(message));
     }
   }
 };

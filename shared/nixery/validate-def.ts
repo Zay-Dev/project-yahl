@@ -46,9 +46,17 @@ const outputSpecSchema = z.object({
   validate: z.string().trim().min(1).regex(/\.mjs$/).optional(),
 });
 
+const relativeEntrySchema = z.string().trim().min(1).superRefine((value, ctx) => {
+  if (value.includes('..') || value.startsWith('/') || value.includes('\\')) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'run.entry must be a relative path under the ability directory',
+    });
+  }
+});
+
 export const nixeryDefSchema = z.object({
   description: z.string().trim().optional(),
-  dockerfile: z.string().trim().min(1).optional(),
   env: z.record(z.string(), z.string()).optional(),
   id: z.string().trim().min(1),
   input: z.record(z.string(), inputFieldSchema).optional(),
@@ -57,25 +65,33 @@ export const nixeryDefSchema = z.object({
   output: outputSpecSchema.optional(),
   packages: z.array(z.string().trim().min(1)).min(1),
   run: z.object({
-    entry: z.array(z.string().trim().min(1)).min(1),
+    entry: relativeEntrySchema,
+    runtime: z.enum(['node', 'tsx', 'python']),
   }).optional(),
-}).superRefine((value, ctx) => {
-  const dockerfile = value.dockerfile;
+});
 
-  if (!dockerfile) {
-    return;
-  }
-
-  if (dockerfile.includes('..') || dockerfile.includes('/') || dockerfile.includes('\\')) {
+const pluginRelativePathSchema = z.string().trim().min(1).superRefine((value, ctx) => {
+  if (value.includes('..') || value.startsWith('/') || value.includes('\\')) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'dockerfile must be a filename under the def directory (no path segments)',
-      path: ['dockerfile'],
+      code: 'custom',
+      message: 'plugin artifact path must be relative under the plugin root (no .. or absolute)',
     });
   }
 });
 
+export const nixeryPluginMetaSchema = z.object({
+  description: z.string().trim().optional(),
+  name: z.string().trim().optional(),
+  prompts: z.array(pluginRelativePathSchema).optional(),
+  skills: z.array(pluginRelativePathSchema).optional(),
+  task_skills: z.array(pluginRelativePathSchema).optional(),
+});
+
 export const validateNixeryDef = (raw: unknown) => {
+  if (raw && typeof raw === 'object' && 'dockerfile' in raw) {
+    throw new Error('nixery def dockerfile is not supported; use packages only');
+  }
+
   const parsed = nixeryDefSchema.parse(raw);
 
   if (parsed.id.includes('/') || parsed.id.includes('..')) {
@@ -84,3 +100,5 @@ export const validateNixeryDef = (raw: unknown) => {
 
   return parsed;
 };
+
+export const validateNixeryPluginMeta = (raw: unknown) => nixeryPluginMetaSchema.parse(raw ?? {});

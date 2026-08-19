@@ -5,18 +5,34 @@ import { deriveModelResponseTags } from "./model-response-tags.ts";
 import { parseBrowserToolArguments } from "./stage-tools.ts";
 
 describe("parseBrowserToolArguments", () => {
-  it("parses agent mode with instruction", () => {
-    const result = parseBrowserToolArguments(JSON.stringify({
+  it("rejects agent mode", () => {
+    assert.equal(parseBrowserToolArguments(JSON.stringify({
       instruction: "Search for baby bottles",
       mode: "agent",
       maxSteps: 10,
+    })), null);
+  });
+
+  it("parses act mode without url", () => {
+    const result = parseBrowserToolArguments(JSON.stringify({
+      instruction: "Click the submit button",
+      mode: "act",
     }));
 
     assert.deepEqual(result, {
-      instruction: "Search for baby bottles",
-      maxSteps: 10,
-      mode: "agent",
+      instruction: "Click the submit button",
+      mode: "act",
     });
+  });
+
+  it("rejects url on act extract and observe", () => {
+    for (const mode of ["act", "extract", "observe"] as const) {
+      assert.equal(parseBrowserToolArguments(JSON.stringify({
+        instruction: "do something",
+        mode,
+        url: "https://example.com",
+      })), null);
+    }
   });
 
   it("requires url for goto mode", () => {
@@ -87,18 +103,73 @@ describe("deriveModelResponseTags", () => {
     assert.deepEqual(deriveModelResponseTags({ content: "", tool_calls: [] }), ["unknown"]);
   });
 
-  it("returns tool and mastermind skill tag for mastermind calls", () => {
+  it("returns tool and platform skill tag for platform calls", () => {
     assert.deepEqual(
       deriveModelResponseTags({
         content: null,
         tool_calls: [{
           function: {
-            arguments: JSON.stringify({ args: { topic: 'x' }, skill: 'research' }),
-            name: 'mastermind',
+            arguments: JSON.stringify({ args: { taskId: 'x' }, skill: 'dispatch-task-run' }),
+            name: 'platform',
           },
         }],
       }),
-      ["tool", "mastermind:research"],
+      ["tool", "platform:dispatch-task-run"],
+    );
+  });
+
+  it("returns bash for shell tool calls", () => {
+    assert.deepEqual(
+      deriveModelResponseTags({
+        content: null,
+        tool_calls: [{ function: { name: "shell" } }],
+      }),
+      ["bash"],
+    );
+  });
+
+  it("returns tool for write_workspace_file and wiki", () => {
+    assert.deepEqual(
+      deriveModelResponseTags({
+        content: null,
+        tool_calls: [{ function: { name: "write_workspace_file" } }],
+      }),
+      ["tool"],
+    );
+    assert.deepEqual(
+      deriveModelResponseTags({
+        content: null,
+        tool_calls: [{ function: { name: "wiki" } }],
+      }),
+      ["tool"],
+    );
+  });
+
+  it("returns tool and nixery def tag for nixery calls", () => {
+    assert.deepEqual(
+      deriveModelResponseTags({
+        content: null,
+        tool_calls: [{
+          function: {
+            arguments: JSON.stringify({ args: { topic: 'x' }, defId: 'get-knowledge' }),
+            name: 'nixery',
+          },
+        }],
+      }),
+      ["tool", "nixery:get-knowledge"],
+    );
+  });
+
+  it("drops unknown when a mapped tool is also present", () => {
+    assert.deepEqual(
+      deriveModelResponseTags({
+        content: null,
+        tool_calls: [
+          { function: { name: "shell" } },
+          { function: { name: "not_a_real_tool" } },
+        ],
+      }),
+      ["bash"],
     );
   });
 });

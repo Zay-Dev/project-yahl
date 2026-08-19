@@ -13,11 +13,11 @@ const baseDef = (overrides: Partial<TNixeryDef> = {}): TNixeryDef => ({
 });
 
 describe('resolveNixeryOutputSpec', () => {
-  it('defaults to output.md, validation.mjs, and retry 3', () => {
+  it('defaults to output.md, validation.mjs, and retry 10', () => {
     assert.deepEqual(resolveNixeryOutputSpec(baseDef()), {
       default: 'output.md',
       inlineTool: false,
-      retry: 3,
+      retry: 10,
       validate: 'validation.mjs',
     });
   });
@@ -29,8 +29,8 @@ describe('resolveNixeryOutputSpec', () => {
 });
 
 describe('resolveNixeryOutputRetry', () => {
-  it('defaults to 3 when omitted', () => {
-    assert.equal(resolveNixeryOutputRetry(baseDef()), 3);
+  it('defaults to 10 when omitted', () => {
+    assert.equal(resolveNixeryOutputRetry(baseDef()), 10);
   });
 
   it('honors explicit 0 and 5', () => {

@@ -1,0 +1,58 @@
+id: resolve-topic
+description: Deterministic topic slug resolve against registry + export — no LLM
+
+packages: [nodejs]
+
+env:
+  TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  topicText:
+    type: string
+    required: false
+  slug:
+    type: string
+    required: false
+  topic:
+    type: string
+    required: false
+  seedUrls:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: ro
+  /data/mastermind:
+    host: data/mastermind
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: false

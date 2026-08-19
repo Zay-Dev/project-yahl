@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import {
   dedupePackages,
   isTransientDockerPullError,
   pullDockerImageWithRetry,
-  resolveCustomNixeryImageTag,
   resolveNixeryImage,
   resolveNixeryRegistry,
 } from '@/orchestrator/-nixery/run-container';
@@ -38,18 +36,6 @@ describe('resolveNixeryImage', () => {
 
   it('handles single package', () => {
     assert.equal(resolveNixeryImage('nixery.dev', ['git']), 'nixery.dev/git');
-  });
-});
-
-describe('resolveCustomNixeryImageTag', () => {
-  it('tags with md5 of Dockerfile bytes', () => {
-    const body = 'ARG NIXERY_BASE\nFROM ${NIXERY_BASE}\n';
-    const hash = createHash('md5').update(body).digest('hex');
-
-    assert.equal(
-      resolveCustomNixeryImageTag('media-to-text', body),
-      `custom-nixery-media-to-text:v${hash}`,
-    );
   });
 });
 

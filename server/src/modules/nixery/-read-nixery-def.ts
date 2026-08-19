@@ -1,12 +1,14 @@
-import fs from 'fs/promises';
-import path from 'path';
-
 import { loadNixeryDefFromFile } from '@project-yahl/shared/nixery/load-def';
+import { listNixeryDefIds as listSharedNixeryDefIds } from '@project-yahl/shared/nixery/list-defs';
 
-import { nixeryIndexAbsolutePath, nixeryIndexRelativePath, resolveNixeryRoot } from './-nixery-root';
+import {
+  nixeryIndexAbsolutePath,
+  nixeryIndexRelativePath,
+  resolveNixeryRoot,
+} from './-nixery-root';
 
 export const readNixeryDef = async (defId: string) => {
-  const absolutePath = nixeryIndexAbsolutePath(defId);
+  const absolutePath = await nixeryIndexAbsolutePath(defId);
   const def = await loadNixeryDefFromFile(absolutePath);
 
   if (def.id !== defId) {
@@ -16,31 +18,8 @@ export const readNixeryDef = async (defId: string) => {
   return {
     def,
     id: defId,
-    path: nixeryIndexRelativePath(defId),
+    path: await nixeryIndexRelativePath(defId),
   };
 };
 
-export const listNixeryDefIds = async () => {
-  const root = resolveNixeryRoot();
-  const entries = await fs.readdir(root, { withFileTypes: true });
-  const ids: string[] = [];
-
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith('_')) {
-      continue;
-    }
-
-    const indexPath = path.join(root, entry.name, 'index.yml');
-
-    try {
-      await fs.access(indexPath);
-      ids.push(entry.name);
-    } catch {
-      continue;
-    }
-  }
-
-  ids.sort((left, right) => left.localeCompare(right));
-
-  return ids;
-};
+export const listNixeryDefIds = async () => listSharedNixeryDefIds(resolveNixeryRoot());

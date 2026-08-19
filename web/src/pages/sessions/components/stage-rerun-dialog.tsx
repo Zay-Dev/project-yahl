@@ -1,9 +1,8 @@
 import type {
   TRequestCreateForkSessionBody,
   TResponseStageDetail,
-  TResponseStageListItem,
 } from "@project-yahl/server/modules/sessions/-api-types";
-import type { TStageLoopMeta, TYahlStage } from "@project-yahl/server/modules/sessions/-types";
+import type { TParsedStage, TStageLoopMeta, TYahlStage } from "@project-yahl/server/modules/sessions/-types";
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
@@ -17,15 +16,17 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { bucketFromPayload } from "@/pages/sessions/lib/context-diff";
-import { filterLaterStagesForRerun } from "@/pages/sessions/lib/rerun-later-stages";
+import {
+  laterOriginalStageLabel,
+  laterOriginalStagesForRerun,
+} from "@/pages/sessions/lib/rerun-later-stages";
 import { SESSION_SHEET_WIDTH } from "@/pages/sessions/lib/session-sheet";
-import { createForkSession, fetchSessionStageDetail } from "@/pages/sessions/lib/sessions-api";
-import { buildStageLabels } from "@/pages/sessions/lib/stage-label";
+import { createForkSession } from "@/pages/sessions/lib/sessions-api";
 
 type TStageRerunDialogProps = {
   detail: TResponseStageDetail;
+  originalStages: TParsedStage[];
   sessionId: string;
-  stages: TResponseStageListItem[];
 };
 
 const EMPTY_OBJECT_JSON = '{}';
@@ -50,7 +51,21 @@ const bucketJsonFromDetail = (
   return JSON.stringify(bucketFromPayload(context, bucket), null, 2);
 };
 
-export function StageRerunDialog({ detail, sessionId, stages }: TStageRerunDialogProps) {
+const laterLogicPreview = (logic: string | undefined) => {
+  const lines = (logic ?? '')
+    .split('\n')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .slice(0, 5);
+
+  return lines.join('\n') || '—';
+};
+
+export function StageRerunDialog({
+  detail,
+  originalStages,
+  sessionId,
+}: TStageRerunDialogProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -67,12 +82,12 @@ export function StageRerunDialog({ detail, sessionId, stages }: TStageRerunDialo
   const [loopMetaJson, setLoopMetaJson] = useState(
     () => (detail.loopMeta ? JSON.stringify(detail.loopMeta, null, 2) : ''),
   );
-  const [selectedLaterIds, setSelectedLaterIds] = useState<Set<string>>(() => new Set());
-  const [laterStageJson, setLaterStageJson] = useState<Map<string, string>>(() => new Map());
+  const [selectedLaterIds, setSelectedLaterIds] = useState<Set<number>>(() => new Set());
+  const [laterStageJson, setLaterStageJson] = useState<Map<number, string>>(() => new Map());
 
   const laterCandidates = useMemo(
-    () => filterLaterStagesForRerun(stages, detail),
-    [detail, stages],
+    () => laterOriginalStagesForRerun(originalStages, detail.parsedStageIndex),
+    [detail.parsedStageIndex, originalStages],
   );
 
   useEffect(() => {
@@ -91,17 +106,6 @@ export function StageRerunDialog({ detail, sessionId, stages }: TStageRerunDialo
     setError(null);
   }, [detail, open]);
 
-  const stageLabels = useMemo(() => buildStageLabels(stages), [stages]);
-  const labelByRequestId = useMemo(() => {
-    const map = new Map<string, string>();
-
-    stages.forEach((item, index) => {
-      map.set(item.requestId, stageLabels[index] ?? `#${index + 1}`);
-    });
-
-    return map;
-  }, [stageLabels, stages]);
-
   const handleEditContextFromDataChange = (checked: boolean) => {
     setEditContextFromData(checked);
     setContextBucketJson(bucketJsonFromDetail(detail.context, 'context', checked));
@@ -112,31 +116,30 @@ export function StageRerunDialog({ detail, sessionId, stages }: TStageRerunDialo
     setTypesBucketJson(bucketJsonFromDetail(detail.context, 'types', checked));
   };
 
-  const toggleLater = (stageId: string, checked: boolean) => {
+  const toggleLater = (parsedStageIndex: number, spec: TYahlStage, checked: boolean) => {
     setSelectedLaterIds((current) => {
       const next = new Set(current);
 
       if (checked) {
-        next.add(stageId);
+        next.add(parsedStageIndex);
       } else {
-        next.delete(stageId);
+        next.delete(parsedStageIndex);
       }
 
       return next;
     });
-  };
 
-  const loadLaterStageJson = async (item: TResponseStageListItem) => {
-    if (laterStageJson.has(item.stageId)) {
+    if (!checked) {
       return;
     }
 
-    const loaded = await fetchSessionStageDetail(sessionId, item.requestId);
+    setLaterStageJson((current) => {
+      if (current.has(parsedStageIndex)) {
+        return current;
+      }
 
-    setLaterStageJson((current) => new Map(current).set(
-      item.stageId,
-      JSON.stringify(loaded.stage, null, 2),
-    ));
+      return new Map(current).set(parsedStageIndex, JSON.stringify(spec, null, 2));
+    });
   };
 
   const handleSubmit = async () => {
@@ -164,23 +167,21 @@ export function StageRerunDialog({ detail, sessionId, stages }: TStageRerunDialo
       const laterSetups: TRequestCreateForkSessionBody['setups'] = [];
 
       for (const item of laterCandidates) {
-        if (!selectedLaterIds.has(item.stageId)) {
+        if (!selectedLaterIds.has(item.parsedStageIndex)) {
           continue;
         }
 
-        const raw = laterStageJson.get(item.stageId);
+        const raw = laterStageJson.get(item.parsedStageIndex);
 
         if (!raw) {
-          throw new Error(`Stage ${labelByRequestId.get(item.requestId) ?? item.stageId} is not loaded`);
+          throw new Error(`Stage ${laterOriginalStageLabel(item.parsed, item.parsedStageIndex)} is not loaded`);
         }
 
-        const loaded = await fetchSessionStageDetail(sessionId, item.requestId);
-
         laterSetups.push({
-          context: loaded.context,
-          loopMeta: loaded.loopMeta,
+          context: {},
+          parsedStageIndex: item.parsedStageIndex,
           stage: parseJsonField('later stage setup', raw) as TYahlStage,
-          stageId: item.stageId,
+          stageId: item.parsed.spec.id?.trim() || `parsed:${item.parsedStageIndex}`,
         });
       }
 
@@ -220,7 +221,8 @@ export function StageRerunDialog({ detail, sessionId, stages }: TStageRerunDialo
         <div className="space-y-4 px-6 pb-8 text-sm">
           <p className="text-muted-foreground">
             Prefix stages fast-forward from each stage&apos;s saved contextAfter. Edited context before
-            this stage merges onto that state; later session stages run normally and continue by default.
+            this stage merges onto that state; later original task stages run from the task YAML and
+            continue by default.
           </p>
           <div>
             <div className="flex items-center justify-between gap-2">
@@ -282,46 +284,43 @@ export function StageRerunDialog({ detail, sessionId, stages }: TStageRerunDialo
           ) : null}
           {laterCandidates.length > 0 ? (
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Later stages (optional)</p>
+              <p className="text-xs font-medium text-muted-foreground">Later original task stages (optional)</p>
               <ul className="mt-2 space-y-3">
                 {laterCandidates.map((item) => {
-                  const checked = selectedLaterIds.has(item.stageId);
+                  const checked = selectedLaterIds.has(item.parsedStageIndex);
 
                   return (
-                    <li className="rounded-md border p-3" key={item.stageId}>
+                    <li className="rounded-md border p-3" key={item.parsedStageIndex}>
                       <label className="flex cursor-pointer items-center gap-2">
                         <input
                           checked={checked}
                           onChange={(event) => {
-                            const next = event.target.checked;
-
-                            toggleLater(item.stageId, next);
-
-                            if (next) {
-                              void loadLaterStageJson(item);
-                            }
+                            toggleLater(
+                              item.parsedStageIndex,
+                              item.parsed.spec,
+                              event.target.checked,
+                            );
                           }}
                           type="checkbox"
                         />
                         <span className="font-mono text-xs">
-                          {labelByRequestId.get(item.requestId) ?? item.requestId}
+                          {laterOriginalStageLabel(item.parsed, item.parsedStageIndex)}
                         </span>
                       </label>
                       <pre className="mt-2 max-h-32 overflow-auto rounded-md border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
-                        {item.logicPreview || "—"}
+                        {laterLogicPreview(item.parsed.spec.logic)}
                       </pre>
                       {checked ? (
                         <textarea
                           className="mt-2 min-h-28 w-full rounded-md border bg-background p-2 font-mono text-xs"
                           onChange={(event) => {
                             setLaterStageJson((current) => new Map(current).set(
-                              item.stageId,
+                              item.parsedStageIndex,
                               event.target.value,
                             ));
                           }}
-                          placeholder="Loading stage setup…"
                           spellCheck={false}
-                          value={laterStageJson.get(item.stageId) ?? ''}
+                          value={laterStageJson.get(item.parsedStageIndex) ?? ''}
                         />
                       ) : null}
                     </li>

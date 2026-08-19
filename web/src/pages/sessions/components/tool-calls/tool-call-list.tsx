@@ -2,7 +2,7 @@ import type { TResponseStageToolCallItem } from "@project-yahl/server/modules/se
 
 import { AskUserToolCall } from "./ask-user-tool-call";
 import { GenericToolCall } from "./generic-tool-call";
-import { MastermindToolCall } from "./mastermind-tool-call";
+import { PlatformToolCall } from "./platform-tool-call";
 import { SetContextToolCall } from "./set-context-tool-call";
 
 type TToolCallListProps = {
@@ -22,8 +22,8 @@ const ToolEntry = ({
     return <AskUserToolCall tool={tool} />;
   }
 
-  if (tool.name === "mastermind") {
-    return <MastermindToolCall tool={tool} />;
+  if (tool.name === "platform" || tool.name === "mastermind") {
+    return <PlatformToolCall tool={tool} />;
   }
 
   return <GenericToolCall tool={tool} />;

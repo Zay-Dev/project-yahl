@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { handleToolCalls } from './handle-tool-calls';
+import { handleToolCalls, SET_CONTEXT_OK_TOOL_RESULT } from './handle-tool-calls';
 
 const toolCall = (
   id: string,
@@ -25,7 +25,6 @@ describe('handleToolCalls', () => {
   it('emits JSON result for nixery success without newStorage', async () => {
     const payload = JSON.stringify({ data: { paths: ['a.md'] }, ok: true });
     const { toolCallMessages } = await handleToolCalls({
-      error: async () => {},
       storage: emptyStorage(),
       toolCall: async () => ({
         hasError: false,
@@ -39,13 +38,8 @@ describe('handleToolCalls', () => {
     assert.equal(toolCallMessages[0]?.content, payload);
   });
 
-  it('emits error content for nixery failure', async () => {
-    let reported: Error | undefined;
-
+  it('emits error content for tool failure without aborting the stage', async () => {
     const { toolCallMessages } = await handleToolCalls({
-      error: async (error) => {
-        reported = error;
-      },
       storage: emptyStorage(),
       toolCall: async () => ({
         hasError: true,
@@ -54,15 +48,45 @@ describe('handleToolCalls', () => {
       toolCalls: [toolCall('tool-nixery-2', 'nixery')],
     });
 
-    assert.ok(reported);
     assert.match(toolCallMessages[0]?.content ?? '', /tool call error:/);
   });
 
-  it('emits OK for set_context success with newStorage', async () => {
+  it('continues remaining tool calls after hasError', async () => {
+    const names: string[] = [];
+
+    const { toolCallMessages } = await handleToolCalls({
+      storage: emptyStorage(),
+      toolCall: async (call) => {
+        names.push(call.function.name);
+
+        if (call.function.name === 'ask_user') {
+          return {
+            hasError: true,
+            result: 'ask_user: question[0] multipleChoice needs at least 2 valid options',
+          };
+        }
+
+        return {
+          hasError: false,
+          result: 'OK',
+        };
+      },
+      toolCalls: [
+        toolCall('tool-ask-1', 'ask_user'),
+        toolCall('tool-set-1', 'set_context'),
+      ],
+    });
+
+    assert.deepEqual(names, ['ask_user', 'set_context']);
+    assert.equal(toolCallMessages.length, 2);
+    assert.match(toolCallMessages[0]?.content ?? '', /tool call error:/);
+    assert.equal(toolCallMessages[1]?.content, SET_CONTEXT_OK_TOOL_RESULT);
+  });
+
+  it('emits applied OK nudge for set_context success with newStorage', async () => {
     const storage = emptyStorage();
 
     const { toolCallMessages } = await handleToolCalls({
-      error: async () => {},
       storage,
       toolCall: async () => ({
         hasError: false,
@@ -75,7 +99,33 @@ describe('handleToolCalls', () => {
       toolCalls: [toolCall('tool-set-1', 'set_context')],
     });
 
-    assert.equal(toolCallMessages[0]?.content, 'tool call result: OK');
+    assert.equal(toolCallMessages[0]?.content, SET_CONTEXT_OK_TOOL_RESULT);
     assert.deepEqual(Object.fromEntries(storage.context.entries()), { user_region: { id: 'hko' } });
+  });
+
+  it('emits applied OK nudge for set_context success without newStorage', async () => {
+    const { toolCallMessages } = await handleToolCalls({
+      storage: emptyStorage(),
+      toolCall: async () => ({
+        hasError: false,
+        result: 'OK',
+      }),
+      toolCalls: [toolCall('tool-set-2', 'set_context')],
+    });
+
+    assert.equal(toolCallMessages[0]?.content, SET_CONTEXT_OK_TOOL_RESULT);
+  });
+
+  it('leaves set_context skipped result unchanged', async () => {
+    const { toolCallMessages } = await handleToolCalls({
+      storage: emptyStorage(),
+      toolCall: async () => ({
+        hasError: false,
+        result: 'skipped',
+      }),
+      toolCalls: [toolCall('tool-set-3', 'set_context')],
+    });
+
+    assert.equal(toolCallMessages[0]?.content, 'skipped');
   });
 });

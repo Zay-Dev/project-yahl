@@ -180,7 +180,7 @@ describe('handleLoop dotted context paths', () => {
 
     const loopStage = compileStage({
       contextKeys: ['stale_topics'],
-      logic: '/mastermind(dispatch-task-run)',
+      logic: '/platform(dispatch-task-run)',
       loopSetup: 'for each topic of [stale_topics]',
       updateContextKeys: ['dispatched'],
     }, 1);

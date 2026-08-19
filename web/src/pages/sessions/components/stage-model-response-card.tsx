@@ -1,30 +1,22 @@
 import type { TResponseStageModelResponseItem } from "@project-yahl/server/modules/sessions/-api-types";
 
 import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
+import { GenericToolCall } from "@/pages/sessions/components/tool-calls/generic-tool-call";
+
+import {
+  previewFromModelResponse,
+  toolCallsFromModelResponse,
+} from "@/pages/sessions/lib/model-response-preview";
 
 type TStageModelResponseCardProps = {
   response: TResponseStageModelResponseItem;
 };
 
-const contentFromResponse = (response: TResponseStageModelResponseItem) => {
-  const raw = response.response as
-    | { choices?: Array<{ message?: { content?: unknown } }> }
-    | undefined;
-  const content = raw?.choices?.[0]?.message?.content;
-
-  if (typeof content === "string" && content.length > 0) {
-    return content;
-  }
-
-  if (content !== undefined && content !== null) {
-    return JSON.stringify(content);
-  }
-
-  return response.contentPreview || "";
-};
-
 export function StageModelResponseCard({ response }: TStageModelResponseCardProps) {
-  const content = contentFromResponse(response);
+  const preview = previewFromModelResponse(response);
+  const toolCalls = toolCallsFromModelResponse(response);
+  const domains = response.domain?.trim() ? [response.domain.trim()] : [];
+  const hasPreview = preview.text.length > 0;
 
   return (
     <li className="rounded-md border bg-background p-2">
@@ -46,18 +38,31 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
         ) : null}
         {response.thinkingMode ? <span>thinking</span> : null}
       </div>
-      {response.usage ? (
+      {response.usage || domains.length > 0 ? (
         <div className="mt-2">
-          <TokenStatsRow totals={response.usage} />
+          <TokenStatsRow domains={domains} totals={response.usage} />
         </div>
       ) : null}
-      {content ? (
-        <pre className="mt-2 max-h-[min(70vh,40rem)] overflow-auto rounded border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
-          {content}
-        </pre>
-      ) : (
+      {hasPreview ? (
+        <>
+          {preview.kind === "reasoning" ? (
+            <p className="mt-2 text-xs text-muted-foreground">Reasoning</p>
+          ) : null}
+          <pre className="mt-2 max-h-[min(70vh,40rem)] overflow-auto rounded border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
+            {preview.text}
+          </pre>
+        </>
+      ) : null}
+      {toolCalls.length > 0 ? (
+        <div className="mt-2 space-y-2">
+          {toolCalls.map((tool) => (
+            <GenericToolCall key={tool.id} tool={tool} />
+          ))}
+        </div>
+      ) : null}
+      {!hasPreview && toolCalls.length === 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">No preview</p>
-      )}
+      ) : null}
     </li>
   );
 }

@@ -1,5 +1,8 @@
-import fs from 'fs';
 import path from 'path';
+
+import { resolveNixeryAbilityLocation } from '@project-yahl/shared/nixery/list-defs';
+
+import fs from 'fs';
 
 const _findProjectYahlRoot = (startDir: string) => {
   let current = path.resolve(startDir);
@@ -26,8 +29,14 @@ const _findProjectYahlRoot = (startDir: string) => {
 export const resolveNixeryRoot = () =>
   path.join(_findProjectYahlRoot(process.cwd()), 'server', 'nixery');
 
-export const nixeryIndexRelativePath = (defId: string) =>
-  `server/nixery/${defId}/index.yml`;
+export const nixeryIndexRelativePath = async (defId: string) => {
+  const location = await resolveNixeryAbilityLocation(resolveNixeryRoot(), defId);
 
-export const nixeryIndexAbsolutePath = (defId: string) =>
-  path.join(resolveNixeryRoot(), defId, 'index.yml');
+  return `server/nixery/${location.pluginId}/${location.abilityId}/index.yml`;
+};
+
+export const nixeryIndexAbsolutePath = async (defId: string) => {
+  const location = await resolveNixeryAbilityLocation(resolveNixeryRoot(), defId);
+
+  return location.indexPath;
+};

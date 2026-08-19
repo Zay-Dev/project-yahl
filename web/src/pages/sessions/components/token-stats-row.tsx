@@ -1,7 +1,12 @@
-import type { TResponseTokenTotals } from "@project-yahl/server/modules/sessions/-api-types";
+import type {
+  TResponseModelUsageByModel,
+  TResponseTokenTotals,
+} from "@project-yahl/server/modules/sessions/-api-types";
 
 type TTokenStatsRowProps = {
+  byModel?: TResponseModelUsageByModel[];
   compact?: boolean;
+  domains?: string[];
   totals: TResponseTokenTotals | null;
 };
 
@@ -12,7 +17,7 @@ const TokenChip = ({
 }: {
   compact?: boolean;
   label: string;
-  value: number;
+  value: number | string;
 }) => (
   <span
     className={
@@ -22,27 +27,77 @@ const TokenChip = ({
     }
   >
     <span className="text-muted-foreground">{label}</span>
-    <span className="font-medium tabular-nums">{value.toLocaleString()}</span>
+    <span className={typeof value === "number" ? "font-medium tabular-nums" : "font-medium"}>
+      {typeof value === "number" ? value.toLocaleString() : value}
+    </span>
   </span>
 );
 
-export function TokenStatsRow({ compact = true, totals }: TTokenStatsRowProps) {
-  if (!totals) {
+const TokenChips = ({
+  compact,
+  domains,
+  totals,
+}: {
+  compact: boolean;
+  domains: string[];
+  totals: TResponseTokenTotals | null;
+}) => (
+  <>
+    {domains.map((host) => (
+      <TokenChip compact={compact} key={host} label="Domain" value={host} />
+    ))}
+    {totals ? (
+      <>
+        <TokenChip compact={compact} label="Input" value={totals.promptTokens} />
+        <TokenChip compact={compact} label="Cached" value={totals.cacheHitTokens} />
+        <TokenChip compact={compact} label="Uncached" value={totals.cacheMissTokens} />
+        <TokenChip compact={compact} label="Output" value={totals.completionTokens} />
+        {totals.reasoningTokens > 0 ? (
+          <TokenChip compact={compact} label="Reasoning" value={totals.reasoningTokens} />
+        ) : null}
+        {!compact ? (
+          <TokenChip compact={compact} label="Total" value={totals.totalTokens} />
+        ) : null}
+      </>
+    ) : null}
+  </>
+);
+
+export function TokenStatsRow({
+  byModel,
+  compact = true,
+  domains,
+  totals,
+}: TTokenStatsRowProps) {
+  const models = (byModel ?? []).filter(
+    (row) => row.tokenTotals || row.domains.length > 0,
+  );
+  const hosts = models.length === 0
+    ? (domains ?? [])
+      .map((domain) => domain.trim())
+      .filter((domain) => domain.length > 0)
+    : [];
+
+  if (!totals && hosts.length === 0 && models.length === 0) {
     return null;
   }
 
   return (
-    <div className={`flex flex-wrap gap-1.5 ${compact ? "" : "gap-2"}`}>
-      <TokenChip compact={compact} label="Input" value={totals.promptTokens} />
-      <TokenChip compact={compact} label="Cached" value={totals.cacheHitTokens} />
-      <TokenChip compact={compact} label="Uncached" value={totals.cacheMissTokens} />
-      <TokenChip compact={compact} label="Output" value={totals.completionTokens} />
-      {totals.reasoningTokens > 0 ? (
-        <TokenChip compact={compact} label="Reasoning" value={totals.reasoningTokens} />
+    <div className="space-y-1.5">
+      {totals || hosts.length > 0 ? (
+        <div className={`flex flex-wrap gap-1.5 ${compact ? "" : "gap-2"}`}>
+          <TokenChips compact={compact} domains={hosts} totals={totals} />
+        </div>
       ) : null}
-      {!compact ? (
-        <TokenChip compact={compact} label="Total" value={totals.totalTokens} />
-      ) : null}
+      {models.map((row) => (
+        <div
+          className={`flex flex-wrap gap-1.5 ${compact ? "" : "gap-2"}`}
+          key={row.model}
+        >
+          <TokenChip compact={compact} label="Model" value={row.model} />
+          <TokenChips compact={compact} domains={row.domains} totals={row.tokenTotals} />
+        </div>
+      ))}
     </div>
   );
 }

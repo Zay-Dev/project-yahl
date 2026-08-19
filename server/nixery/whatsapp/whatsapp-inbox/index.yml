@@ -1,0 +1,45 @@
+id: whatsapp-inbox
+description: Read or clear pending WhatsApp inbox JSONL for onboarded channels
+
+packages: [nodejs]
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  action:
+    type: string
+    required: true
+  folder:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+  /whatsapp/inbox:
+    host: data/whatsapp_inbox
+    mode: rw
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: true

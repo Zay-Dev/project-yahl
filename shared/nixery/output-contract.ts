@@ -4,7 +4,7 @@ export const DEFAULT_NIXERY_OUTPUT_FILE = 'output.md';
 
 export const DEFAULT_VALIDATION_MODULE = 'validation.mjs';
 
-export const DEFAULT_NIXERY_OUTPUT_RETRY = 3;
+export const DEFAULT_NIXERY_OUTPUT_RETRY = 10;
 
 export const resolveNixeryOutputRetry = (def: TNixeryDef): number => {
   const retry = def.output?.retry;

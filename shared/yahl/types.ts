@@ -33,6 +33,13 @@ export type TYahlGotoEntry = {
   description: string;
 };
 
+export type TYahlWhileSetupSpec = {
+  condition: string;
+  doAtLeast?: number;
+};
+
+export type TYahlWhileSetup = string | TYahlWhileSetupSpec;
+
 export type TYahlStage = {
   agentOverrides?: TYahlAgentOverrides;
   askUser?: TYahlAskUserEntry[];
@@ -44,6 +51,8 @@ export type TYahlStage = {
   logic: string;
   loopSetup?: string;
   maxBashCalls?: number;
+  warmUp?: string;
+  whileSetup?: TYahlWhileSetup;
   maxTurns?: number;
   nixeryInput?: TNixeryStageInput;
   nixeryRun?: string;
@@ -56,15 +65,20 @@ export type TYahlStage = {
   version?: number;
 };
 
+export type TStageLoopMetaKind = 'warmup' | 'for' | 'while';
+
 export type TStageLoopMeta = {
-  arraySnapshot: unknown[];
+  arraySnapshot?: unknown[];
   endAfter?: number;
-  index: number;
+  index?: number;
   indexName?: string;
+  kind?: TStageLoopMetaKind;
+  remainingBashCalls?: number;
+  remainingTurns?: number;
   startAt?: number;
   step?: number;
   temperature?: number;
-  value: unknown;
+  value?: unknown;
 };
 
 export type TParsedStage = {
@@ -75,7 +89,7 @@ export type TParsedStage = {
   sourceStartLine: number;
   spec: TYahlStage;
   temperature?: number;
-  type: 'loop' | 'plain';
+  type: 'loop' | 'plain' | 'while';
   updateContextKeys?: string[];
 };
 

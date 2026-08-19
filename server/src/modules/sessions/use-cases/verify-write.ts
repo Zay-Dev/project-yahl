@@ -12,7 +12,7 @@ import { emitSessionEvent } from '../-session-events';
 import type { TResponseVerifyCheckpoint } from '../-api-types';
 import type { TParsedStageSnapshot, TVerifyResumeAction, TYahlStage } from '../-types';
 import { modelAskUserQuestion, modelStage, modelVerifyCheckpoint } from '../models';
-import { yahlStageSchema } from '../stage-schema';
+import { parsedStageSnapshotSchema, yahlStageSchema } from '../stage-schema';
 import { spawnOrchestrate } from './spawn-orchestrate';
 
 export type TRequestCreateVerifyCheckpointBody = {
@@ -39,12 +39,6 @@ const sessionParamsSchema = Joi.object({
 const verifyParamsSchema = Joi.object({
   sessionId: Joi.string().trim().required(),
   verifyId: Joi.string().trim().required(),
-});
-
-const parsedStageSnapshotSchema = Joi.object<TParsedStageSnapshot>({
-  lines: Joi.string().required(),
-  sourceStartLine: Joi.number().integer().min(1).required(),
-  type: Joi.string().valid('loop', 'plain').required(),
 });
 
 const createBodySchema = Joi.object<TRequestCreateVerifyCheckpointBody>({

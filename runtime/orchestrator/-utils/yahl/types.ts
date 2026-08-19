@@ -4,6 +4,9 @@ export interface StageLoopMeta {
   arraySnapshot: unknown[];
   index: number;
   indexName?: string;
+  kind?: "warmup" | "for" | "while";
+  remainingBashCalls?: number;
+  remainingTurns?: number;
   temperature?: number;
   value: unknown;
 }
@@ -16,7 +19,7 @@ export interface ParsedStage {
   sourceStartLine: number;
   spec: YahlStage;
   temperature?: number;
-  type: "loop" | "plain";
+  type: "loop" | "plain" | "while";
   updateContextKeys?: string[];
 }
 

@@ -6,16 +6,14 @@ import type {
   TRequestPutKnowledgeManagerInstructionBody,
   TResponseKnowledgeManagerInstruction,
 } from '../-api-types';
-import { fetchMastermindJson } from '../-mastermind-client';
+import {
+  assertPlatformApprovalToken,
+  writeKnowledgeManagerInstructionText,
+} from '../-knowledge-instruction';
 
 const bodySchema = Joi.object<TRequestPutKnowledgeManagerInstructionBody>({
   text: Joi.string().allow('').required(),
 });
-
-type TMastermindInstructionResponse = {
-  data?: { text?: string };
-  ok?: boolean;
-};
 
 export const putKnowledgeManagerInstruction = [
   Middlewares.Chainable
@@ -23,16 +21,11 @@ export const putKnowledgeManagerInstruction = [
       body: joi.getValidatedOrThrow(bodySchema, req.body),
     }))
     .next(async (express, { body }) => {
-      const result = await fetchMastermindJson<TMastermindInstructionResponse>(
-        '/v1/internal/knowledges/manager-instruction',
-        {
-          body: JSON.stringify({ text: body.text }),
-          method: 'PUT',
-        },
-      );
+      assertPlatformApprovalToken(express.req.headers['x-approval-token']);
+      await writeKnowledgeManagerInstructionText(body.text);
 
       express.respondOne<TResponseKnowledgeManagerInstruction>({
-        text: result.data?.text ?? body.text,
+        text: body.text,
       });
     })
     .toMiddleware(),

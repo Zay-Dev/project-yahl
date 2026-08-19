@@ -2,6 +2,7 @@ import type { TStorage } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import { shutdownAgent } from '@/orchestrator/-docker';
+import { seedDefaultContext } from '@/orchestrator/-context/default-context';
 
 import { VerifyFailedError, VerifyUnavailableError } from './errors';
 import { nixeryVerifyApi } from './nixery-verify';
@@ -47,6 +48,38 @@ const _serializeContextSnapshot = (storage: TStorage) => ({
   types: Object.fromEntries(storage.types.entries()),
 });
 
+const persistVerifyCheckpoint = async (params: {
+  body: Record<string, unknown>;
+  requestId: string;
+  sessionId: string;
+  storage: TStorage;
+}) => {
+  try {
+    return await postVerifyCheckpoint(params.sessionId, params.body);
+  } catch (error) {
+    console.error(
+      `[agent] verify checkpoint persist failed sessionId=${params.sessionId} `
+      + `requestId=${params.requestId}`,
+      error,
+    );
+
+    try {
+      globalThis.publisher?.emitStageFinish({
+        contextAfter: params.storage,
+        requestId: params.requestId,
+      });
+      await globalThis.sessionTracker?.flush?.();
+    } catch (finishError) {
+      console.error(
+        `[agent] verify row finish after checkpoint fail failed requestId=${params.requestId}`,
+        finishError,
+      );
+    }
+
+    throw error;
+  }
+};
+
 export type TVerifyFastForward = {
   feedback: string;
   score: number;
@@ -70,6 +103,8 @@ export const runVerifyGate = async (params: {
   if (!verify || typeof verify !== 'object') {
     return { feedback: '', pass: true };
   }
+
+  seedDefaultContext(params.storage);
 
   const startedAt = Date.now();
 
@@ -113,6 +148,7 @@ export const runVerifyGate = async (params: {
   let result = await nixeryVerifyApi.run({
     defId: verify.defId,
     input: verifyInput,
+    requestId: params.requestId,
     sessionId: params.sessionId,
   });
 
@@ -121,6 +157,7 @@ export const runVerifyGate = async (params: {
     result = await nixeryVerifyApi.run({
       defId: verify.defId,
       input: verifyInput,
+      requestId: params.requestId,
       sessionId: params.sessionId,
     });
   }
@@ -144,16 +181,21 @@ export const runVerifyGate = async (params: {
   if (result.unavailable) {
     await globalThis.sessionTracker?.flush?.();
 
-    const { verifyId } = await postVerifyCheckpoint(params.sessionId, {
-      contextSnapshot: _serializeContextSnapshot(params.storage),
-      feedback: result.feedback,
-      parsedStageSnapshot: toParsedStageSnapshot(params.stage),
+    const { verifyId } = await persistVerifyCheckpoint({
+      body: {
+        contextSnapshot: _serializeContextSnapshot(params.storage),
+        feedback: result.feedback,
+        parsedStageSnapshot: toParsedStageSnapshot(params.stage),
+        requestId: params.requestId,
+        score: 0,
+        stage: spec,
+        stageIndex: params.pipelineStageIndex,
+        storageSnapshot: _serializeStorage(params.storage),
+        unavailable: true,
+      },
       requestId: params.requestId,
-      score: 0,
-      stage: spec,
-      stageIndex: params.pipelineStageIndex,
-      storageSnapshot: _serializeStorage(params.storage),
-      unavailable: true,
+      sessionId: params.sessionId,
+      storage: params.storage,
     });
 
     await globalThis.sessionTracker?.flush?.();
@@ -174,17 +216,22 @@ export const runVerifyGate = async (params: {
 
   await globalThis.sessionTracker?.flush?.();
 
-  const { verifyId } = await postVerifyCheckpoint(params.sessionId, {
-    contextSnapshot: _serializeContextSnapshot(params.storage),
-    feedback: result.feedback,
-    parsedStageSnapshot: toParsedStageSnapshot(params.stage),
+  const { verifyId } = await persistVerifyCheckpoint({
+    body: {
+      contextSnapshot: _serializeContextSnapshot(params.storage),
+      feedback: result.feedback,
+      parsedStageSnapshot: toParsedStageSnapshot(params.stage),
+      requestId: params.requestId,
+      score: result.score,
+      stage: spec,
+      stageIndex: params.pipelineStageIndex,
+      storageSnapshot: _serializeStorage(params.storage),
+      ...(result.askUserRef ? { askUserRef: result.askUserRef } : {}),
+      ...(result.resumeAction ? { resumeAction: result.resumeAction } : {}),
+    },
     requestId: params.requestId,
-    score: result.score,
-    stage: spec,
-    stageIndex: params.pipelineStageIndex,
-    storageSnapshot: _serializeStorage(params.storage),
-    ...(result.askUserRef ? { askUserRef: result.askUserRef } : {}),
-    ...(result.resumeAction ? { resumeAction: result.resumeAction } : {}),
+    sessionId: params.sessionId,
+    storage: params.storage,
   });
 
   await globalThis.sessionTracker?.flush?.();

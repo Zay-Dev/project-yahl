@@ -4,9 +4,9 @@ const TYPES_LOGIC_PATTERN = /^\s*(?:export\s+)?type\s+\w+/m;
 
 export const isTypesPreambleStage = (stage: {
   spec: TYahlStage;
-  type: 'loop' | 'plain';
+  type: 'loop' | 'plain' | 'while';
 }): boolean => {
-  if (stage.type === 'loop') {
+  if (stage.type === 'loop' || stage.type === 'while') {
     return false;
   }
 
@@ -14,6 +14,8 @@ export const isTypesPreambleStage = (stage: {
 
   if (
     spec.loopSetup
+    || spec.whileSetup
+    || spec.warmUp
     || spec.contextMode
     || spec.conditionMode
     || spec.verify

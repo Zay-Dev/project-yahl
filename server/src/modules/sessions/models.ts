@@ -26,10 +26,13 @@ export type TDbAskUserQuestion = TSessionChildDb<IAskUserQuestion>;
 export type TDbVerifyCheckpoint = TSessionChildDb<IVerifyCheckpoint>;
 
 const loopMetaSchema = new Schema({
-  arraySnapshot: { type: [Schema.Types.Mixed], required: true },
+  arraySnapshot: { type: [Schema.Types.Mixed] },
   endAfter: model.d.optionalNumber(),
-  index: model.d.requiredNumber(),
+  index: model.d.optionalNumber(),
   indexName: model.d.optionalString(),
+  kind: { enum: ['for', 'warmup', 'while'], type: String },
+  remainingBashCalls: model.d.optionalNumber(),
+  remainingTurns: model.d.optionalNumber(),
   startAt: model.d.optionalNumber(),
   step: model.d.optionalNumber(),
   temperature: model.d.optionalNumber(),
@@ -51,6 +54,7 @@ const runCursorSchema = new Schema({
 const forkSessionSetupSchema = new Schema({
   context: model.d.mixed(),
   loopMeta: loopMetaSchema,
+  parsedStageIndex: model.d.optionalNumber(),
   stage: model.d.mixed(),
   stageId: model.d.requiredString(),
 }, { _id: false });
@@ -99,6 +103,7 @@ const stageSchema = new Schema<TDbStage>({
 stageSchema.index({ requestId: 1, session: 1 }, { unique: true });
 
 const modelResponseSchema = new Schema<TDbModelResponse>({
+  domain: model.d.optionalString(),
   durationMs: model.d.optionalNumber(),
   requestId: model.d.requiredString(),
   response: model.d.mixed(),
@@ -114,6 +119,7 @@ modelResponseSchema.index({ requestId: 1, session: 1 });
 
 const toolCallSchema = new Schema<TDbToolCall>({
   requestId: model.d.requiredString(),
+  results: [model.d.mixed()],
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   toolCalls: [model.d.mixed()],
 }, {

@@ -61,7 +61,7 @@ export const compileStage = (
   lines: compileStageLines(stage),
   sourceStartLine,
   spec: stage,
-  type: stage.loopSetup ? 'loop' : 'plain',
+  type: stage.whileSetup ? 'while' : stage.loopSetup ? 'loop' : 'plain',
   ...(stage.temperature === undefined ? {} : { temperature: stage.temperature }),
   ...(stage.contextKeys?.length ? { contextKeys: stage.contextKeys } : {}),
   ...(stage.updateContextKeys?.length ? { updateContextKeys: stage.updateContextKeys } : {}),

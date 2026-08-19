@@ -1,36 +1,14 @@
 import assert from 'node:assert/strict';
-import { after, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 
-import { probeMastermindHealth } from './index.js';
-
-const originalFetch = globalThis.fetch;
+import { buildServerHealth } from './index.js';
 
 describe('server health', () => {
-  after(() => {
-    globalThis.fetch = originalFetch;
-  });
+  it('buildServerHealth reports mongo-only ok', async () => {
+    const result = await buildServerHealth();
 
-  it('probeMastermindHealth treats non-ok body as failure', async () => {
-    globalThis.fetch = async () => new Response(
-      JSON.stringify({ agent: 'auth_failed', ok: false }),
-      { status: 503 },
-    );
-
-    const result = await probeMastermindHealth();
-
-    assert.equal(result.ok, false);
-    assert.equal(result.agent, 'auth_failed');
-  });
-
-  it('probeMastermindHealth succeeds when mastermind is ready', async () => {
-    globalThis.fetch = async () => new Response(
-      JSON.stringify({ agent: 'ready', ok: true }),
-      { status: 200 },
-    );
-
-    const result = await probeMastermindHealth();
-
-    assert.equal(result.ok, true);
-    assert.equal(result.agent, 'ready');
+    assert.equal(result.service, 'server');
+    assert.equal(typeof result.mongo.readyState, 'number');
+    assert.equal(typeof result.ok, 'boolean');
   });
 });

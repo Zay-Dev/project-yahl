@@ -1,0 +1,48 @@
+name: notification-test
+description: Propose email and WhatsApp notifications for end-to-end approval and worker-send testing.
+resultContextKey: result
+
+stages:
+  - contextMode: true
+    produceContextKeys: [notification_test]
+    logic: |
+      const notification_test = {
+        email: {
+          to: 'you@example.com',
+          body: 'YAHL email notification test — approve at /platform/approvals',
+        },
+        whatsapp: {
+          to: '+85291234567',
+          body: 'YAHL WhatsApp notification test — approve at /platform/approvals',
+        },
+      };
+
+      (() => ({notification_test}))
+
+  - contextKeys: [notification_test]
+    produceContextKeys: [proposals]
+    logic: |
+      const email = /platform(propose-notification,
+        channel: email,
+        direction: to_user,
+        to: notification_test.email.to,
+        body: notification_test.email.body
+      );
+      const whatsapp = /platform(propose-notification,
+        channel: whatsapp,
+        direction: to_user,
+        to: notification_test.whatsapp.to,
+        body: notification_test.whatsapp.body
+      );
+      const proposals = { email, whatsapp };
+
+  - contextMode: true
+    contextKeys: [proposals]
+    produceContextKeys: [result]
+    logic: |
+      const result = {
+        message: 'Approve both proposals at /platform/approvals, then check worker logs.',
+        proposals: context.context.proposals,
+      };
+
+      (() => ({result}))

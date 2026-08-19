@@ -2,10 +2,12 @@ import {
   parseStageGotoCommand,
   STAGE_ID_PATTERN,
 } from '@project-yahl/shared/yahl/stage-goto';
+import type { TYahlWhileSetup } from '@project-yahl/shared/yahl/types';
 import {
   DEFAULT_VERIFY_DEF_ID,
   type TYahlVerifySpec,
 } from '@project-yahl/shared/yahl/verify';
+import { persistYahlWhileSetup } from '@project-yahl/shared/yahl/while-setup';
 
 export type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
 export { DEFAULT_VERIFY_DEF_ID } from '@project-yahl/shared/yahl/verify';
@@ -52,6 +54,8 @@ export interface YahlStage {
   loopSetup?: string;
   maxBashCalls?: number;
   maxTurns?: number;
+  warmUp?: string;
+  whileSetup?: TYahlWhileSetup;
   nixeryInput?: TNixeryStageInput;
   nixeryRun?: string;
   produceContextKeys?: string[];
@@ -358,11 +362,16 @@ const normalizeVerifySpec = (
     throw new Error(`${label}.verify.resume: must be a boolean when present`);
   }
 
+  if (entry.skipWarmUp !== undefined && typeof entry.skipWarmUp !== 'boolean') {
+    throw new Error(`${label}.verify.skipWarmUp: must be a boolean when present`);
+  }
+
   return {
     defId,
     ...(entry.autoRetry === true ? { autoRetry: true } : {}),
     ...(entry.minScore !== undefined ? { minScore: Number(entry.minScore) } : {}),
     ...(entry.resume === false ? { resume: false } : {}),
+    ...(entry.skipWarmUp === false ? { skipWarmUp: false } : {}),
     ...(typeof entry.rubric === 'string' && entry.rubric.trim()
       ? { rubric: entry.rubric.trim() }
       : {}),
@@ -393,6 +402,14 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
       throw new Error(`${label}: nixeryRun cannot combine with loopSetup`);
     }
 
+    if (stage.whileSetup !== undefined) {
+      throw new Error(`${label}: nixeryRun cannot combine with whileSetup`);
+    }
+
+    if (stage.warmUp !== undefined) {
+      throw new Error(`${label}: nixeryRun cannot combine with warmUp`);
+    }
+
     if (stage.produceContextKeys !== undefined) {
       throw new Error(`${label}: nixeryRun stages must not set produceContextKeys`);
     }
@@ -406,14 +423,34 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     throw new Error(`${label}: contextMode and conditionMode are mutually exclusive`);
   }
 
-  if (stage.conditionMode === true && stage.loopSetup !== undefined) {
+  const loopSetup = typeof stage.loopSetup === 'string' ? stage.loopSetup.trim() : undefined;
+  const whileSetup = persistYahlWhileSetup(stage.whileSetup, label);
+  const warmUp = typeof stage.warmUp === 'string' ? stage.warmUp.trim() : undefined;
+
+  if (stage.loopSetup !== undefined) {
+    if (!loopSetup || !LOOP_SETUP_PATTERN.test(loopSetup)) {
+      throw new Error(`${label}.loopSetup: must match "for each <id> of [...]"`);
+    }
+  }
+
+  if (stage.warmUp !== undefined && !warmUp) {
+    throw new Error(`${label}.warmUp: required non-empty string when present`);
+  }
+
+  if (loopSetup && whileSetup) {
+    throw new Error(`${label}: loopSetup and whileSetup are mutually exclusive`);
+  }
+
+  if (stage.conditionMode === true && loopSetup) {
     throw new Error(`${label}: conditionMode and loopSetup are mutually exclusive`);
   }
 
-  if (stage.loopSetup !== undefined) {
-    if (typeof stage.loopSetup !== 'string' || !LOOP_SETUP_PATTERN.test(stage.loopSetup.trim())) {
-      throw new Error(`${label}.loopSetup: must match "for each <id> of [...]"`);
-    }
+  if (stage.conditionMode === true && whileSetup) {
+    throw new Error(`${label}: conditionMode and whileSetup are mutually exclusive`);
+  }
+
+  if (warmUp && !loopSetup && !whileSetup) {
+    throw new Error(`${label}: warmUp requires loopSetup or whileSetup`);
   }
 
   if (stage.temperature !== undefined) {
@@ -514,7 +551,9 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     ...(goto ? { goto } : {}),
     ...(stage.contextMode === true ? { contextMode: true } : {}),
     ...(stage.conditionMode === true ? { conditionMode: true } : {}),
-    ...(typeof stage.loopSetup === 'string' ? { loopSetup: stage.loopSetup.trim() } : {}),
+    ...(loopSetup ? { loopSetup } : {}),
+    ...(whileSetup ? { whileSetup } : {}),
+    ...(warmUp ? { warmUp } : {}),
     ...(stage.temperature !== undefined ? { temperature: Number(stage.temperature) } : {}),
     ...(stage.maxBashCalls !== undefined ? { maxBashCalls: Number(stage.maxBashCalls) } : {}),
     ...(stage.maxTurns !== undefined ? { maxTurns: Number(stage.maxTurns) } : {}),
@@ -528,7 +567,13 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
 };
 
 export const toAgentStage = (stage: YahlStage): YahlStage => {
-  const { loopSetup: _loopSetup, verify: _verify, ...rest } = stage;
+  const {
+    loopSetup: _loopSetup,
+    verify: _verify,
+    warmUp: _warmUp,
+    whileSetup: _whileSetup,
+    ...rest
+  } = stage;
 
   return validateYahlStage(rest);
 };

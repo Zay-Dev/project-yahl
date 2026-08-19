@@ -3,6 +3,7 @@ import { afterEach, describe, it } from 'node:test';
 
 import {
   isRetryableLlmHttpError,
+  isRetryableLlmTransportError,
   resolveLlmCallRetryMax,
   withLlmCallRetry,
 } from './-retry';
@@ -38,7 +39,11 @@ describe('resolveLlmCallRetryMax', () => {
 });
 
 describe('isRetryableLlmHttpError', () => {
-  it('retries 408, 429, and >=500', () => {
+  it('retries all 4xx and >=500', () => {
+    assert.equal(isRetryableLlmHttpError({ status: 400 }), true);
+    assert.equal(isRetryableLlmHttpError({ status: 401 }), true);
+    assert.equal(isRetryableLlmHttpError({ status: 402 }), true);
+    assert.equal(isRetryableLlmHttpError({ status: 403 }), true);
     assert.equal(isRetryableLlmHttpError({ status: 408 }), true);
     assert.equal(isRetryableLlmHttpError({ status: 429 }), true);
     assert.equal(isRetryableLlmHttpError({ status: 500 }), true);
@@ -46,17 +51,51 @@ describe('isRetryableLlmHttpError', () => {
     assert.equal(isRetryableLlmHttpError({ statusCode: 429 }), true);
   });
 
-  it('does not retry other 4xx or missing status', () => {
-    assert.equal(isRetryableLlmHttpError({ status: 400 }), false);
-    assert.equal(isRetryableLlmHttpError({ status: 401 }), false);
-    assert.equal(isRetryableLlmHttpError({ status: 403 }), false);
-    assert.equal(isRetryableLlmHttpError(new Error('network')), false);
+  it('retries numeric string status and message-embedded 4xx/5xx', () => {
+    assert.equal(isRetryableLlmHttpError({ status: '503' }), true);
+    assert.equal(isRetryableLlmHttpError({ statusCode: '429' }), true);
+    assert.equal(isRetryableLlmHttpError({ status: '400' }), true);
+    assert.equal(
+      isRetryableLlmHttpError(
+        new Error('503 <503> ***.Algo: An error occurred in model serving'),
+      ),
+      true,
+    );
+    assert.equal(isRetryableLlmHttpError(new Error('<503> throttled')), true);
+    assert.equal(isRetryableLlmHttpError(new Error('400 bad request')), true);
+  });
+
+  it('does not retry missing status', () => {
+    assert.equal(isRetryableLlmHttpError(new Error('invalid json')), false);
     assert.equal(isRetryableLlmHttpError(null), false);
+  });
+
+  it('retries undici transport failures and proxy 500 transport messages', () => {
+    assert.equal(
+      isRetryableLlmTransportError(new Error('fetch failed | UND_ERR_SOCKET other side closed')),
+      true,
+    );
+    assert.equal(
+      isRetryableLlmHttpError(new Error('500 fetch failed | UND_ERR_SOCKET other side closed')),
+      true,
+    );
+  });
+
+  it('retries request and headers timeouts', () => {
+    assert.equal(isRetryableLlmTransportError(new Error('Request timed out.')), true);
+    assert.equal(isRetryableLlmHttpError(new Error('Request timed out.')), true);
+    assert.equal(
+      isRetryableLlmTransportError(Object.assign(new Error('Headers Timeout Error'), {
+        code: 'UND_ERR_HEADERS_TIMEOUT',
+        name: 'TimeoutError',
+      })),
+      true,
+    );
   });
 });
 
 describe('withLlmCallRetry', () => {
-  it('retries 429 then succeeds', async () => {
+  it('retries 429 then succeeds with ×1.1 sleep growth', async () => {
     let calls = 0;
     const sleeps: number[] = [];
 
@@ -80,7 +119,7 @@ describe('withLlmCallRetry', () => {
 
     assert.equal(result, 'ok');
     assert.equal(calls, 3);
-    assert.deepEqual(sleeps, [10, 10]);
+    assert.deepEqual(sleeps, [10, 11]);
   });
 
   it('retries 503 and 408', async () => {
@@ -107,14 +146,58 @@ describe('withLlmCallRetry', () => {
     assert.equal(calls, 3);
   });
 
-  it('throws 400 immediately without retry', async () => {
+  it('retries message-only 503 then succeeds', async () => {
+    let calls = 0;
+
+    const result = await withLlmCallRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('503 <503> ***.Algo: throttled due to system capacity limits');
+        }
+        return 'ok';
+      },
+      {
+        maxAttempts: 3,
+        sleepMs: 10,
+        sleep: async () => {},
+      },
+    );
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 2);
+  });
+
+  it('retries 402 then succeeds', async () => {
+    let calls = 0;
+
+    const result = await withLlmCallRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw Object.assign(new Error('Insufficient Balance'), { status: 402 });
+        }
+        return 'ok';
+      },
+      {
+        maxAttempts: 3,
+        sleepMs: 10,
+        sleep: async () => {},
+      },
+    );
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 2);
+  });
+
+  it('throws non-retryable errors immediately without retry', async () => {
     let calls = 0;
 
     await assert.rejects(
       () => withLlmCallRetry(
         async () => {
           calls += 1;
-          throw Object.assign(new Error('bad request'), { status: 400 });
+          throw new Error('invalid json');
         },
         {
           maxAttempts: 3,
@@ -124,12 +207,56 @@ describe('withLlmCallRetry', () => {
         },
       ),
       (error: unknown) => {
-        assert.equal((error as { status: number }).status, 400);
+        assert.equal(error instanceof Error && error.message, 'invalid json');
         return true;
       },
     );
 
     assert.equal(calls, 1);
+  });
+
+  it('retries transport errors then succeeds', async () => {
+    let calls = 0;
+
+    const result = await withLlmCallRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('500 fetch failed | UND_ERR_SOCKET other side closed');
+        }
+        return 'ok';
+      },
+      {
+        maxAttempts: 3,
+        sleepMs: 10,
+        sleep: async () => {},
+      },
+    );
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 2);
+  });
+
+  it('retries Request timed out then succeeds', async () => {
+    let calls = 0;
+
+    const result = await withLlmCallRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('Request timed out.');
+        }
+        return 'ok';
+      },
+      {
+        maxAttempts: 3,
+        sleepMs: 10,
+        sleep: async () => {},
+      },
+    );
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 2);
   });
 
   it('exhausts attempt budget on repeated 429', async () => {

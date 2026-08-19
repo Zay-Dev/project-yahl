@@ -9,7 +9,6 @@
 | `runtime/` | `@project-yahl/runtime` — YAHL runtime + orchestrator |
 | `server/` | `@project-yahl/server` — Express + Mongoose session/tasks API |
 | `web/` | Vite + shadcn — Sessions, Tasks, platform approvals, cron jobs |
-| `mastermind/` | Personal assistant gateway (HTTP skills) |
 | `worker/` | Cron ticks (via server API), platform approvals |
 
 Install and build framework packages from the **Omniflex repo root**:
@@ -24,7 +23,8 @@ Copy [`.env.example`](.env.example) to `.env`. Set at minimum:
 
 - `HOST_REPO_ROOT` — absolute path to this repo (required for agent workspace bind mounts)
 - `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` — OneCLI proxy for LLM keys
-- `CURSOR_API_KEY` — required for nixery `media-to-text` (Cursor CLI); not used by mastermind or worker
+
+Copy [`.env.nixery.example`](.env.nixery.example) to `.env.nixery` for nixery LLM defaults (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and optional phase URLs). Values may use `${LLM_BASE_URL}` / `${LLM_API_KEY}` from `.env`, or concrete URLs/keys. The orchestrator loads `.env.nixery` at startup in [`runtime/orchestrator/config.ts`](../runtime/orchestrator/config.ts) after `.env`; empty keys in `server/nixery/*/index.yml` inherit the same-named `process.env` value. For `compose:up:all`, the file is bind-mounted into the server (not via compose `env_file`) so the spawned orchestrator can read and expand it — the host file must exist.
 
 Copy `server/.env.example` to `server/.env` if you run the server standalone.
 
@@ -35,9 +35,9 @@ Copy `server/.env.example` to `server/.env` if you run the server standalone.
 | [`docker-compose.yml`](docker-compose.yml) | Infra and optional built server/web |
 | [`docker-compose.agent.yml`](docker-compose.agent.yml) | Per-session agent container (orchestrator only) |
 
-**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, **mastermind** (4100), **worker**.
+**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, wiki, **worker**.
 
-**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173). Does not start mastermind/worker — use `compose:up` for those, or start them manually from the same compose file.
+**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173). Does not start worker — use `compose:up` for worker, or start it manually from the same compose file.
 
 Image build context is the **Omniflex monorepo root** (`..` from project-yahl). App paths use `OMNIFLEX_APP_DIR` (default `project-yahl`). `COMPOSE_PROJECT_NAME` is independent (Docker naming only).
 
@@ -54,9 +54,9 @@ Docker only reads `.dockerignore` from the **build context root**, so put it at 
 */data/
 ```
 
-The agent compose file sets `MASTERMIND_API_URL=http://mastermind:4100` for stage agents.
+The agent compose file sets `SESSION_API_BASE_URL` (default `http://server:4000`) for platform skills.
 
-**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
+**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind data dir, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
 
 **Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (built on the host when orchestrator runs).
 
@@ -71,13 +71,12 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Human (web UI)** | Browser | Sessions, tasks, ask-user answers, platform approvals | Spawn agents, read vault keys, bypass approval queue |
 | **Server** | Host (`pnpm run dev:server`) or `server` container (prod) | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic; control plane only |
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
-| **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to mastermind / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
-| **Mastermind** | `mastermind` container (4100) | Wiki.js GraphQL + read-only `data/knowledge_export`, workspace `/workspace`, HTTP skills | Side effects without approval — proposals go to server first |
+| **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to server (`platform` tool) / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
 | **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive, SMTP outbound | Does not spawn orchestrator or agent containers; WhatsApp/email I/O is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
-Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir; see [mastermind/decision-log.md](mastermind/decision-log.md)).
+Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir.
 
 **Local dev:** server on host spawns orchestrator on host; agents still run in Docker via `docker-compose.agent.yml`. Manual `pnpm run orchestrate` bypasses the server spawn path but uses the same agent isolation.
 
@@ -88,10 +87,10 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 - **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-onecli.ts`](runtime/orchestrator/-docker/compose-onecli.ts), project `agent-{sessionId}`), then tears it down.
 - **Minimal mounts** — only [`data/workspace/`](data/workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
 - **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge reads via `nixeryRun` → `~/nixery/get-knowledge/`; study dialogue under `~/nixery/study/` — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see [security.md](security.md)).
-- **Structured tools only** — `run_bash`, `browser`, `set_context`, `ask_user`, `mastermind`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
+- **Structured tools only** — `run_bash`, `browser`, `set_context`, `extend_context`, `ask_user`, `platform`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See OneCLI setup below for vault rules.
-- **Mastermind is HTTP** — agent calls `MASTERMIND_API_URL` with named skills (policies, dispatch, notifications). Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN`. Cursor credentials are not injected into mastermind.
+- **Platform tool → server** — agent calls `SESSION_API_BASE_URL` with named skills (dispatch, notifications, knowledge transfers, KM instruction). Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN`.
 - **VM control flow off-agent** — `CONTEXT` / `IF` blocks run in `isolated-vm` on the orchestrator process, not inside the agent.
 
 `docker.sock` on **server** only: the server spawns orchestrator/agent containers per run. It is not mounted into agent or worker containers.
@@ -102,7 +101,7 @@ flowchart TB
   server[Server_host_or_container]
   orch[Orchestrator_per_run_process]
   agent[Agent_container]
-  mm[Mastermind]
+  platform[Platform_tool]
   onecli[OneCLI_vault_proxy]
   worker[Worker]
 
@@ -111,9 +110,9 @@ flowchart TB
   orch -->|docker_compose_agent| agent
   orch -->|filtered_stage_via_Redis| agent
   orch -->|verify_gate| worker
-  agent -->|typed_skills| mm
+  agent -->|typed_skills| platform
   agent -->|LLM_via_proxy| onecli
-  mm -->|proposals_only| server
+  platform -->|runs_proposals| server
   human -->|approve| server
   worker -->|approved_jobs| server
 ```
@@ -129,7 +128,7 @@ Individual commands:
 
 | Command | What it does |
 |---------|--------------|
-| `pnpm run compose:up` | Infra only (mongo, redis, onecli, mastermind, worker) |
+| `pnpm run compose:up` | Infra only (mongo, redis, onecli, wiki, worker) |
 | `pnpm run compose:up:all` | Full Docker stack (infra + built server + web) |
 | `pnpm run dev` | Server + runtime on the host |
 | `pnpm run dev:server` | API server only |
@@ -163,7 +162,7 @@ Example: `pnpm run orchestrate -- --session-id my-debug-session`
 
 ### WhatsApp + outbound channels
 
-WhatsApp send/receive and SMTP live on the **worker** only — not in stage agents, not in Mastermind. YAHL tasks (`greets`, `whatsapp_wiki_stack`, `traffic_monitor`, …) propose notifications or tidy wiki; the worker does the actual delivery.
+WhatsApp send/receive and SMTP live on the **worker** only — not in stage agents. YAHL tasks (`greets`, `whatsapp_wiki_stack`, `traffic_monitor`, …) propose notifications or tidy wiki; the worker does the actual delivery.
 
 From [`.env.example`](../.env.example):
 
@@ -203,17 +202,14 @@ curl -sf http://127.0.0.1:10254/
 # OneCLI proxy route
 curl -x http://127.0.0.1:10255 -H "Authorization: Bearer placeholder" https://api.deepseek.com/models
 
-# Mastermind health
-curl -sf http://127.0.0.1:4100/health
+# Server health
+curl -sf http://127.0.0.1:4000/__/ping
 
-# Server aggregated health (mongo + mastermind)
+# Server aggregated health (mongo)
 curl -sf http://127.0.0.1:4000/__/health
 
 # Worker health (in-container loopback; compose healthcheck uses this)
 docker compose exec worker node -e "fetch('http://127.0.0.1:4091/health').then(r=>process.exit(r.ok?0:1))"
-
-# Full stack doctor (host)
-pnpm run doctor
 
 # Runtime
 pnpm run orchestrate
@@ -277,7 +273,7 @@ pnpm run orchestrate
 
 #### Example: Knowledge Manager overnight
 
-Schedule full-corpus review (global instruction; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers):
+Schedule full-corpus review (global instruction; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers → within-topic dedup):
 
 ```json
 {
@@ -289,11 +285,11 @@ Schedule full-corpus review (global instruction; every topic) by starting multi-
 }
 ```
 
-Edit focus via `/platform/knowledge-policies` or task `knowledge_settings`. Manual / from another stage: `/mastermind(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
+Edit focus via `/platform/knowledge-policies` or task `knowledge_settings`. Manual / from another stage: `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
 
 #### Example: traffic monitor cron
 
-Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`traffic_monitor`](../server/tasks/traffic_monitor/SKILL.yahl) at 08:00 HKT:
+Create a job at `/platform/cron-jobs` (or `POST /api/platform/cron/jobs`) so the worker starts [`traffic_monitor`](../server/tasks/traffic_monitor/SKILL.yaml) at 08:00 HKT:
 
 ```json
 {

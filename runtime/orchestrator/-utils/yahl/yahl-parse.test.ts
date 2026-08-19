@@ -19,17 +19,22 @@ import { fileURLToPath } from "node:url";
 
 const testSkillPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../../../server/tasks/test/SKILL.yahl",
+  "../../../../server/tasks/test/SKILL.yaml",
+);
+
+const trafficMonitorPath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../../server/tasks/traffic_monitor/SKILL.yaml",
 );
 
 describe("parseYahlDocument", () => {
-  it("parses test SKILL.yahl", () => {
+  it("parses test SKILL.yaml", () => {
     const text = readFileSync(testSkillPath, "utf-8");
     const doc = parseYahlDocument(text);
 
     assert.equal(doc.name, "test the syntax");
     assert.equal(doc.resultContextKey, "result");
-    assert.equal(doc.stages.length, 7);
+    assert.equal(doc.stages.length, 9);
   });
 
   it("rejects contextMode and conditionMode together", () => {
@@ -147,6 +152,46 @@ stages:
 `);
     }, /mutually exclusive/);
   });
+
+  it("rejects conditionMode and whileSetup together", () => {
+    assert.throws(() => {
+      parseYahlDocument(`
+name: x
+description: y
+stages:
+  - conditionMode: true
+    whileSetup: "context.context.c < 3"
+    logic: |
+      IF: true;
+      END:
+`);
+    }, /mutually exclusive/);
+  });
+
+  it("rejects loopSetup and whileSetup together", () => {
+    assert.throws(() => {
+      parseYahlDocument(`
+name: x
+description: y
+stages:
+  - loopSetup: for each i of [1..2]
+    whileSetup: "context.context.c < 3"
+    logic: "c += 1;"
+`);
+    }, /mutually exclusive/);
+  });
+
+  it("rejects warmUp without a loop", () => {
+    assert.throws(() => {
+      parseYahlDocument(`
+name: x
+description: y
+stages:
+  - warmUp: "c += 1;"
+    logic: "c += 1;"
+`);
+    }, /warmUp requires loopSetup or whileSetup/);
+  });
 });
 
 describe("compileStageLines", () => {
@@ -172,16 +217,28 @@ describe("compileStageLines", () => {
 
     assert.match(lines, /^for each i of \[1..5\] CONTEXT:/);
   });
+
+  it("does not prepend whileSetup onto agent lines", () => {
+    const lines = compileStageLines({
+      logic: "c += 1;",
+      whileSetup: "context.context.c < 10",
+    });
+
+    assert.equal(lines, "{\nc += 1;\n}");
+    assert.doesNotMatch(lines, /whileSetup/);
+  });
 });
 
 describe("parseYahlTask", () => {
-  it("returns stages and resultContextKey from test SKILL.yahl", () => {
+  it("returns stages and resultContextKey from test SKILL.yaml", () => {
     const text = readFileSync(testSkillPath, "utf-8");
     const { resultContextKey, stages } = parseYahlTask(text);
 
     assert.equal(resultContextKey, "result");
-    assert.equal(stages.length, 7);
+    assert.equal(stages.length, 9);
     assert.equal(stages[2]?.type, "loop");
+    assert.equal(stages[7]?.type, "while");
+    assert.equal(stages[7]?.spec.whileSetup, "context.context.c < 20");
   });
 
   it("returns runInputContextKeys from task metadata", () => {
@@ -202,11 +259,40 @@ describe("parseYahlFile", () => {
   it("compiles test stages with temperature and loop type", () => {
     const stages = parseYahlFile(readFileSync(testSkillPath, "utf-8"));
 
-    assert.equal(stages.length, 7);
+    assert.equal(stages.length, 9);
     assert.equal(stages[2]?.type, "loop");
     assert.equal(stages[2]?.temperature, 0.2);
     assert.equal(stages[0]?.produceContextKeys?.join(","), "a,b,c");
     assert.match(stages[3]?.lines ?? "", /^IF:/);
+    assert.equal(stages[7]?.type, "while");
+    assert.equal(stages[7]?.spec.warmUp?.trim(), "c += 1;");
+  });
+
+  it("compiles traffic_monitor monitor as while with following assemble", () => {
+    const stages = parseYahlFile(readFileSync(trafficMonitorPath, "utf-8"));
+    const monitorIndex = stages.findIndex((stage) => stage.spec.id === "monitor");
+    const monitor = stages[monitorIndex];
+    const assemble = stages[monitorIndex + 1];
+
+    assert.equal(monitor?.type, "while");
+    assert.match(
+      (typeof monitor?.spec.whileSetup === "string"
+        ? monitor.spec.whileSetup
+        : monitor?.spec.whileSetup?.condition) ?? "",
+      /started_at/,
+    );
+    assert.equal(
+      typeof monitor?.spec.whileSetup === "object"
+        ? monitor.spec.whileSetup.doAtLeast
+        : 1,
+      2,
+    );
+    assert.match(monitor?.spec.warmUp ?? "", /bind_origin/);
+    assert.match(monitor?.spec.warmUp ?? "", /stagehand\/SKILL\.md/);
+    assert.ok(monitor?.spec.verify);
+    assert.equal(assemble?.spec.contextMode, true);
+    assert.equal(assemble?.spec.verify, undefined);
+    assert.deepEqual(assemble?.produceContextKeys, ["monitor"]);
   });
 
   it("prepends types as synthetic stage", () => {
@@ -236,6 +322,18 @@ describe("toAgentStage", () => {
     assert.equal(agent.logic, "c += i;");
     assert.equal(agent.loopSetup, undefined);
     assert.deepEqual(agent.contextKeys, ["c"]);
+  });
+
+  it("omits whileSetup and warmUp for agent/redis payloads", () => {
+    const agent = toAgentStage({
+      logic: "c += 1;",
+      warmUp: "c += 0;",
+      whileSetup: "context.context.c < 10",
+    });
+
+    assert.equal(agent.logic, "c += 1;");
+    assert.equal(agent.whileSetup, undefined);
+    assert.equal(agent.warmUp, undefined);
   });
 
   it("omits verify for agent/redis payloads", () => {
@@ -293,6 +391,38 @@ describe("compileForkRunStage", () => {
     assert.equal(stage.type, "plain");
     assert.match(stage.lines, /CONTEXT:/);
     assert.equal(stage.spec.loopSetup, "for each i of [1..5]");
+  });
+});
+
+describe("compileStage while", () => {
+  it("marks whileSetup stages as type while", () => {
+    const stage = compileStage({
+      logic: "c += 1;",
+      whileSetup: "context.context.c < 10",
+      warmUp: "c += 0;",
+    }, 4);
+
+    assert.equal(stage.type, "while");
+    assert.equal(stage.spec.whileSetup, "context.context.c < 10");
+    assert.equal(stage.spec.warmUp, "c += 0;");
+    assert.match(stage.lines, /c \+= 1;/);
+    assert.doesNotMatch(stage.lines, /whileSetup/);
+  });
+
+  it("keeps object whileSetup with doAtLeast", () => {
+    const stage = compileStage({
+      logic: "c += 1;",
+      whileSetup: {
+        condition: "false",
+        doAtLeast: 2,
+      },
+    }, 4);
+
+    assert.equal(stage.type, "while");
+    assert.deepEqual(stage.spec.whileSetup, {
+      condition: "false",
+      doAtLeast: 2,
+    });
   });
 });
 

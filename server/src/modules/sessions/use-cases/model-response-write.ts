@@ -21,7 +21,11 @@ const isModelResponseTag = (value: unknown): value is TModelResponseTag => {
     return true;
   }
 
-  return value.startsWith('mastermind:') && value.length > 'mastermind:'.length;
+  return (
+    (value.startsWith('platform:') && value.length > 'platform:'.length)
+    || (value.startsWith('mastermind:') && value.length > 'mastermind:'.length)
+    || (value.startsWith('nixery:') && value.length > 'nixery:'.length)
+  );
 };
 
 const modelResponseTagSchema = Joi.string().custom((value, helpers) => {
@@ -33,6 +37,7 @@ const modelResponseTagSchema = Joi.string().custom((value, helpers) => {
 });
 
 export type TRequestCreateModelResponseBody = {
+  domain?: string;
   durationMs?: number;
   response: Record<string, unknown>;
   tags?: TModelResponseTag[];
@@ -44,6 +49,7 @@ export type TResponseCreateModelResponse = {
 };
 
 const bodySchema = Joi.object<TRequestCreateModelResponseBody>({
+  domain: Joi.string().trim().optional(),
   durationMs: Joi.number().optional(),
   response: Joi.object().required(),
   tags: Joi.array().items(modelResponseTagSchema).optional(),
@@ -71,6 +77,7 @@ export const createModelResponse = [
       });
 
       await modelModelResponse.create({
+        ...(body.domain?.trim() ? { domain: body.domain.trim() } : {}),
         durationMs: body.durationMs,
         requestId: params.requestId,
         response: body.response,

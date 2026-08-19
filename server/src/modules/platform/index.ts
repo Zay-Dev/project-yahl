@@ -2,8 +2,6 @@ import { exposedRoute } from '@/servers';
 
 import { getCronJob, listCronJobs } from './use-cases/cron-read';
 import { createCronJob, deleteCronJob, updateCronJob } from './use-cases/cron-write';
-import { listKnowledgePolicies } from './use-cases/knowledge-policies-read';
-import { patchKnowledgePolicy } from './use-cases/knowledge-policies-write';
 import { getKnowledgeManagerInstruction } from './use-cases/knowledge-instruction-read';
 import { putKnowledgeManagerInstruction } from './use-cases/knowledge-instruction-write';
 import {
@@ -55,10 +53,6 @@ exposedRoute('/api/platform/cron/jobs')
   .get('/:id', getCronJob)
   .patch('/:id', updateCronJob)
   .delete('/:id', deleteCronJob);
-
-exposedRoute('/api/platform/knowledge-policies')
-  .get('/', listKnowledgePolicies)
-  .patch('/:slug', patchKnowledgePolicy);
 
 exposedRoute('/api/platform/knowledge-manager-instruction')
   .get('/', getKnowledgeManagerInstruction)

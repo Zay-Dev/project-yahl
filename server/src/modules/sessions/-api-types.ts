@@ -11,9 +11,26 @@ import type {
   TStageLoopMeta,
   TTokenTotals,
   TYahlStage,
+  TYahlWhileSetup,
 } from './-types';
 
 export type TResponseTokenTotals = TTokenTotals;
+
+export type TResponseModelUsageByModel = {
+  domains: string[];
+  model: string;
+  tokenTotals: TResponseTokenTotals | null;
+};
+
+export type TResponseModelUsageSummary = {
+  byModel: TResponseModelUsageByModel[];
+  domains: string[];
+  tokenTotals: TResponseTokenTotals | null;
+};
+
+export type TResponseNixeryUsageGroup = TResponseModelUsageSummary & {
+  defId: string;
+};
 
 export type TResponseGetSession = {
   _id: string;
@@ -33,6 +50,11 @@ export type TResponseGetSession = {
   taskId: string;
   taskSkills: TTaskSkillFile[];
   taskYahl: string;
+  byModel: TResponseModelUsageByModel[];
+  domains: string[];
+  lastModelResponseAt?: string;
+  nixeryUsage: TResponseNixeryUsageGroup[];
+  stageUsage: TResponseModelUsageSummary;
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
@@ -46,6 +68,7 @@ export type TResponseSessionListItem = {
   isBackground?: boolean;
   sessionId: string;
   taskId?: string;
+  domains: string[];
   tokenTotals: TResponseTokenTotals | null;
   updatedAt: string;
 };
@@ -56,17 +79,28 @@ export type TResponseStageListItem = {
   createdAt: string;
   finishedAt?: string;
   isTypesPreamble?: boolean;
+  lastModelDurationMs: number;
+  lastModelResponseAt?: string;
+  lastToolCallAt?: string;
   logicPreview: string;
+  loopKind?: 'warmup' | 'for' | 'while';
   loopSetup?: string;
   loopIndex?: number;
   loopValue?: unknown;
+  remainingBashCalls?: number;
+  remainingTurns?: number;
   modelCallCount: number;
+  modelDurationMs: number;
+  parsedStageIndex?: number;
   requestId: string;
   stageId: string;
   status: TResponseStageStatus;
+  byModel: TResponseModelUsageByModel[];
+  domains: string[];
   tokenTotals: TTokenTotals | null;
   toolCallCount: number;
   updatedAt: string;
+  whileSetup?: TYahlWhileSetup;
 };
 
 export type TResponseStageReplayVerifyResult = {
@@ -93,6 +127,7 @@ export type TResponseStageModelResponseItem = {
   _id: string;
   contentPreview: string;
   createdAt: string;
+  domain?: string;
   durationMs?: number;
   model?: string;
   response?: Record<string, unknown>;
@@ -105,6 +140,7 @@ export type TResponseStageToolSummary = {
   arguments: unknown;
   id: string;
   name: string;
+  result?: string;
 };
 
 export type TResponseStageToolCallItem = {
@@ -171,7 +207,7 @@ export type TResponseVerifyCheckpoint = {
   parsedStageSnapshot?: {
     lines: string;
     sourceStartLine: number;
-    type: 'loop' | 'plain';
+    type: 'loop' | 'plain' | 'while';
   };
   requestId: string;
   resumeAction?: TVerifyResumeAction;
@@ -205,6 +241,7 @@ export type TStageListSource = {
   createdAt: Date | string;
   finishedAt?: Date | string;
   loopMeta?: TStageLoopMeta;
+  parsedStageIndex?: number;
   requestId: string;
   stage: TYahlStage;
   temperature?: number;

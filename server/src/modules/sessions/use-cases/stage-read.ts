@@ -17,10 +17,11 @@ import type {
 } from '../-api-types';
 import type { IStage, TModelResponseTag, TParsedStage, TYahlStage } from '../-types';
 import {
+  emptyRequestIdUsageSummary,
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
 } from '../-usage-normalize';
-import { parseToolSummaries } from '../-utils/normalize-tool-call';
+import { collectToolResultById, parseToolSummaries } from '../-utils/normalize-tool-call';
 import { modelModelResponse, modelStage, modelToolCall } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
@@ -109,19 +110,22 @@ const countByRequestId = async (
   sessionRef: Types.ObjectId,
   requestIds: string[],
 ) => {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { count: number; lastCreatedAt?: string }>();
 
   if (requestIds.length === 0) {
     return counts;
   }
 
-  const rows = await model.aggregate<{ _id: string; count: number }>([
+  const rows = await model.aggregate<{ _id: string; count: number; lastCreatedAt?: Date }>([
     { $match: { requestId: { $in: requestIds }, session: sessionRef } },
-    { $group: { _id: '$requestId', count: { $sum: 1 } } },
+    { $group: { _id: '$requestId', count: { $sum: 1 }, lastCreatedAt: { $max: '$createdAt' } } },
   ]);
 
   rows.forEach((row) => {
-    counts.set(row._id, row.count);
+    counts.set(row._id, {
+      count: row.count,
+      lastCreatedAt: toIso(row.lastCreatedAt),
+    });
   });
 
   return counts;
@@ -150,24 +154,49 @@ const toListItem = (
   modelCallCount: number,
   toolCallCount: number,
   tokenTotals: TResponseStageListItem['tokenTotals'],
+  domains: TResponseStageListItem['domains'],
+  byModel: TResponseStageListItem['byModel'],
+  timing: {
+    lastModelDurationMs: number;
+    lastModelResponseAt?: string;
+    lastToolCallAt?: string;
+    modelDurationMs: number;
+  },
 ): TResponseStageListItem => ({
   createdAt: toIso(stage.createdAt as Date) ?? '',
   finishedAt: toIso(stage.finishedAt),
   isTypesPreamble: isTypesPreambleStage({
     spec: stage.stage,
-    type: stage.stage.loopSetup ? 'loop' : 'plain',
+    type: stage.stage.whileSetup ? 'while' : stage.stage.loopSetup ? 'loop' : 'plain',
   }),
+  lastModelDurationMs: timing.lastModelDurationMs,
+  ...(timing.lastModelResponseAt ? { lastModelResponseAt: timing.lastModelResponseAt } : {}),
+  ...(timing.lastToolCallAt ? { lastToolCallAt: timing.lastToolCallAt } : {}),
   logicPreview: logicPreviewFrom(stage.stage?.logic),
+  ...(stage.loopMeta?.kind
+    ? { loopKind: stage.loopMeta.kind }
+    : typeof stage.loopMeta?.index === 'number' ? { loopKind: 'for' as const } : {}),
   loopSetup: stage.stage?.loopSetup,
   loopIndex: stage.loopMeta?.index,
   loopValue: stage.loopMeta?.value,
+  ...(typeof stage.loopMeta?.remainingBashCalls === 'number'
+    ? { remainingBashCalls: stage.loopMeta.remainingBashCalls }
+    : {}),
+  ...(typeof stage.loopMeta?.remainingTurns === 'number'
+    ? { remainingTurns: stage.loopMeta.remainingTurns }
+    : {}),
   modelCallCount,
+  modelDurationMs: timing.modelDurationMs,
+  ...(typeof stage.parsedStageIndex === 'number' ? { parsedStageIndex: stage.parsedStageIndex } : {}),
   requestId: stage.requestId,
   stageId: stage._id.toString(),
   status: resolveStageStatus(stage),
+  byModel,
+  domains,
   tokenTotals,
   toolCallCount,
   updatedAt: toIso(stage.updatedAt as Date) ?? '',
+  ...(stage.stage?.whileSetup ? { whileSetup: stage.stage.whileSetup } : {}),
 });
 
 export const resolveSessionStagesList = async (sessionId: string) => {
@@ -178,18 +207,32 @@ export const resolveSessionStagesList = async (sessionId: string) => {
 
   const requestIds = stages.map((stage) => stage.requestId);
 
-  const [modelCounts, tokenTotalsByRequestId, toolCounts] = await Promise.all([
+  const [modelCounts, usageByRequestId, toolCounts] = await Promise.all([
     countByRequestId(modelModelResponse, sessionRef, requestIds),
     sumModelResponseUsagesByRequestId(sessionRef, requestIds),
     countByRequestId(modelToolCall, sessionRef, requestIds),
   ]);
 
-  return stages.map((stage) => toListItem(
-    stage,
-    modelCounts.get(stage.requestId) ?? 0,
-    toolCounts.get(stage.requestId) ?? 0,
-    tokenTotalsByRequestId.get(stage.requestId) ?? null,
-  ));
+  return stages.map((stage) => {
+    const usage = usageByRequestId.get(stage.requestId) ?? emptyRequestIdUsageSummary();
+    const modelStats = modelCounts.get(stage.requestId);
+    const toolStats = toolCounts.get(stage.requestId);
+
+    return toListItem(
+      stage,
+      modelStats?.count ?? 0,
+      toolStats?.count ?? 0,
+      usage.tokenTotals,
+      usage.domains,
+      usage.byModel,
+      {
+        lastModelDurationMs: usage.lastModelDurationMs,
+        lastModelResponseAt: usage.lastModelResponseAt,
+        lastToolCallAt: toolStats?.lastCreatedAt,
+        modelDurationMs: usage.modelDurationMs,
+      },
+    );
+  });
 };
 
 export const resolveSessionStagesReplay = async (sessionId: string) => {
@@ -274,16 +317,27 @@ export const getSessionStage = [
           .lean(),
       ]);
 
-      const tokenTotalsByRequestId = await sumModelResponseUsagesByRequestId(
+      const usageByRequestId = await sumModelResponseUsagesByRequestId(
         sessionRef,
         [params.requestId],
       );
-
+      const usage = usageByRequestId.get(params.requestId) ?? emptyRequestIdUsageSummary();
+      const lastToolCallDoc = toolCallDocs[toolCallDocs.length - 1];
       const listItem = toListItem(
         stage,
         modelCallCount,
         toolCallCount,
-        tokenTotalsByRequestId.get(params.requestId) ?? null,
+        usage.tokenTotals,
+        usage.domains,
+        usage.byModel,
+        {
+          lastModelDurationMs: usage.lastModelDurationMs,
+          lastModelResponseAt: usage.lastModelResponseAt,
+          lastToolCallAt: lastToolCallDoc
+            ? toIso(lastToolCallDoc.createdAt as Date)
+            : undefined,
+          modelDurationMs: usage.modelDurationMs,
+        },
       );
 
       const detail: TResponseStageDetail = {
@@ -298,6 +352,9 @@ export const getSessionStage = [
             _id: String(doc._id),
             contentPreview: extractContentPreview(response),
             createdAt: toIso(doc.createdAt as Date) ?? '',
+            ...(typeof doc.domain === 'string' && doc.domain.trim()
+              ? { domain: doc.domain.trim() }
+              : {}),
             durationMs: doc.durationMs,
             model: typeof response.model === 'string' ? response.model : undefined,
             response,
@@ -307,13 +364,29 @@ export const getSessionStage = [
           };
         }),
         stage: stage.stage as TYahlStage,
-        toolCalls: toolCallDocs.map((doc) => ({
-          _id: String(doc._id),
-          createdAt: toIso(doc.createdAt as Date) ?? '',
-          tools: parseToolSummaries(
-            Array.isArray(doc.toolCalls) ? doc.toolCalls as Record<string, unknown>[] : [],
-          ),
-        })),
+        toolCalls: (() => {
+          const resultById = collectToolResultById(toolCallDocs);
+
+          return toolCallDocs.flatMap((doc) => {
+            const tools = parseToolSummaries(
+              Array.isArray(doc.toolCalls) ? doc.toolCalls as Record<string, unknown>[] : [],
+            ).map((tool) => {
+              const result = resultById.get(tool.id);
+
+              return result === undefined ? tool : { ...tool, result };
+            });
+
+            if (!tools.length) {
+              return [];
+            }
+
+            return [{
+              _id: String(doc._id),
+              createdAt: toIso(doc.createdAt as Date) ?? '',
+              tools,
+            }];
+          });
+        })(),
       };
 
       express.respondOne<TResponseStageDetail>(detail);

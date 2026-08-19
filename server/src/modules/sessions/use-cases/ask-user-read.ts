@@ -22,7 +22,7 @@ export type TResponseAskUserQuestion = {
   parsedStageSnapshot?: {
     lines: string;
     sourceStartLine: number;
-    type: 'loop' | 'plain';
+    type: 'loop' | 'plain' | 'while';
   };
   questionId: string;
   requestId: string;
@@ -62,7 +62,7 @@ const _toCheckpoint = (question: {
   parsedStageSnapshot?: {
     lines: string;
     sourceStartLine: number;
-    type: 'loop' | 'plain';
+    type: 'loop' | 'plain' | 'while';
   };
   questionId: string;
   requestId: string;

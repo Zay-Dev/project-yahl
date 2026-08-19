@@ -8,7 +8,7 @@ import { deriveTaskIdFromYahlPath, deriveTaskNameFromYahl } from './derive-task-
 
 const testSkillPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../../server/tasks/test/SKILL.yahl',
+  '../../../../server/tasks/test/SKILL.yaml',
 );
 
 describe('deriveTaskNameFromYahl', () => {
@@ -16,21 +16,28 @@ describe('deriveTaskNameFromYahl', () => {
     const yahl = readFileSync(testSkillPath, 'utf-8');
 
     assert.equal(
-      deriveTaskNameFromYahl(yahl, 'server/tasks/test/SKILL.yahl'),
+      deriveTaskNameFromYahl(yahl, 'server/tasks/test/SKILL.yaml'),
       'test the syntax',
     );
   });
 
   it('falls back to task folder name for non-yahl text', () => {
     assert.equal(
-      deriveTaskNameFromYahl('plain logic only', 'server/tasks/research/SKILL.yahl'),
+      deriveTaskNameFromYahl('plain logic only', 'server/tasks/research/SKILL.yaml'),
       'research',
     );
   });
 
-  it('deriveTaskIdFromYahlPath returns folder name', () => {
+  it('deriveTaskIdFromYahlPath returns folder name for .yaml', () => {
     assert.equal(
-      deriveTaskIdFromYahlPath('server/tasks/test/SKILL.yahl'),
+      deriveTaskIdFromYahlPath('server/tasks/test/SKILL.yaml'),
+      'test',
+    );
+  });
+
+  it('deriveTaskIdFromYahlPath returns folder name for .yml', () => {
+    assert.equal(
+      deriveTaskIdFromYahlPath('server/tasks/test/SKILL.yml'),
       'test',
     );
   });

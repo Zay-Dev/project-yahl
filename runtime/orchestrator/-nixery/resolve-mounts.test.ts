@@ -4,7 +4,17 @@ import { afterEach, describe, it } from 'node:test';
 
 import { resolveMounts } from './resolve-mounts';
 
+import type { TNixeryAbilityLocation } from '@project-yahl/shared/nixery/types';
+
 const hostRepoRoot = '/host/project-yahl';
+
+const locationFor = (pluginId: string, abilityId: string): TNixeryAbilityLocation => ({
+  abilityId,
+  abilityDir: path.join(hostRepoRoot, 'server', 'nixery', pluginId, abilityId),
+  indexPath: path.join(hostRepoRoot, 'server', 'nixery', pluginId, abilityId, 'index.yml'),
+  pluginDir: path.join(hostRepoRoot, 'server', 'nixery', pluginId),
+  pluginId,
+});
 
 describe('resolveMounts', () => {
   const previousHostRepoRoot = process.env.HOST_REPO_ROOT;
@@ -31,13 +41,14 @@ describe('resolveMounts', () => {
         },
       },
       defId: 'get-knowledge',
+      location: locationFor('knowledge-wiki', 'get-knowledge'),
       sessionId: 'session-1',
     });
 
     assert.deepEqual(mounts, [
       {
         containerPath: '/data/knowledge_export',
-        hostPath: path.join(hostRepoRoot, 'data/knowledge_export'),
+        hostPath: path.join(hostRepoRoot, 'data', 'knowledge_export'),
         mode: 'ro',
       },
       {
@@ -47,31 +58,37 @@ describe('resolveMounts', () => {
       },
       {
         containerPath: '/opt/nixery/def',
-        hostPath: path.join(hostRepoRoot, 'server/nixery/get-knowledge'),
+        hostPath: path.join(hostRepoRoot, 'server', 'nixery', 'knowledge-wiki', 'get-knowledge'),
+        mode: 'ro',
+      },
+      {
+        containerPath: '/opt/nixery/plugin',
+        hostPath: path.join(hostRepoRoot, 'server', 'nixery', 'knowledge-wiki'),
         mode: 'ro',
       },
     ]);
   });
 
-  it('maps lib mount token to nixery _lib dist path', () => {
+  it('maps plugin mount token to plugin root', () => {
     process.env.HOST_REPO_ROOT = hostRepoRoot;
 
     const mounts = resolveMounts({
       def: {
-        id: 'write-def-fixture',
+        id: 'merge-topic',
         packages: ['nodejs'],
         mount: {
-          '/opt/nixery/knowledge-wiki': { host: 'lib/knowledge-wiki', mode: 'ro' },
+          '/opt/nixery/plugin': { host: 'plugin', mode: 'ro' },
         },
       },
-      defId: 'write-def-fixture',
+      defId: 'merge-topic',
+      location: locationFor('knowledge-wiki', 'merge-topic'),
       sessionId: 'session-1',
     });
 
     assert.deepEqual(mounts, [
       {
-        containerPath: '/opt/nixery/knowledge-wiki',
-        hostPath: path.join(hostRepoRoot, 'server/nixery/_lib/knowledge-wiki/dist'),
+        containerPath: '/opt/nixery/plugin',
+        hostPath: path.join(hostRepoRoot, 'server', 'nixery', 'knowledge-wiki'),
         mode: 'ro',
       },
     ]);
@@ -89,6 +106,7 @@ describe('resolveMounts', () => {
         },
       },
       defId: 'research',
+      location: locationFor('research', 'research'),
       sessionId: 'session-1',
     });
 
@@ -97,6 +115,11 @@ describe('resolveMounts', () => {
         containerPath: '/session',
         hostPath: path.join(hostRepoRoot, 'data/workspace/sessions/session-1'),
         mode: 'rw',
+      },
+      {
+        containerPath: '/opt/nixery/plugin',
+        hostPath: path.join(hostRepoRoot, 'server', 'nixery', 'research'),
+        mode: 'ro',
       },
     ]);
   });
@@ -113,14 +136,20 @@ describe('resolveMounts', () => {
         },
       },
       defId: 'whatsapp-inbox',
+      location: locationFor('whatsapp', 'whatsapp-inbox'),
       sessionId: 'session-1',
     });
 
     assert.deepEqual(mounts, [
       {
         containerPath: '/whatsapp/inbox',
-        hostPath: path.join(hostRepoRoot, 'data/whatsapp_inbox'),
+        hostPath: path.join(hostRepoRoot, 'data', 'whatsapp_inbox'),
         mode: 'rw',
+      },
+      {
+        containerPath: '/opt/nixery/plugin',
+        hostPath: path.join(hostRepoRoot, 'server', 'nixery', 'whatsapp'),
+        mode: 'ro',
       },
     ]);
   });

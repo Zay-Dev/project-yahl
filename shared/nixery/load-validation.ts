@@ -1,9 +1,10 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { resolveNixeryAbilityLocation } from './list-defs';
 import { resolveNixeryOutputSpec } from './output-contract';
 
-import type { TNixeryDef } from './types';
+import type { TNixeryAbilityLocation, TNixeryDef } from './types';
 
 export type TNixeryValidationContext = {
   defId: string;
@@ -25,15 +26,14 @@ export type TNixeryValidationModule = {
 export const DEFAULT_VALIDATION_MODULE = 'validation.mjs';
 
 export const resolveValidationModulePath = (
-  nixeryRoot: string,
-  defId: string,
+  abilityDir: string,
   validateFile?: string,
-) => path.join(nixeryRoot, defId, validateFile?.trim() || DEFAULT_VALIDATION_MODULE);
+) => path.join(abilityDir, validateFile?.trim() || DEFAULT_VALIDATION_MODULE);
 
-export const resolveValidationModulePathFromDef = (
-  nixeryRoot: string,
+export const resolveValidationModulePathFromLocation = (
+  location: TNixeryAbilityLocation,
   def: TNixeryDef,
-) => resolveValidationModulePath(nixeryRoot, def.id, resolveNixeryOutputSpec(def).validate);
+) => resolveValidationModulePath(location.abilityDir, resolveNixeryOutputSpec(def).validate);
 
 const validationModuleCache = new Map<string, Promise<TNixeryValidationModule>>();
 
@@ -42,7 +42,8 @@ export const loadDefValidationModule = async (
   defId: string,
   validateFile?: string,
 ): Promise<TNixeryValidationModule> => {
-  const modulePath = resolveValidationModulePath(nixeryRoot, defId, validateFile);
+  const location = await resolveNixeryAbilityLocation(nixeryRoot, defId);
+  const modulePath = resolveValidationModulePath(location.abilityDir, validateFile);
   const cached = validationModuleCache.get(modulePath);
 
   if (cached) {

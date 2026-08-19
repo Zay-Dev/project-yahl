@@ -2,16 +2,11 @@
 
 Operator tips that are easy to miss.
 
-## `additional_instruction` on `knowledge_refresh`
+## `additional_instruction` (YAHL `runInput`)
 
-Do **not** put free-text guidance in `rerun_intent` — that key must stay a structured object (`proceedMode`, `updateScope`, …). Put natural-language guidance in optional `additional_instruction`.
+Optional free-text **this-run** override. Declare the key under the task's `runInput:` list. Blank/missing → ignore. Never writes durable Knowledge Manager instruction or wiki.
 
-After `get-knowledge`, a dedicated stage parses it into `instruction_followup`:
-
-- `{ actionable: false, reason }` when blank
-- `{ actionable: true, missionAddon, seedUrls, scopeHints, failFast, notes }` when there is work to do
-
-Stage 1 merges mission/seed/scope hints and only keeps `rerun_intent` when it is structured.
+`knowledge_manager` parses it into `instruction_followup` (`missionAddon` merges into this-run mission).
 
 Example:
 
@@ -19,10 +14,9 @@ Example:
 curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
   -H 'Content-Type: application/json' \
   -d '{
-    "taskId": "knowledge_refresh",
+    "taskId": "knowledge_manager",
     "runInput": {
-      "knowledge_topic": "project yahl",
-      "additional_instruction": "all, try refresh from discussion https://share.google/aimode/abcdefg, fail fast if cannot access the discussion"
+      "additional_instruction": "Focus depth on project-yahl and hk-weather tonight"
     }
   }'
 ```
@@ -58,7 +52,6 @@ curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
 ## Fuzzy topic vs exact policy
 
 - **Ambiguous names** (e.g. `project yahl`) → nixery `resolve-topic` (+ agent `pick-canonical-topic` when `suggestMerge` is present) → exact slug such as `project-yahl-develop`.
-- **Mastermind `resolve-topic-policy`** → exact slug or declared alias only; unknown → `{ ok: false }` (404-style), not fuzzy guess.
 
 Structured `rerun_intent` still works for auto dispatch:
 
@@ -87,27 +80,3 @@ Wiki roots matter:
 - `topics/{slug}/` — curated subject knowledge (different tree; don’t mix them)
 
 Send/receive still live on the worker (`WHATSAPP_ENABLED=true`, QR in worker logs). YAHL only greets, stacks, and proposes.
-
-## Novel tasks (`novel_*`)
-
-Novels reuse `topics/{slug}/` via `resolve-topic` / `get-knowledge` / `upsert-knowledge-page` with **`page` + `content`** (do not add novel keys to the knowledge key map). Pass `novel` in `runInput` or the first stage asks.
-
-```bash
-curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "taskId": "novel_design",
-    "runInput": {
-      "novel": "my-novel-slug",
-      "additional_instruction": "new idea: a quiet coastal city where clocks run backward"
-    }
-  }'
-```
-
-Pipeline order: `novel_design` → `novel_plan_arc` → `novel_plan_stages` → `novel_plan_batch` → `novel_write`.
-
-After `novel_write`, sync chapters to tracked `novels/` for GitHub Pages (then commit/push `develop`):
-
-```bash
-./scripts/sync-novels-pages.sh
-```

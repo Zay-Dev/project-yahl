@@ -11,7 +11,7 @@ Given extracted knowledge and prior stage Q&A, decide whether the current onboar
 - Session extract markdown for topic `user-onboarding` (read from `~/nixery/get-knowledge/` artifacts)
 - Stage-specific keys expected for this stage index
 - `onboarding_qa_<stageIndex>` log if present
-- Stage rubric from SKILL.yahl
+- Stage rubric from SKILL.yaml
 
 ## Output (via set_context)
 

@@ -1,0 +1,292 @@
+name: knowledge-manager
+description: |
+  Multi-stage overnight Knowledge Manager — per-topic validate/apply + cross-topic transfer proposals + within-topic dedup.
+  Start via cron taskPath knowledge_manager (handbook/how-to-run.md) or
+  /platform(dispatch-task-run, taskId: knowledge_manager, runInput: {}).
+background: true
+resultContextKey: result
+runInput:
+  - additional_instruction
+
+types: |
+  type TReviewRecord = {
+    topic: string;
+    depth: 'focus' | 'light';
+    honeApplied: number;
+    honeSkipped: number;
+    opsApplied: number;
+    opsDiscarded: number;
+    quizTodoAdded: boolean;
+    transfersProposed: number;
+    consumed?: number;
+    skippedEmpty?: boolean;
+    applyFailed?: boolean;
+    dedupOk?: boolean;
+    dedupSkipped?: boolean;
+  };
+
+  type TTopicGroup = {
+    id: string;
+    topics: string[];
+    rationale: string;
+    canonical?: string;
+  };
+
+  type TResult = {
+    reviewedAt: string;
+    instructionPreview: string;
+    topicCount: number;
+    reviews: TReviewRecord[];
+    topic_groups: TTopicGroup[];
+    mergesApplied?: number;
+    mergeCanonicals?: string[];
+    transfersProposed: number;
+    approvedTransfersApplied: number;
+    dedupTopics?: string[];
+    additionalInstructionNotes?: string;
+  };
+
+stages:
+  - produceContextKeys: [missionText, reviews_acc, transfers_proposed_acc, instruction_followup]
+    contextKeys: [additional_instruction]
+    logic: |
+      const missionText = *load_task_mission(~/task-skills/task-mission/SKILL.md);
+      const reviews_acc = [];
+      const transfers_proposed_acc = 0;
+      const instruction_followup = *analyze_additional_instruction(
+        additional_instruction,
+        guideline: ~/task-skills/analyze-additional-instruction/SKILL.md,
+      );
+
+  - nixeryRun: list-manager-topics
+    nixeryInput:
+      output: result.json
+    logic: "(nixery)"
+
+  - produceContextKeys: [topics, instructionPreview, missionText]
+    contextKeys: [missionText, instruction_followup]
+    logic: |
+      Read ~/nixery/list-manager-topics/result.json from the session workspace.
+      Parse the gate JSON. If ok and topics is an array, set topics to that array and instructionPreview to instructionPreview or ''.
+      Otherwise set topics to [] and instructionPreview to ''.
+      IF: instruction_followup && instruction_followup.actionable && instruction_followup.missionAddon;
+        const missionText = (missionText || '') + '\n\nThis-run additional_instruction:\n' + instruction_followup.missionAddon;
+      END:
+
+  - loopSetup: for each topic of [topics]
+    contextKeys: [missionText, topic, topics, reviews_acc, transfers_proposed_acc, instruction_followup]
+    updateContextKeys: [reviews_acc, transfers_proposed_acc]
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.7
+      rubric: |
+        Judge context only (no workspace filesystem paths).
+        Pass when topic is non-empty and reviews_acc contains a review whose topic matches this iteration
+        and review.applyFailed is not true.
+        That review must be either skippedEmpty: true, or a successful apply review for the same topic
+        (honeApplied / honeSkipped / opsApplied fields may be present).
+        Fail (autoRetry) when the matching review is missing, topic mismatches, or applyFailed is true.
+        Do not require ~/nixery/** gate files — stage-verify cannot read them.
+    logic: |
+      Read ~/task-skills/task-mission/SKILL.md.
+      Read ~/task-skills/validate-and-feedback/SKILL.md.
+      const intakeOut = 'intake-' + topic + '.json';
+      /nixery(list-pending-observations, topic: topic, output: intakeOut);
+      Read the gate JSON under ~/nixery/list-pending-observations/ named intakeOut from the session workspace.
+      Parse the gate JSON. Set intake to intake object when ok; otherwise intake = { observations: [], needsValidation: [], depth: 'light', excerpts: {}, placePage: 'facts', topic }.
+      const needs = intake.needsValidation || [];
+      const obs = intake.observations || [];
+      IF: needs.length > 0;
+        const researchNeed = *validation_research_need(needs, topic, intake);
+        const researchOut = 'research-' + topic + '.md';
+        /nixery(
+          research,
+          topic: topic,
+          need: researchNeed,
+          mission: missionText,
+          facts: { needs, excerpts: intake.excerpts },
+          guidelinePath: ~/task-skills/validate-and-feedback/SKILL.md,
+          output: researchOut,
+        );
+        Read the research markdown under ~/nixery/research/ named researchOut from the session workspace when present.
+        const feedbacks = *build_validation_observations(needs, researchMd, topic);
+        IF: feedbacks && feedbacks.length;
+          for each feedback of feedbacks: /nixery(
+            submit-knowledge-observation,
+            topic_hint: topic,
+            cue: feedback.cue,
+            claim: feedback.claim,
+            example: feedback.example,
+            quote: feedback.quote,
+            evidence: feedback.evidence,
+            confidence: feedback.confidence,
+            tags: feedback.tags,
+          );
+        END:
+      END:
+      IF: obs.length === 0 AND needs.length === 0 AND (intake.depth || 'light') === 'light';
+        const review = { topic, depth: 'light', honeApplied: 0, honeSkipped: 0, opsApplied: 0, opsDiscarded: 0, quizTodoAdded: false, transfersProposed: 0, skippedEmpty: true };
+        EXTENDS: reviews_acc = [...(reviews_acc || []), review];
+      ELSE:
+        const applyOut = 'apply-' + topic + '.json';
+        /nixery(apply-manager-topic, topic: topic, output: applyOut);
+        Read the apply gate under ~/nixery/apply-manager-topic/ named applyOut from the session workspace.
+        Parse the gate JSON.
+        IF: gate.ok AND gate.review AND gate.review.topic === topic;
+          const review = gate.review;
+          EXTENDS: reviews_acc = [...(reviews_acc || []), review];
+          EXTENDS: transfers_proposed_acc = (transfers_proposed_acc || 0) + Number(review.transfersProposed || 0);
+        ELSE:
+          const review = { topic, depth: intake.depth || 'light', honeApplied: 0, honeSkipped: 0, opsApplied: 0, opsDiscarded: 0, quizTodoAdded: false, transfersProposed: 0, applyFailed: true };
+          EXTENDS: reviews_acc = [...(reviews_acc || []), review];
+        END:
+      END:
+
+  - nixeryRun: group-manager-topics
+    nixeryInput:
+      topics: topics
+      output: result.json
+    contextKeys: [topics]
+    logic: "(nixery)"
+
+  - produceContextKeys: [topic_groups]
+    contextKeys: [topics]
+    logic: |
+      Read ~/nixery/group-manager-topics/result.json from the session workspace.
+      Parse the gate JSON. If ok and topic_groups is an array, set topic_groups to that array.
+      Otherwise set topic_groups to (topics || []).map(t => ({ id: 'solo-' + t, topics: [t], rationale: 'fallback singleton' })).
+
+  - produceContextKeys: [merges_acc, merge_canonicals_acc]
+    logic: |
+      const merges_acc = [];
+      const merge_canonicals_acc = [];
+
+  - loopSetup: for each group of [topic_groups]
+    contextKeys: [missionText, group, topic_groups, merges_acc, merge_canonicals_acc]
+    updateContextKeys: [merges_acc, merge_canonicals_acc]
+    verify:
+      defId: stage-verify
+      autoRetry: false
+      minScore: 0.5
+      rubric: |
+        Soft pass. Judge context only (no workspace filesystem paths).
+        When group.topics length is under 2, pass.
+        When length is 2+, prefer that merges_acc records an entry for this group.id
+        (ok true or false is fine — soft-fail individual merges).
+        Do not require ~/nixery/** gate files.
+    logic: |
+      Read ~/task-skills/task-mission/SKILL.md.
+      Call the nixery tool directly for merge-topic — do not search the filesystem for def folders or index.yml.
+      IF: group && group.topics && group.topics.length >= 2;
+        const canonical = group.canonical || group.topics.slice().sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
+        const sources = (group.topics || []).filter((topic) => topic && topic !== canonical);
+        const mergeResults = [];
+        for each sourceTopic of sources:
+          const mergeOut = 'merge-' + sourceTopic + '.json';
+          /nixery(
+            merge-topic,
+            sourceTopic: sourceTopic,
+            targetTopic: canonical,
+            output: mergeOut,
+          );
+          Read the merge gate under ~/nixery/merge-topic/ named mergeOut from the session workspace when present.
+          Parse the gate JSON when present. Set mergeOk to true when gate.ok is true; otherwise false.
+          EXTENDS: mergeResults = [...mergeResults, { sourceTopic, targetTopic: canonical, ok: mergeOk }];
+        END:
+        EXTENDS: merges_acc = [...(merges_acc || []), { groupId: group.id, canonical, results: mergeResults }];
+        EXTENDS: merge_canonicals_acc = [...new Set([...(merge_canonicals_acc || []), canonical])];
+      ELSE:
+        EXTENDS: merges_acc = [...(merges_acc || []), { groupId: group && group.id, skipped: true }];
+      END:
+
+  - loopSetup: for each group of [topic_groups]
+    contextKeys: [missionText, group, topic_groups, transfers_proposed_acc]
+    updateContextKeys: [transfers_proposed_acc]
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 0.65
+      rubric: |
+        Pass when group.topics is a non-empty array and the stage only proposes knowledge_transfer
+        (or skips when group has fewer than 2 topics). Fail if narrative wiki was upserted on a target topic.
+    logic: |
+      Read ~/task-skills/task-mission/SKILL.md.
+      Read ~/task-skills/cross-topic-scan/SKILL.md.
+      IF: group && group.topics && group.topics.length >= 2;
+        const briefs = *load_group_briefs(group.topics);
+        const candidates = *find_cross_topic_candidates(briefs, group, guideline: ~/task-skills/cross-topic-scan/SKILL.md);
+        IF: candidates && candidates.length;
+          for each candidate of candidates: /platform(
+            propose-knowledge-transfer,
+            sourceTopic: candidate.sourceTopic,
+            targetTopic: candidate.targetTopic,
+            claim: candidate.claim,
+            rationale: candidate.rationale,
+            example: candidate.example,
+            evidence: candidate.evidence,
+          );
+          EXTENDS: transfers_proposed_acc = (transfers_proposed_acc || 0) + candidates.length;
+        END:
+      END:
+
+  - nixeryRun: apply-approved-transfers
+    nixeryInput:
+      output: result.json
+    logic: "(nixery)"
+
+  - produceContextKeys: [approvedTransfersApplied, transfer_target_topics, dedup_topics, mergesApplied, mergeCanonicals]
+    contextKeys: [reviews_acc, merges_acc, merge_canonicals_acc]
+    logic: |
+      Read ~/nixery/apply-approved-transfers/result.json from the session workspace.
+      Parse the gate JSON. Set approvedTransfersApplied to approvedTransfersApplied number or 0.
+      Set transfer_target_topics to gate.targetTopics when it is an array; otherwise [].
+      Build appliedTopics as the topic strings from reviews_acc where skippedEmpty is not true and applyFailed is not true.
+      Set mergeCanonicals to merge_canonicals_acc or [].
+      Set mergesApplied to the count of merge results in merges_acc where ok is true.
+      Set dedup_topics to the sorted unique union of appliedTopics, transfer_target_topics, and mergeCanonicals.
+
+  - loopSetup: for each topic of [dedup_topics]
+    contextKeys: [missionText, topic, dedup_topics, reviews_acc]
+    updateContextKeys: [reviews_acc]
+    verify:
+      defId: stage-verify
+      autoRetry: false
+      minScore: 0.5
+      rubric: |
+        Soft pass when topic is non-empty. Judge context only (no workspace filesystem paths).
+        Prefer that reviews_acc has a matching review with dedupOk set true or false after this iteration.
+        Do not fail the overnight run solely because a dedup gate file is missing or ok:false.
+    logic: |
+      Read ~/task-skills/task-mission/SKILL.md.
+      const dedupOut = 'dedup-' + topic + '.json';
+      /nixery(
+        dedup-knowledge,
+        topic: topic,
+        purpose: Overnight within-topic maintenance: collapse duplicate H2 sections and stacked Key Facts / near-duplicate HOWTO blocks on this topic narrative pages after apply and approved transfers.
+        output: dedupOut,
+      );
+      Read the dedup gate under ~/nixery/dedup-knowledge/ named dedupOut from the session workspace when present.
+      Parse the gate JSON when present. Set dedupOk to true when gate.ok is true; otherwise false.
+      EXTENDS: reviews_acc = (reviews_acc || []).map((review) => review && review.topic === topic
+        ? { ...review, dedupOk, dedupSkipped: false }
+        : review);
+
+  - produceContextKeys: [result]
+    contextKeys: [instructionPreview, topics, reviews_acc, topic_groups, transfers_proposed_acc, instruction_followup, approvedTransfersApplied, dedup_topics, mergesApplied, mergeCanonicals]
+    logic: |
+      const result = {
+        reviewedAt: new Date().toISOString(),
+        instructionPreview: instructionPreview || '',
+        topicCount: (topics || []).length,
+        reviews: reviews_acc || [],
+        topic_groups: topic_groups || [],
+        mergesApplied: mergesApplied || 0,
+        mergeCanonicals: mergeCanonicals || [],
+        transfersProposed: transfers_proposed_acc || 0,
+        approvedTransfersApplied: approvedTransfersApplied || 0,
+        dedupTopics: dedup_topics || [],
+        additionalInstructionNotes: instruction_followup && instruction_followup.actionable
+          ? instruction_followup.notes
+          : undefined,
+      };

@@ -56,6 +56,10 @@
       "development": "./yahl/types.ts",
       "import": "./dist/yahl/types.js"
     },
+    "./yahl/while-setup": {
+      "development": "./yahl/while-setup.ts",
+      "import": "./dist/yahl/while-setup.js"
+    },
     "./yahl/verify": {
       "development": "./yahl/verify.ts",
       "import": "./dist/yahl/verify.js"
@@ -112,10 +116,6 @@
       "development": "./nixery/resolve-policy.ts",
       "import": "./dist/nixery/resolve-policy.js"
     },
-    "./nixery/knowledge-write-gate": {
-      "development": "./nixery/knowledge-write-gate.ts",
-      "import": "./dist/nixery/knowledge-write-gate.js"
-    },
     "./nixery/load-def": {
       "development": "./nixery/load-def.ts",
       "import": "./dist/nixery/load-def.js"
@@ -127,6 +127,14 @@
     "./nixery/list-defs": {
       "development": "./nixery/list-defs.ts",
       "import": "./dist/nixery/list-defs.js"
+    },
+    "./nixery/ensure-plugin-links": {
+      "development": "./nixery/ensure-plugin-links.ts",
+      "import": "./dist/nixery/ensure-plugin-links.js"
+    },
+    "./nixery/resolve-entry": {
+      "development": "./nixery/resolve-entry.ts",
+      "import": "./dist/nixery/resolve-entry.js"
     },
     "./nixery/load-validation": {
       "development": "./nixery/load-validation.ts",

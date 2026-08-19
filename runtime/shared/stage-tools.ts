@@ -1,7 +1,6 @@
 import type OpenAI from "openai";
 
 import {
-  CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
   AskUserToolCallEnvelope,
   type SetContextToolCallEnvelope,
@@ -43,13 +42,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 export type SetContextToolArguments = SetContextToolCallEnvelope["arguments"];
 
-export const BROWSER_MODES = ["goto", "act", "extract", "observe", "agent"] as const;
+export const BROWSER_MODES = ["goto", "act", "extract", "observe"] as const;
 
 export type TBrowserMode = (typeof BROWSER_MODES)[number];
 
 export type BrowserToolArguments = {
   instruction: string;
-  maxSteps?: number;
   mode: TBrowserMode;
   schema?: Record<string, unknown>;
   url?: string;
@@ -59,7 +57,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Ask the user one or more questions in a single batch. All questions must be answered before the stage continues.",
+        "Read /opt/skills/ask-user/SKILL.md first. Pause for a user question batch (askUserBatch.v1).",
       name: "ask_user",
       parameters: {
         properties: {
@@ -110,7 +108,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "End this stage and jump the pipeline to another labeled stage declared in this stage's goto list. Use for /stage(id) in stage logic. Requires a non-empty reason. On success the current stage finishes without verify and the orchestrator continues from the target stage.",
+        "Jump to a labeled stage in this stage's goto list (/stage(id)). Requires a non-empty reason. On success this stage ends without verify.",
       name: "goto_stage",
       parameters: {
         properties: {
@@ -132,20 +130,16 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Control a headless browser via Stagehand. Use for /stagehand(...) in stage logic: web search, page fetch, structured extract, observe elements, or multi-step agent tasks. Returns JSON { ok, data } or { ok: false, error }.",
+        "Read /opt/skills/stagehand/SKILL.md first. Stagehand goto/act/extract/observe. Pass url only with goto. Returns JSON { ok, data } or { ok: false, error }.",
       name: "browser",
       parameters: {
         properties: {
           instruction: {
-            description: "Natural language instruction for act, extract, observe, or agent mode.",
+            description: "Natural language instruction for act, extract, or observe; or a short navigate note for goto.",
             type: "string",
           },
-          maxSteps: {
-            description: "Max agent steps when mode is agent. Default 15.",
-            type: "number",
-          },
           mode: {
-            description: "Stagehand operation mode.",
+            description: "Stagehand operation mode. Use goto to navigate; act/extract/observe operate on the current page.",
             enum: [...BROWSER_MODES],
             type: "string",
           },
@@ -154,7 +148,8 @@ export const STAGE_TOOLS = [
             type: "object",
           },
           url: {
-            description: "Required for goto; optional starting URL for other modes.",
+            description:
+              "Required for goto only. Omit for act, extract, and observe — passing url on those modes reloads the page.",
             type: "string",
           },
         },
@@ -167,7 +162,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Run a single shell command inside the agent container. Use for listing files, reading paths under /opt/skills, and curl for documented HTTP APIs in workspace files referenced by stage logic. Do not use curl for web search, HTML browse, or scraping. Do not use for persisting context. Do not use echo/printf to fake other API tools; call those tools by name instead.",
+        "One shell command. List/read /opt/skills and ~/task-skills; curl only for documented workspace HTTP APIs. Not for persisting context or faking other tools.",
       name: "run_bash",
       parameters: {
         properties: {
@@ -185,8 +180,8 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Persist a key-value pair to orchestrator runtime. scope global is shared across stages; scope stage is reset each stage; scope types is the type-definition bucket, shared across stages, always present in the agent input payload.",
-      name: "set_context",
+        "Append onto a context array (or pair non-array values). scope global is shared across stages; types is the type-definition bucket. Use instead of set_context when accumulating list items.",
+      name: "extend_context",
       parameters: {
         properties: {
           key: {
@@ -198,9 +193,30 @@ export const STAGE_TOOLS = [
             enum: [...CONTEXT_SCOPES],
             type: "string",
           },
-          operation: {
-            description: "Context write strategy. set overwrites; extend appends onto arrays (or [old, new] for non-arrays).",
-            enum: [...CONTEXT_SET_OPERATIONS],
+          value: {
+            description: "Any JSON-serializable value to append.",
+          },
+        },
+        required: ["scope", "key", "value"],
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
+  {
+    function: {
+      description:
+        "Overwrite a key-value pair. scope global is shared across stages; types is the type-definition bucket. To append onto arrays use extend_context.",
+      name: "set_context",
+      parameters: {
+        properties: {
+          key: {
+            description: "Non-empty string key.",
+            type: "string",
+          },
+          scope: {
+            description: "Target bucket.",
+            enum: [...CONTEXT_SCOPES],
             type: "string",
           },
           value: {
@@ -216,8 +232,8 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke the mastermind gateway helper. Use for /mastermind(list-topic-policies|resolve-topic-policy|patch-topic-policy|dispatch-task-run|propose-notification, ...) in stage logic. Topic resolve, media-to-text, and LLM helpers use the nixery tool. Planning uses orchestrator nixeryRun plan or plan-study + ~/nixery/{defId}/{output}. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error, retryable?, requestStatus?, invocationId?, unavailable?, queueDepth? }.",
-      name: "mastermind",
+        "Read /opt/skills/platform/SKILL.md first. /platform(...) against the session API. Returns JSON { ok, data } or { ok: false, error }.",
+      name: "platform",
       parameters: {
         properties: {
           args: {
@@ -225,11 +241,8 @@ export const STAGE_TOOLS = [
             type: "object",
           },
           skill: {
-            description: "Helper skill name.",
+            description: "Platform skill name.",
             enum: [
-              "list-topic-policies",
-              "resolve-topic-policy",
-              "patch-topic-policy",
               "dispatch-task-run",
               "propose-notification",
               "propose-knowledge-transfer",
@@ -248,24 +261,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Poll mastermind request activity for the current session stage request. Use for debugging long skill calls — do not re-POST while status is queued or running. Returns { ok, agent, queueDepth, request: { status, skill, invocationId, startedAt, updatedAt } }.",
-      name: "mastermind_status",
-      parameters: {
-        properties: {
-          invocationId: {
-            description: "Optional invocation id from a prior mastermind tool response.",
-            type: "string",
-          },
-        },
-        type: "object",
-      },
-    },
-    type: "function" as const,
-  },
-  {
-    function: {
-      description:
-        "Run a nixery def inline from stage logic. Use for /nixery(defId, …) where the def has output.inlineTool: true in server/nixery/{defId}/index.yml. Returns JSON { ok, data } or { ok: false, error }.",
+        "Read /opt/skills/nixery/SKILL.md first. /nixery(defId, …) inline abilities. Returns JSON { ok, data } or { ok: false, error }.",
       name: "nixery",
       parameters: {
         properties: {
@@ -274,7 +270,7 @@ export const STAGE_TOOLS = [
             type: "object",
           },
           defId: {
-            description: "Nixery def id under server/nixery/ with output.inlineTool: true.",
+            description: "Nixery ability id (globally unique under server/nixery/{plugin}/) with output.inlineTool: true.",
             type: "string",
           },
         },
@@ -308,31 +304,7 @@ export const parseNixeryToolArguments = (
   };
 };
 
-export const parseMastermindStatusToolArguments = (
-  raw: string,
-): { invocationId?: string } => {
-  if (!raw.trim()) {
-    return {};
-  }
-
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch {
-    return {};
-  }
-
-  if (!isRecord(parsed)) return {};
-
-  const invocationId = typeof parsed.invocationId === 'string' && parsed.invocationId.trim()
-    ? parsed.invocationId.trim()
-    : undefined;
-
-  return invocationId ? { invocationId } : {};
-};
-
-export const parseMastermindToolArguments = (
+export const parsePlatformToolArguments = (
   raw: string,
 ): { args: Record<string, unknown>; skill: string } | null => {
   let parsed: unknown;
@@ -386,16 +358,13 @@ export const parseBrowserToolArguments = (raw: string): BrowserToolArguments | n
   if (!parsed.instruction.trim()) return null;
 
   const url = typeof parsed.url === "string" && parsed.url.trim() ? parsed.url.trim() : undefined;
-  const maxSteps = typeof parsed.maxSteps === "number" && parsed.maxSteps > 0
-    ? parsed.maxSteps
-    : undefined;
   const schema = isRecord(parsed.schema) ? parsed.schema : undefined;
 
   if (parsed.mode === "goto" && !url) return null;
+  if (parsed.mode !== "goto" && url) return null;
 
   return {
     instruction: parsed.instruction.trim(),
-    ...(maxSteps === undefined ? {} : { maxSteps }),
     mode: parsed.mode as TBrowserMode,
     ...(schema === undefined ? {} : { schema }),
     ...(url === undefined ? {} : { url }),

@@ -1,15 +1,19 @@
 import { randomUUID } from 'crypto';
 
-import type { TResumeStage, TRunYahl } from './-types';
+import type { TResumeStage, TRunYahl, TStageUsage } from './-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TStorage } from '@/shared/transports/-types';
 
 import { toAgentStage } from '@/shared/yahl-stage';
+import { resolveVerifySkipWarmUp } from '@project-yahl/shared/yahl/verify';
 import { parseNixeryToolArguments } from '@/shared/stage-tools';
 
 import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
-import { seedRunInputContext } from '@/orchestrator/-context/default-context';
+import {
+  seedDefaultContext,
+  seedRunInputContext,
+} from '@/orchestrator/-context/default-context';
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
@@ -31,6 +35,7 @@ import {
 } from '@/orchestrator/-verify/resume-helpers';
 
 import {
+  applyExtendContextToolCall,
   applySetContextToolCall,
   filterStorageForStage,
 } from '@/orchestrator/-context';
@@ -53,12 +58,16 @@ import {
   writeProduceKeysDiagnostic,
 } from './produce-keys-retry';
 import { handleLoop } from './loop';
+import { handleWhile } from './while';
+import {
+  isPostLoopWhileResume,
+  runWhileWithParentVerify,
+} from './while-parent-verify';
 import {
   resolveStageWaitMaxMs,
   StageWaitTimeoutError,
 } from './stage-wait-timeout';
-
-const AGENT_LOCAL_TOOLS = new Set(['browser', 'mastermind', 'run_bash']);
+import { startStageWaitHeartbeat } from './stage-wait-heartbeat';
 
 const serializeStorageSnapshot = (storage: TStorage) => ({
   context: Object.fromEntries(storage.context.entries()),
@@ -117,6 +126,10 @@ class YahlAgentRunner {
   private gotoCount = 0;
 
   private enteredViaGoto = false;
+
+  private lastGotoTargetIndex?: number;
+
+  private lastUsage?: TStageUsage;
 
   constructor(
     yahl: string,
@@ -183,6 +196,50 @@ class YahlAgentRunner {
         continue;
       }
 
+      const resumeLoopMeta = this.options.resumeStage?.loopMeta ?? this.options.loopMeta;
+
+      if (stage.type === 'while' && !this.options.contextAfter && !(isResumingThisStage && !isPostLoopWhileResume(resumeLoopMeta))) {
+        this.enteredViaGoto = false;
+        const whileResult = await runWhileWithParentVerify({
+          agentName: this.agentName,
+          firstPass: (systemAppend) => handleWhile(
+            stage,
+            this.storage,
+            runYahl,
+            this.temperature,
+            this.pipelineStageIndex,
+            this.options.recoveryStages ?? this.stages,
+            { systemAppend },
+          ),
+          pipelineStageIndex: this.pipelineStageIndex,
+          rerun: (systemAppend) => handleWhile(
+            stage,
+            this.storage,
+            runYahl,
+            this.temperature,
+            this.pipelineStageIndex,
+            this.options.recoveryStages ?? this.stages,
+            {
+              skipWarmUp: resolveVerifySkipWarmUp(stage.spec.verify),
+              systemAppend,
+            },
+          ),
+          sessionId: this.sessionId,
+          stage,
+          storage: this.storage,
+          temperature: this.temperature,
+        });
+
+        if (whileResult.gotoTargetStageIndex !== undefined) {
+          this.enteredViaGoto = true;
+          stageIndex = whileResult.gotoTargetStageIndex;
+          continue;
+        }
+
+        stageIndex += 1;
+        continue;
+      }
+
       if (!isResumingThisStage && isTypesPreambleStage(stage, stageIndex)) {
         seedTypesPreamble(this.storage.types, stage.spec.logic);
         this.resetStageContext(stage, stageIndex, false);
@@ -193,11 +250,21 @@ class YahlAgentRunner {
 
       this.resetStageContext(stage, stageIndex, isResumingThisStage);
       const nextStageIndex = await this.runOneStage();
+
+      if (typeof nextStageIndex === 'number') {
+        this.lastGotoTargetIndex = nextStageIndex;
+      }
+
       stageIndex = nextStageIndex ?? stageIndex + 1;
     }
 
     return {
+      requestId: this.requestId,
       storage: this.storage,
+      ...(this.lastGotoTargetIndex === undefined
+        ? {}
+        : { gotoTargetStageIndex: this.lastGotoTargetIndex }),
+      ...(this.lastUsage ? { usage: this.lastUsage } : {}),
     };
   }
 
@@ -227,6 +294,8 @@ class YahlAgentRunner {
     this.activeStage = resumedStage && parsedStagesMatchSlot(resumedStage, this.boundStage)
       ? resumedStage
       : this.boundStage;
+
+    seedDefaultContext(this.storage);
 
     this.filteredStorage = filterStorageForStage(
       this.storage,
@@ -355,6 +424,7 @@ class YahlAgentRunner {
         loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
         parsedStageIndex: this.boundParsedStageIndex,
         persistedStage: stageSpec,
+        prefixMessages: this.options.prefixMessages,
         resumeFrom: this.resumeStage?.resumeFrom,
         skipStageCreate,
         sourceStartLine: this.boundSourceStartLine,
@@ -378,6 +448,34 @@ class YahlAgentRunner {
             return {
               hasError: false,
               result: `set_context: invalid JSON arguments: ${outcome.invalidJson}`,
+            };
+          }
+
+          if (outcome.rejectReason) {
+            return {
+              hasError: false,
+              result: outcome.rejectReason,
+            };
+          }
+
+          return {
+            hasError: false,
+            result: outcome.applied ? 'OK' : 'skipped',
+            newStorage: this.storage,
+          };
+        }
+
+        if (toolCall.function.name === 'extend_context') {
+          const outcome = await applyExtendContextToolCall(
+            this.storage,
+            toolCall,
+            this.activeStage,
+          );
+
+          if (outcome.invalidJson) {
+            return {
+              hasError: false,
+              result: `extend_context: invalid JSON arguments: ${outcome.invalidJson}`,
             };
           }
 
@@ -451,14 +549,19 @@ class YahlAgentRunner {
               requestId: this.requestId,
               sessionId: this.sessionId,
             });
+            const { defRunCompleted, ...gate } = result as Record<string, unknown> & {
+              defRunCompleted?: boolean;
+              ok: boolean;
+            };
 
-            if (!result.ok) {
+            if (!gate.ok && defRunCompleted !== true) {
               this.nixerySoftFails += 1;
             }
 
             return resolveNixerySoftFailToolResult({
+              abandonAfterDefRun: defRunCompleted === true,
               maxRetries: this.maxNixeryInlineRetries,
-              result,
+              result: gate as Record<string, unknown> & { ok: boolean },
               softFailCount: this.nixerySoftFails,
             });
           } catch (error) {
@@ -477,12 +580,6 @@ class YahlAgentRunner {
           }
         }
 
-        if (AGENT_LOCAL_TOOLS.has(toolCall.function.name)) {
-          return {
-            hasError: false,
-            result: 'OK',
-          };
-        }
       } catch (error) {
         if (error instanceof AskUserPausedError) {
           pauseError = error;
@@ -532,25 +629,49 @@ class YahlAgentRunner {
       + (stageWaitMaxMs == null ? '' : ` stageWaitMaxMs=${stageWaitMaxMs}`),
     );
 
+    const heartbeat = startStageWaitHeartbeat({
+      getElapsedMs: () => Date.now() - waitStartedAt,
+      requestId: this.requestId,
+      sessionId: this.sessionId,
+      stageId: this.activeStage?.spec?.id,
+      stageIndex: this.pipelineStageIndex,
+    });
+
     try {
-      await Promise.race([
+      const usage = await Promise.race([
         wait(),
         pausePromise,
         ...(stageWaitTimeoutPromise ? [stageWaitTimeoutPromise] : []),
       ]);
+
+      if (usage && typeof usage === 'object' && ('turns' in usage || 'bashCalls' in usage)) {
+        this.lastUsage = usage;
+      }
     } catch (error) {
+      heartbeat.clear();
       disposeWait();
       toolCallHandlers.dispose();
       await toolCallPromise.catch(() => {});
 
       const errorName = error instanceof Error ? error.name : 'unknown';
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error && error.stack
+        ? (error.stack.length > 500 ? `${error.stack.slice(0, 500)}…` : error.stack)
+        : '-';
 
       console.log(
         `[orchestrator] stage wait end requestId=${this.requestId} durationMs=${Date.now() - waitStartedAt} outcome=error`,
       );
       console.log(
-        `[yahl-diag] race error requestId=${this.requestId} errorName=${errorName} pid=${process.pid}`,
+        `[yahl-diag] race error requestId=${this.requestId} errorName=${errorName} errorMessage=${errorMessage} `
+        + `stack=${errorStack} stageIndex=${this.pipelineStageIndex} `
+        + `stageId=${this.activeStage?.spec?.id ?? '-'} sessionId=${this.sessionId} endReceived=false pid=${process.pid}`,
       );
+
+      globalThis.orchestratorFailureCursor = {
+        kind: 'pipeline',
+        stageIndex: this.pipelineStageIndex,
+      };
 
       if (error instanceof AskUserPausedError) {
         throw error;
@@ -558,6 +679,8 @@ class YahlAgentRunner {
 
       throw error;
     } finally {
+      heartbeat.clear();
+
       if (stageWaitTimer) {
         clearTimeout(stageWaitTimer);
       }
@@ -582,7 +705,7 @@ class YahlAgentRunner {
     return Boolean(this.options.verifyFastForward && this.options.contextAfter);
   }
 
-  private async finishOrchestratorDirectStage() {
+  private persistOrchestratorDirectStage() {
     globalThis.sessionTracker?.createStage(this.sessionId, {
       context: serializeStorageSnapshot(this.filteredStorage),
       parsedStageIndex: this.boundParsedStageIndex,
@@ -591,6 +714,10 @@ class YahlAgentRunner {
       stage: toAgentStage(this.activeStage.spec),
       temperature: this.temperature,
     });
+  }
+
+  private async finishOrchestratorDirectStage() {
+    this.persistOrchestratorDirectStage();
 
     publisher.emitStageFinish({
       requestId: this.requestId,
@@ -609,16 +736,24 @@ class YahlAgentRunner {
         throw new Error('nixeryRun stage requires nixeryInput');
       }
 
-      const def = await loadNixeryDef(nixeryRun);
+      const { def } = await loadNixeryDef(nixeryRun);
+
+      this.persistOrchestratorDirectStage();
+      await globalThis.sessionTracker?.flush?.();
 
       const { containerName } = await runNixeryDef({
         defId: nixeryRun,
         input: resolveNixeryStageInput(this.filteredStorage, nixeryInput, def.input),
+        requestId: this.requestId,
         sessionId: this.sessionId,
         skipTeardown: true,
       });
 
-      await this.finishOrchestratorDirectStage();
+      publisher.emitStageFinish({
+        requestId: this.requestId,
+        contextAfter: this.storage,
+      });
+      await globalThis.sessionTracker?.flush?.();
       await teardownNixeryContainer(containerName, this.sessionId, nixeryRun);
       return undefined;
     }
@@ -720,6 +855,8 @@ class YahlAgentRunner {
         this.requestId = randomUUID();
         this.stageDocSourceStartLine = undefined;
       }
+
+      seedDefaultContext(this.storage);
 
       this.filteredStorage = filterStorageForStage(
         this.storage,

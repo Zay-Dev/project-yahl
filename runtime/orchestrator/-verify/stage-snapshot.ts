@@ -1,4 +1,4 @@
-import type { TVerifyStageSnapshot } from '@/shared/mastermind-client';
+import type { TVerifyStageSnapshot } from '@/shared/platform-client';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 

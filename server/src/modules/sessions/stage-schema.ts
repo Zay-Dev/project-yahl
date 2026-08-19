@@ -2,7 +2,7 @@ import Joi from 'joi';
 
 import { STAGE_ID_PATTERN } from '@project-yahl/shared/yahl/stage-goto';
 
-import type { TParsedStage, TYahlStage } from './-types';
+import type { TParsedStage, TParsedStageSnapshot, TYahlStage } from './-types';
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
 
@@ -29,6 +29,7 @@ const verifySpecSchema = Joi.object({
   minScore: Joi.number().min(0).max(1).optional(),
   resume: Joi.boolean().optional(),
   rubric: Joi.string().trim().optional(),
+  skipWarmUp: Joi.boolean().optional(),
 });
 
 const agentOverridesSchema = Joi.object({
@@ -45,6 +46,14 @@ const gotoEntrySchema = Joi.object({
   command: Joi.string().trim().pattern(STAGE_GOTO_COMMAND_PATTERN).required(),
   description: Joi.string().trim().required(),
 });
+
+const whileSetupSchema = Joi.alternatives().try(
+  Joi.string().trim().min(1),
+  Joi.object({
+    condition: Joi.string().trim().min(1).required(),
+    doAtLeast: Joi.number().integer().min(1).optional(),
+  }),
+);
 
 export const yahlStageSchema = Joi.object<TYahlStage>({
   agentOverrides: agentOverridesSchema.optional(),
@@ -71,14 +80,28 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   updateContextKeys: stringArraySchema.optional(),
   verify: verifySpecSchema.optional(),
   version: Joi.number().integer().min(1).optional(),
+  warmUp: Joi.string().trim().optional(),
+  whileSetup: whileSetupSchema.optional(),
 })
   .custom((value, helpers) => {
     if (value.contextMode === true && value.conditionMode === true) {
       return helpers.error('any.invalid', { message: 'contextMode and conditionMode are mutually exclusive' });
     }
 
+    if (value.loopSetup !== undefined && value.whileSetup !== undefined) {
+      return helpers.error('any.invalid', { message: 'loopSetup and whileSetup are mutually exclusive' });
+    }
+
     if (value.conditionMode === true && value.loopSetup !== undefined) {
       return helpers.error('any.invalid', { message: 'conditionMode and loopSetup are mutually exclusive' });
+    }
+
+    if (value.conditionMode === true && value.whileSetup !== undefined) {
+      return helpers.error('any.invalid', { message: 'conditionMode and whileSetup are mutually exclusive' });
+    }
+
+    if (value.warmUp !== undefined && value.loopSetup === undefined && value.whileSetup === undefined) {
+      return helpers.error('any.invalid', { message: 'warmUp requires loopSetup or whileSetup' });
     }
 
     if (value.conditionMode === true && !String(value.logic).includes('IF:')) {
@@ -108,6 +131,14 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
         return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with loopSetup' });
       }
 
+      if (value.whileSetup !== undefined) {
+        return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with whileSetup' });
+      }
+
+      if (value.warmUp !== undefined) {
+        return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with warmUp' });
+      }
+
       if (value.produceContextKeys !== undefined) {
         return helpers.error('any.invalid', { message: 'nixeryRun stages must not set produceContextKeys' });
       }
@@ -120,6 +151,12 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
     return value;
   });
 
+export const parsedStageSnapshotSchema = Joi.object<TParsedStageSnapshot>({
+  lines: Joi.string().required(),
+  sourceStartLine: Joi.number().integer().min(1).required(),
+  type: Joi.string().valid('loop', 'plain', 'while').required(),
+});
+
 export const parsedStageSchema = Joi.object<TParsedStage>({
   contextKeys: stringArraySchema.optional(),
   lines: Joi.string().required(),
@@ -128,6 +165,6 @@ export const parsedStageSchema = Joi.object<TParsedStage>({
   sourceStartLine: Joi.number().integer().min(1).required(),
   spec: yahlStageSchema.required(),
   temperature: Joi.number().min(0).max(2).optional(),
-  type: Joi.string().valid('loop', 'plain').required(),
+  type: Joi.string().valid('loop', 'plain', 'while').required(),
   updateContextKeys: stringArraySchema.optional(),
 });

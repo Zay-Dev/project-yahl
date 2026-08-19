@@ -7,10 +7,13 @@ import type { YahlStage } from '@/shared/yahl-stage';
 type TPushRequestEnvelope = {
   context: Record<string, unknown>;
   loopMeta?: {
-    arraySnapshot: unknown[];
-    index: number;
+    arraySnapshot?: unknown[];
+    index?: number;
+    kind?: 'for' | 'warmup' | 'while';
+    remainingBashCalls?: number;
+    remainingTurns?: number;
     temperature?: number;
-    value: unknown;
+    value?: unknown;
   };
   parsedStageIndex?: number;
   requestId: string;
@@ -22,6 +25,12 @@ type TPushRequestEnvelope = {
 type TToolCallEnvelope = {
   requestId: string;
   toolCalls: Record<string, unknown>[];
+};
+
+type TToolCallResultEnvelope = {
+  requestId: string;
+  result: string;
+  toolCallId: string;
 };
 
 type TModelResponseEnvelope = {
@@ -47,7 +56,35 @@ export class SessionEventTrackerError extends Error {
 
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
 
+const parseSessionIdFromUrl = (url: string) => {
+  const match = url.match(/\/sessions\/([^/]+)/);
+
+  return match?.[1];
+};
+
+const parseRequestIdFromUrl = (url: string) => {
+  const match = url.match(/\/stages\/([^/]+)/);
+
+  return match?.[1];
+};
+
+const isUndiciFetchError = (error: unknown) => {
+  const text = String(error);
+
+  if (text.includes('UND_ERR_')) {
+    return true;
+  }
+
+  if (!(error instanceof Error) || !error.cause) {
+    return false;
+  }
+
+  return String(error.cause).includes('UND_ERR_');
+};
+
 const _request = async (url: string, init: RequestInit) => {
+  const sessionId = parseSessionIdFromUrl(url);
+  const requestId = parseRequestIdFromUrl(url);
   let response: Response;
 
   try {
@@ -60,8 +97,12 @@ const _request = async (url: string, init: RequestInit) => {
     });
   } catch (error) {
     const message = `failed ${init.method ?? 'GET'} ${url}: ${String(error)}`;
+    const undiciHint = isUndiciFetchError(error) ? ' undici=yes' : '';
 
-    console.error(`[ERROR] session-event-tracker ${message}\n`);
+    console.error(
+      `[ERROR] session-event-tracker ${message} sessionId=${sessionId ?? '-'} `
+      + `requestId=${requestId ?? '-'}${undiciHint}\n`,
+    );
     throw new SessionEventTrackerError(message, url);
   }
 
@@ -69,7 +110,10 @@ const _request = async (url: string, init: RequestInit) => {
     const detail = await response.text().catch(() => '');
     const message = `${init.method ?? 'GET'} ${url} failed with ${response.status} ${response.statusText}: ${detail || '<empty body>'}`;
 
-    console.error(`[ERROR] session-event-tracker ${message}\n`);
+    console.error(
+      `[ERROR] session-event-tracker ${message} sessionId=${sessionId ?? '-'} `
+      + `requestId=${requestId ?? '-'}\n`,
+    );
     throw new SessionEventTrackerError(message, url, response.status);
   }
 };
@@ -79,6 +123,10 @@ const _post = (url: string, body: unknown) =>
 
 const _patch = (url: string, body: unknown) =>
   _request(url, { body: JSON.stringify(body), method: 'PATCH' });
+
+import { truncateToolResult, TOOL_RESULT_PERSIST_MAX } from '@/shared/tool-result-truncate';
+
+export { TOOL_RESULT_PERSIST_MAX, truncateToolResult };
 
 export const createSessionEventTracker = () => {
   const baseUrlRaw = process.env.SESSION_API_BASE_URL;
@@ -142,7 +190,7 @@ export const createSessionEventTracker = () => {
         stage: envelope.stage,
         ...(temperature === undefined ? {} : { temperature }),
       });
-    });
+    }, true);
   };
 
   const appendToolCall = (sessionId: string, envelope: TToolCallEnvelope) => {
@@ -154,6 +202,25 @@ export const createSessionEventTracker = () => {
         `/stages/${encodeURIComponent(envelope.requestId)}/tool-calls`;
 
       await _post(url, { toolCalls: envelope.toolCalls });
+    });
+  };
+
+  const appendToolResult = (sessionId: string, envelope: TToolCallResultEnvelope) => {
+    enqueue(async () => {
+      if (!baseUrl) return;
+
+      const content = truncateToolResult(envelope.result);
+
+      if (!content) {
+        return;
+      }
+
+      const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}` +
+        `/stages/${encodeURIComponent(envelope.requestId)}/tool-call-results`;
+
+      await _post(url, {
+        results: [{ content, id: envelope.toolCallId }],
+      });
     });
   };
 
@@ -224,6 +291,7 @@ export const createSessionEventTracker = () => {
   return {
     appendModelResponse,
     appendToolCall,
+    appendToolResult,
     createStage,
     flush,
     patchLiveViewVncPort,

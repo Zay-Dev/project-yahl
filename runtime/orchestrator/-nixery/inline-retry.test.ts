@@ -17,10 +17,10 @@ describe('resolveNixeryInlineRetryMax', () => {
     }
   });
 
-  it('defaults to 3', () => {
+  it('defaults to 1 for pre-run soft-fail only', () => {
     delete process.env.YAHL_NIXERY_INLINE_RETRY_MAX;
 
-    assert.equal(resolveNixeryInlineRetryMax(), 3);
+    assert.equal(resolveNixeryInlineRetryMax(), 1);
   });
 
   it('reads positive env', () => {
@@ -32,7 +32,7 @@ describe('resolveNixeryInlineRetryMax', () => {
   it('falls back on invalid env', () => {
     process.env.YAHL_NIXERY_INLINE_RETRY_MAX = '0';
 
-    assert.equal(resolveNixeryInlineRetryMax(), 3);
+    assert.equal(resolveNixeryInlineRetryMax(), 1);
   });
 });
 
@@ -89,9 +89,25 @@ describe('resolveNixerySoftFailToolResult', () => {
     });
   });
 
+  it('abandons immediately after def-run exhaustion', () => {
+    const out = resolveNixerySoftFailToolResult({
+      abandonAfterDefRun: true,
+      maxRetries: 3,
+      result: { ok: false, error: 'container exited but output invalid' },
+      softFailCount: 0,
+    });
+
+    assert.equal(out.hasError, false);
+    assert.deepEqual(JSON.parse(out.result), {
+      ok: false,
+      error: 'container exited but output invalid',
+      abandoned: true,
+    });
+  });
+
   it('soft-fails invalid arguments within budget', () => {
     const out = resolveNixerySoftFailToolResult({
-      maxRetries: 3,
+      maxRetries: 1,
       result: { ok: false, error: 'nixery: invalid arguments' },
       softFailCount: 1,
     });
@@ -100,15 +116,15 @@ describe('resolveNixerySoftFailToolResult', () => {
     assert.deepEqual(JSON.parse(out.result), {
       ok: false,
       error: 'nixery: invalid arguments',
-      retryRemaining: 2,
+      retryRemaining: 0,
     });
   });
 
   it('abandons invalid arguments after budget exceeded without hasError', () => {
     const out = resolveNixerySoftFailToolResult({
-      maxRetries: 3,
+      maxRetries: 1,
       result: { ok: false, error: 'nixery: invalid arguments' },
-      softFailCount: 4,
+      softFailCount: 2,
     });
 
     assert.equal(out.hasError, false);

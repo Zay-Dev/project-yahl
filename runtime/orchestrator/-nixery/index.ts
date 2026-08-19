@@ -3,7 +3,7 @@ export {
   isContainerRunning,
   resolveNixeryContainerName,
 } from './run-container';
-export { loadNixeryDef, resolveNixeryDefPath, resolveNixeryRoot } from './load-def';
+export { loadNixeryDef, resolveNixeryAbility, resolveNixeryDefPath, resolveNixeryRoot } from './load-def';
 export { resolveNixeryEnv } from './resolve-def-env';
 export { resolveMounts } from './resolve-mounts';
 export {

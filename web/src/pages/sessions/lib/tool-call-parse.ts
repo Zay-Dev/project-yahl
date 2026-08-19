@@ -44,6 +44,53 @@ export const parseToolArgumentsDetailed = (raw: unknown): TToolArgumentParseResu
 export const parseToolArguments = (raw: unknown): unknown =>
   parseToolArgumentsDetailed(raw).parsed;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const toolCallName = (toolCall: Record<string, unknown>) => {
+  const fn = toolCall.function as { name?: unknown } | undefined;
+
+  if (typeof fn?.name === 'string' && fn.name.trim()) {
+    return fn.name;
+  }
+
+  if (typeof toolCall.name === 'string' && toolCall.name.trim()) {
+    return toolCall.name;
+  }
+
+  return 'unknown';
+};
+
+const toolCallId = (toolCall: Record<string, unknown>, index: number) =>
+  typeof toolCall.id === 'string' && toolCall.id.trim() ? toolCall.id : `tool-${index}`;
+
+const toolCallRawArguments = (toolCall: Record<string, unknown>) => {
+  const fn = toolCall.function as { arguments?: unknown } | undefined;
+
+  if (fn?.arguments !== undefined && fn.arguments !== null) {
+    return fn.arguments;
+  }
+
+  if (toolCall.arguments !== undefined && toolCall.arguments !== null) {
+    return toolCall.arguments;
+  }
+
+  return undefined;
+};
+
+export const parseToolSummaries = (toolCalls: unknown[]) =>
+  toolCalls.flatMap((toolCall, index) => {
+    if (!isRecord(toolCall)) {
+      return [];
+    }
+
+    return [{
+      arguments: parseToolArguments(toolCallRawArguments(toolCall)),
+      id: toolCallId(toolCall, index),
+      name: toolCallName(toolCall),
+    }];
+  });
+
 export const isSetContextArgs = (value: unknown): value is TSetContextArgs => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;

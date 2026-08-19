@@ -1,6 +1,7 @@
 import type { OpenAI } from 'openai';
 
 import type { TModelResponseTag } from '../model-response-tags.js';
+import type { ChatApiMessage } from '../stage-tools.js';
 
 import { EventEmitter } from 'events';
 
@@ -24,10 +25,15 @@ type TNormalizedStorage = {
   types: Record<string, unknown>;
 };
 
+export type TLoopMetaKind = 'warmup' | 'for' | 'while';
+
 export type TLoopMeta = {
   arraySnapshot: unknown[];
   index: number;
   indexName?: string;
+  kind?: TLoopMetaKind;
+  remainingBashCalls?: number;
+  remainingTurns?: number;
   temperature?: number;
   value: unknown;
 };
@@ -45,6 +51,12 @@ export type TToolCallResult = {
   hasError: boolean;
   result: string;
   newStorage?: TStorage;
+};
+
+export type TLocalToolResultEnvelope = {
+  hasError: boolean;
+  result: string;
+  toolCallId: string;
 };
 
 export type TAskUserBatchResumeAnswer = {
@@ -66,6 +78,8 @@ export type TAskUserResumeFrom = {
 export type TRequestEnvelope = {
   context: TStorage;
   contextAfter?: TStorage;
+  parsedStageIndex?: number;
+  prefixMessages?: ChatApiMessage[];
   requestId: string;
   resumeFrom?: TAskUserResumeFrom;
   stage: YahlStage;
@@ -75,6 +89,7 @@ export type TRequestEnvelope = {
 
 interface IPublisherEventMap {
   toolCall: [envelope: { requestId: string, toolCalls: TChatToolCall[] }];
+  toolCallResult: [envelope: { requestId: string; result: string; toolCallId: string }];
   modelResponse: [envelope: { requestId: string, response: TModelResponse }];
   pushRequest: [envelope: {
     context: TNormalizedStorage;
@@ -119,6 +134,7 @@ export interface IPublisher extends IBase {
       loopMeta?: TLoopMeta | undefined,
       parsedStageIndex?: number,
       persistedStage?: YahlStage,
+      prefixMessages?: ChatApiMessage[],
       resumeFrom?: TAskUserResumeFrom,
       skipStageCreate?: boolean,
       sourceStartLine?: number,
@@ -127,7 +143,7 @@ export interface IPublisher extends IBase {
     },
   ) => Promise<{
     disposeWait: () => void;
-    wait: () => Promise<void>,
+    wait: () => Promise<{ bashCalls?: number; turns?: number } | void>,
     getWaitForToolCall: (
       callback: (toolCall: TChatToolCall) => Promise<TToolCallResult>
     ) => {
@@ -143,9 +159,12 @@ export interface ISubscriber extends IBase {
   getReply: (requestId: string) => {
     error: (error: Error) => Promise<void>;
 
-    end: () => Promise<any>;
-    toolCall: (toolCalls: TChatToolCall) => Promise<TToolCallResult>;
-
+    end: (usage?: { bashCalls?: number; turns?: number }) => Promise<any>;
     onModelResponse: (response: TModelResponse) => Promise<void>;
+    reportLocalToolCall: (
+      toolCall: TChatToolCall,
+      result: Pick<TToolCallResult, 'hasError' | 'result'>,
+    ) => Promise<void>;
+    toolCall: (toolCalls: TChatToolCall) => Promise<TToolCallResult>;
   };
 }

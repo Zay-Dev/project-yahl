@@ -378,6 +378,7 @@ lerna-debug.log*
 
 # Environment files
 .env
+.env.nixery
 .env.local
 .env.development.local
 .env.test.local
@@ -406,7 +407,5 @@ next-env.d.ts
 runtime/.agents/
 tsconfig.tsbuildinfo
 docs/
-# Vendored Linux cursor-agent for nixery media-to-text (scripts/bootstrap-cursor-agent.sh)
-server/nixery/_shared/cursor-agent/
 
 .wwebjs_cache/

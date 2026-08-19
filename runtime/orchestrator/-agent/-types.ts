@@ -1,3 +1,4 @@
+import type { ChatApiMessage } from '@/shared/stage-tools';
 import type { TAskUserResumeFrom, TStorage, TLoopMeta } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
@@ -15,6 +16,11 @@ export type TVerifyFastForward = {
   score: number;
 };
 
+export type TStageUsage = {
+  bashCalls?: number;
+  turns?: number;
+};
+
 export type TRunYahl = (
   yahl: string,
   options?: {
@@ -27,6 +33,7 @@ export type TRunYahl = (
     stages?: ParsedStage[];
     parsedStageIndex?: number;
     pipelineStageIndex?: number;
+    prefixMessages?: ChatApiMessage[];
     produceKeysResumeAttempt?: boolean;
     startFromStageIndex?: number;
     systemAppend?: string;
@@ -36,5 +43,8 @@ export type TRunYahl = (
     verifyFastForward?: TVerifyFastForward;
   },
 ) => Promise<{
+  gotoTargetStageIndex?: number;
+  requestId?: string;
   storage: TStorage;
+  usage?: TStageUsage;
 }>;

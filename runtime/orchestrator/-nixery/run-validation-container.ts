@@ -5,7 +5,7 @@ import { resolveNixeryOutputSpec } from '@project-yahl/shared/nixery/output-cont
 
 import { resolveDockerHostRepoRoot } from '@/orchestrator/-docker/paths';
 
-import { loadNixeryDef, resolveNixeryRoot } from './load-def';
+import { loadNixeryDef } from './load-def';
 import { resolveDockerHostSessionDir } from './resolve-mounts';
 import { prepareNixeryImage } from './run-container';
 
@@ -13,12 +13,12 @@ import type { TNixeryValidationContext } from '@project-yahl/shared/nixery/load-
 
 export const NIXERY_VALIDATION_CLI_ENTRY = [
   'node',
-  '/opt/nixery/_shared/validation-cli.mjs',
+  '/opt/nixery/validation-cli.mjs',
 ] as const;
 
 const WORKSPACE_CONTAINER_PATH = '/workspace';
 const DEF_CONTAINER_PATH = '/opt/nixery/def';
-const SHARED_CONTAINER_PATH = '/opt/nixery/_shared';
+const VALIDATION_CLI_CONTAINER_PATH = '/opt/nixery/validation-cli.mjs';
 
 const runDockerSync = (args: string[]) => new Promise<{
   code: number;
@@ -65,14 +65,14 @@ export const runNixeryValidationContainer = async (params: {
   outputName: string;
   sessionDir: string;
 }): Promise<{ ok: boolean; reason?: string }> => {
-  const def = await loadNixeryDef(params.defId);
+  const { def, location } = await loadNixeryDef(params.defId);
   const validateModule = resolveNixeryOutputSpec(def).validate;
 
   if (!validateModule.endsWith('.mjs')) {
     return { ok: true };
   }
 
-  const validateModulePath = path.join(resolveNixeryRoot(), params.defId, validateModule);
+  const validateModulePath = path.join(location.abilityDir, validateModule);
 
   try {
     const { access } = await import('node:fs/promises');
@@ -82,13 +82,24 @@ export const runNixeryValidationContainer = async (params: {
   }
 
   const { image } = await prepareNixeryImage({
-    defId: params.defId,
-    dockerfile: def.dockerfile,
-    nixeryRoot: resolveNixeryRoot(),
     packages: def.packages,
   });
   const repoRoot = resolveDockerHostRepoRoot();
   const hostSessionDir = resolveDockerHostSessionDir(params.sessionDir);
+  const hostAbilityDir = path.join(
+    repoRoot,
+    'server',
+    'nixery',
+    location.pluginId,
+    location.abilityId,
+  );
+  const hostValidationCli = path.join(
+    repoRoot,
+    'runtime',
+    'orchestrator',
+    '-nixery',
+    'validation-cli.mjs',
+  );
   const validateCtx = buildNixeryValidationContext({
     defId: params.defId,
     input: params.input,
@@ -104,9 +115,9 @@ export const runNixeryValidationContainer = async (params: {
     '-v',
     `${hostSessionDir}:${WORKSPACE_CONTAINER_PATH}:ro`,
     '-v',
-    `${path.join(repoRoot, 'server', 'nixery', params.defId)}:${DEF_CONTAINER_PATH}:ro`,
+    `${hostAbilityDir}:${DEF_CONTAINER_PATH}:ro`,
     '-v',
-    `${path.join(repoRoot, 'server', 'nixery', '_shared')}:${SHARED_CONTAINER_PATH}:ro`,
+    `${hostValidationCli}:${VALIDATION_CLI_CONTAINER_PATH}:ro`,
     image,
     ...NIXERY_VALIDATION_CLI_ENTRY,
   ];

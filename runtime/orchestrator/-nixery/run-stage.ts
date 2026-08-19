@@ -1,11 +1,17 @@
+import type { TNixeryDef } from '@project-yahl/shared/nixery/types';
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { writeSharedOneCliOverride } from '@/orchestrator/-docker/compose-onecli';
-import { resolveDockerHostRepoRoot } from '@/orchestrator/-docker/paths';
 import { workspaceRoot } from '@/orchestrator/-utils/workspace-paths';
+import {
+  resolveNixeryOutputHint,
+  resolveNixeryOutputRetry,
+} from '@project-yahl/shared/nixery/output-contract';
+import { resolveNixeryDefEntryArgv } from '@project-yahl/shared/nixery/resolve-entry';
 
-import { loadNixeryDef, resolveNixeryRoot } from './load-def';
+import { loadNixeryDef } from './load-def';
 import { resolveNixeryEnv } from './resolve-def-env';
 import { resolveMounts } from './resolve-mounts';
 import {
@@ -16,18 +22,19 @@ import {
   startNixeryLogStream,
 } from './run-container';
 import { clearStaleNixeryOutput, waitForNixeryOutput } from './validate-output';
-import { assertNamespaceWriteAllowed } from '@project-yahl/shared/nixery/knowledge-write-gate';
-import {
-  resolveNixeryOutputHint,
-  resolveNixeryOutputRetry,
-} from '@project-yahl/shared/nixery/output-contract';
-import { fetchSession } from '@/orchestrator/-ask-user/session-api';
 
 export const resolveSessionNixeryDir = (sessionId: string, defId: string) =>
   path.join(workspaceRoot(), 'sessions', sessionId, 'nixery', defId);
 
 export type TNixeryRunResult = {
   containerName: string;
+};
+
+export type TNixeryRetryState = {
+  attempt: number;
+  feedback?: string;
+  isFinalAttempt: boolean;
+  maxAttempts: number;
 };
 
 let activeNixeryContainer: string | null = null;
@@ -59,6 +66,53 @@ const registerSigtermHook = () => {
 const resolveDiagnosticsLogPath = (sessionId: string, defId: string) =>
   path.join(workspaceRoot(), 'sessions', sessionId, 'diagnostics', `nixery-${defId}.log`);
 
+const resolveMaxAttempts = (defRetry: number) => (defRetry < 1 ? 1 : defRetry);
+
+export const resolveNixeryRunMaxAttempts = (def: TNixeryDef) => {
+  if (def.output?.inlineTool === true) {
+    const retry = def.output.retry;
+
+    if (typeof retry === 'number' && Number.isInteger(retry) && retry >= 1) {
+      return retry;
+    }
+
+    return 1;
+  }
+
+  return resolveMaxAttempts(resolveNixeryOutputRetry(def));
+};
+
+const writeSessionInput = async (
+  sessionDir: string,
+  input: Record<string, unknown>,
+) => {
+  await fs.writeFile(
+    path.join(sessionDir, 'input.json'),
+    `${JSON.stringify(input, null, 2)}\n`,
+    'utf8',
+  );
+};
+
+const readOkFalseError = async (
+  sessionDir: string,
+  outputHint: string,
+): Promise<string | null> => {
+  try {
+    const raw = await fs.readFile(path.join(sessionDir, outputHint), 'utf8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+    if (parsed?.ok !== false) {
+      return null;
+    }
+
+    return typeof parsed.error === 'string' && parsed.error.trim()
+      ? parsed.error.trim()
+      : 'nixery failed';
+  } catch {
+    return null;
+  }
+};
+
 export const teardownNixeryContainer = async (
   containerName: string,
   sessionId: string,
@@ -82,35 +136,43 @@ export const teardownNixeryContainer = async (
   }
 };
 
+export const resolveNixeryRequestId = (params: {
+  input: Record<string, unknown>;
+  requestId?: string;
+}): string | undefined => {
+  const fromParams = params.requestId?.trim();
+
+  if (fromParams) {
+    return fromParams;
+  }
+
+  const fromInput = params.input.requestId;
+
+  if (typeof fromInput === 'string' && fromInput.trim()) {
+    return fromInput.trim();
+  }
+
+  return undefined;
+};
+
 export const runNixeryDef = async (params: {
   defId: string;
   input: Record<string, unknown>;
+  requestId?: string;
   sessionId: string;
   skipTeardown?: boolean;
-  taskId?: string;
 }): Promise<TNixeryRunResult> => {
   registerSigtermHook();
   await writeSharedOneCliOverride();
 
-  let taskId = params.taskId?.trim() ?? '';
-
-  if (!taskId && params.sessionId.trim()) {
-    try {
-      const session = await fetchSession(params.sessionId);
-
-      taskId = session.taskId?.trim() ?? '';
-    } catch {
-      taskId = '';
-    }
-  }
-
-  assertNamespaceWriteAllowed({ defId: params.defId, taskId });
-
-  const def = await loadNixeryDef(params.defId);
+  const { def, location } = await loadNixeryDef(params.defId);
   const sessionDir = resolveSessionNixeryDir(params.sessionId, params.defId);
   const containerName = resolveNixeryContainerName(params.sessionId, params.defId);
   const diagnosticsLogPath = resolveDiagnosticsLogPath(params.sessionId, params.defId);
-  const maxRetries = resolveNixeryOutputRetry(def);
+  const maxAttempts = resolveNixeryRunMaxAttempts(def);
+  const baseInput = { ...params.input };
+  const outputHint = resolveNixeryOutputHint(def, baseInput);
+  const entry = resolveNixeryDefEntryArgv(def);
 
   await fs.mkdir(sessionDir, { recursive: true });
   await fs.mkdir(path.dirname(diagnosticsLogPath), { recursive: true });
@@ -120,41 +182,45 @@ export const runNixeryDef = async (params: {
     'utf8',
   );
 
-  await fs.writeFile(
-    path.join(sessionDir, 'input.json'),
-    JSON.stringify(params.input, null, 2),
-    'utf8',
-  );
+  const { env, volumeMounts: oneCliMounts } = await resolveNixeryEnv(def.env);
+  const requestId = resolveNixeryRequestId(params);
 
-  const outputHint = resolveNixeryOutputHint(def, params.input);
-
-  if (!def.run?.entry?.length) {
-    throw new Error(`[nixery] def ${params.defId} requires run.entry`);
+  if (params.sessionId.trim() && !requestId) {
+    console.warn(
+      `[nixery] YAHL_REQUEST_ID missing def=${params.defId} sessionId=${params.sessionId}; `
+      + 'llm usage will not postback to session UI',
+    );
   }
 
-  const { env, volumeMounts: oneCliMounts } = await resolveNixeryEnv(def.env);
   const defMounts = resolveMounts({
     def,
     defId: params.defId,
+    location,
     sessionId: params.sessionId,
   });
-  const sharedMount = {
-    containerPath: '/opt/nixery/_shared',
-    hostPath: path.join(resolveDockerHostRepoRoot(), 'server', 'nixery', '_shared'),
-    mode: 'ro' as const,
-  };
   const { cleanup, image } = await prepareNixeryImage({
-    defId: params.defId,
-    dockerfile: def.dockerfile,
-    nixeryRoot: resolveNixeryRoot(),
     packages: def.packages,
   });
 
   let stopLogStream: (() => void) | undefined;
   let lastError: unknown;
+  let retryFeedback: string | undefined;
 
   try {
-    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const isFinalAttempt = attempt + 1 >= maxAttempts;
+      const nixeryRetry: TNixeryRetryState = {
+        attempt,
+        isFinalAttempt,
+        maxAttempts,
+        ...(retryFeedback ? { feedback: retryFeedback } : {}),
+      };
+
+      await writeSessionInput(sessionDir, {
+        ...baseInput,
+        nixeryRetry,
+      });
+
       await clearStaleNixeryOutput({
         defDefault: def.output?.default,
         outputHint,
@@ -164,19 +230,21 @@ export const runNixeryDef = async (params: {
       console.log(
         `[nixery] run start def=${params.defId} sessionId=${params.sessionId} `
         + `container=${containerName} image=${image}`
-        + (maxRetries > 0 ? ` attempt=${attempt + 1}/${maxRetries + 1}` : ''),
+        + ` attempt=${attempt + 1}/${maxAttempts}`,
       );
 
       try {
         await runNixeryContainerDetached({
           containerName,
-          entry: def.run.entry,
+          entry,
           env: {
             ...env,
             NIXERY_DEF_ID: params.defId,
+            YAHL_SESSION_ID: params.sessionId,
+            ...(requestId ? { YAHL_REQUEST_ID: requestId } : {}),
           },
           image,
-          volumeMounts: [...defMounts, sharedMount, ...oneCliMounts],
+          volumeMounts: [...defMounts, ...oneCliMounts],
         });
 
         activeNixeryContainer = containerName;
@@ -189,6 +257,20 @@ export const runNixeryDef = async (params: {
           sessionDir,
         });
 
+        const okFalseError = await readOkFalseError(sessionDir, outputHint);
+
+        if (okFalseError && !isFinalAttempt) {
+          stopLogStream?.();
+          stopLogStream = undefined;
+          await teardownNixeryContainer(containerName, params.sessionId, params.defId);
+          retryFeedback = okFalseError;
+          console.log(
+            `[nixery] ok:false soft-fail; retry attempt=${attempt + 1}/${maxAttempts} `
+            + `def=${params.defId} (${okFalseError})`,
+          );
+          continue;
+        }
+
         lastError = undefined;
         break;
       } catch (error) {
@@ -198,14 +280,15 @@ export const runNixeryDef = async (params: {
 
         await teardownNixeryContainer(containerName, params.sessionId, params.defId);
 
-        if (attempt >= maxRetries) {
+        if (isFinalAttempt) {
           throw error;
         }
 
         const reason = error instanceof Error ? error.message : String(error);
 
+        retryFeedback = reason;
         console.log(
-          `[nixery] validation failed; retry attempt=${attempt + 1}/${maxRetries} `
+          `[nixery] validation failed; retry attempt=${attempt + 1}/${maxAttempts} `
           + `def=${params.defId} (${reason})`,
         );
       }
@@ -234,6 +317,7 @@ export const runNixeryDef = async (params: {
 export const runNixeryStage = async (params: {
   defId: string;
   input: Record<string, unknown>;
+  requestId?: string;
   sessionId: string;
 }) => {
   await runNixeryDef(params);

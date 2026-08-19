@@ -15,7 +15,7 @@ import type {
   TYahlStage,
 } from '../-types';
 import { modelAskUserQuestion, modelStage } from '../models';
-import { yahlStageSchema } from '../stage-schema';
+import { parsedStageSnapshotSchema, yahlStageSchema } from '../stage-schema';
 import { spawnOrchestrate } from './spawn-orchestrate';
 
 export type TAskUserBatchQuestionInput = {
@@ -79,12 +79,6 @@ const batchParamsSchema = Joi.object({
 const questionParamsSchema = Joi.object({
   questionId: Joi.string().trim().required(),
   sessionId: Joi.string().trim().required(),
-});
-
-const parsedStageSnapshotSchema = Joi.object<TParsedStageSnapshot>({
-  lines: Joi.string().required(),
-  sourceStartLine: Joi.number().integer().min(1).required(),
-  type: Joi.string().valid('loop', 'plain').required(),
 });
 
 const batchQuestionSchema = Joi.object<TAskUserBatchQuestionInput>({
