@@ -67,8 +67,6 @@ import {
 } from './stage-wait-timeout';
 import { startStageWaitHeartbeat } from './stage-wait-heartbeat';
 
-const AGENT_LOCAL_TOOLS = new Set(['browser', 'platform', 'run_bash']);
-
 const serializeStorageSnapshot = (storage: TStorage) => ({
   context: Object.fromEntries(storage.context.entries()),
   types: Object.fromEntries(storage.types.entries()),
@@ -549,12 +547,6 @@ class YahlAgentRunner {
           }
         }
 
-        if (AGENT_LOCAL_TOOLS.has(toolCall.function.name)) {
-          return {
-            hasError: false,
-            result: 'OK',
-          };
-        }
       } catch (error) {
         if (error instanceof AskUserPausedError) {
           pauseError = error;

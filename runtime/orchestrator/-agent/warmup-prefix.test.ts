@@ -29,6 +29,36 @@ describe('buildWarmupPrefixMessages', () => {
     assert.equal(messages[1] && 'content' in messages[1] ? messages[1].content : '', JSON.stringify({ ok: true }));
   });
 
+  it('ignores persisted OK stubs and falls back to default stub', () => {
+    const messages = buildWarmupPrefixMessages({
+      modelResponses: [{
+        response: {
+          choices: [{
+            message: {
+              content: 'read skill',
+              role: 'assistant',
+              tool_calls: [{
+                function: { arguments: '{"command":"cat SKILL.md"}', name: 'run_bash' },
+                id: 'call-1',
+                type: 'function',
+              }],
+            },
+          }],
+        },
+      }],
+      toolCalls: [{
+        tools: [{
+          arguments: { command: 'cat SKILL.md' },
+          id: 'call-1',
+          name: 'run_bash',
+          result: 'OK',
+        }],
+      }],
+    });
+
+    assert.equal(messages[1] && 'content' in messages[1] ? messages[1].content : '', JSON.stringify({ ok: true }));
+  });
+
   it('uses persisted tool results when present', () => {
     const messages = buildWarmupPrefixMessages({
       modelResponses: [{

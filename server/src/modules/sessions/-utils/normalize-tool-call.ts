@@ -68,6 +68,24 @@ export const parseToolSummaries = (toolCalls: Record<string, unknown>[]) =>
     name: resolveToolCallName(toolCall, index),
   }));
 
+const isStubToolResultContent = (content: string) => {
+  const trimmed = content.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  if (trimmed === 'OK') {
+    return true;
+  }
+
+  if (trimmed === JSON.stringify({ ok: true })) {
+    return true;
+  }
+
+  return false;
+};
+
 export const collectToolResultById = (
   docs: { results?: unknown }[],
 ) => {
@@ -86,6 +104,12 @@ export const collectToolResultById = (
       const record = item as { content?: unknown; id?: unknown };
 
       if (typeof record.id !== 'string' || typeof record.content !== 'string') {
+        continue;
+      }
+
+      const existing = byId.get(record.id);
+
+      if (existing && !isStubToolResultContent(existing) && isStubToolResultContent(record.content)) {
         continue;
       }
 

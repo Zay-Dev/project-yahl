@@ -432,6 +432,7 @@ stages:
     warmUp: |
       Read /opt/skills/platform/SKILL.md.
       Read /opt/skills/nixery/SKILL.md.
+      Read /opt/skills/stagehand/SKILL.md.
       Read ~/task-skills/monitor-loop/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
       Read ~/task-skills/worth-persisting-knowledge/SKILL.md.

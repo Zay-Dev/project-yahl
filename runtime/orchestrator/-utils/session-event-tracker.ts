@@ -124,12 +124,9 @@ const _post = (url: string, body: unknown) =>
 const _patch = (url: string, body: unknown) =>
   _request(url, { body: JSON.stringify(body), method: 'PATCH' });
 
-export const TOOL_RESULT_PERSIST_MAX = 24_000;
+import { truncateToolResult, TOOL_RESULT_PERSIST_MAX } from '@/shared/tool-result-truncate';
 
-export const truncateToolResult = (value: string) =>
-  value.length <= TOOL_RESULT_PERSIST_MAX
-    ? value
-    : `${value.slice(0, TOOL_RESULT_PERSIST_MAX)}\n…[truncated]`;
+export { TOOL_RESULT_PERSIST_MAX, truncateToolResult };
 
 export const createSessionEventTracker = () => {
   const baseUrlRaw = process.env.SESSION_API_BASE_URL;

@@ -6,9 +6,10 @@ import {
   fetchSessionStages,
   fetchStageDetail,
 } from '@/orchestrator/-ask-user/session-api';
-import { truncateToolResult } from '@/orchestrator/-utils/session-event-tracker';
+import { truncateToolResult } from '@/shared/tool-result-truncate';
+import { isStubToolResultContent, STUB_TOOL_RESULT_JSON } from '@/shared/tool-result-stub';
 
-const STUB_TOOL_RESULT = JSON.stringify({ ok: true });
+const STUB_TOOL_RESULT = STUB_TOOL_RESULT_JSON;
 
 const resultByToolCallId = (
   detail: Pick<TStageDetailForResume, 'toolCalls'>,
@@ -17,7 +18,11 @@ const resultByToolCallId = (
 
   for (const batch of detail.toolCalls ?? []) {
     for (const tool of batch.tools ?? []) {
-      if (typeof tool.result === 'string' && tool.result.length) {
+      if (
+        typeof tool.result === 'string'
+        && tool.result.length
+        && !isStubToolResultContent(tool.result)
+      ) {
         byId.set(tool.id, truncateToolResult(tool.result));
       }
     }

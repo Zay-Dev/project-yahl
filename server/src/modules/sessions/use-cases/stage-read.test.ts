@@ -126,4 +126,22 @@ describe('collectToolResultById', () => {
     assert.equal(byId.get('call-1'), 'skill body');
     assert.equal(byId.get('call-2'), 'ok');
   });
+
+  it('keeps real stdout when a later stub row arrives', () => {
+    const byId = collectToolResultById([
+      { results: [{ content: 'OK', id: 'call-1' }] },
+      { results: [{ content: '# monitor-loop\n', id: 'call-1' }] },
+    ]);
+
+    assert.equal(byId.get('call-1'), '# monitor-loop\n');
+  });
+
+  it('does not replace real stdout with a later stub', () => {
+    const byId = collectToolResultById([
+      { results: [{ content: '# monitor-loop\n', id: 'call-1' }] },
+      { results: [{ content: 'OK', id: 'call-1' }] },
+    ]);
+
+    assert.equal(byId.get('call-1'), '# monitor-loop\n');
+  });
 });

@@ -107,7 +107,7 @@ export const startRedisDaemon = async () => {
       temperature,
     } = envelope;
     const effectiveTemperature = temperature ?? stage.temperature;
-    const { end, error, toolCall, onModelResponse } = subscriber.getReply(requestId);
+    const { end, error, onModelResponse, reportLocalToolCall, toolCall } = subscriber.getReply(requestId);
 
     console.log(
       `[agent-daemon] stage start sessionId=${config.cliOptions.sessionId} requestId=${requestId} `
@@ -228,14 +228,16 @@ export const startRedisDaemon = async () => {
             },
           },
           {
-            onLocalToolCall: async ({ call }) => {
-              await toolCall(call);
+            onLocalToolCall: async ({ call, resultContent }) => {
+              await reportLocalToolCall(call, {
+                hasError: false,
+                result: resultContent,
+              });
             },
-            onLocalToolStart: async ({ call, timeoutMs }) => {
+            onLocalToolStart: async ({ timeoutMs }) => {
               console.log(
                 `[agent-daemon] run_bash start requestId=${requestId} timeoutMs=${timeoutMs}`,
               );
-              await toolCall(call);
             },
             onModelResponse,
             prefixMessages,

@@ -53,6 +53,12 @@ export type TToolCallResult = {
   newStorage?: TStorage;
 };
 
+export type TLocalToolResultEnvelope = {
+  hasError: boolean;
+  result: string;
+  toolCallId: string;
+};
+
 export type TAskUserBatchResumeAnswer = {
   answerValue: number | string | string[];
   freeText?: string;
@@ -154,8 +160,11 @@ export interface ISubscriber extends IBase {
     error: (error: Error) => Promise<void>;
 
     end: (usage?: { bashCalls?: number; turns?: number }) => Promise<any>;
-    toolCall: (toolCalls: TChatToolCall) => Promise<TToolCallResult>;
-
     onModelResponse: (response: TModelResponse) => Promise<void>;
+    reportLocalToolCall: (
+      toolCall: TChatToolCall,
+      result: Pick<TToolCallResult, 'hasError' | 'result'>,
+    ) => Promise<void>;
+    toolCall: (toolCalls: TChatToolCall) => Promise<TToolCallResult>;
   };
 }

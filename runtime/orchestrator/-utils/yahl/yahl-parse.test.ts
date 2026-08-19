@@ -288,6 +288,7 @@ describe("parseYahlFile", () => {
       2,
     );
     assert.match(monitor?.spec.warmUp ?? "", /bind_origin/);
+    assert.match(monitor?.spec.warmUp ?? "", /stagehand\/SKILL\.md/);
     assert.ok(monitor?.spec.verify);
     assert.equal(assemble?.spec.contextMode, true);
     assert.equal(assemble?.spec.verify, undefined);

@@ -6,8 +6,12 @@ import type {
   ISubscriber,
   TRequestEnvelope,
   TChatToolCall,
+  TLocalToolResultEnvelope,
   TToolCallResult,
 } from "./-types";
+
+import { isAgentLocalTool } from "../agent-local-tools.js";
+import { truncateToolResult } from "../tool-result-truncate.js";
 
 import { PublisherEmitter } from "./-types";
 
@@ -20,6 +24,8 @@ const _getToolCallResultChannel = (sessionId: string, requestId: string) =>
   `yahl:tool-result:${sessionId}:${requestId}`;
 const _getModelResponseChannel = (sessionId: string, requestId: string) =>
   `yahl:model-response:${sessionId}:${requestId}`;
+const _getLocalToolResultChannel = (sessionId: string, requestId: string) =>
+  `yahl:local-tool-result:${sessionId}:${requestId}`;
 
 const _isStorage = (value: unknown): value is TStorage =>
   typeof value === 'object'
@@ -72,6 +78,10 @@ class RedisTransport {
 
   protected _toolResultChannel(requestId: string) {
     return _getToolCallResultChannel(this.sessionId, requestId);
+  }
+
+  protected _localToolResultChannel(requestId: string) {
+    return _getLocalToolResultChannel(this.sessionId, requestId);
   }
 
   async close() {
@@ -381,6 +391,33 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
             this.emit("toolCall", { requestId, toolCalls: [toolCall] });
 
+            if (isAgentLocalTool(toolCall.function.name)) {
+              const localResult = await this._waitForLocalToolResult(
+                redis,
+                requestId,
+                toolCall.id,
+                timeoutSeconds,
+              );
+              const persistedResult = truncateToolResult(localResult.result);
+              const result: TToolCallResult = {
+                hasError: localResult.hasError,
+                result: persistedResult,
+              };
+
+              this.emit("toolCallResult", {
+                requestId,
+                result: persistedResult,
+                toolCallId: toolCall.id,
+              });
+
+              await this.redis.lpush(
+                this._toolResultChannel(requestId),
+                JSON.stringify(result),
+              );
+
+              continue;
+            }
+
             const result = await callback(toolCall);
 
             this.emit("toolCallResult", {
@@ -411,6 +448,35 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
         }
       }
     };
+  }
+
+  private async _waitForLocalToolResult(
+    redis: Redis,
+    requestId: string,
+    toolCallId: string,
+    timeoutSeconds: number,
+  ): Promise<TLocalToolResultEnvelope> {
+    const deadline = Date.now() + timeoutSeconds * 1000;
+
+    while (Date.now() < deadline) {
+      const remainingMs = deadline - Date.now();
+      const waitSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+      const popped = await this._brpop(redis, this._localToolResultChannel(requestId), waitSeconds);
+
+      if (!popped) {
+        continue;
+      }
+
+      const parsed = JSON.parse(popped) as TLocalToolResultEnvelope;
+
+      if (parsed.toolCallId !== toolCallId) {
+        continue;
+      }
+
+      return parsed;
+    }
+
+    throw new Error(`local tool result timed out for ${toolCallId}`);
   }
 }
 
@@ -492,6 +558,18 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
           await this.redis.lpush(
             this._modelResponseQueue(requestId),
             JSON.stringify({ requestId, response }),
+          );
+        },
+
+        reportLocalToolCall: async (toolCall, result) => {
+          await this.redis.lpush(this._toolCallChannel(requestId), JSON.stringify(toolCall));
+          await this.redis.lpush(
+            this._localToolResultChannel(requestId),
+            JSON.stringify({
+              hasError: result.hasError,
+              result: result.result,
+              toolCallId: toolCall.id,
+            } satisfies TLocalToolResultEnvelope),
           );
         },
 
