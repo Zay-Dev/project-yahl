@@ -130,6 +130,22 @@ export const formatRebuttalBlock = (context, maxChars = INLINE_VALUE_CHARS) => {
   return lines.join('\n');
 };
 
+export const formatClockBlock = (context) => {
+  const record = context && typeof context === 'object' && !Array.isArray(context)
+    ? context
+    : {};
+  const nowIso = typeof record.now_iso === 'string' ? record.now_iso : '';
+  const today = typeof record.today === 'string' ? record.today : '';
+
+  return [
+    '## Clock',
+    `now_iso: ${JSON.stringify(nowIso)}`,
+    `today: ${JSON.stringify(today)}`,
+    'This is wall-clock now for elapsed checks. Use this clock for current time and elapsed vs started_at.',
+    'Do not infer now from fetches, stale narrative timestamps, or pretrained knowledge.',
+  ].join('\n');
+};
+
 export const buildVerifyUserMessage = (params) => {
   const context = params.context ?? {};
   const types = params.types ?? {};
@@ -142,6 +158,7 @@ export const buildVerifyUserMessage = (params) => {
   const sections = [
     '## Rubric\n',
     params.rubricText,
+    formatClockBlock(context),
     formatStageSnapshotBlock(params.stageSnapshot, params.maxChars ?? INLINE_VALUE_CHARS),
     `## Context key catalog\n${JSON.stringify(buildKeyCatalog(context))}`,
     `## Type key catalog\n${JSON.stringify(buildKeyCatalog(types))}`,

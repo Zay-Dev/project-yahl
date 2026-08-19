@@ -5,7 +5,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TLoopMeta, TStorage } from '@/shared/transports/-types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
-import { filterStorageForStage } from '@/orchestrator/-context';
+import { seedDefaultContext, filterStorageForStage } from '@/orchestrator/-context';
 import { isVerifyRubricFailure, runVerifyGate } from '@/orchestrator/-verify';
 import {
   applyVerifyRecoveryToStorage,
@@ -76,6 +76,9 @@ export const runWhileWithParentVerify = async (params: {
     }
 
     const requestId = randomUUID();
+
+    seedDefaultContext(params.storage);
+
     const filtered = filterStorageForStage(
       params.storage,
       params.stage.lines,

@@ -2,6 +2,7 @@ import type { TStorage } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import { shutdownAgent } from '@/orchestrator/-docker';
+import { seedDefaultContext } from '@/orchestrator/-context/default-context';
 
 import { VerifyFailedError, VerifyUnavailableError } from './errors';
 import { nixeryVerifyApi } from './nixery-verify';
@@ -102,6 +103,8 @@ export const runVerifyGate = async (params: {
   if (!verify || typeof verify !== 'object') {
     return { feedback: '', pass: true };
   }
+
+  seedDefaultContext(params.storage);
 
   const startedAt = Date.now();
 

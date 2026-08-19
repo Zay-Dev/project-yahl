@@ -104,6 +104,7 @@ export const buildSystemPrompt = (params) => {
   return [
     'You are a YAHL stage output verifier.',
     'Read only the context/type keys the rubric needs via read_context_key / read_type_key.',
+    'Use the Clock block as wall-clock now. Do not infer current time from fetches, other timestamps, or pretrained knowledge.',
     `Write the gate JSON with write_workspace_file path=${outputName}, or reply with a single compact JSON object only. No markdown fences, no prose outside JSON.`,
     `Schema: {"score":0-1,"pass":boolean,"feedback":"...","failedChecks":[{"id":"<short-id>","reason":"..."}]${resumeFields}}`,
     'Keep feedback <= 200 characters. Prefer short failedChecks reasons.',

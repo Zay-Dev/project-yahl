@@ -280,4 +280,63 @@ describe('runVerifyGate', () => {
       globalThis.publisher = prevPublisher;
     });
   });
+
+  it('refreshes now_iso on the context snapshot sent to nixery', async () => {
+    process.env.SESSION_API_BASE_URL = 'http://session.test';
+
+    const stale = '1970-01-01T00:00:00.000Z';
+    const clockStorage = {
+      context: new Map<string, unknown>([
+        ['now_iso', stale],
+        ['today', '1970-01-01'],
+        ['report', { metric: 1 }],
+      ]),
+      types: new Map(),
+    };
+
+    let snapshotNowIso: unknown;
+    let snapshotToday: unknown;
+
+    await withNixeryVerify(
+      async (params) => {
+        const parsed = JSON.parse(String(params.input.contextSnapshot)) as {
+          context?: Record<string, unknown>;
+        };
+
+        snapshotNowIso = parsed.context?.now_iso;
+        snapshotToday = parsed.context?.today;
+
+        return { feedback: 'ok', pass: true, score: 1 };
+      },
+      () => withMockFetch(
+        (url, init) => {
+          if (url.includes('/verify-start') && init?.method === 'POST') {
+            return Response.json({ data: { ok: true } });
+          }
+
+          if (url.includes('/verify-pass') && init?.method === 'POST') {
+            return Response.json({ data: { ok: true } });
+          }
+
+          throw new Error(`unexpected fetch: ${url} ${init?.method ?? 'GET'}`);
+        },
+        async () => {
+          await runVerifyGate({
+            agentName: 'agent-test',
+            pipelineStageIndex: 2,
+            requestId: 'req-clock',
+            sessionId: 'sess-clock',
+            stage: verifyStage,
+            storage: clockStorage,
+          });
+
+          assert.notEqual(snapshotNowIso, stale);
+          assert.match(String(snapshotNowIso), /^\d{4}-\d{2}-\d{2}T/);
+          assert.match(String(snapshotToday), /^\d{4}-\d{2}-\d{2}$/);
+          assert.equal(clockStorage.context.get('now_iso'), snapshotNowIso);
+          assert.notEqual(clockStorage.context.get('today'), '1970-01-01');
+        },
+      ),
+    );
+  });
 });

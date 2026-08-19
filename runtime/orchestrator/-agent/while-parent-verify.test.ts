@@ -91,7 +91,11 @@ describe('runWhileWithParentVerify', () => {
   });
 
   it('persists the parent without loopMeta and verifies once', async () => {
-    const persisted: { loopMeta?: unknown; stage: { verify?: unknown } }[] = [];
+    const persisted: {
+      context?: { context?: Record<string, unknown> };
+      loopMeta?: unknown;
+      stage: { verify?: unknown };
+    }[] = [];
     let gates = 0;
     let loops = 0;
 
@@ -125,6 +129,8 @@ describe('runWhileWithParentVerify', () => {
     assert.equal(persisted.length, 1);
     assert.equal('loopMeta' in persisted[0]!, false);
     assert.ok(persisted[0]?.stage.verify);
+    assert.match(String(persisted[0]?.context?.context?.now_iso), /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(String(persisted[0]?.context?.context?.today), /^\d{4}-\d{2}-\d{2}$/);
   });
 
   it('re-enters the while on fail autoRetry rerun', async () => {

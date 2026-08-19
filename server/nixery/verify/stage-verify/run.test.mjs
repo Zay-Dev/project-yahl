@@ -10,6 +10,7 @@ import {
   buildKeyCatalog,
   buildVerifyUserMessage,
   clipText,
+  formatClockBlock,
   pickInlineProduceValues,
 } from '../lib/snapshot-catalog.mjs';
 
@@ -67,6 +68,7 @@ describe('buildSystemPrompt', () => {
     assert.match(prompt, /feedback <= 200/);
     assert.match(prompt, /No markdown fences/);
     assert.match(prompt, /read_context_key/);
+    assert.match(prompt, /Clock block as wall-clock now/);
     assert.match(prompt, /write_workspace_file path=result.json/);
   });
 });
@@ -128,6 +130,29 @@ describe('snapshot catalog', () => {
     assert.match(message, /Produce context omitted/);
     assert.doesNotMatch(message, /yyyyyyyyyy/);
     assert.doesNotMatch(message, /reviews_acc":\[/);
+  });
+
+  it('always injects a Clock block even when produceContextKeys is empty', () => {
+    const message = buildVerifyUserMessage({
+      context: {
+        now_iso: '2026-08-19T16:08:48.633Z',
+        today: '2026-08-19',
+        fetches: [{ fetched_at: '2026-08-19T15:49:00Z' }],
+      },
+      rubricText: 'Pass when clock elapsed vs started_at is >= monitor_minutes.',
+      stageSnapshot: { logic: 'poll once' },
+      types: {},
+    });
+
+    assert.match(message, /## Clock/);
+    assert.match(message, /now_iso: "2026-08-19T16:08:48.633Z"/);
+    assert.match(message, /today: "2026-08-19"/);
+    assert.match(message, /wall-clock now/);
+    assert.match(message, /Do not infer now from fetches/);
+    assert.equal(
+      formatClockBlock({ now_iso: '2026-08-19T16:08:48.633Z', today: '2026-08-19' }).includes('## Clock'),
+      true,
+    );
   });
 });
 

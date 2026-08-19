@@ -1,6 +1,6 @@
 # YAHL (Yet Another High-level Language)
 
-YAHL is a language for writing pseudo-code that the stage agent executes. Orchestrator YAML schema (`loopSetup`, `nixeryRun`, `verify`, VM stages) lives in the handbook — not here.
+YAHL is a language for writing pseudo-code that the stage agent executes. Orchestrator YAML schema (`loopSetup`, `whileSetup`, `warmUp`, `nixeryRun`, `verify`, VM stages) lives in the handbook — not here.
 
 ### Syntaxes
 

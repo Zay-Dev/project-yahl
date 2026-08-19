@@ -9,7 +9,10 @@ import { parseNixeryToolArguments } from '@/shared/stage-tools';
 
 import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
-import { seedRunInputContext } from '@/orchestrator/-context/default-context';
+import {
+  seedDefaultContext,
+  seedRunInputContext,
+} from '@/orchestrator/-context/default-context';
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
@@ -288,6 +291,8 @@ class YahlAgentRunner {
     this.activeStage = resumedStage && parsedStagesMatchSlot(resumedStage, this.boundStage)
       ? resumedStage
       : this.boundStage;
+
+    seedDefaultContext(this.storage);
 
     this.filteredStorage = filterStorageForStage(
       this.storage,
@@ -825,6 +830,8 @@ class YahlAgentRunner {
         this.requestId = randomUUID();
         this.stageDocSourceStartLine = undefined;
       }
+
+      seedDefaultContext(this.storage);
 
       this.filteredStorage = filterStorageForStage(
         this.storage,
