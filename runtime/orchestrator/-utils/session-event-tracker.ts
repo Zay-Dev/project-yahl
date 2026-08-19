@@ -7,10 +7,13 @@ import type { YahlStage } from '@/shared/yahl-stage';
 type TPushRequestEnvelope = {
   context: Record<string, unknown>;
   loopMeta?: {
-    arraySnapshot: unknown[];
-    index: number;
+    arraySnapshot?: unknown[];
+    index?: number;
+    kind?: 'for' | 'warmup' | 'while';
+    remainingBashCalls?: number;
+    remainingTurns?: number;
     temperature?: number;
-    value: unknown;
+    value?: unknown;
   };
   parsedStageIndex?: number;
   requestId: string;

@@ -56,6 +56,10 @@
       "development": "./yahl/types.ts",
       "import": "./dist/yahl/types.js"
     },
+    "./yahl/while-setup": {
+      "development": "./yahl/while-setup.ts",
+      "import": "./dist/yahl/while-setup.js"
+    },
     "./yahl/verify": {
       "development": "./yahl/verify.ts",
       "import": "./dist/yahl/verify.js"

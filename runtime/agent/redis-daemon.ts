@@ -11,7 +11,6 @@ import { isOrchestratorHandledTool } from './-utils/orchestrator-handled-tools';
 import { buildResumeStageMessages } from './-utils/resume-messages';
 import { runBashCommand } from './-utils/run-bash-command';
 import { runStageSession } from "./stage-session";
-
 import { fastForward, type TContextBuckets } from './-utils/ff-client';
 import { chatWithTools } from "./-utils/llm-client";
 import { withLlmRequestContext } from "./-utils/llm-request-context";
@@ -100,6 +99,7 @@ export const startRedisDaemon = async () => {
       context,
       contextAfter,
       parsedStageIndex,
+      prefixMessages,
       requestId,
       resumeFrom,
       stage,
@@ -184,7 +184,7 @@ export const startRedisDaemon = async () => {
 
         let chatTurn = 0;
 
-        await runStageSession(
+        const envelope = await runStageSession(
           {
             context,
             stage: stageSpec,
@@ -214,12 +214,13 @@ export const startRedisDaemon = async () => {
                 `[agent-daemon] chat turn end requestId=${requestId} turn=${turn} durationMs=${durationMs} toolCalls=${toolCallCount}\n`,
               );
 
+              const orchestratorCalls = (result.tool_calls || [])
+                .filter(tool => isOrchestratorHandledTool(tool.function.name));
               const { toolCallMessages } = await handleToolCalls({
                 error,
                 storage: context,
                 toolCall,
-                toolCalls: (result.tool_calls || [])
-                  .filter(tool => isOrchestratorHandledTool(tool.function.name)),
+                toolCalls: orchestratorCalls,
               });
 
               return [
@@ -239,6 +240,7 @@ export const startRedisDaemon = async () => {
               await toolCall(call);
             },
             onModelResponse,
+            prefixMessages,
             requestId,
             resumeFrom,
             resumeMessages: resumeFrom ? buildResumeStageMessages(resumeFrom) : undefined,
@@ -254,7 +256,14 @@ export const startRedisDaemon = async () => {
         console.log(`[agent-daemon] stage session done requestId=${requestId}\n`);
         console.log(`[agent-daemon] stage end requestId=${requestId} pushing END\n`);
 
-        return await end();
+        const usage = envelope && !Array.isArray(envelope) && envelope.type === 'result'
+          ? {
+            bashCalls: envelope.bashCalls ?? 0,
+            turns: envelope.turns ?? 0,
+          }
+          : undefined;
+
+        return await end(usage);
       };
 
       await _runStage();

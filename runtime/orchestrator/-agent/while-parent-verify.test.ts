@@ -1,0 +1,163 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+
+import type { TStorage } from './-types';
+import type { TVerifyGateResult } from '@/orchestrator/-verify';
+
+import { compileStage } from '@/orchestrator/-utils/yahl';
+
+import {
+  isPostLoopWhileResume,
+  runWhileWithParentVerify,
+} from './while-parent-verify';
+
+const storageFrom = (context: Record<string, unknown>): TStorage => ({
+  context: new Map(Object.entries(context)),
+  types: new Map(),
+});
+
+const parentStage = compileStage({
+  logic: 'c += 1;',
+  updateContextKeys: ['c'],
+  verify: {
+    autoRetry: true,
+    defId: 'stage-verify',
+    minScore: 0.75,
+    rubric: 'Pass when c is set.',
+  },
+  whileSetup: 'false',
+}, 12);
+
+const failGate = (): TVerifyGateResult => ({
+  failedChecks: [{ id: 'window', reason: 'too short' }],
+  feedback: 'fail',
+  pass: false,
+  resumeAction: 'rerun',
+  score: 0.2,
+  verifyId: 'v1',
+});
+
+const passGate = (): TVerifyGateResult => ({
+  feedback: '',
+  pass: true,
+});
+
+describe('isPostLoopWhileResume', () => {
+  it('is true when the checkpoint has no loopMeta', () => {
+    assert.equal(isPostLoopWhileResume(undefined), true);
+  });
+
+  it('is false when mid-poll loopMeta is present', () => {
+    assert.equal(isPostLoopWhileResume({
+      arraySnapshot: [],
+      index: 0,
+      kind: 'while',
+      value: 0,
+    }), false);
+  });
+});
+
+describe('runWhileWithParentVerify', () => {
+  it('skips persist and verify when the parent has no verify', async () => {
+    let loops = 0;
+    const persisted: unknown[] = [];
+
+    await runWhileWithParentVerify({
+      agentName: 'agent-s',
+      firstPass: async () => {
+        loops += 1;
+        return {};
+      },
+      hooks: {
+        persistStage: (envelope) => {
+          persisted.push(envelope);
+        },
+        runGate: async () => passGate(),
+      },
+      pipelineStageIndex: 3,
+      rerun: async () => {
+        throw new Error('rerun should not run');
+      },
+      sessionId: 's',
+      stage: compileStage({
+        logic: 'c += 1;',
+        whileSetup: 'false',
+      }, 1),
+      storage: storageFrom({ c: 1 }),
+    });
+
+    assert.equal(loops, 1);
+    assert.deepEqual(persisted, []);
+  });
+
+  it('persists the parent without loopMeta and verifies once', async () => {
+    const persisted: { loopMeta?: unknown; stage: { verify?: unknown } }[] = [];
+    let gates = 0;
+    let loops = 0;
+
+    await runWhileWithParentVerify({
+      agentName: 'agent-s',
+      firstPass: async () => {
+        loops += 1;
+        return {};
+      },
+      hooks: {
+        emitFinish: () => {},
+        persistStage: (envelope) => {
+          persisted.push(envelope);
+        },
+        runGate: async () => {
+          gates += 1;
+          return passGate();
+        },
+      },
+      pipelineStageIndex: 3,
+      rerun: async () => {
+        throw new Error('rerun should not run');
+      },
+      sessionId: 's',
+      stage: parentStage,
+      storage: storageFrom({ c: 1 }),
+    });
+
+    assert.equal(loops, 1);
+    assert.equal(gates, 1);
+    assert.equal(persisted.length, 1);
+    assert.equal('loopMeta' in persisted[0]!, false);
+    assert.ok(persisted[0]?.stage.verify);
+  });
+
+  it('re-enters the while on fail autoRetry rerun', async () => {
+    let first = 0;
+    let rerun = 0;
+    let gates = 0;
+
+    await runWhileWithParentVerify({
+      agentName: 'agent-s',
+      firstPass: async () => {
+        first += 1;
+        return {};
+      },
+      hooks: {
+        emitFinish: () => {},
+        persistStage: () => {},
+        runGate: async () => {
+          gates += 1;
+          return gates === 1 ? failGate() : passGate();
+        },
+      },
+      pipelineStageIndex: 3,
+      rerun: async () => {
+        rerun += 1;
+        return {};
+      },
+      sessionId: 's',
+      stage: parentStage,
+      storage: storageFrom({ c: 1 }),
+    });
+
+    assert.equal(first, 1);
+    assert.equal(rerun, 1);
+    assert.equal(gates, 2);
+  });
+});

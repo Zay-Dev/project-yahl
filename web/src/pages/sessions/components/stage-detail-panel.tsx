@@ -35,7 +35,7 @@ export function StageDetailPanel({
   originalStages,
   sessionId,
 }: TStageDetailPanelProps) {
-  const { nixeryGroups, untagged } = groupModelResponsesByNixery(detail.modelResponses);
+  const sections = groupModelResponsesByNixery(detail.modelResponses);
 
   return (
     <div className="space-y-4 border-t bg-background/60 px-4 py-4 text-sm">
@@ -55,29 +55,35 @@ export function StageDetailPanel({
       />
       <div>
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-muted-foreground">Stage logic</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            {detail.loopMeta?.kind === "warmup" ? "Warm-up logic" : "Stage logic"}
+          </p>
           <StageSetupJsonSheet stage={detail.stage} />
         </div>
         <pre className="mt-1 max-h-96 overflow-auto rounded-md border bg-background p-2 text-xs whitespace-pre-wrap">
           {detail.stage.logic}
         </pre>
       </div>
-      {detail.modelResponses.length > 0 ? (
+      {sections.length > 0 ? (
         <div className="space-y-4">
-          {untagged.length > 0 ? (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Model responses</p>
-              <ModelResponseList responses={untagged} />
-            </div>
-          ) : null}
-          {nixeryGroups.map((group) => (
-            <div key={group.defId}>
-              <p className="text-xs font-medium text-muted-foreground">
-                nixery:{group.defId}
-              </p>
-              <ModelResponseList responses={group.responses} />
-            </div>
-          ))}
+          {sections.map((section) => {
+            const firstId = section.responses[0]?._id ?? "";
+            const key = section.kind === "nixery"
+              ? `nixery:${section.defId}:${firstId}`
+              : `agent:${firstId}`;
+            const label = section.kind === "nixery"
+              ? `nixery:${section.defId}`
+              : "Model responses";
+
+            return (
+              <div key={key}>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {label}
+                </p>
+                <ModelResponseList responses={section.responses} />
+              </div>
+            );
+          })}
         </div>
       ) : null}
       <ToolCallList toolCalls={detail.toolCalls} />

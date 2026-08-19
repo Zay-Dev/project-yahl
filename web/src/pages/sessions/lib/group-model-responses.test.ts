@@ -18,6 +18,12 @@ const response = (
   ...overrides,
 });
 
+const sectionIds = (sections: ReturnType<typeof groupModelResponsesByNixery>) =>
+  sections.map((section) => [
+    section.kind === "nixery" ? `nixery:${section.defId}` : "agent",
+    section.responses.map((item) => item._id),
+  ]);
+
 describe("nixeryDefIdFromTags", () => {
   it("reads the first nixery def id", () => {
     assert.equal(
@@ -34,27 +40,112 @@ describe("nixeryDefIdFromTags", () => {
 });
 
 describe("groupModelResponsesByNixery", () => {
-  it("keeps untagged responses in the default list and groups by def", () => {
-    const grouped = groupModelResponsesByNixery([
-      response({ _id: "a", tags: ["chat"] }),
-      response({ _id: "b", tags: ["tool", "nixery:resolve-error-with-knowledge"] }),
-      response({ _id: "c", tags: ["bash", "nixery:resolve-error-with-knowledge"] }),
-      response({ _id: "d", tags: ["tool", "nixery:append-raw-knowledge-page"] }),
+  it("places nixery between agent calls in createdAt order", () => {
+    const sections = groupModelResponsesByNixery([
+      response({
+        _id: "agent-1",
+        createdAt: "2026-08-19T15:46:00.000Z",
+        tags: ["chat"],
+      }),
+      response({
+        _id: "nixery-1",
+        createdAt: "2026-08-19T15:47:39.000Z",
+        tags: ["tool", "nixery:resolve-error-with-knowledge"],
+      }),
+      response({
+        _id: "agent-2",
+        createdAt: "2026-08-19T15:48:53.000Z",
+        tags: ["bash"],
+      }),
     ]);
 
-    assert.deepEqual(
-      grouped.untagged.map((item) => item._id),
-      ["a"],
-    );
-    assert.deepEqual(
-      grouped.nixeryGroups.map((group) => [
-        group.defId,
-        group.responses.map((item) => item._id),
-      ]),
-      [
-        ["append-raw-knowledge-page", ["d"]],
-        ["resolve-error-with-knowledge", ["b", "c"]],
-      ],
-    );
+    assert.deepEqual(sectionIds(sections), [
+      ["agent", ["agent-1"]],
+      ["nixery:resolve-error-with-knowledge", ["nixery-1"]],
+      ["agent", ["agent-2"]],
+    ]);
+  });
+
+  it("keeps non-adjacent same-def nixery calls as separate sections", () => {
+    const sections = groupModelResponsesByNixery([
+      response({
+        _id: "nixery-1",
+        createdAt: "2026-08-19T15:47:00.000Z",
+        tags: ["tool", "nixery:resolve-error-with-knowledge"],
+      }),
+      response({
+        _id: "agent-1",
+        createdAt: "2026-08-19T15:48:00.000Z",
+        tags: ["chat"],
+      }),
+      response({
+        _id: "nixery-2",
+        createdAt: "2026-08-19T15:49:00.000Z",
+        tags: ["bash", "nixery:resolve-error-with-knowledge"],
+      }),
+    ]);
+
+    assert.deepEqual(sectionIds(sections), [
+      ["nixery:resolve-error-with-knowledge", ["nixery-1"]],
+      ["agent", ["agent-1"]],
+      ["nixery:resolve-error-with-knowledge", ["nixery-2"]],
+    ]);
+  });
+
+  it("groups adjacent same-def nixery calls", () => {
+    const sections = groupModelResponsesByNixery([
+      response({
+        _id: "a",
+        createdAt: "2026-08-19T15:46:00.000Z",
+        tags: ["chat"],
+      }),
+      response({
+        _id: "b",
+        createdAt: "2026-08-19T15:47:00.000Z",
+        tags: ["tool", "nixery:resolve-error-with-knowledge"],
+      }),
+      response({
+        _id: "c",
+        createdAt: "2026-08-19T15:47:30.000Z",
+        tags: ["bash", "nixery:resolve-error-with-knowledge"],
+      }),
+      response({
+        _id: "d",
+        createdAt: "2026-08-19T15:48:00.000Z",
+        tags: ["tool", "nixery:append-raw-knowledge-page"],
+      }),
+    ]);
+
+    assert.deepEqual(sectionIds(sections), [
+      ["agent", ["a"]],
+      ["nixery:resolve-error-with-knowledge", ["b", "c"]],
+      ["nixery:append-raw-knowledge-page", ["d"]],
+    ]);
+  });
+
+  it("sorts out-of-order input by createdAt then _id", () => {
+    const sections = groupModelResponsesByNixery([
+      response({
+        _id: "agent-2",
+        createdAt: "2026-08-19T15:48:53.000Z",
+        tags: ["bash"],
+      }),
+      response({
+        _id: "nixery-1",
+        createdAt: "2026-08-19T15:47:39.000Z",
+        tags: ["tool", "nixery:resolve-error-with-knowledge"],
+      }),
+      response({
+        _id: "agent-1",
+        createdAt: "2026-08-19T15:46:00.000Z",
+        tags: ["chat"],
+      }),
+    ]);
+
+    assert.deepEqual(sectionIds(sections), [
+      ["agent", ["agent-1"]],
+      ["nixery:resolve-error-with-knowledge", ["nixery-1"]],
+      ["agent", ["agent-2"]],
+    ]);
   });
 });

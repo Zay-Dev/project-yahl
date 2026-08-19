@@ -17,7 +17,7 @@ const buildResumedFromCheckpoint = (
     parsedStageSnapshot?: {
       lines: string;
       sourceStartLine: number;
-      type: 'loop' | 'plain';
+      type: 'loop' | 'plain' | 'while';
     };
     stage: YahlStage;
     stageIndex?: number;

@@ -4,6 +4,8 @@ import type { TParsedStageSnapshot } from '@/orchestrator/-ask-user/parsed-stage
 
 import { runYahl } from '@/orchestrator/-agent';
 import { resumeLoopFromCheckpoint } from '@/orchestrator/-agent/loop';
+import { handleWhile, resumeWhileFromCheckpoint } from '@/orchestrator/-agent/while';
+import { runWhileWithParentVerify } from '@/orchestrator/-agent/while-parent-verify';
 
 export type TPipelinePosition =
   | { kind: 'none' }
@@ -40,15 +42,24 @@ export const isLoopStageCheckpoint = (
   loopMeta: TLoopMeta | undefined,
   yahlStages: ParsedStage[],
   stageIndex: number,
-) => Boolean(loopMeta && yahlStages[stageIndex]?.type === 'loop');
+) => {
+  const stageType = yahlStages[stageIndex]?.type;
+
+  if (loopMeta?.kind === 'while' || loopMeta?.kind === 'warmup') {
+    return Boolean(loopMeta && stageType === 'while');
+  }
+
+  return Boolean(loopMeta && stageType === 'loop');
+};
 
 export const resolveLoopStageIndex = (
   hint: { parsedStageSnapshot?: TParsedStageSnapshot | null },
   yahlStages: ParsedStage[],
 ) => {
-  if (hint.parsedStageSnapshot?.type === 'loop') {
+  if (hint.parsedStageSnapshot?.type === 'loop' || hint.parsedStageSnapshot?.type === 'while') {
     const match = yahlStages.findIndex((stage) =>
-      stage.type === 'loop' && stage.lines === hint.parsedStageSnapshot?.lines);
+      stage.type === hint.parsedStageSnapshot?.type
+      && stage.lines === hint.parsedStageSnapshot?.lines);
 
     if (match >= 0) {
       return match;
@@ -65,21 +76,62 @@ export const resolveLoopStageIndex = (
     }
   }
 
-  return yahlStages.findIndex((stage) => stage.type === 'loop');
+  return yahlStages.findIndex((stage) => stage.type === 'loop' || stage.type === 'while');
 };
 
-export const hasMoreLoopIterations = (loopMeta: TLoopMeta) =>
-  loopMeta.index < loopMeta.arraySnapshot.length - 1;
+export const hasMoreLoopIterations = (loopMeta: TLoopMeta) => {
+  if (loopMeta.kind === 'while' || loopMeta.kind === 'warmup') {
+    return true;
+  }
+
+  return loopMeta.index < loopMeta.arraySnapshot.length - 1;
+};
 
 const _continueLoopIterations = async (
   ctx: TPipelineContinuation,
   loopMeta: TLoopMeta,
   loopStageIndex: number,
+  warmupRequestId?: string,
 ) => {
   const loopStage = ctx.yahlStages[loopStageIndex];
 
   if (!loopStage) {
     throw new Error(`pipeline continuation: missing loop stage at index ${loopStageIndex}`);
+  }
+
+  if (loopStage.type === 'while') {
+    await runWhileWithParentVerify({
+      agentName: `agent-${globalThis.sessionId}`,
+      firstPass: (systemAppend) => resumeWhileFromCheckpoint(
+        loopStage,
+        ctx.storage,
+        loopMeta,
+        runYahl,
+        loopMeta.temperature,
+        loopStageIndex,
+        loopStageIndex,
+        ctx.yahlStages,
+        {
+          systemAppend: systemAppend ?? ctx.systemAppend,
+          warmupRequestId,
+        },
+      ),
+      pipelineStageIndex: loopStageIndex,
+      rerun: (systemAppend) => handleWhile(
+        loopStage,
+        ctx.storage,
+        runYahl,
+        loopMeta.temperature,
+        loopStageIndex,
+        ctx.yahlStages,
+        { systemAppend: systemAppend ?? ctx.systemAppend },
+      ),
+      sessionId: globalThis.sessionId,
+      stage: loopStage,
+      storage: ctx.storage,
+      temperature: loopMeta.temperature,
+    });
+    return;
   }
 
   await resumeLoopFromCheckpoint(
@@ -157,7 +209,12 @@ export const runPipelineContinuation = async (ctx: TPipelineContinuation) => {
         useStorage: () => ctx.storage,
       });
 
-      await _continueLoopIterations(ctx, position.loopMeta, position.stageIndex);
+      await _continueLoopIterations(
+        ctx,
+        position.loopMeta,
+        position.stageIndex,
+        position.loopMeta.kind === 'warmup' ? position.requestId : undefined,
+      );
       await _runSuffix(ctx);
 
       return ctx.storage;

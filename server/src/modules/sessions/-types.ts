@@ -1,9 +1,11 @@
 import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
-import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+import type { TYahlWhileSetup } from '@project-yahl/shared/yahl/types';
 import type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
 
 export type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
+export type { TYahlWhileSetup } from '@project-yahl/shared/yahl/types';
 
 export type TTokenTotals = {
   cacheHitTokens: number;
@@ -14,15 +16,20 @@ export type TTokenTotals = {
   totalTokens: number;
 };
 
+export type TStageLoopMetaKind = 'warmup' | 'for' | 'while';
+
 export type TStageLoopMeta = {
-  arraySnapshot: unknown[];
+  arraySnapshot?: unknown[];
   endAfter?: number;
-  index: number;
+  index?: number;
   indexName?: string;
+  kind?: TStageLoopMetaKind;
+  remainingBashCalls?: number;
+  remainingTurns?: number;
   startAt?: number;
   step?: number;
   temperature?: number;
-  value: unknown;
+  value?: unknown;
 };
 
 export type TYahlAskUserOption = {
@@ -76,6 +83,8 @@ export type TYahlStage = {
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
   version?: number;
+  warmUp?: string;
+  whileSetup?: TYahlWhileSetup;
 };
 
 export type TParsedStage = {
@@ -86,7 +95,7 @@ export type TParsedStage = {
   sourceStartLine: number;
   spec: TYahlStage;
   temperature?: number;
-  type: 'loop' | 'plain';
+  type: 'loop' | 'plain' | 'while';
   updateContextKeys?: string[];
 };
 
@@ -190,7 +199,7 @@ export type TAskUserQuestionStatus = 'answered' | 'pending';
 export type TParsedStageSnapshot = {
   lines: string;
   sourceStartLine: number;
-  type: 'loop' | 'plain';
+  type: 'loop' | 'plain' | 'while';
 };
 
 export type TAskUserBatchAnswerRecord = {

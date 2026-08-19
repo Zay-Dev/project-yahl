@@ -28,8 +28,15 @@ export type StageSessionInput = {
   };
 };
 
+export type TStageUsage = {
+  bashCalls: number;
+  turns: number;
+};
+
 export type StageResultEnvelope = {
+  bashCalls?: number;
   output: string;
+  turns?: number;
   type: "result";
 };
 

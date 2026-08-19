@@ -2,6 +2,10 @@ import type { TResponseStageModelResponseItem } from "@project-yahl/server/modul
 
 const NIXERY_TAG_PREFIX = "nixery:";
 
+export type TModelResponseSection =
+  | { kind: "agent"; responses: TResponseStageModelResponseItem[] }
+  | { kind: "nixery"; defId: string; responses: TResponseStageModelResponseItem[] };
+
 export const nixeryDefIdFromTags = (tags: unknown): string | null => {
   if (!Array.isArray(tags)) {
     return null;
@@ -21,32 +25,46 @@ export const nixeryDefIdFromTags = (tags: unknown): string | null => {
   return null;
 };
 
+const compareByCreatedAt = (
+  left: TResponseStageModelResponseItem,
+  right: TResponseStageModelResponseItem,
+) => {
+  const byTime = left.createdAt.localeCompare(right.createdAt);
+
+  if (byTime !== 0) {
+    return byTime;
+  }
+
+  return left._id.localeCompare(right._id);
+};
+
 export const groupModelResponsesByNixery = (
   responses: TResponseStageModelResponseItem[],
-) => {
-  const untagged: TResponseStageModelResponseItem[] = [];
-  const byDef = new Map<string, TResponseStageModelResponseItem[]>();
+): TModelResponseSection[] => {
+  const ordered = [...responses].sort(compareByCreatedAt);
+  const sections: TModelResponseSection[] = [];
 
-  for (const response of responses) {
+  for (const response of ordered) {
     const defId = nixeryDefIdFromTags(response.tags);
+    const last = sections.at(-1);
 
-    if (!defId) {
-      untagged.push(response);
+    if (defId) {
+      if (last?.kind === "nixery" && last.defId === defId) {
+        last.responses.push(response);
+        continue;
+      }
+
+      sections.push({ kind: "nixery", defId, responses: [response] });
       continue;
     }
 
-    const list = byDef.get(defId) ?? [];
+    if (last?.kind === "agent") {
+      last.responses.push(response);
+      continue;
+    }
 
-    list.push(response);
-    byDef.set(defId, list);
+    sections.push({ kind: "agent", responses: [response] });
   }
 
-  const nixeryGroups = [...byDef.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([defId, items]) => ({
-      defId,
-      responses: items,
-    }));
-
-  return { nixeryGroups, untagged };
+  return sections;
 };

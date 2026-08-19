@@ -167,15 +167,24 @@ const toListItem = (
   finishedAt: toIso(stage.finishedAt),
   isTypesPreamble: isTypesPreambleStage({
     spec: stage.stage,
-    type: stage.stage.loopSetup ? 'loop' : 'plain',
+    type: stage.stage.whileSetup ? 'while' : stage.stage.loopSetup ? 'loop' : 'plain',
   }),
   lastModelDurationMs: timing.lastModelDurationMs,
   ...(timing.lastModelResponseAt ? { lastModelResponseAt: timing.lastModelResponseAt } : {}),
   ...(timing.lastToolCallAt ? { lastToolCallAt: timing.lastToolCallAt } : {}),
   logicPreview: logicPreviewFrom(stage.stage?.logic),
+  ...(stage.loopMeta?.kind
+    ? { loopKind: stage.loopMeta.kind }
+    : typeof stage.loopMeta?.index === 'number' ? { loopKind: 'for' as const } : {}),
   loopSetup: stage.stage?.loopSetup,
   loopIndex: stage.loopMeta?.index,
   loopValue: stage.loopMeta?.value,
+  ...(typeof stage.loopMeta?.remainingBashCalls === 'number'
+    ? { remainingBashCalls: stage.loopMeta.remainingBashCalls }
+    : {}),
+  ...(typeof stage.loopMeta?.remainingTurns === 'number'
+    ? { remainingTurns: stage.loopMeta.remainingTurns }
+    : {}),
   modelCallCount,
   modelDurationMs: timing.modelDurationMs,
   ...(typeof stage.parsedStageIndex === 'number' ? { parsedStageIndex: stage.parsedStageIndex } : {}),
@@ -187,6 +196,7 @@ const toListItem = (
   tokenTotals,
   toolCallCount,
   updatedAt: toIso(stage.updatedAt as Date) ?? '',
+  ...(stage.stage?.whileSetup ? { whileSetup: stage.stage.whileSetup } : {}),
 });
 
 export const resolveSessionStagesList = async (sessionId: string) => {

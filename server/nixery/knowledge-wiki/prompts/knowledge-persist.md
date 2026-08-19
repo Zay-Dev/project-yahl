@@ -15,6 +15,7 @@ When `~/task-skills/worth-persisting-knowledge/SKILL.md` exists, **Read it early
 3. Call the resolver **once** per error signature in a stage.
 4. Do **not** separately submit the same failure; `not_found` and `unavailable` already mean it was recorded.
 5. Do **not** recursively invoke the resolver for an error caused by the resolver itself — use inline nixery soft-fail handling.
+6. information dicovery read the `The Librarian` section below.
 
 If a working path appears later (cited solution verified, or your own investigation succeeded): submit a **second**, separate HOWTO/TRICK observation via `/nixery(submit-knowledge-observation, …)` (top priority again). Do not merge failure and success into one note.
 
@@ -22,7 +23,9 @@ Read those `~/task-skills/…/SKILL.md` files when present. Do **not** invent fi
 
 ## The Librarian
 
-`/nixery(resolve-error-with-knowledge, …)` is the system's **Librarian**. Ask it before inventing a search. Do **not** scan `/workspace/sessions/*`, `find /`, or other runs for a spec. It support not only error, instead, it will be able to provide most of the info, and it is your responsbility to contribute back if it failed to provide the info, so DO **NOT** feel hesitated to use it.
+1. Read `~/task-skills/resolve-errors-with-knowledge/SKILL.md` when it exists, voice out if they are missing.
+2. Call `/nixery(resolve-error-with-knowledge, …)` as the **first** action — before inventing a search.
+3. `/nixery(resolve-error-with-knowledge, …)` is the system's **Librarian**. Before consulting `resolve-errors-with-knowledge`, do **not** scan `/workspace/sessions/*`, `find /`, or other runs for a spec. It supports **not only error**, instead, it is alo able to provide useful info to operate, and it is your responsbility to contribute back if it failed to provide the info, so DO **NOT** feel hesitated to use it.
 
 The ticket is `observation.observationId` (e.g. `error-a1b2c3d4e5f6`). Keep it until you post back.
 

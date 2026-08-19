@@ -169,6 +169,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
       loopMeta,
       parsedStageIndex,
       persistedStage,
+      prefixMessages,
       resumeFrom,
       skipStageCreate,
       sourceStartLine,
@@ -195,6 +196,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
           context: _serializeStorage(context),
           contextAfter: _serializeStorage(contextAfter),
           parsedStageIndex,
+          prefixMessages,
           requestId,
           resumeFrom,
           stage,
@@ -248,6 +250,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
         await this._drainModelResponses(requestId);
 
         const waitStartedAt = Date.now();
+        let usage: { bashCalls?: number; turns?: number } | undefined;
 
         console.log(`[yahl-diag] reply wait start requestId=${requestId} pid=${process.pid}`);
 
@@ -266,12 +269,22 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
             if (raw) {
               try {
                 const parsed = JSON.parse(raw) as {
+                  bashCalls?: number;
+                  turns?: number;
                   type?: string;
                   output?: {
                     error?: { message?: string; name?: string; stack?: string };
                     message?: string;
                   };
                 };
+
+                if (parsed.type === 'usage') {
+                  usage = {
+                    bashCalls: Number(parsed.bashCalls) || 0,
+                    turns: Number(parsed.turns) || 0,
+                  };
+                  continue;
+                }
 
                 if (parsed.type === 'error') {
                   const errorMessage = parsed.output?.message
@@ -324,6 +337,8 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
         if (!disposed) {
           await redis.quit();
         }
+
+        return usage;
       },
     };
   }
@@ -455,7 +470,17 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
           await this.redis.lpush(replyQueue, 'END');
         },
 
-        end: () => this.redis.lpush(replyQueue, 'END'),
+        end: async (usage) => {
+          if (usage) {
+            await this.redis.lpush(replyQueue, JSON.stringify({
+              bashCalls: usage.bashCalls ?? 0,
+              turns: usage.turns ?? 0,
+              type: 'usage',
+            }));
+          }
+
+          await this.redis.lpush(replyQueue, 'END');
+        },
 
         onModelResponse: async (response) => {
           await this.redis.lpush(

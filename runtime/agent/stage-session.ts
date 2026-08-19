@@ -56,10 +56,14 @@ type StageSessionOptions = {
   onLocalToolCall?: (record: TLocalToolCallRecord) => Promise<void>;
   onLocalToolStart?: (record: TLocalToolStartRecord) => Promise<void>;
   onModelResponse?: (response: TModelResponse) => Promise<void>;
+  prefixMessages?: ChatApiMessage[];
   requestId?: string;
   resumeFrom?: TAskUserResumeFrom;
   resumeMessages?: ChatApiMessage[];
 };
+
+export const WARMUP_CONTINUE_NOTE =
+  'Warm-up already ran; do not repeat opening reads/binds; execute this Input only';
 
 const toApiMessages = (messages: BootstrapMessage[]): ChatApiMessage[] =>
   messages.map((message) => ({
@@ -169,6 +173,22 @@ const finalizeEnvelope = (content: string | null): StageEnvelope => {
   };
 };
 
+const withUsage = (
+  envelope: StageEnvelope,
+  turns: number,
+  bashCalls: number,
+): StageEnvelope => {
+  if (Array.isArray(envelope) || envelope.type !== 'result') {
+    return envelope;
+  }
+
+  return {
+    ...envelope,
+    bashCalls,
+    turns,
+  };
+};
+
 const toolErrorContent = (message: string) =>
   JSON.stringify({
     error: message,
@@ -206,8 +226,21 @@ export const runStageSession = async (
     },
   }, null, 2);
 
+  const prefixMessages = options.prefixMessages ?? [];
+  const hasWarmupTranscript = prefixMessages.some((message) => message.role === 'assistant');
+  const warmupPrefix: ChatApiMessage[] = hasWarmupTranscript
+    ? [
+      {
+        content: WARMUP_CONTINUE_NOTE,
+        role: 'user',
+      },
+      ...prefixMessages,
+    ]
+    : prefixMessages;
+
   const stageMessages: ChatApiMessage[] = [
     ...toApiMessages(messages),
+    ...warmupPrefix,
     {
       role: "user",
       content: [
@@ -240,10 +273,10 @@ export const runStageSession = async (
 
           console.error(`[agent-daemon] context length exceeded turn=${turns}: ${message}\n`);
 
-          return {
+          return withUsage({
             output: `执行失败 model context length exceeded: ${message.slice(0, 240)}`,
             type: "result",
-          };
+          }, turns, bashCalls);
         }
 
         throw error;
@@ -455,7 +488,7 @@ export const runStageSession = async (
           if (parsed.ok === true && parsed.transfer === true) {
             console.log(`[agent-daemon] stage finalize turn=${turns} goto_stage transfer\n`);
 
-            return finalizeEnvelope("");
+            return withUsage(finalizeEnvelope(""), turns, bashCalls);
           }
         } catch {
           // fall through — invalid/error result continues the stage
@@ -466,7 +499,7 @@ export const runStageSession = async (
 
       console.log(`[agent-daemon] stage finalize turn=${turns} toolCalls=0\n`);
 
-      return finalizeEnvelope(assistantMessage.at(-1)?.content || '');
+      return withUsage(finalizeEnvelope(assistantMessage.at(-1)?.content || ''), turns, bashCalls);
     }
 
     console.warn(
@@ -474,10 +507,10 @@ export const runStageSession = async (
       + `requestId=${options.requestId ?? '-'} maxTurns=${maxTurns}`,
     );
 
-    return {
+    return withUsage({
       output: `执行失败 stage对话轮次超过限制 ${maxTurns}`,
       type: "result",
-    };
+    }, turns, bashCalls);
   } finally {
     if (browserCalls > 0) {
       await closeStagehandSession();

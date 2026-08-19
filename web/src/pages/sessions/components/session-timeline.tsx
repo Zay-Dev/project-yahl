@@ -13,7 +13,7 @@ import { StageDetailPanel } from "@/pages/sessions/components/stage-detail-panel
 import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
 import { fetchWithConcurrency } from "@/pages/sessions/lib/fetch-with-concurrency";
 import { fetchSessionStageDetail } from "@/pages/sessions/lib/sessions-api";
-import { buildStageLabels } from "@/pages/sessions/lib/stage-label";
+import { buildStageLabels, loopSetupHint, resolveLoopKind } from "@/pages/sessions/lib/stage-label";
 import {
   formatElapsedMs,
   resolveCurrentStage,
@@ -68,7 +68,16 @@ type TStageRowProps = {
   open: boolean;
   originalStages: TParsedStage[];
   sessionId: string;
+  setupHint?: string;
   stageLabel: string;
+};
+
+const loopKindBadge = (kind: ReturnType<typeof resolveLoopKind>) => {
+  if (!kind) {
+    return null;
+  }
+
+  return kind === "warmup" ? "warmUp" : kind;
 };
 
 const StageRow = ({
@@ -81,8 +90,13 @@ const StageRow = ({
   open,
   originalStages,
   sessionId,
+  setupHint,
   stageLabel,
-}: TStageRowProps) => (
+}: TStageRowProps) => {
+  const loopKind = resolveLoopKind(item);
+  const badge = loopKindBadge(loopKind);
+
+  return (
   <Collapsible
     className="rounded-lg border bg-background"
     onOpenChange={onOpenChange}
@@ -99,13 +113,28 @@ const StageRow = ({
           >
             {item.status}
           </span>
-          {item.loopValue !== undefined ? (
+          {badge ? (
+            <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+              {badge}
+            </span>
+          ) : null}
+          {loopKind === "while" && typeof item.remainingTurns === "number" ? (
+            <span className="font-mono text-xs text-muted-foreground">
+              {item.remainingTurns} turns left
+            </span>
+          ) : null}
+          {loopKind === "for" && item.loopValue !== undefined ? (
             <span className="font-mono text-xs text-muted-foreground">
               {summarizeValue(item.loopValue, 40)}
             </span>
           ) : null}
         </div>
         <p className="mt-1 font-mono text-xs text-muted-foreground">{item.requestId}</p>
+        {setupHint ? (
+          <p className="mt-1 font-mono text-xs text-muted-foreground line-clamp-1">
+            {setupHint}
+          </p>
+        ) : null}
         <p className="mt-1 line-clamp-5 text-sm whitespace-pre-wrap">
           {item.logicPreview || "—"}
         </p>
@@ -135,7 +164,8 @@ const StageRow = ({
       ) : null}
     </CollapsibleContent>
   </Collapsible>
-);
+  );
+};
 
 export function SessionTimeline({
   error,
@@ -367,6 +397,7 @@ export function SessionTimeline({
             key={item.requestId}
             originalStages={originalStages}
             sessionId={sessionId}
+            setupHint={loopSetupHint(stages, index)}
             stageLabel={stageLabels[index] ?? `#${index + 1}`}
             onOpenChange={(next) => {
               setOpenIds((current) => {

@@ -6,6 +6,7 @@ import type {
   TYahlStagehandConfig,
   TYahlVerifySpec,
 } from './types';
+import { persistYahlWhileSetup } from './while-setup';
 import { DEFAULT_VERIFY_DEF_ID } from './verify';
 import {
   parseStageGotoCommand,
@@ -342,6 +343,14 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
       throw new Error(`${label}: nixeryRun cannot combine with loopSetup`);
     }
 
+    if (stage.whileSetup !== undefined) {
+      throw new Error(`${label}: nixeryRun cannot combine with whileSetup`);
+    }
+
+    if (stage.warmUp !== undefined) {
+      throw new Error(`${label}: nixeryRun cannot combine with warmUp`);
+    }
+
     if (stage.produceContextKeys !== undefined) {
       throw new Error(`${label}: nixeryRun stages must not set produceContextKeys`);
     }
@@ -355,14 +364,34 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     throw new Error(`${label}: contextMode and conditionMode are mutually exclusive`);
   }
 
-  if (stage.conditionMode === true && stage.loopSetup !== undefined) {
+  const loopSetup = typeof stage.loopSetup === 'string' ? stage.loopSetup.trim() : undefined;
+  const whileSetup = persistYahlWhileSetup(stage.whileSetup, label);
+  const warmUp = typeof stage.warmUp === 'string' ? stage.warmUp.trim() : undefined;
+
+  if (stage.loopSetup !== undefined) {
+    if (!loopSetup || !LOOP_SETUP_PATTERN.test(loopSetup)) {
+      throw new Error(`${label}.loopSetup: must match "for each <id> of [...]"`);
+    }
+  }
+
+  if (stage.warmUp !== undefined && !warmUp) {
+    throw new Error(`${label}.warmUp: required non-empty string when present`);
+  }
+
+  if (loopSetup && whileSetup) {
+    throw new Error(`${label}: loopSetup and whileSetup are mutually exclusive`);
+  }
+
+  if (stage.conditionMode === true && loopSetup) {
     throw new Error(`${label}: conditionMode and loopSetup are mutually exclusive`);
   }
 
-  if (stage.loopSetup !== undefined) {
-    if (typeof stage.loopSetup !== 'string' || !LOOP_SETUP_PATTERN.test(stage.loopSetup.trim())) {
-      throw new Error(`${label}.loopSetup: must match "for each <id> of [...]"`);
-    }
+  if (stage.conditionMode === true && whileSetup) {
+    throw new Error(`${label}: conditionMode and whileSetup are mutually exclusive`);
+  }
+
+  if (warmUp && !loopSetup && !whileSetup) {
+    throw new Error(`${label}: warmUp requires loopSetup or whileSetup`);
   }
 
   if (stage.temperature !== undefined) {
@@ -463,7 +492,9 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     ...(goto ? { goto } : {}),
     ...(stage.contextMode === true ? { contextMode: true } : {}),
     ...(stage.conditionMode === true ? { conditionMode: true } : {}),
-    ...(typeof stage.loopSetup === 'string' ? { loopSetup: stage.loopSetup.trim() } : {}),
+    ...(loopSetup ? { loopSetup } : {}),
+    ...(whileSetup ? { whileSetup } : {}),
+    ...(warmUp ? { warmUp } : {}),
     ...(stage.temperature !== undefined ? { temperature: Number(stage.temperature) } : {}),
     ...(stage.maxBashCalls !== undefined ? { maxBashCalls: Number(stage.maxBashCalls) } : {}),
     ...(stage.maxTurns !== undefined ? { maxTurns: Number(stage.maxTurns) } : {}),

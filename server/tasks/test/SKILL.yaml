@@ -67,6 +67,15 @@ stages:
     logic: |
       const result = {a,b,c};
 
+  - contextKeys: [c]
+    updateContextKeys: [c]
+    warmUp: |
+      c += 1;
+    whileSetup: context.context.c < 20
+    maxTurns: 8
+    logic: |
+      c += 1;
+
   - contextMode: true
     updateContextKeys: [result]
     logic: |

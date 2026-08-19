@@ -24,20 +24,24 @@ import { validateForkSourceBundle, ForkSourceBundleError } from '../-fork-source
 import { resolveSessionStagesReplay } from './stage-read';
 import { spawnOrchestrate } from './spawn-orchestrate';
 import { copyPrefixStagesToSession } from '../use-cases.services/copy-fork-prefix-stages';
+import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
 
 export type TRequestCreateForkSessionParams = {
   sessionId: string;
 };
 
 const loopMetaSchema = Joi.object({
-  arraySnapshot: Joi.array().required(),
+  arraySnapshot: Joi.array().optional(),
   endAfter: Joi.number().optional(),
-  index: Joi.number().required(),
+  index: Joi.number().optional(),
   indexName: Joi.string().optional(),
+  kind: Joi.string().valid('for', 'warmup', 'while').optional(),
+  remainingBashCalls: Joi.number().integer().min(0).optional(),
+  remainingTurns: Joi.number().integer().min(0).optional(),
   startAt: Joi.number().optional(),
   step: Joi.number().optional(),
   temperature: Joi.number().optional(),
-  value: Joi.any().required(),
+  value: Joi.any().optional(),
 }).unknown(true);
 
 const setupSchema = Joi.object<TForkSessionStageSetup>({
@@ -65,6 +69,36 @@ const _normalizeContainerName = (value: string) =>
     .replace(/^-+/, '')
     .replace(/-+$/, '')
     .slice(0, 63) || 'session';
+
+export const patchRunInputFromStorageSeed = (params: {
+  runInputContextKeys: string[];
+  sourceRunInput: Record<string, unknown>;
+  storageSeed: Record<string, unknown>;
+}) => {
+  const { runInputContextKeys, sourceRunInput, storageSeed } = params;
+
+  const storageSeedContext = storageSeed && typeof (storageSeed as { context?: unknown }).context === 'object'
+    ? (storageSeed as { context?: Record<string, unknown> }).context
+    : undefined;
+
+  const storageContext = storageSeedContext && !Array.isArray(storageSeedContext)
+    ? storageSeedContext
+    : undefined;
+
+  if (!storageContext) {
+    return sourceRunInput;
+  }
+
+  const patched: Record<string, unknown> = { ...sourceRunInput };
+
+  for (const key of runInputContextKeys) {
+    if (Object.prototype.hasOwnProperty.call(storageContext, key)) {
+      patched[key] = storageContext[key];
+    }
+  }
+
+  return patched;
+};
 
 export const createForkSession = [
   Middlewares.Chainable
@@ -149,6 +183,9 @@ export const createForkSession = [
         throw errors.badRequest('Source session missing taskYahl snapshot');
       }
 
+      const { runInputContextKeys } = parseYahlTask(taskYahl);
+      const runInputKeys = runInputContextKeys ?? [];
+
       const anchorSetup = setups[0]!;
 
       let anchorParsedStageIndex: number;
@@ -172,6 +209,11 @@ export const createForkSession = [
 
       const storageSeed = deriveForkStorageSeed(replayRows, anchorIndex, anchorSetup);
       const prefixRows = prefixRowsForForkCopy(replayRows, anchorIndex);
+      const patchedRunInput = patchRunInputFromStorageSeed({
+        runInputContextKeys: runInputKeys,
+        sourceRunInput: sourceSession.runInput ?? {},
+        storageSeed,
+      });
 
       const forkSessionId = randomUUID();
       const targetSessionId = _normalizeContainerName(randomUUID());
@@ -200,7 +242,7 @@ export const createForkSession = [
               kind: 'pipeline',
               stageIndex: anchorParsedStageIndex,
             },
-            runInput: sourceSession.runInput ?? {},
+            runInput: patchedRunInput,
             storageSeed,
             taskId: sourceTaskId,
             taskSkills: sourceSession.taskSkills,

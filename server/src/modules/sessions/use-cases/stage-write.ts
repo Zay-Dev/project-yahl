@@ -41,14 +41,17 @@ export type TResponsePatchStage = {
 };
 
 const loopMetaSchema = Joi.object({
-  arraySnapshot: Joi.array().required(),
+  arraySnapshot: Joi.array().optional(),
   endAfter: Joi.number().optional(),
-  index: Joi.number().required(),
+  index: Joi.number().optional(),
   indexName: Joi.string().optional(),
+  kind: Joi.string().valid('for', 'warmup', 'while').optional(),
+  remainingBashCalls: Joi.number().integer().min(0).optional(),
+  remainingTurns: Joi.number().integer().min(0).optional(),
   startAt: Joi.number().optional(),
   step: Joi.number().optional(),
   temperature: Joi.number().optional(),
-  value: Joi.any().required(),
+  value: Joi.any().optional(),
 }).unknown(true);
 
 const createStageBodySchema = Joi.object<TRequestCreateStageBody>({

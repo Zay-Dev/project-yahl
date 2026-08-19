@@ -11,6 +11,7 @@ import type {
   TStageLoopMeta,
   TTokenTotals,
   TYahlStage,
+  TYahlWhileSetup,
 } from './-types';
 
 export type TResponseTokenTotals = TTokenTotals;
@@ -82,9 +83,12 @@ export type TResponseStageListItem = {
   lastModelResponseAt?: string;
   lastToolCallAt?: string;
   logicPreview: string;
+  loopKind?: 'warmup' | 'for' | 'while';
   loopSetup?: string;
   loopIndex?: number;
   loopValue?: unknown;
+  remainingBashCalls?: number;
+  remainingTurns?: number;
   modelCallCount: number;
   modelDurationMs: number;
   parsedStageIndex?: number;
@@ -96,6 +100,7 @@ export type TResponseStageListItem = {
   tokenTotals: TTokenTotals | null;
   toolCallCount: number;
   updatedAt: string;
+  whileSetup?: TYahlWhileSetup;
 };
 
 export type TResponseStageReplayVerifyResult = {
@@ -201,7 +206,7 @@ export type TResponseVerifyCheckpoint = {
   parsedStageSnapshot?: {
     lines: string;
     sourceStartLine: number;
-    type: 'loop' | 'plain';
+    type: 'loop' | 'plain' | 'while';
   };
   requestId: string;
   resumeAction?: TVerifyResumeAction;

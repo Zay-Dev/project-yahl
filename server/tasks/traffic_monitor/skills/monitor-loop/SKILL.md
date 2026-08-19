@@ -1,10 +1,10 @@
 # monitor-loop
 
-Configurable-length poll stage (`monitor_minutes`, default 60).
+One poll of a configurable window (`monitor_minutes`, default 60). The orchestrator runs this skill at least twice (`whileSetup.doAtLeast: 2`), then re-checks the window via `whileSetup.condition` before further iterations.
 
 ## Clock / sleep
 
-Never overwrite `started_at`. Exit when `now - started_at >= monitor_minutes`. Verify retry after window → emit `monitor` from real `fetches` only. Times / `## HH:MM` use `timezone`.
+Never overwrite `started_at`. Times / `## HH:MM` use `timezone`. Verify retry after the window → emit `monitor` from real `fetches` only.
 
 | When | `run_bash` |
 |------|------------|
@@ -22,7 +22,7 @@ Single sleep per wait (`bashTimeoutMs: 360000`). No chunking / background / alte
 2. Success: `set_context` extend `fetches` + update `prev_routes` / `prev_incident_note` **before** day-page append.
 3. Append section via `append-raw-knowledge-page` (`raw/fetches-YYYY-MM-DD`) with Path lines when present.
 4. Notify checks (below), then novel-only ops observations.
-5. Sleep until window ends.
+5. Sleep once; the orchestrator decides whether another poll runs.
 
 ## Miss / dead source
 

@@ -26,10 +26,13 @@ export type TDbAskUserQuestion = TSessionChildDb<IAskUserQuestion>;
 export type TDbVerifyCheckpoint = TSessionChildDb<IVerifyCheckpoint>;
 
 const loopMetaSchema = new Schema({
-  arraySnapshot: { type: [Schema.Types.Mixed], required: true },
+  arraySnapshot: { type: [Schema.Types.Mixed] },
   endAfter: model.d.optionalNumber(),
-  index: model.d.requiredNumber(),
+  index: model.d.optionalNumber(),
   indexName: model.d.optionalString(),
+  kind: { enum: ['for', 'warmup', 'while'], type: String },
+  remainingBashCalls: model.d.optionalNumber(),
+  remainingTurns: model.d.optionalNumber(),
   startAt: model.d.optionalNumber(),
   step: model.d.optionalNumber(),
   temperature: model.d.optionalNumber(),

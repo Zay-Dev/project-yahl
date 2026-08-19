@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import type { TResumeStage, TRunYahl } from './-types';
+import type { TResumeStage, TRunYahl, TStageUsage } from './-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TStorage } from '@/shared/transports/-types';
 
@@ -53,6 +53,11 @@ import {
   writeProduceKeysDiagnostic,
 } from './produce-keys-retry';
 import { handleLoop } from './loop';
+import { handleWhile } from './while';
+import {
+  isPostLoopWhileResume,
+  runWhileWithParentVerify,
+} from './while-parent-verify';
 import {
   resolveStageWaitMaxMs,
   StageWaitTimeoutError,
@@ -119,6 +124,10 @@ class YahlAgentRunner {
 
   private enteredViaGoto = false;
 
+  private lastGotoTargetIndex?: number;
+
+  private lastUsage?: TStageUsage;
+
   constructor(
     yahl: string,
     {
@@ -184,6 +193,47 @@ class YahlAgentRunner {
         continue;
       }
 
+      const resumeLoopMeta = this.options.resumeStage?.loopMeta ?? this.options.loopMeta;
+
+      if (stage.type === 'while' && !this.options.contextAfter && !(isResumingThisStage && !isPostLoopWhileResume(resumeLoopMeta))) {
+        this.enteredViaGoto = false;
+        const whileResult = await runWhileWithParentVerify({
+          agentName: this.agentName,
+          firstPass: (systemAppend) => handleWhile(
+            stage,
+            this.storage,
+            runYahl,
+            this.temperature,
+            this.pipelineStageIndex,
+            this.options.recoveryStages ?? this.stages,
+            { systemAppend },
+          ),
+          pipelineStageIndex: this.pipelineStageIndex,
+          rerun: (systemAppend) => handleWhile(
+            stage,
+            this.storage,
+            runYahl,
+            this.temperature,
+            this.pipelineStageIndex,
+            this.options.recoveryStages ?? this.stages,
+            { systemAppend },
+          ),
+          sessionId: this.sessionId,
+          stage,
+          storage: this.storage,
+          temperature: this.temperature,
+        });
+
+        if (whileResult.gotoTargetStageIndex !== undefined) {
+          this.enteredViaGoto = true;
+          stageIndex = whileResult.gotoTargetStageIndex;
+          continue;
+        }
+
+        stageIndex += 1;
+        continue;
+      }
+
       if (!isResumingThisStage && isTypesPreambleStage(stage, stageIndex)) {
         seedTypesPreamble(this.storage.types, stage.spec.logic);
         this.resetStageContext(stage, stageIndex, false);
@@ -194,11 +244,21 @@ class YahlAgentRunner {
 
       this.resetStageContext(stage, stageIndex, isResumingThisStage);
       const nextStageIndex = await this.runOneStage();
+
+      if (typeof nextStageIndex === 'number') {
+        this.lastGotoTargetIndex = nextStageIndex;
+      }
+
       stageIndex = nextStageIndex ?? stageIndex + 1;
     }
 
     return {
+      requestId: this.requestId,
       storage: this.storage,
+      ...(this.lastGotoTargetIndex === undefined
+        ? {}
+        : { gotoTargetStageIndex: this.lastGotoTargetIndex }),
+      ...(this.lastUsage ? { usage: this.lastUsage } : {}),
     };
   }
 
@@ -356,6 +416,7 @@ class YahlAgentRunner {
         loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
         parsedStageIndex: this.boundParsedStageIndex,
         persistedStage: stageSpec,
+        prefixMessages: this.options.prefixMessages,
         resumeFrom: this.resumeStage?.resumeFrom,
         skipStageCreate,
         sourceStartLine: this.boundSourceStartLine,
@@ -547,11 +608,15 @@ class YahlAgentRunner {
     });
 
     try {
-      await Promise.race([
+      const usage = await Promise.race([
         wait(),
         pausePromise,
         ...(stageWaitTimeoutPromise ? [stageWaitTimeoutPromise] : []),
       ]);
+
+      if (usage && typeof usage === 'object' && ('turns' in usage || 'bashCalls' in usage)) {
+        this.lastUsage = usage;
+      }
     } catch (error) {
       heartbeat.clear();
       disposeWait();

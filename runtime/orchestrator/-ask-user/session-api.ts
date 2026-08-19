@@ -120,6 +120,34 @@ export const fetchAskUserCheckpoint = async (
   return response.json() as Promise<TAskUserCheckpoint>;
 };
 
+export type TStageListItemForResume = {
+  loopKind?: 'warmup' | 'for' | 'while';
+  parsedStageIndex?: number;
+  requestId: string;
+};
+
+const unwrapSessionApiPayload = <T>(json: { data?: T } & Partial<T>): T => {
+  if (json.data !== undefined) {
+    return json.data;
+  }
+
+  return json as T;
+};
+
+export const fetchSessionStages = async (sessionId: string) => {
+  const response = await fetch(
+    `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/stages`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`session stages fetch failed (${response.status})`);
+  }
+
+  const json = await response.json() as { data?: TStageListItemForResume[] } | TStageListItemForResume[];
+
+  return Array.isArray(json) ? json : (json.data ?? []);
+};
+
 export const fetchStageDetail = async (sessionId: string, requestId: string) => {
   const response = await fetch(
     `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}` +
@@ -130,7 +158,9 @@ export const fetchStageDetail = async (sessionId: string, requestId: string) => 
     throw new Error(`stage detail fetch failed (${response.status})`);
   }
 
-  return response.json() as Promise<TStageDetailForResume>;
+  const json = await response.json() as { data?: TStageDetailForResume } & Partial<TStageDetailForResume>;
+
+  return unwrapSessionApiPayload(json);
 };
 
 export const fetchSession = async (sessionId: string) => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { buildStageLabels } from './stage-label';
+import { buildStageLabels, loopSetupHint } from './stage-label';
 
 const stage = (
   overrides: Partial<Parameters<typeof buildStageLabels>[0][number]> = {},
@@ -40,5 +40,75 @@ describe('buildStageLabels', () => {
     ]);
 
     assert.deepEqual(labels, ['#1', '#2']);
+  });
+
+  it('groups warmUp and while rows by parsedStageIndex', () => {
+    const labels = buildStageLabels([
+      stage({ logicPreview: 'init' }),
+      stage({
+        logicPreview: 'warm',
+        loopIndex: 0,
+        loopKind: 'warmup',
+        parsedStageIndex: 12,
+      }),
+      stage({
+        logicPreview: 'poll',
+        loopIndex: 0,
+        loopKind: 'while',
+        parsedStageIndex: 12,
+      }),
+      stage({
+        logicPreview: 'poll',
+        loopIndex: 1,
+        loopKind: 'while',
+        parsedStageIndex: 12,
+      }),
+      stage({
+        logicPreview: 'verify',
+        parsedStageIndex: 12,
+        whileSetup: 'context.context.c < 1',
+      }),
+      stage({ logicPreview: 'assemble' }),
+    ]);
+
+    assert.deepEqual(labels, ['#1', '#2.warmUp', '#2.0', '#2.1', '#2.verify', '#3']);
+  });
+
+  it('keeps for-loop labels as #n.index grouped by parsedStageIndex', () => {
+    const labels = buildStageLabels([
+      stage({
+        logicPreview: 'c += i',
+        loopIndex: 0,
+        loopKind: 'for',
+        parsedStageIndex: 2,
+      }),
+      stage({
+        logicPreview: 'c += i',
+        loopIndex: 1,
+        loopKind: 'for',
+        parsedStageIndex: 2,
+      }),
+    ]);
+
+    assert.deepEqual(labels, ['#1.0', '#1.1']);
+  });
+});
+
+describe('loopSetupHint', () => {
+  it('shows whileSetup condition instead of the object', () => {
+    const stages = [
+      stage({
+        logicPreview: 'poll',
+        loopIndex: 0,
+        loopKind: 'while',
+        parsedStageIndex: 12,
+        whileSetup: {
+          condition: 'context.context.c < 1',
+          doAtLeast: 2,
+        },
+      }),
+    ];
+
+    assert.equal(loopSetupHint(stages, 0), 'context.context.c < 1');
   });
 });

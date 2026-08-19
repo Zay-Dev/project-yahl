@@ -224,4 +224,60 @@ describe('runVerifyGate', () => {
       ),
     );
   });
+
+  it('finishes the verify row when checkpoint POST fails', async () => {
+    process.env.SESSION_API_BASE_URL = 'http://session.test';
+
+    const finished: string[] = [];
+    const prevPublisher = globalThis.publisher;
+
+    globalThis.publisher = {
+      emitStageFinish: (envelope) => {
+        finished.push(envelope.requestId);
+      },
+    } as typeof globalThis.publisher;
+
+    await withNixeryVerify(
+      async () => ({
+        feedback: 'poll_count',
+        pass: false,
+        score: 0.7,
+      }),
+      () => withMockFetch(
+        (url, init) => {
+          if (url.includes('/verify-start') && init?.method === 'POST') {
+            return Response.json({ data: { ok: true } });
+          }
+
+          if (url.includes('/verify-checkpoints') && init?.method === 'POST') {
+            return new Response('{"error":"while type"}', { status: 400 });
+          }
+
+          throw new Error(`unexpected fetch: ${url} ${init?.method ?? 'GET'}`);
+        },
+        async () => {
+          await assert.rejects(
+            () => runVerifyGate({
+              agentName: 'agent-test-no-docker',
+              pipelineStageIndex: 12,
+              requestId: 'req-while-verify',
+              sessionId: 'sess-while-verify',
+              stage: {
+                ...verifyStage,
+                type: 'while',
+              },
+              storage,
+              shutdownOnFail: false,
+              throwOnFail: false,
+            }),
+            /verify checkpoint failed: 400/,
+          );
+
+          assert.deepEqual(finished, ['req-while-verify']);
+        },
+      ),
+    ).finally(() => {
+      globalThis.publisher = prevPublisher;
+    });
+  });
 });

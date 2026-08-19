@@ -64,6 +64,21 @@ describe('hasMoreLoopIterations', () => {
       index: 5,
     }), false);
   });
+
+  it('returns true for while and warmup checkpoints', () => {
+    assert.equal(hasMoreLoopIterations({
+      arraySnapshot: [],
+      index: 0,
+      kind: 'while',
+      value: 0,
+    }), true);
+    assert.equal(hasMoreLoopIterations({
+      arraySnapshot: [],
+      index: 0,
+      kind: 'warmup',
+      value: null,
+    }), true);
+  });
 });
 
 describe('isLoopStageCheckpoint', () => {
@@ -74,5 +89,35 @@ describe('isLoopStageCheckpoint', () => {
   it('returns false for plain stages without loopMeta', () => {
     assert.equal(isLoopStageCheckpoint(undefined, yahlStages, 2), false);
     assert.equal(isLoopStageCheckpoint(loopMeta, yahlStages, 0), false);
+  });
+
+  it('returns false for while stages without loopMeta', () => {
+    const whileStage = compileStage({
+      logic: 'c += 1;',
+      whileSetup: 'true',
+    }, 1);
+
+    assert.equal(isLoopStageCheckpoint(undefined, [whileStage], 0), false);
+  });
+
+  it('returns true for while checkpoints on while stages', () => {
+    const whileStage = compileStage({
+      logic: 'c += 1;',
+      whileSetup: 'true',
+    }, 1);
+    const stages: ParsedStage[] = [plainStage, whileStage];
+
+    assert.equal(isLoopStageCheckpoint({
+      arraySnapshot: [],
+      index: 0,
+      kind: 'while',
+      value: 0,
+    }, stages, 1), true);
+    assert.equal(isLoopStageCheckpoint({
+      arraySnapshot: [],
+      index: 0,
+      kind: 'warmup',
+      value: null,
+    }, stages, 1), true);
   });
 });

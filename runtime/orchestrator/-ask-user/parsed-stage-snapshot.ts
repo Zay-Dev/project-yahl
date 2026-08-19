@@ -3,7 +3,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 export type TParsedStageSnapshot = {
   lines: string;
   sourceStartLine: number;
-  type: 'loop' | 'plain';
+  type: 'loop' | 'plain' | 'while';
 };
 
 export const toParsedStageSnapshot = (stage: ParsedStage): TParsedStageSnapshot => ({
