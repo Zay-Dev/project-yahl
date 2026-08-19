@@ -362,11 +362,16 @@ const normalizeVerifySpec = (
     throw new Error(`${label}.verify.resume: must be a boolean when present`);
   }
 
+  if (entry.skipWarmUp !== undefined && typeof entry.skipWarmUp !== 'boolean') {
+    throw new Error(`${label}.verify.skipWarmUp: must be a boolean when present`);
+  }
+
   return {
     defId,
     ...(entry.autoRetry === true ? { autoRetry: true } : {}),
     ...(entry.minScore !== undefined ? { minScore: Number(entry.minScore) } : {}),
     ...(entry.resume === false ? { resume: false } : {}),
+    ...(entry.skipWarmUp === false ? { skipWarmUp: false } : {}),
     ...(typeof entry.rubric === 'string' && entry.rubric.trim()
       ? { rubric: entry.rubric.trim() }
       : {}),

@@ -1,4 +1,4 @@
-export const ORCHESTRATOR_HANDLED_TOOLS = ['set_context', 'ask_user', 'nixery', 'goto_stage'] as const;
+export const ORCHESTRATOR_HANDLED_TOOLS = ['set_context', 'extend_context', 'ask_user', 'nixery', 'goto_stage'] as const;
 
 export type TOrchestratorHandledTool = (typeof ORCHESTRATOR_HANDLED_TOOLS)[number];
 

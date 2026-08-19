@@ -1,7 +1,6 @@
 import type OpenAI from "openai";
 
 import {
-  CONTEXT_SET_OPERATIONS,
   CONTEXT_SCOPES,
   AskUserToolCallEnvelope,
   type SetContextToolCallEnvelope,
@@ -181,8 +180,8 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Persist a key-value pair. scope global is shared across stages; stage resets each stage; types is the type-definition bucket.",
-      name: "set_context",
+        "Append onto a context array (or pair non-array values). scope global is shared across stages; types is the type-definition bucket. Use instead of set_context when accumulating list items.",
+      name: "extend_context",
       parameters: {
         properties: {
           key: {
@@ -194,9 +193,30 @@ export const STAGE_TOOLS = [
             enum: [...CONTEXT_SCOPES],
             type: "string",
           },
-          operation: {
-            description: "Context write strategy. set overwrites; extend appends onto arrays (or [old, new] for non-arrays).",
-            enum: [...CONTEXT_SET_OPERATIONS],
+          value: {
+            description: "Any JSON-serializable value to append.",
+          },
+        },
+        required: ["scope", "key", "value"],
+        type: "object",
+      },
+    },
+    type: "function" as const,
+  },
+  {
+    function: {
+      description:
+        "Overwrite a key-value pair. scope global is shared across stages; types is the type-definition bucket. To append onto arrays use extend_context.",
+      name: "set_context",
+      parameters: {
+        properties: {
+          key: {
+            description: "Non-empty string key.",
+            type: "string",
+          },
+          scope: {
+            description: "Target bucket.",
+            enum: [...CONTEXT_SCOPES],
             type: "string",
           },
           value: {

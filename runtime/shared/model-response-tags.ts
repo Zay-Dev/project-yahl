@@ -17,6 +17,7 @@ const TAG_ORDER: Array<TModelResponseTag | `platform:${string}`> = [
 const TOOL_NAME_TAGS: Record<string, TModelResponseTag> = {
   ask_user: "tool",
   browser: "browse",
+  extend_context: "tool",
   goto_stage: "tool",
   nixery: "tool",
   platform: "tool",

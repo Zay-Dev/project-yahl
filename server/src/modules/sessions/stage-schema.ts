@@ -29,6 +29,7 @@ const verifySpecSchema = Joi.object({
   minScore: Joi.number().min(0).max(1).optional(),
   resume: Joi.boolean().optional(),
   rubric: Joi.string().trim().optional(),
+  skipWarmUp: Joi.boolean().optional(),
 });
 
 const agentOverridesSchema = Joi.object({

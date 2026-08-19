@@ -5,9 +5,10 @@
 - Anything worth keeping goes into a shared context bucket; everything else is forgotten between stages.
 - Each stage declares **key allowlists** in YAML so context stays bounded and debuggable:
   - `contextKeys` — which shared context (and loop-local) keys the stage/agent may read
-  - `produceContextKeys` — which keys the stage must write via `set_context` before it can finish (runtime retries if any are missing)
+  - `produceContextKeys` — which keys the stage must write via `set_context` / `extend_context` before it can finish (runtime retries if any are missing)
   - `updateContextKeys` — which produced keys get merged back into global context after the stage (on loops, after each iteration)
-- The AI talks back through structured tools — set a variable, run a shell command, ask user choices, ask for chunked extraction, call Mastermind.
+- The AI talks back through structured tools — **`set_context`** (overwrite), **`extend_context`** (append arrays), shell, browser, ask-user, platform, nixery.
+- Platform context keys (`now_iso`, `today`, verify recovery fields, …) are orchestrator-seeded. Each **`whileSetup` poll** refreshes `now_iso` before the iteration body runs.
 
 ```mermaid
 flowchart LR

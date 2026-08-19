@@ -24,6 +24,10 @@ Syntax of "*some_text(...args)" is a virtual function, that means
 5. the variable name to store the result can also provide context of the purpose of the virtual function, e.g. const newest_news = *... // means it is very likely to skip out dated news
 6. after analyzing the purpose and args of the virtual function, generate bash command for the user to execute
 
+Context persistence:
+- `*set_context(key, …)` → `set_context` tool (overwrite)
+- `*extend_context(key, value: item)` → `extend_context` tool (append onto arrays)
+
 examples:
 - const decision = *ask_user(a2ui, [multipleChoice], choose_scope) means emit runtime `ask_user` tool arguments with `version:"askUserBatch.v1"` and a `questions` array
 - const sum = *sum([1,3,5,6,10]) means get the sum of the args (1+3+5+6+10)

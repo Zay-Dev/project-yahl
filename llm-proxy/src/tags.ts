@@ -20,6 +20,7 @@ const TAG_ORDER: TModelResponseTag[] = [
 const TOOL_NAME_TAGS: Record<string, TModelResponseTag> = {
   ask_user: 'tool',
   browser: 'browse',
+  extend_context: 'tool',
   goto_stage: 'tool',
   nixery: 'tool',
   platform: 'tool',

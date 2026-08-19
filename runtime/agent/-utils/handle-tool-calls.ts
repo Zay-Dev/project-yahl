@@ -7,11 +7,18 @@ export type TToolCallMessage = {
 };
 
 export const SET_CONTEXT_OK_TOOL_RESULT =
-  'tool call result: OK. That set_context call succeeded and was applied. Do not call set_context again with the same scope/key/value/operation.';
+  'tool call result: OK. That set_context call succeeded and was applied. Do not call set_context again with the same scope/key/value.';
+
+export const EXTEND_CONTEXT_OK_TOOL_RESULT =
+  'tool call result: OK. That extend_context call succeeded and was applied. Do not call extend_context again with the same scope/key/value.';
 
 const setContextSuccessContent = (name: string, result: string) => {
   if (name === 'set_context' && result === 'OK') {
     return SET_CONTEXT_OK_TOOL_RESULT;
+  }
+
+  if (name === 'extend_context' && result === 'OK') {
+    return EXTEND_CONTEXT_OK_TOOL_RESULT;
   }
 
   return null;

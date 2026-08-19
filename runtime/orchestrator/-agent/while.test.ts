@@ -231,6 +231,102 @@ describe('handleWhile', () => {
     assert.deepEqual(prefixes[1], warmupPrefix);
     assert.deepEqual(prefixes[2], warmupPrefix);
   });
+
+  it('skips warmUp when skipWarmUp is true and loads prefix', async () => {
+    const kinds: string[] = [];
+    const prefixes: unknown[] = [];
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      kinds.push(String(options?.loopMeta?.kind ?? ''));
+      prefixes.push(options?.prefixMessages);
+      const nested = options?.useStorage?.() ?? storageFrom({});
+      nested.context.set('c', Number(nested.context.get('c') ?? 0) + 1);
+
+      return {
+        storage: nested,
+        usage: { bashCalls: 0, turns: 1 },
+      };
+    };
+
+    await handleWhile(
+      whileStage({
+        warmUp: 'c += 0;',
+        whileSetup: { condition: 'false', doAtLeast: 2 },
+      }),
+      storageFrom({ c: 0 }),
+      runner,
+      undefined,
+      12,
+      undefined,
+      {
+        loadPrefixMessages: async () => warmupPrefix,
+        skipWarmUp: true,
+      },
+    );
+
+    assert.deepEqual(kinds, ['while', 'while']);
+    assert.ok(!kinds.includes('warmup'));
+    assert.deepEqual(prefixes[0], warmupPrefix);
+    assert.deepEqual(prefixes[1], warmupPrefix);
+  });
+
+  it('re-runs warmUp when skipWarmUp is false', async () => {
+    const kinds: string[] = [];
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      kinds.push(String(options?.loopMeta?.kind ?? ''));
+      const nested = options?.useStorage?.() ?? storageFrom({});
+      nested.context.set('c', Number(nested.context.get('c') ?? 0) + 1);
+
+      return {
+        requestId: options?.loopMeta?.kind === 'warmup' ? 'warm-1' : `poll-${options?.loopMeta?.index}`,
+        storage: nested,
+        usage: { bashCalls: 0, turns: 1 },
+      };
+    };
+
+    await handleWhile(
+      whileStage({
+        warmUp: 'c += 0;',
+        whileSetup: 'context.context.c < 3',
+      }),
+      storageFrom({ c: 0 }),
+      runner,
+      undefined,
+      undefined,
+      undefined,
+      { skipWarmUp: false },
+    );
+
+    assert.deepEqual(kinds, ['warmup', 'while', 'while']);
+  });
+
+  it('refreshes now_iso before each while segment', async () => {
+    const seen: string[] = [];
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      seen.push(String(options?.useStorage?.()?.context.get('now_iso') ?? ''));
+      const nested = options?.useStorage?.() ?? storageFrom({});
+      nested.context.set('c', Number(nested.context.get('c') ?? 0) + 1);
+
+      return {
+        storage: nested,
+        usage: { bashCalls: 0, turns: 1 },
+      };
+    };
+
+    const storage = storageFrom({ c: 0 });
+    storage.context.set('now_iso', 'stale');
+
+    await handleWhile(
+      whileStage({ whileSetup: 'context.context.c < 2' }),
+      storage,
+      runner,
+    );
+
+    assert.ok(seen.length >= 2);
+    assert.ok(seen.every((value) => value !== 'stale' && /^\d{4}-\d{2}-\d{2}T/.test(value)));
+  });
 });
 
 describe('resumeWhileFromCheckpoint', () => {

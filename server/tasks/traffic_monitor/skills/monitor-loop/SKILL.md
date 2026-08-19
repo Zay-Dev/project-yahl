@@ -19,7 +19,7 @@ Single sleep per wait (`bashTimeoutMs: 360000`). No chunking / background / alte
 ## Poll sequence
 
 1. `*read(source_ops_md)`; fetch routes (route-analysis) for resolved OD.
-2. Success: `set_context` extend `fetches` + update `prev_routes` / `prev_incident_note` **before** day-page append.
+2. Success: `extend_context` on `fetches` + update `prev_routes` / `prev_incident_note` **before** day-page append. Use `now_iso` and `timezone` for poll timestamps.
 3. Append section via `append-raw-knowledge-page` (`raw/fetches-YYYY-MM-DD`) with Path lines when present.
 4. Notify checks (below), then novel-only ops observations.
 5. Sleep once; the orchestrator decides whether another poll runs.

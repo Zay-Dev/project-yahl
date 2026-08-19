@@ -5,6 +5,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TStorage } from '@/shared/transports/-types';
 
 import { toAgentStage } from '@/shared/yahl-stage';
+import { resolveVerifySkipWarmUp } from '@project-yahl/shared/yahl/verify';
 import { parseNixeryToolArguments } from '@/shared/stage-tools';
 
 import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
@@ -34,6 +35,7 @@ import {
 } from '@/orchestrator/-verify/resume-helpers';
 
 import {
+  applyExtendContextToolCall,
   applySetContextToolCall,
   filterStorageForStage,
 } from '@/orchestrator/-context';
@@ -217,7 +219,10 @@ class YahlAgentRunner {
             this.temperature,
             this.pipelineStageIndex,
             this.options.recoveryStages ?? this.stages,
-            { systemAppend },
+            {
+              skipWarmUp: resolveVerifySkipWarmUp(stage.spec.verify),
+              systemAppend,
+            },
           ),
           sessionId: this.sessionId,
           stage,
@@ -443,6 +448,34 @@ class YahlAgentRunner {
             return {
               hasError: false,
               result: `set_context: invalid JSON arguments: ${outcome.invalidJson}`,
+            };
+          }
+
+          if (outcome.rejectReason) {
+            return {
+              hasError: false,
+              result: outcome.rejectReason,
+            };
+          }
+
+          return {
+            hasError: false,
+            result: outcome.applied ? 'OK' : 'skipped',
+            newStorage: this.storage,
+          };
+        }
+
+        if (toolCall.function.name === 'extend_context') {
+          const outcome = await applyExtendContextToolCall(
+            this.storage,
+            toolCall,
+            this.activeStage,
+          );
+
+          if (outcome.invalidJson) {
+            return {
+              hasError: false,
+              result: `extend_context: invalid JSON arguments: ${outcome.invalidJson}`,
             };
           }
 

@@ -9,6 +9,7 @@ export {
   pickContextUpdates,
 } from './context-filter';
 export {
+  applyExtendContextToolCall,
   applySetContextToolCall,
   filterLoopBucket,
   filterStageBucket,
@@ -18,7 +19,7 @@ export {
   setContextScopeForStage,
   shouldApplySetContext,
 } from './stage-field-policy';
-export type { TApplySetContextResult } from './stage-field-policy';
+export type { TApplyExtendContextResult, TApplySetContextResult } from './stage-field-policy';
 export {
   mergeContextPayloadToStorage,
   storageFromContextPayload,

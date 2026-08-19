@@ -4,7 +4,7 @@ import type { AskUserBatchToolArguments } from './ask-user-batch';
 import type { YahlStage } from "./yahl-stage";
 
 export const CONTEXT_SCOPES = ["global", "types"] as const;
-export const CONTEXT_SET_OPERATIONS = ["set", "extend"] as const;
+export const CONTEXT_SET_OPERATIONS = ["set"] as const;
 export const RUNTIME_BUCKETS = ["context", "stage", "types"] as const;
 export const STAGE_ENVELOPE_TYPES = ["result", "tool_call"] as const;
 
@@ -43,11 +43,21 @@ export type StageResultEnvelope = {
 export type SetContextToolCallEnvelope = {
   arguments: {
     key: string;
-    operation: ContextSetOperation;
+    operation?: ContextSetOperation;
     scope: ContextScope;
     value: unknown;
   };
   tool: "set_context";
+  type: "tool_call";
+};
+
+export type ExtendContextToolCallEnvelope = {
+  arguments: {
+    key: string;
+    scope: ContextScope;
+    value: unknown;
+  };
+  tool: "extend_context";
   type: "tool_call";
 };
 
@@ -58,6 +68,7 @@ export type AskUserToolCallEnvelope = {
 };
 
 export type StageToolCallEnvelope = SetContextToolCallEnvelope |
+  ExtendContextToolCallEnvelope |
   AskUserToolCallEnvelope;
 
 export type StageEnvelope = StageResultEnvelope |
@@ -114,6 +125,23 @@ const parseToolCallEnvelope = (item: unknown): StageToolCallEnvelope | null => {
         value: parsedArgs.value,
       },
       tool: "set_context",
+      type: "tool_call",
+    };
+  }
+
+  if (
+    item.tool === "extend_context" &&
+    isScope(parsedArgs.scope) &&
+    typeof parsedArgs.key === "string" &&
+    parsedArgs.key.trim()
+  ) {
+    return {
+      arguments: {
+        key: parsedArgs.key,
+        scope: parsedArgs.scope,
+        value: parsedArgs.value,
+      },
+      tool: "extend_context",
       type: "tool_call",
     };
   }

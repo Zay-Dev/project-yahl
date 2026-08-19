@@ -23,7 +23,7 @@ Syntax reference:
 - `~/task-skills/…` — task-local SKILL files echoed from the session snapshot (see Authoring tasks below).
 - `for each i of [0..100]` and `for each x of [array]` — for-loops, with an optional step like `,+2` (`loopSetup`).
 - `whileSetup` — orchestrator-owned do-while. String form is a JS predicate (`context.context.{key}`) with an implicit floor of 1 body. Object form `{ condition, doAtLeast? }` runs `doAtLeast` bodies (default and min 1) then uses `condition` to gate further polls. WarmUp does not count toward `doAtLeast`.
-- `warmUp` — optional one-shot prefix on `loopSetup` or `whileSetup`; Redis stage run, then the loop. While iterations prepend the warmUp chat transcript (`prefixMessages`), not prior polls.
+- `warmUp` — optional one-shot prefix on `loopSetup` or `whileSetup`; Redis stage run, then the loop. While iterations prepend the warmUp chat transcript (`prefixMessages`), not prior polls. On verify **autoRetry** rerun, warmUp logic is skipped by default (`verify.skipWarmUp`, default `true`); the first warmUp transcript is still reused.
 - `CONTEXT: ...` — run deterministic context mutation in the VM before the next AI stage.
 - `IF:` / `ELSE IF:` / `ELSE:` / `END:` — stage branching; condition decides which block runs.
 - `REPLACE: ...` — system tag the runtime uses when a step needs a second pass after a tool call.
@@ -34,6 +34,8 @@ Syntax reference:
 - `/platform(...)` — dispatch runs, notification/knowledge-transfer proposals, KM instruction (session API).
 - `/nixery(...)` — knowledge writes, research, design-questions, extract-info (see `/opt/skills/nixery/SKILL.md`).
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
+- `*set_context(key, …)` — overwrite a context key via the `set_context` tool (`global` or `types` scope).
+- `*extend_context(key, value: item)` — append onto an array via the `extend_context` tool (use for poll lists, notification history, etc.).
 
 ## SKILL.yaml file format
 
@@ -54,7 +56,7 @@ Per-stage fields:
 | `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` (same `context.context.{key}` reads as `contextMode`) |
 | `loopSetup` | Orchestrator-only for-loop (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
 | `whileSetup` | Orchestrator-only do-while. String = predicate (floor 1). Object `{ condition, doAtLeast? }` runs at least `doAtLeast` bodies (default and min 1), then `condition` gates further iterations. Mutually exclusive with `loopSetup` / `conditionMode` / `nixeryRun`. Parent `verify` runs once after the loop. |
-| `warmUp` | Optional one-shot logic before the first `loopSetup` or `whileSetup` iteration (Redis run; stripped from the agent envelope). While polls reuse this transcript as `prefixMessages`. |
+| `warmUp` | Optional one-shot logic before the first `loopSetup` or `whileSetup` iteration (Redis run; stripped from the agent envelope). While polls reuse this transcript as `prefixMessages`. On verify `autoRetry` rerun, warmUp is skipped by default — see `verify.skipWarmUp`. |
 | `maxBashCalls` | Optional cap on `run_bash` calls for this AI stage (default 24) |
 | `maxTurns` | Optional cap on chat turns for this AI stage (default 60) |
 | `agentOverrides` | Optional agent knobs for this stage. **Only** `bashTimeoutMs` (positive int ms) is accepted — unknown keys fail validation. Used by `run_bash` instead of the shared 60s default. |
@@ -62,8 +64,8 @@ Per-stage fields:
 | `temperature` | Model temperature for AI stages (0–2) |
 | `contextKeys` | Allowlist of context/stage keys passed into the runner |
 | `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |
-| `produceContextKeys` | Allowlist for VM / `set_context` writes to global context |
-| `produceTypeKeys` | Allowlist for VM / `set_context` writes to the types bucket |
+| `produceContextKeys` | Allowlist for VM / `set_context` / `extend_context` writes to global context |
+| `produceTypeKeys` | Allowlist for VM / `set_context` / `extend_context` writes to the types bucket |
 | `nixeryRun` | Orchestrator-direct nixery def id (e.g. `get-knowledge`, `plan`, `plan-study`); read `~/nixery/{defId}/{output}` in a following AI stage |
 | `verify` | Object gate after stage finish — see below. Shorthand `verify: true` → `{ defId: stage-verify }` |
 
@@ -99,16 +101,53 @@ Rules:
 | `rubric` | Named file under `data/mastermind/rules/verify/` or inline Pass/Fail checklist |
 | `minScore` | Minimum pass score (0–1, default 0.75) |
 | `autoRetry` | Orchestrator in-process verify retry loop on rubric fail |
+| `skipWarmUp` | On `autoRetry` rerun of a `whileSetup` stage with `warmUp`, skip re-running warmUp when omitted or `true` (default); set `false` to re-run warmUp on retry |
 | `resume` | When `false`, skip resumeAction classification |
 
 ```yaml
 verify:
   defId: stage-verify
   autoRetry: true
+  skipWarmUp: true   # optional; default true on while+warmUp — skip warmUp body on retry, reuse prefix
   minScore: 0.75
   rubric: |
     Pass when learning_contract has non-empty topic OR at least one seedUrl.
     Fail when topic and seedUrls both empty.
+```
+
+### Context tools (`set_context` / `extend_context`)
+
+Stage agents persist durable state through orchestrator-handled tools (not bash):
+
+| Tool | YAHL sugar | Behavior |
+|------|------------|----------|
+| `set_context` | `*set_context(key, …)` | Overwrite a key (`global` or `types` scope) |
+| `extend_context` | `*extend_context(key, value: item)` | Append onto an array; missing key starts a one-item array |
+
+Rules:
+
+- `set_context` with `operation: extend` is **retired** — use `extend_context` for list accumulation (e.g. `fetches` poll history).
+- Writes are allowlisted via `produceContextKeys`, `produceTypeKeys`, and `updateContextKeys`.
+- Platform keys (`now_iso`, `today`, verify recovery keys, `stage_goto_*`, …) are orchestrator-owned. Each **`whileSetup` poll segment** refreshes `now_iso` (and `today`) before the body runs — use `now_iso` + task `timezone` for poll timestamps instead of inventing clock values.
+
+**While + warmUp + verify retry:**
+
+- First pass always runs `warmUp` when defined.
+- On verify **`autoRetry` rerun**, `skipWarmUp` defaults to **`true`**: warmUp logic is not re-executed, but the first warmUp chat transcript is still prepended to polls. Set `skipWarmUp: false` to re-run warmUp on retry (opt-in).
+
+```yaml
+# Reference: server/tasks/traffic_monitor/SKILL.yaml (monitor stage)
+whileSetup:
+  condition: "(Date.now() - Date.parse(String(context.context.started_at))) < …"
+  doAtLeast: 2
+warmUp: |
+  Read ~/task-skills/monitor-loop/SKILL.md.
+logic: |
+  …
+  *extend_context(fetches, value: fetch_with_status);
+verify:
+  autoRetry: true
+  skipWarmUp: true
 ```
 
 ### VM stages (`contextMode`, `conditionMode`)

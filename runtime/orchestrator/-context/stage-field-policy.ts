@@ -1,13 +1,19 @@
 import type { TChatToolCall, TStorage } from "@/shared/transports/-types";
-import type { SetContextToolCallEnvelope } from "@/shared/stage-contract";
+import type {
+  ExtendContextToolCallEnvelope,
+  SetContextToolCallEnvelope,
+} from "@/shared/stage-contract";
 
 import { PLATFORM_CONTEXT_KEYS } from "./default-context";
 import {
   filterContextByKeys,
-  filterContextByReadUsage,
   pickContextUpdates,
 } from "./context-filter";
-import { setContext } from "@/orchestrator/-tools/set_context";
+import {
+  SET_CONTEXT_EXTEND_RETIRED,
+  extendContext,
+  setContext,
+} from "@/orchestrator/-tools/set_context";
 
 import type { ParsedStage } from "@/orchestrator/-utils/yahl/types";
 
@@ -129,7 +135,29 @@ const _isSetContextScope = (
 const _isSetContextOperation = (
   value: unknown,
 ): value is SetContextToolCallEnvelope['arguments']['operation'] =>
-  value === 'set' || value === 'extend';
+  value === 'set';
+
+const _canonicalExtendContextArgs = (
+  parsed: Record<string, unknown>,
+): ExtendContextToolCallEnvelope['arguments'][] => {
+  if (typeof parsed.key === 'string' && parsed.key.trim()) {
+    return [{
+      key: parsed.key.trim(),
+      scope: _isSetContextScope(parsed.scope) ? parsed.scope : 'global',
+      value: parsed.value,
+    }];
+  }
+
+  const scope = _isSetContextScope(parsed.scope) ? parsed.scope : 'global';
+
+  return Object.keys(parsed)
+    .filter((key) => key !== 'scope' && key !== 'value')
+    .map((key) => ({
+      key,
+      scope,
+      value: parsed[key],
+    }));
+};
 
 const _canonicalSetContextArgs = (
   parsed: Record<string, unknown>,
@@ -161,9 +189,9 @@ const _applyOneSetContextArg = async (
   toolCall: TChatToolCall,
   stage: ParsedStage,
   args: SetContextToolCallEnvelope['arguments'],
-) => {
+): Promise<'applied' | 'skipped'> => {
   if (!_isFastForwardToolCall(toolCall) && !shouldApplySetContext(args.key, stage)) {
-    return false;
+    return 'skipped';
   }
 
   const scope = resolveSetContextScope(args.key, stage, args.scope);
@@ -176,12 +204,13 @@ const _applyOneSetContextArg = async (
     },
   });
 
-  return true;
+  return 'applied';
 };
 
 export type TApplySetContextResult = {
   applied: boolean;
   invalidJson?: string;
+  rejectReason?: string;
 };
 
 export const applySetContextToolCall = async (
@@ -201,6 +230,10 @@ export const applySetContextToolCall = async (
     throw error;
   }
 
+  if (parsed.operation === 'extend') {
+    return { applied: false, rejectReason: SET_CONTEXT_EXTEND_RETIRED };
+  }
+
   const argList = _canonicalSetContextArgs(parsed);
 
   if (argList.length === 0) {
@@ -210,7 +243,69 @@ export const applySetContextToolCall = async (
   let applied = false;
 
   for (const args of argList) {
-    if (await _applyOneSetContextArg(storage, toolCall, stage, args)) {
+    const outcome = await _applyOneSetContextArg(storage, toolCall, stage, args);
+
+    if (outcome === 'applied') {
+      applied = true;
+    }
+  }
+
+  return { applied };
+};
+
+const _applyOneExtendContextArg = async (
+  storage: TStorage,
+  toolCall: TChatToolCall,
+  stage: ParsedStage,
+  args: ExtendContextToolCallEnvelope['arguments'],
+) => {
+  if (!_isFastForwardToolCall(toolCall) && !shouldApplySetContext(args.key, stage)) {
+    return false;
+  }
+
+  const scope = resolveSetContextScope(args.key, stage, args.scope);
+
+  await extendContext(storage, {
+    key: args.key,
+    scope: scope === 'types' ? 'types' : 'global',
+    value: args.value,
+  });
+
+  return true;
+};
+
+export type TApplyExtendContextResult = {
+  applied: boolean;
+  invalidJson?: string;
+};
+
+export const applyExtendContextToolCall = async (
+  storage: TStorage,
+  toolCall: TChatToolCall,
+  stage: ParsedStage,
+): Promise<TApplyExtendContextResult> => {
+  let parsed: Record<string, unknown>;
+
+  try {
+    parsed = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return { applied: false, invalidJson: error.message };
+    }
+
+    throw error;
+  }
+
+  const argList = _canonicalExtendContextArgs(parsed);
+
+  if (argList.length === 0) {
+    return { applied: false };
+  }
+
+  let applied = false;
+
+  for (const args of argList) {
+    if (await _applyOneExtendContextArg(storage, toolCall, stage, args)) {
       applied = true;
     }
   }

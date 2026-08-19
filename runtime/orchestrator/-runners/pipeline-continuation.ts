@@ -6,6 +6,7 @@ import { runYahl } from '@/orchestrator/-agent';
 import { resumeLoopFromCheckpoint } from '@/orchestrator/-agent/loop';
 import { handleWhile, resumeWhileFromCheckpoint } from '@/orchestrator/-agent/while';
 import { runWhileWithParentVerify } from '@/orchestrator/-agent/while-parent-verify';
+import { resolveVerifySkipWarmUp } from '@project-yahl/shared/yahl/verify';
 
 export type TPipelinePosition =
   | { kind: 'none' }
@@ -124,7 +125,10 @@ const _continueLoopIterations = async (
         loopMeta.temperature,
         loopStageIndex,
         ctx.yahlStages,
-        { systemAppend: systemAppend ?? ctx.systemAppend },
+        {
+          skipWarmUp: resolveVerifySkipWarmUp(loopStage.spec.verify),
+          systemAppend: systemAppend ?? ctx.systemAppend,
+        },
       ),
       sessionId: globalThis.sessionId,
       stage: loopStage,

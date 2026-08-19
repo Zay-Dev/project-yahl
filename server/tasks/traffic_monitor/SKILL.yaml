@@ -471,7 +471,7 @@ stages:
       ELSE:
         const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, holidays_md, ~/task-skills/route-analysis/SKILL.md);
         const fetch_with_status = { ...fetch, ...analysis.patch };
-        *set_context(fetches, operation: extend, value: fetch_with_status);
+        *extend_context(fetches, value: fetch_with_status);
         prev_routes = fetch_with_status.routes;
         *set_context(prev_routes);
         fetches = [...fetches, fetch_with_status];
@@ -507,6 +507,7 @@ stages:
     verify:
       defId: stage-verify
       autoRetry: true
+      skipWarmUp: true
       minScore: 0.75
       rubric: |
         Pass when started_at is set and unchanged,

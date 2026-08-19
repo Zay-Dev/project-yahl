@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { TStorage } from './-types';
+import type { TRunYahl, TStorage } from './-types';
 import type { TVerifyGateResult } from '@/orchestrator/-verify';
 
 import { compileStage } from '@/orchestrator/-utils/yahl';
+import { resolveVerifySkipWarmUp } from '@project-yahl/shared/yahl/verify';
 
+import { handleWhile } from './while';
 import {
   isPostLoopWhileResume,
   runWhileWithParentVerify,
@@ -165,5 +167,122 @@ describe('runWhileWithParentVerify', () => {
     assert.equal(first, 1);
     assert.equal(rerun, 1);
     assert.equal(gates, 2);
+  });
+
+  it('rerun skips warmUp by default after verify autoRetry', async () => {
+    const kinds: string[] = [];
+    let gates = 0;
+
+    const stage = compileStage({
+      logic: 'c += 1;',
+      updateContextKeys: ['c'],
+      warmUp: 'c += 0;',
+      verify: {
+        autoRetry: true,
+        defId: 'stage-verify',
+        minScore: 0.75,
+      },
+      whileSetup: 'false',
+    }, 12);
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      kinds.push(String(options?.loopMeta?.kind ?? ''));
+      return {
+        storage: options?.useStorage?.() ?? storageFrom({}),
+        usage: { bashCalls: 0, turns: 1 },
+      };
+    };
+
+    const storage = storageFrom({ c: 0 });
+
+    await runWhileWithParentVerify({
+      agentName: 'agent-s',
+      firstPass: () => handleWhile(stage, storage, runner, undefined, 12),
+      hooks: {
+        emitFinish: () => {},
+        persistStage: () => {},
+        runGate: async () => {
+          gates += 1;
+          return gates === 1 ? failGate() : passGate();
+        },
+      },
+      pipelineStageIndex: 12,
+      rerun: (systemAppend) => handleWhile(
+        stage,
+        storage,
+        runner,
+        undefined,
+        12,
+        undefined,
+        {
+          skipWarmUp: resolveVerifySkipWarmUp(stage.spec.verify),
+          systemAppend,
+        },
+      ),
+      sessionId: 's',
+      stage,
+      storage,
+    });
+
+    assert.deepEqual(kinds, ['warmup', 'while', 'while']);
+  });
+
+  it('rerun re-runs warmUp when skipWarmUp is false', async () => {
+    const kinds: string[] = [];
+    let gates = 0;
+
+    const stage = compileStage({
+      logic: 'c += 1;',
+      updateContextKeys: ['c'],
+      warmUp: 'c += 0;',
+      verify: {
+        autoRetry: true,
+        defId: 'stage-verify',
+        minScore: 0.75,
+        skipWarmUp: false,
+      },
+      whileSetup: 'false',
+    }, 12);
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      kinds.push(String(options?.loopMeta?.kind ?? ''));
+      return {
+        storage: options?.useStorage?.() ?? storageFrom({}),
+        usage: { bashCalls: 0, turns: 1 },
+      };
+    };
+
+    const storage = storageFrom({ c: 0 });
+
+    await runWhileWithParentVerify({
+      agentName: 'agent-s',
+      firstPass: () => handleWhile(stage, storage, runner, undefined, 12),
+      hooks: {
+        emitFinish: () => {},
+        persistStage: () => {},
+        runGate: async () => {
+          gates += 1;
+          return gates === 1 ? failGate() : passGate();
+        },
+      },
+      pipelineStageIndex: 12,
+      rerun: (systemAppend) => handleWhile(
+        stage,
+        storage,
+        runner,
+        undefined,
+        12,
+        undefined,
+        {
+          skipWarmUp: resolveVerifySkipWarmUp(stage.spec.verify),
+          systemAppend,
+        },
+      ),
+      sessionId: 's',
+      stage,
+      storage,
+    });
+
+    assert.deepEqual(kinds, ['warmup', 'while', 'warmup', 'while']);
   });
 });

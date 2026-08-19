@@ -26,7 +26,8 @@ But more importantly — it does feel like patching in the right direction. No m
 | Cron `runInput` | Works | Cron jobs accept a string-map `runInput` validated against the task’s defaults; web cron form has schedule presets (daily / hourly / every N minutes / weekday / custom). |
 | Nixery tools | Works | Plugin folders under `server/nixery/{plugin}/` each expose abilities (`{plugin}/{ability}/index.yml`). Orchestrator-direct reads (`nixeryRun: get-knowledge`, …); inline abilities (`research`, `submit-knowledge-observation`, …); manager writes (`apply-manager-topic`, `merge-topic`, …); stage gate `stage-verify`. Packages-only images (no ability Dockerfiles). Concepts: [nixery.md](nixery.md). |
 | design-questions | Works | Nixery inline def for dynamic ask-user batches (pass `mission:` for subject framing). |
-| verify.autoRetry | Works | Orchestrator in-process verify loop on stages with `verify.autoRetry: true`. |
+| verify.autoRetry | Works | Orchestrator in-process verify loop on stages with `verify.autoRetry: true`. On `whileSetup` + `warmUp`, `verify.skipWarmUp` defaults to `true` so retry reruns polls without re-executing warmUp (first warmUp prefix still prepended). |
+| extend_context | Works | Orchestrator tool for array append; replaces retired `set_context` `operation: extend`. |
 | Task-local skills | Works | Echoed from session snapshot to agent `~/task-skills/`; see [yahl-syntax.md](yahl-syntax.md). |
 | Knowledge store | Works | Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see the root README and [security.md](security.md). |
 | Topic governance | Works | Global Knowledge Manager instruction + overnight cron `knowledge_manager` (full corpus); observations inbox; cross-topic `knowledge_transfer` approvals; within-topic `dedup-knowledge` after approved transfers. |

@@ -9,6 +9,7 @@ import { runPredicateScript } from '@/agent/-utils/vm-client';
 import {
   filterStageBucket,
   pickContextUpdates,
+  seedDefaultContext,
 } from '@/orchestrator/-context';
 import { toLoopIterationStage } from '@/orchestrator/-utils/yahl';
 
@@ -23,6 +24,7 @@ const DEFAULT_MAX_BASH_CALLS = 24;
 export type TWhileRunnerExtras = {
   loadPrefixMessages?: (requestId?: string) => Promise<ChatApiMessage[] | undefined>;
   prefixMessages?: ChatApiMessage[];
+  skipWarmUp?: boolean;
   systemAppend?: string;
   warmupRequestId?: string;
 };
@@ -102,6 +104,8 @@ const runWhileSegment = async (
     systemAppend?: string;
   },
 ) => {
+  seedDefaultContext(storage);
+
   const stageInput = filterStageBucket(
     logic,
     Object.fromEntries(storage.context),
@@ -220,43 +224,49 @@ export const handleWhile = async (
   };
 
   if (warmUp) {
-    if (remainingTurns < 1) {
-      return {};
-    }
+    if (extras?.skipWarmUp === true) {
+      warmupPrefix = warmupPrefix
+        ?? await loadWarmupPrefixForParsedStage(pipelineStageIndex)
+        ?? await loadPrefix(extras?.warmupRequestId);
+    } else {
+      if (remainingTurns < 1) {
+        return {};
+      }
 
-    const result = await runWhileSegment(
-      stage,
-      storage,
-      warmUp,
-      {
-        arraySnapshot: [],
-        index: 0,
-        kind: 'warmup',
-        remainingBashCalls,
-        remainingTurns,
+      const result = await runWhileSegment(
+        stage,
+        storage,
+        warmUp,
+        {
+          arraySnapshot: [],
+          index: 0,
+          kind: 'warmup',
+          remainingBashCalls,
+          remainingTurns,
+          temperature,
+          value: null,
+        },
+        runner,
         temperature,
-        value: null,
-      },
-      runner,
-      temperature,
-      pipelineStageIndex,
-      pipelineStageIndex,
-      recoveryStages,
-      extras?.systemAppend ? { systemAppend: extras.systemAppend } : undefined,
-    );
+        pipelineStageIndex,
+        pipelineStageIndex,
+        recoveryStages,
+        extras?.systemAppend ? { systemAppend: extras.systemAppend } : undefined,
+      );
 
-    const outcome = applySegmentOutcome(storage, remainingTurns, remainingBashCalls, result);
+      const outcome = applySegmentOutcome(storage, remainingTurns, remainingBashCalls, result);
 
-    if ('gotoTargetStageIndex' in outcome) {
-      return { gotoTargetStageIndex: outcome.gotoTargetStageIndex };
+      if ('gotoTargetStageIndex' in outcome) {
+        return { gotoTargetStageIndex: outcome.gotoTargetStageIndex };
+      }
+
+      if ('stop' in outcome) {
+        return {};
+      }
+
+      ({ remainingBashCalls, remainingTurns } = outcome.budget);
+      warmupPrefix = warmupPrefix ?? await loadPrefix(result.requestId);
     }
-
-    if ('stop' in outcome) {
-      return {};
-    }
-
-    ({ remainingBashCalls, remainingTurns } = outcome.budget);
-    warmupPrefix = warmupPrefix ?? await loadPrefix(result.requestId);
   }
 
   let iteration = 0;
