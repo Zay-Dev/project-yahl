@@ -119,6 +119,7 @@ modelResponseSchema.index({ requestId: 1, session: 1 });
 
 const toolCallSchema = new Schema<TDbToolCall>({
   requestId: model.d.requiredString(),
+  results: [model.d.mixed()],
   session: model.d.toRequiredObjectId(modelsName.Sessions),
   toolCalls: [model.d.mixed()],
 }, {

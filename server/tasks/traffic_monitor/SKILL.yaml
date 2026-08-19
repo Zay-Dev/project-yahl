@@ -430,6 +430,11 @@ stages:
       condition: "(Date.now() - Date.parse(String(context.context.started_at))) < Number(context.context.monitor_minutes) * 60 * 1000"
       doAtLeast: 2
     warmUp: |
+      Read /opt/skills/platform/SKILL.md.
+      Read /opt/skills/nixery/SKILL.md.
+      Read ~/task-skills/monitor-loop/SKILL.md.
+      Read ~/task-skills/route-analysis/SKILL.md.
+      Read ~/task-skills/worth-persisting-knowledge/SKILL.md.
       IF: instruction_active;
         *read(source_instruction);
       END:
@@ -437,8 +442,8 @@ stages:
       *read(holidays_md);
       const bind_origin = origin_resolved || origin;
       const bind_destination = destination_resolved || destination;
+      Do not fetch, notify, append day-page, or sleep.
     logic: |
-      Read ~/task-skills/monitor-loop/SKILL.md.
       const bind_origin = origin_resolved || origin;
       const bind_destination = destination_resolved || destination;
       *read(source_ops_md);

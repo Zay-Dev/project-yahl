@@ -13,12 +13,23 @@ export type TRequestCreateToolCallBody = {
   toolCalls: Record<string, unknown>[];
 };
 
+export type TRequestCreateToolCallResultsBody = {
+  results: { content: string; id: string }[];
+};
+
 export type TResponseCreateToolCall = {
   ok: true;
 };
 
 const bodySchema = Joi.object<TRequestCreateToolCallBody>({
   toolCalls: Joi.array().items(Joi.object()).min(1).required(),
+});
+
+const resultsBodySchema = Joi.object<TRequestCreateToolCallResultsBody>({
+  results: Joi.array().items(Joi.object({
+    content: Joi.string().required(),
+    id: Joi.string().required(),
+  })).min(1).required(),
 });
 
 const paramsSchema = Joi.object<TRequestStageParams>({
@@ -50,6 +61,34 @@ export const createToolCall = [
       emitSessionEvent(params.sessionId, {
         requestId: params.requestId,
         type: 'stage.tool-call',
+      });
+
+      express.res.status(202);
+      express.respondOne<TResponseCreateToolCall>({ ok: true });
+    })
+    .toMiddleware(),
+];
+
+export const createToolCallResults = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      body: joi.getValidatedOrThrow(resultsBodySchema, req.body),
+      params: joi.getValidatedOrThrow(paramsSchema, req.params),
+    }))
+    .next(async (express, { body, params }) => {
+      const session = await resolveSessionBySessionId(params.sessionId);
+      const sessionRef = session._id;
+
+      await Queries.hasExactOne(modelStage, {
+        requestId: params.requestId,
+        session: sessionRef,
+      });
+
+      await modelToolCall.create({
+        requestId: params.requestId,
+        results: body.results,
+        session: sessionRef,
+        toolCalls: [],
       });
 
       express.res.status(202);

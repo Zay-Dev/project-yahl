@@ -191,6 +191,7 @@ export interface IToolCall extends TWithTimestamps {
   _id: string;
   session: string;
   requestId: string;
+  results?: { content: string; id: string }[];
   toolCalls: Record<string, unknown>[];
 }
 

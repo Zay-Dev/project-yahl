@@ -83,6 +83,7 @@ export type TRequestEnvelope = {
 
 interface IPublisherEventMap {
   toolCall: [envelope: { requestId: string, toolCalls: TChatToolCall[] }];
+  toolCallResult: [envelope: { requestId: string; result: string; toolCallId: string }];
   modelResponse: [envelope: { requestId: string, response: TModelResponse }];
   pushRequest: [envelope: {
     context: TNormalizedStorage;

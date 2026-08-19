@@ -61,12 +61,6 @@ stages:
     logic: |
       c += /ask-user(1);
 
-  - temperature: 0.5
-    contextKeys: [a, b, c]
-    produceContextKeys: [result]
-    logic: |
-      const result = {a,b,c};
-
   - contextKeys: [c]
     updateContextKeys: [c]
     warmUp: |
@@ -75,6 +69,12 @@ stages:
     maxTurns: 8
     logic: |
       c += 1;
+
+  - temperature: 0.5
+    contextKeys: [a, b, c]
+    produceContextKeys: [result]
+    logic: |
+      const result = {a,b,c};
 
   - contextMode: true
     updateContextKeys: [result]

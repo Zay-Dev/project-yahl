@@ -131,7 +131,6 @@ export const startRedisDaemon = async () => {
       const calls = _toSetContextToolCalls(model, requestId, buckets);
 
       await handleToolCalls({
-        error,
         storage: context,
         toolCall,
         toolCalls: calls,
@@ -217,7 +216,6 @@ export const startRedisDaemon = async () => {
               const orchestratorCalls = (result.tool_calls || [])
                 .filter(tool => isOrchestratorHandledTool(tool.function.name));
               const { toolCallMessages } = await handleToolCalls({
-                error,
                 storage: context,
                 toolCall,
                 toolCalls: orchestratorCalls,

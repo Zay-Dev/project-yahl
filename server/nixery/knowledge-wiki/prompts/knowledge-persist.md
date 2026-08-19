@@ -1,6 +1,6 @@
 # Knowledge persist (all tasks)
 
-When `~/task-skills/worth-persisting-knowledge/SKILL.md` exists, **Read it early** in AI stages — before inventing what to persist and before end-of-run knowledge decisions.
+When `~/task-skills/worth-persisting-knowledge/SKILL.md` exists, **Read it once per stage** — before inventing what to persist and before end-of-run knowledge decisions. Skip the Read when a warmup prefix already contains that file.
 
 - Novel **and** evidenced lessons → `/nixery(submit-knowledge-observation, …)` per that skill.
 - Soft optional `topic_hint` (content-based or omit). Wrong hint is OK — Knowledge Manager decides final topic and apply shape.

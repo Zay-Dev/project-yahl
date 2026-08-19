@@ -2,10 +2,24 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  STAGE_TOOLS,
   parseAskUserToolArguments,
   parseNixeryToolArguments,
   parseRunBashToolArguments,
 } from "./stage-tools";
+
+describe("STAGE_TOOLS", () => {
+  it("points skill-backed tools at /opt/skills", () => {
+    const byName = Object.fromEntries(
+      STAGE_TOOLS.map((tool) => [tool.function.name, tool.function.description]),
+    );
+
+    assert.match(byName.ask_user ?? "", /\/opt\/skills\/ask-user\/SKILL.md/);
+    assert.match(byName.browser ?? "", /\/opt\/skills\/stagehand\/SKILL.md/);
+    assert.match(byName.nixery ?? "", /\/opt\/skills\/nixery\/SKILL.md/);
+    assert.match(byName.platform ?? "", /\/opt\/skills\/platform\/SKILL.md/);
+  });
+});
 
 describe("parseRunBashToolArguments", () => {
   it("parses valid command", () => {

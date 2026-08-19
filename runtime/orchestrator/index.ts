@@ -55,6 +55,9 @@ const _setupPublisher = async (tracker: ReturnType<typeof createSessionEventTrac
     .on('toolCall', (params) => {
       tracker.appendToolCall(sessionId, params);
     })
+    .on('toolCallResult', (params) => {
+      tracker.appendToolResult(sessionId, params);
+    })
     .on('modelResponse', (params) => {
       tracker.appendModelResponse(sessionId, params);
     })

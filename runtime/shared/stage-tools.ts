@@ -58,7 +58,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Ask the user one or more questions in a single batch. All questions must be answered before the stage continues.",
+        "Read /opt/skills/ask-user/SKILL.md first. Pause for a user question batch (askUserBatch.v1).",
       name: "ask_user",
       parameters: {
         properties: {
@@ -109,7 +109,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "End this stage and jump the pipeline to another labeled stage declared in this stage's goto list. Use for /stage(id) in stage logic. Requires a non-empty reason. On success the current stage finishes without verify and the orchestrator continues from the target stage.",
+        "Jump to a labeled stage in this stage's goto list (/stage(id)). Requires a non-empty reason. On success this stage ends without verify.",
       name: "goto_stage",
       parameters: {
         properties: {
@@ -131,7 +131,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Control a headless browser via Stagehand. Use for /stagehand(...) in stage logic: navigate, act, extract, or observe. Pass url only with mode goto — including url on act/extract/observe reloads the page and clears form state. Returns JSON { ok, data } or { ok: false, error }.",
+        "Read /opt/skills/stagehand/SKILL.md first. Stagehand goto/act/extract/observe. Pass url only with goto. Returns JSON { ok, data } or { ok: false, error }.",
       name: "browser",
       parameters: {
         properties: {
@@ -163,7 +163,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Run a single shell command inside the agent container. Use for listing files, reading paths under /opt/skills, and curl for documented HTTP APIs in workspace files referenced by stage logic. Do not use curl for web search, HTML browse, or scraping. Do not use for persisting context. Do not use echo/printf to fake other API tools; call those tools by name instead.",
+        "One shell command. List/read /opt/skills and ~/task-skills; curl only for documented workspace HTTP APIs. Not for persisting context or faking other tools.",
       name: "run_bash",
       parameters: {
         properties: {
@@ -181,7 +181,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Persist a key-value pair to orchestrator runtime. scope global is shared across stages; scope stage is reset each stage; scope types is the type-definition bucket, shared across stages, always present in the agent input payload.",
+        "Persist a key-value pair. scope global is shared across stages; stage resets each stage; types is the type-definition bucket.",
       name: "set_context",
       parameters: {
         properties: {
@@ -212,7 +212,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Invoke a platform skill against the session API. Use for /platform(dispatch-task-run|propose-notification|propose-knowledge-transfer|get-knowledge-manager-instruction|put-knowledge-manager-instruction, ...) in stage logic. Topic resolve and LLM helpers use the nixery tool. Knowledge reads use orchestrator nixeryRun stages + ~/nixery/{defId}/{output}. Returns JSON { ok, data } or { ok: false, error }.",
+        "Read /opt/skills/platform/SKILL.md first. /platform(...) against the session API. Returns JSON { ok, data } or { ok: false, error }.",
       name: "platform",
       parameters: {
         properties: {
@@ -241,7 +241,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Run a nixery ability inline from stage logic. Use for /nixery(defId, …) where the ability has output.inlineTool: true under server/nixery/{plugin}/{abilityId}/index.yml. Returns JSON { ok, data } or { ok: false, error }.",
+        "Read /opt/skills/nixery/SKILL.md first. /nixery(defId, …) inline abilities. Returns JSON { ok, data } or { ok: false, error }.",
       name: "nixery",
       parameters: {
         properties: {

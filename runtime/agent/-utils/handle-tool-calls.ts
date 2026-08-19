@@ -18,7 +18,6 @@ const setContextSuccessContent = (name: string, result: string) => {
 };
 
 export const handleToolCalls = async (params: {
-  error: (error: Error) => Promise<void>;
   storage: TStorage;
   toolCall: (call: TChatToolCall) => Promise<TToolCallResult>;
   toolCalls: TChatToolCall[];
@@ -31,8 +30,6 @@ export const handleToolCalls = async (params: {
     const name = call.function.name;
 
     if (result.hasError) {
-      await params.error(new Error(result.result));
-
       toolCallMessages.push({ ...baseMessage, content: `tool call error: ${result.result}` });
 
       continue;

@@ -1,17 +1,37 @@
 import type { ChatApiMessage } from '@/shared/stage-tools';
 import type { TModelResponse } from '@/shared/transports/-types';
+import type { TStageDetailForResume } from '@/orchestrator/-ask-user/session-api';
 
 import {
   fetchSessionStages,
   fetchStageDetail,
-  type TStageDetailForResume,
 } from '@/orchestrator/-ask-user/session-api';
+import { truncateToolResult } from '@/orchestrator/-utils/session-event-tracker';
+
+const STUB_TOOL_RESULT = JSON.stringify({ ok: true });
+
+const resultByToolCallId = (
+  detail: Pick<TStageDetailForResume, 'toolCalls'>,
+) => {
+  const byId = new Map<string, string>();
+
+  for (const batch of detail.toolCalls ?? []) {
+    for (const tool of batch.tools ?? []) {
+      if (typeof tool.result === 'string' && tool.result.length) {
+        byId.set(tool.id, truncateToolResult(tool.result));
+      }
+    }
+  }
+
+  return byId;
+};
 
 export const buildWarmupPrefixMessages = (
-  detail: Pick<TStageDetailForResume, 'modelResponses'>,
+  detail: Pick<TStageDetailForResume, 'modelResponses' | 'toolCalls'>,
 ): ChatApiMessage[] => {
   const messages: ChatApiMessage[] = [];
   const completedToolIds = new Set<string>();
+  const results = resultByToolCallId(detail);
 
   for (const item of detail.modelResponses) {
     const response = item.response as unknown as TModelResponse;
@@ -36,7 +56,7 @@ export const buildWarmupPrefixMessages = (
 
       completedToolIds.add(call.id);
       messages.push({
-        content: JSON.stringify({ ok: true }),
+        content: results.get(call.id) ?? STUB_TOOL_RESULT,
         role: 'tool',
         tool_call_id: call.id,
       });

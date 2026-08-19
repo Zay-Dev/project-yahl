@@ -140,6 +140,7 @@ export type TResponseStageToolSummary = {
   arguments: unknown;
   id: string;
   name: string;
+  result?: string;
 };
 
 export type TResponseStageToolCallItem = {

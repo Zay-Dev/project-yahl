@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { SessionEventTrackerError, createSessionEventTracker } from './session-event-tracker';
+import { SessionEventTrackerError, createSessionEventTracker, truncateToolResult } from './session-event-tracker';
 
 const withMockFetch = (
   handler: (url: string, init?: RequestInit) => Response | Promise<Response>,
@@ -211,5 +211,48 @@ describe('createSessionEventTracker', () => {
         assert.equal(toolCallAttempts, 1);
       },
     );
+  });
+
+  it('posts truncated tool results', async () => {
+    process.env.SESSION_API_BASE_URL = 'http://localhost:4000';
+
+    const tracker = createSessionEventTracker();
+    let posted: unknown;
+
+    await withMockFetch(
+      (url, init) => {
+        if (init?.method === 'POST' && url.includes('/tool-call-results')) {
+          posted = JSON.parse(String(init.body ?? '{}'));
+        }
+
+        return new Response(JSON.stringify({ ok: true }), { status: 202 });
+      },
+      async () => {
+        tracker.appendToolResult('sess-1', {
+          requestId: 'stage-req-4',
+          result: 'skill body',
+          toolCallId: 'call-1',
+        });
+
+        await tracker.flush();
+
+        assert.deepEqual(posted, {
+          results: [{ content: 'skill body', id: 'call-1' }],
+        });
+      },
+    );
+  });
+});
+
+describe('truncateToolResult', () => {
+  it('leaves short results unchanged', () => {
+    assert.equal(truncateToolResult('ok'), 'ok');
+  });
+
+  it('caps long stdout', () => {
+    const truncated = truncateToolResult('x'.repeat(24_001));
+
+    assert.ok(truncated.endsWith('\n…[truncated]'));
+    assert.equal(truncated.length, 24_000 + '\n…[truncated]'.length);
   });
 });

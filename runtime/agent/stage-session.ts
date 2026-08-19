@@ -63,7 +63,7 @@ type StageSessionOptions = {
 };
 
 export const WARMUP_CONTINUE_NOTE =
-  'Warm-up already ran; do not repeat opening reads/binds; execute this Input only';
+  'Warm-up already ran; do not re-read /opt/skills or ~/task-skills; do not find / for schemas; do not repeat opening reads/binds; execute this Input only';
 
 const toApiMessages = (messages: BootstrapMessage[]): ChatApiMessage[] =>
   messages.map((message) => ({

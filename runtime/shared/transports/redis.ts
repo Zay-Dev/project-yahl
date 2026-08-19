@@ -383,6 +383,12 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
             const result = await callback(toolCall);
 
+            this.emit("toolCallResult", {
+              requestId,
+              result: result.result,
+              toolCallId: toolCall.id,
+            });
+
             await this.redis.lpush(
               this._toolResultChannel(requestId),
               JSON.stringify(result),

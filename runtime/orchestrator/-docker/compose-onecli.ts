@@ -139,6 +139,7 @@ export const writeAgentSessionOverride = async (opts: TAgentSessionOverrideOptio
     hostRepoRoot,
     installs: pluginInstalls,
   });
+
   const lines = [
     "services:",
     "  agent:",

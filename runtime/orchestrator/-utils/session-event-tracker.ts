@@ -27,6 +27,12 @@ type TToolCallEnvelope = {
   toolCalls: Record<string, unknown>[];
 };
 
+type TToolCallResultEnvelope = {
+  requestId: string;
+  result: string;
+  toolCallId: string;
+};
+
 type TModelResponseEnvelope = {
   requestId: string;
   response: TModelResponse;
@@ -118,6 +124,13 @@ const _post = (url: string, body: unknown) =>
 const _patch = (url: string, body: unknown) =>
   _request(url, { body: JSON.stringify(body), method: 'PATCH' });
 
+export const TOOL_RESULT_PERSIST_MAX = 24_000;
+
+export const truncateToolResult = (value: string) =>
+  value.length <= TOOL_RESULT_PERSIST_MAX
+    ? value
+    : `${value.slice(0, TOOL_RESULT_PERSIST_MAX)}\n…[truncated]`;
+
 export const createSessionEventTracker = () => {
   const baseUrlRaw = process.env.SESSION_API_BASE_URL;
   const baseUrl = baseUrlRaw ? normalizeBaseUrl(baseUrlRaw) : 'http://localhost:4000';
@@ -195,6 +208,25 @@ export const createSessionEventTracker = () => {
     });
   };
 
+  const appendToolResult = (sessionId: string, envelope: TToolCallResultEnvelope) => {
+    enqueue(async () => {
+      if (!baseUrl) return;
+
+      const content = truncateToolResult(envelope.result);
+
+      if (!content) {
+        return;
+      }
+
+      const url = `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}` +
+        `/stages/${encodeURIComponent(envelope.requestId)}/tool-call-results`;
+
+      await _post(url, {
+        results: [{ content, id: envelope.toolCallId }],
+      });
+    });
+  };
+
   const appendModelResponse = (sessionId: string, envelope: TModelResponseEnvelope) => {
     enqueue(async () => {
       if (!baseUrl) return;
@@ -262,6 +294,7 @@ export const createSessionEventTracker = () => {
   return {
     appendModelResponse,
     appendToolCall,
+    appendToolResult,
     createStage,
     flush,
     patchLiveViewVncPort,

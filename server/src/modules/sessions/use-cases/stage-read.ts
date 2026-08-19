@@ -21,7 +21,7 @@ import {
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
 } from '../-usage-normalize';
-import { parseToolSummaries } from '../-utils/normalize-tool-call';
+import { collectToolResultById, parseToolSummaries } from '../-utils/normalize-tool-call';
 import { modelModelResponse, modelStage, modelToolCall } from '../models';
 
 import type { TRequestStageParams } from './stage-write';
@@ -364,13 +364,29 @@ export const getSessionStage = [
           };
         }),
         stage: stage.stage as TYahlStage,
-        toolCalls: toolCallDocs.map((doc) => ({
-          _id: String(doc._id),
-          createdAt: toIso(doc.createdAt as Date) ?? '',
-          tools: parseToolSummaries(
-            Array.isArray(doc.toolCalls) ? doc.toolCalls as Record<string, unknown>[] : [],
-          ),
-        })),
+        toolCalls: (() => {
+          const resultById = collectToolResultById(toolCallDocs);
+
+          return toolCallDocs.flatMap((doc) => {
+            const tools = parseToolSummaries(
+              Array.isArray(doc.toolCalls) ? doc.toolCalls as Record<string, unknown>[] : [],
+            ).map((tool) => {
+              const result = resultById.get(tool.id);
+
+              return result === undefined ? tool : { ...tool, result };
+            });
+
+            if (!tools.length) {
+              return [];
+            }
+
+            return [{
+              _id: String(doc._id),
+              createdAt: toIso(doc.createdAt as Date) ?? '',
+              tools,
+            }];
+          });
+        })(),
       };
 
       express.respondOne<TResponseStageDetail>(detail);

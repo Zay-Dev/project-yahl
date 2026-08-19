@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  collectToolResultById,
   parseToolArguments,
   parseToolSummaries,
   resolveToolCallRawArguments,
@@ -112,5 +113,17 @@ describe('parseToolSummaries', () => {
     ]);
 
     assert.equal((tool.arguments as Record<string, unknown>).scope, 'context');
+  });
+});
+
+describe('collectToolResultById', () => {
+  it('maps result content by tool call id', () => {
+    const byId = collectToolResultById([
+      { results: [{ content: 'skill body', id: 'call-1' }] },
+      { results: [{ content: 'ok', id: 'call-2' }] },
+    ]);
+
+    assert.equal(byId.get('call-1'), 'skill body');
+    assert.equal(byId.get('call-2'), 'ok');
   });
 });

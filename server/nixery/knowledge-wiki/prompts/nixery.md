@@ -1,6 +1,6 @@
 # nixery (YAHL)
 
-Plug-and-play defs for `/nixery(defId, …)`. The set of defs can change — treat `/opt/skills/nixery/SKILL.md` as the current catalog snapshot, not a guarantee.
+Plug-and-play defs for `/nixery(defId, …)`. The set of defs can change — treat `/opt/skills/nixery/SKILL.md` as the current catalog snapshot, not a guarantee. That directory is catalog-only; do not `find` ability `index.yml` trees or other sessions.
 
 ## Model
 
@@ -33,7 +33,7 @@ Pre-run failures only (invalid `/nixery` argv, def not inline, namespace gate) s
 ## Policy pointers
 
 - Knowledge writes and tool-error recovery → sibling `knowledge-persist.md` and `~/task-skills/resolve-errors-with-knowledge` when present.
-- Current call shapes, allowlists, and helper catalog → `/opt/skills/nixery/SKILL.md`.
+- Current call shapes, allowlists, and helper catalog → `/opt/skills/nixery/SKILL.md` (read that file; do not hunt host paths).
 
 ## Breaking changes
 

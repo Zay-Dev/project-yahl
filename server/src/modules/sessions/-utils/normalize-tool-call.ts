@@ -67,3 +67,31 @@ export const parseToolSummaries = (toolCalls: Record<string, unknown>[]) =>
     id: resolveToolCallId(toolCall, index),
     name: resolveToolCallName(toolCall, index),
   }));
+
+export const collectToolResultById = (
+  docs: { results?: unknown }[],
+) => {
+  const byId = new Map<string, string>();
+
+  for (const doc of docs) {
+    if (!Array.isArray(doc.results)) {
+      continue;
+    }
+
+    for (const item of doc.results) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        continue;
+      }
+
+      const record = item as { content?: unknown; id?: unknown };
+
+      if (typeof record.id !== 'string' || typeof record.content !== 'string') {
+        continue;
+      }
+
+      byId.set(record.id, record.content);
+    }
+  }
+
+  return byId;
+};

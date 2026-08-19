@@ -41,7 +41,7 @@ export type TStageDetailForResume = {
     thinkingMode?: boolean;
   }[];
   stage: Record<string, unknown>;
-  toolCalls: { tools: { arguments: unknown; id: string; name: string }[] }[];
+  toolCalls: { tools: { arguments: unknown; id: string; name: string; result?: string }[] }[];
 };
 
 export type TSessionRunCursor = {
