@@ -8,6 +8,7 @@ import type {
   TChatToolCall,
   TLocalToolResultEnvelope,
   TToolCallResult,
+  TToolCallResultWire,
 } from "./-types";
 
 import { isAgentLocalTool } from "../agent-local-tools.js";
@@ -360,6 +361,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     const timeoutSeconds = 60 * 60;
     const redis = this.redis.duplicate();
     let disposed = false;
+    const localOrphanBuffer = new Map<string, TLocalToolResultEnvelope>();
 
     this.connections.push(redis);
 
@@ -397,6 +399,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
                 requestId,
                 toolCall.id,
                 timeoutSeconds,
+                localOrphanBuffer,
               );
               const persistedResult = truncateToolResult(localResult.result);
               const result: TToolCallResult = {
@@ -412,7 +415,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
               await this.redis.lpush(
                 this._toolResultChannel(requestId),
-                JSON.stringify(result),
+                JSON.stringify({ ...result, toolCallId: toolCall.id } satisfies TToolCallResultWire),
               );
 
               continue;
@@ -428,7 +431,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
             await this.redis.lpush(
               this._toolResultChannel(requestId),
-              JSON.stringify(result),
+              JSON.stringify({ ...result, toolCallId: toolCall.id } satisfies TToolCallResultWire),
             );
           } catch (error: unknown) {
             if (error instanceof Error && error.name === 'AskUserPausedError') {
@@ -455,7 +458,16 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     requestId: string,
     toolCallId: string,
     timeoutSeconds: number,
+    orphanBuffer: Map<string, TLocalToolResultEnvelope>,
   ): Promise<TLocalToolResultEnvelope> {
+    const buffered = orphanBuffer.get(toolCallId);
+
+    if (buffered) {
+      orphanBuffer.delete(toolCallId);
+
+      return buffered;
+    }
+
     const deadline = Date.now() + timeoutSeconds * 1000;
 
     while (Date.now() < deadline) {
@@ -470,6 +482,8 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
       const parsed = JSON.parse(popped) as TLocalToolResultEnvelope;
 
       if (parsed.toolCallId !== toolCallId) {
+        orphanBuffer.set(parsed.toolCallId, parsed);
+
         continue;
       }
 
@@ -507,21 +521,51 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
 
       this.connections.push(redis);
 
-      const _waitForToolCallResult = async (): Promise<TToolCallResult> => {
-        const popped = await this._brpop(redis, this._toolResultChannel(requestId), timeoutSeconds);
+      const orphanBuffer = new Map<string, TToolCallResultWire>();
 
-        if (!popped) {
+      const _waitForToolCallResult = async (toolCallId: string): Promise<TToolCallResult> => {
+        const buffered = orphanBuffer.get(toolCallId);
+
+        if (buffered) {
+          orphanBuffer.delete(toolCallId);
+          const { toolCallId: _wireId, ...result } = buffered;
+
           return {
-            hasError: false,
-            result: 'Empty result',
+            ...result,
+            newStorage: this._deserializeStorage(result.newStorage),
           };
         }
 
-        const parsed = JSON.parse(popped) as TToolCallResult;
+        const deadline = Date.now() + timeoutSeconds * 1000;
+
+        while (Date.now() < deadline) {
+          const remainingMs = deadline - Date.now();
+          const waitSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+          const popped = await this._brpop(redis, this._toolResultChannel(requestId), waitSeconds);
+
+          if (!popped) {
+            continue;
+          }
+
+          const parsed = JSON.parse(popped) as TToolCallResultWire;
+
+          if (parsed.toolCallId && parsed.toolCallId !== toolCallId) {
+            orphanBuffer.set(parsed.toolCallId, parsed);
+
+            continue;
+          }
+
+          const { toolCallId: _wireId, ...result } = parsed;
+
+          return {
+            ...result,
+            newStorage: this._deserializeStorage(result.newStorage),
+          };
+        }
 
         return {
-          ...parsed,
-          newStorage: this._deserializeStorage(parsed.newStorage),
+          hasError: false,
+          result: 'Empty result',
         };
       };
 
@@ -576,7 +620,7 @@ export class RedisSubscriber extends RedisTransport implements ISubscriber {
         toolCall: async (toolCall) => {
           await this.redis.lpush(this._toolCallChannel(requestId), JSON.stringify(toolCall));
 
-          return await _waitForToolCallResult();
+          return await _waitForToolCallResult(toolCall.id);
         },
       }
     }

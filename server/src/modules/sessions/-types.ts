@@ -65,11 +65,13 @@ export type TYahlGotoEntry = {
 export type TYahlStage = {
   agentOverrides?: TYahlAgentOverrides;
   askUser?: TYahlAskUserEntry[];
+  cacheMaxAge?: number;
   conditionMode?: boolean;
   contextKeys?: string[];
   contextMode?: boolean;
   goto?: TYahlGotoEntry[];
   id?: string;
+  knowledgeToScript?: boolean;
   logic: string;
   loopSetup?: string;
   maxBashCalls?: number;

@@ -137,12 +137,16 @@ export const formatClockBlock = (context) => {
   const nowIso = typeof record.now_iso === 'string' ? record.now_iso : '';
   const today = typeof record.today === 'string' ? record.today : '';
 
+  const timezone = typeof record.timezone === 'string' ? record.timezone : '';
+
   return [
     '## Clock',
     `now_iso: ${JSON.stringify(nowIso)}`,
     `today: ${JSON.stringify(today)}`,
+    ...(timezone ? [`timezone: ${JSON.stringify(timezone)}`] : []),
     'This is wall-clock now for elapsed checks. Use this clock for current time and elapsed vs started_at.',
     'Do not infer now from fetches, stale narrative timestamps, or pretrained knowledge.',
+    'When timezone is set (e.g. Asia/Hong_Kong), fetched_at may mislabel local wall clock as UTC; allow up to +9h vs now_iso when day-page sections corroborate the poll.',
   ].join('\n');
 };
 

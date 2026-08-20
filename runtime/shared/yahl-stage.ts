@@ -8,6 +8,8 @@ import {
   type TYahlVerifySpec,
 } from '@project-yahl/shared/yahl/verify';
 import { persistYahlWhileSetup } from '@project-yahl/shared/yahl/while-setup';
+import { validateCacheMaxAgeField } from '@project-yahl/shared/yahl/cache-max-age';
+import { validateKnowledgeToScriptField } from '@project-yahl/shared/yahl/knowledge-to-script';
 
 export type { TYahlVerifySpec } from '@project-yahl/shared/yahl/verify';
 export { DEFAULT_VERIFY_DEF_ID } from '@project-yahl/shared/yahl/verify';
@@ -45,11 +47,13 @@ export type YahlGotoEntry = {
 export interface YahlStage {
   agentOverrides?: YahlAgentOverrides;
   askUser?: YahlAskUserEntry[];
+  cacheMaxAge?: number;
   conditionMode?: boolean;
   contextKeys?: string[];
   contextMode?: boolean;
   goto?: YahlGotoEntry[];
   id?: string;
+  knowledgeToScript?: boolean;
   logic: string;
   loopSetup?: string;
   maxBashCalls?: number;
@@ -537,6 +541,20 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
   const verify = normalizeVerifySpec(stage.verify, label);
   const agentOverrides = validateAgentOverrides(stage.agentOverrides, label);
   const stagehand = validateStagehandConfig(stage.stagehand, label);
+  const knowledgeToScript = validateKnowledgeToScriptField(stage.knowledgeToScript, label, {
+    conditionMode: stage.conditionMode === true,
+    contextMode: stage.contextMode === true,
+    nixeryRun,
+  });
+  const cacheMaxAge = validateCacheMaxAgeField(stage.cacheMaxAge, label);
+
+  if (cacheMaxAge !== undefined) {
+    if (stage.contextMode === true || stage.conditionMode === true || nixeryRun) {
+      throw new Error(
+        `${label}.cacheMaxAge: only valid on AI stages (not contextMode, conditionMode, or nixeryRun)`,
+      );
+    }
+  }
 
   return {
     logic: logicRaw || '(nixery)',
@@ -563,6 +581,9 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): YahlS
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
     ...(verify ? { verify } : {}),
     ...(stage.version !== undefined ? { version: Number(stage.version) } : {}),
+    ...(knowledgeToScript === false ? { knowledgeToScript: false } : {}),
+    ...(knowledgeToScript === true ? { knowledgeToScript: true } : {}),
+    ...(cacheMaxAge !== undefined ? { cacheMaxAge } : {}),
   };
 };
 

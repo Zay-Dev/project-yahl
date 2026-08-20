@@ -178,5 +178,5 @@ flowchart LR
 - Chromium runs locally in the agent container (headless unless live view).
 - Stagehand’s LLM calls go through a **localhost-only OpenAI-compatible proxy** in the agent runtime. The proxy answers with a nested completion that includes a short **YAHL browse brief** (mode/url + optional opaque text) plus Stagehand’s act/observe/extract prompt — not the full stage chat history. Thinking is forced off so provider `tool_choice` works. Stagehand is CU-only; YAHL persists knowledge after browser tool results.
 - Reuse the same browser session within a stage; multiple `browser` calls share one Chromium instance. Navigate with `goto` only when you need a new URL.
-- For large page text saved to `~/tmp/`, follow up with `/nixery(extract-info, source: ~/tmp/…, need: …)` per `/opt/skills/nixery/SKILL.md`.
+- For large page text saved to `~/tmp/`, use an extract helper from the current nixery catalog (`/opt/skills/nixery/SKILL.md`) when listed there; otherwise trim/parse inline. Do not invent a defId.
 - HEAD may differ from full page load (paywalls, bot blocks, redirect chains without `-L`); use judgment — invalid HEAD does not always mean the URL is useless for a later `goto`.

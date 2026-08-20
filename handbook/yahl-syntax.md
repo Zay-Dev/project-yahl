@@ -20,6 +20,7 @@ for each i of [1..5,+2] {
 Syntax reference:
 
 - `~/something` — session scratch workspace (`AGENT_SESSION_HOME`); the agent can read and write here, not the whole repo.
+- `~/data/scripts/…` — per-task operation scripts when `knowledgeToScript` is enabled (default on AI stages); many narrow scripts per stage, not one script per stage id.
 - `~/task-skills/…` — task-local SKILL files echoed from the session snapshot (see Authoring tasks below).
 - `for each i of [0..100]` and `for each x of [array]` — for-loops, with an optional step like `,+2` (`loopSetup`).
 - `whileSetup` — orchestrator-owned do-while. String form is a JS predicate (`context.context.{key}`) with an implicit floor of 1 body. Object form `{ condition, doAtLeast? }` runs `doAtLeast` bodies (default and min 1) then uses `condition` to gate further polls. WarmUp does not count toward `doAtLeast`.
@@ -55,15 +56,17 @@ Per-stage fields:
 | `contextMode` | VM-only stage; read prior keys via `context.context.{key}`; return `(() => ({ ... }))` to write `produceContextKeys` |
 | `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` (same `context.context.{key}` reads as `contextMode`) |
 | `loopSetup` | Orchestrator-only for-loop (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
-| `whileSetup` | Orchestrator-only do-while. String = predicate (floor 1). Object `{ condition, doAtLeast? }` runs at least `doAtLeast` bodies (default and min 1), then `condition` gates further iterations. Mutually exclusive with `loopSetup` / `conditionMode` / `nixeryRun`. Parent `verify` runs once after the loop. |
+| `whileSetup` | Orchestrator-only do-while. String = predicate (floor 1). Object `{ condition, doAtLeast? }` runs at least `doAtLeast` bodies (default and min 1), then `condition` gates further iterations. Mutually exclusive with `loopSetup` / `conditionMode` / `nixeryRun`. Parent `verify` runs once after the loop. Each body segment gets a filtered `contextKeys` copy; `updateContextKeys` merge replaces parent keys — keep `extend_context` accumulators on `contextKeys` (see `updateContextKeys`). |
 | `warmUp` | Optional one-shot logic before the first `loopSetup` or `whileSetup` iteration (Redis run; stripped from the agent envelope). While polls reuse this transcript as `prefixMessages`. On verify `autoRetry` rerun, warmUp is skipped by default — see `verify.skipWarmUp`. |
 | `maxBashCalls` | Optional cap on `run_bash` calls for this AI stage (default 24) |
 | `maxTurns` | Optional cap on chat turns for this AI stage (default 60) |
 | `agentOverrides` | Optional agent knobs for this stage. **Only** `bashTimeoutMs` (positive int ms) is accepted — unknown keys fail validation. Used by `run_bash` instead of the shared 60s default. |
 | `stagehand` | Optional Stagehand knobs for this AI stage: `model`, `apiBaseUrl` (both optional; default to agent `LLM_*` / `STAGEHAND_MODEL`), `preferScreenshot` (optional boolean, default `false` — excludes Stagehand `screenshot` tool on `browser` `mode: agent`). Unknown keys fail validation. |
+| `knowledgeToScript` | Optional boolean. **Default on** for AI stages (omit field). Set `false` to opt out. Enables narrow operation scripts under `~/data/scripts/` — many per stage, not one per stage id. Invalid on `contextMode`, `conditionMode`, and `nixeryRun` stages (explicit `true` fails validation). Phase 1: boolean only — no `knowledgeKeys`. |
+| `cacheMaxAge` | Optional positive integer **minutes**. AI stages only. Grace period for trusting durable cache files (e.g. explorer `~/data/{traffic_source_file}`): trust only when file age ≤ this value; older → live-probe. |
 | `temperature` | Model temperature for AI stages (0–2) |
 | `contextKeys` | Allowlist of context/stage keys passed into the runner |
-| `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration |
+| `updateContextKeys` | Write allowlist on plain AI stages; on loops, keys merged back after each iteration. **While caveat:** each `whileSetup` body runs on a **filtered copy** of `contextKeys`, then merge **replaces** parent values for listed keys. Any array you `extend_context` across polls (e.g. poll history) must also stay on `contextKeys`, or the next segment starts empty and wipe prior items on merge. |
 | `produceContextKeys` | Allowlist for VM / `set_context` / `extend_context` writes to global context |
 | `produceTypeKeys` | Allowlist for VM / `set_context` / `extend_context` writes to the types bucket |
 | `nixeryRun` | Orchestrator-direct nixery def id (e.g. `get-knowledge`, `plan`, `plan-study`); read `~/nixery/{defId}/{output}` in a following AI stage |
@@ -92,6 +95,21 @@ Rules:
 - `goto` only on AI stages (not `contextMode` / `conditionMode` / `nixeryRun`).
 - On success: current stage finishes **without verify**; orchestrator continues from the target index onward; `stage_goto_reason` and `stage_goto_from` are platform context keys (always visible like `now_iso`).
 - Session max transfers: 5.
+
+### `knowledgeToScript`
+
+Default **on** for AI stages (omit the field). Opt out per stage:
+
+```yaml
+- id: monitor
+  knowledgeToScript: false
+  logic: |
+    ...
+```
+
+Many **operation** scripts may live under `~/data/scripts/` (`extract-routes`, `parse-notify-json`, …) — not one script per stage `id`. The agent still runs full stage logic; scripts replay narrow sub-ops. Invalid on `contextMode`, `conditionMode`, and `nixeryRun` stages.
+
+Behavior contract lives in `/opt/skills/knowledge-to-script/SKILL.md` (and the injected YAHL fragment): parameterized recipes (`{{…}}`, no session literals), ordered replay (not crib-sheet browse), execute node scripts before treating them as done, rewrite on miss same poll. No platform helper APIs — agent-owned files under `~/data/scripts/` only. Pre-contract recipes with baked-in literals are obsolete until agents rewrite them.
 
 ### `verify` object
 
@@ -128,6 +146,7 @@ Rules:
 
 - `set_context` with `operation: extend` is **retired** — use `extend_context` for list accumulation (e.g. `fetches` poll history).
 - Writes are allowlisted via `produceContextKeys`, `produceTypeKeys`, and `updateContextKeys`.
+- On `whileSetup`, keep every `extend_context` accumulator on `contextKeys` as well as `updateContextKeys` — segments start from a filtered copy and merge replaces parent values.
 - Platform keys (`now_iso`, `today`, verify recovery keys, `stage_goto_*`, …) are orchestrator-owned. Each **`whileSetup` poll segment** refreshes `now_iso` (and `today`) before the body runs — use `now_iso` + task `timezone` for poll timestamps instead of inventing clock values.
 
 **While + warmUp + verify retry:**

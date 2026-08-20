@@ -40,6 +40,14 @@
       "development": "./verify/verify-infra.ts",
       "import": "./dist/verify/verify-infra.js"
     },
+    "./yahl/knowledge-to-script": {
+      "development": "./yahl/knowledge-to-script.ts",
+      "import": "./dist/yahl/knowledge-to-script.js"
+    },
+    "./yahl/cache-max-age": {
+      "development": "./yahl/cache-max-age.ts",
+      "import": "./dist/yahl/cache-max-age.js"
+    },
     "./yahl/run-input-keys": {
       "development": "./yahl/run-input-keys.ts",
       "import": "./dist/yahl/run-input-keys.js"

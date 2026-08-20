@@ -23,6 +23,10 @@ import {
   handleGotoStageToolCall,
   type TGotoStageTransfer,
 } from '@/orchestrator/-goto';
+import {
+  buildStageSystemAppend,
+  isEnabled as isKnowledgeToScriptEnabled,
+} from '@/orchestrator/-knowledge-to-script';
 import { runVerifyGate, isVerifyRubricFailure } from '@/orchestrator/-verify';
 import {
   applyVerifyRecoveryToStorage,
@@ -317,6 +321,10 @@ class YahlAgentRunner {
 
     if (gotoAppend) {
       this.systemAppendParts.push(gotoAppend);
+    }
+
+    if (isKnowledgeToScriptEnabled(this.activeStage.spec)) {
+      this.systemAppendParts.push(buildStageSystemAppend());
     }
   }
 

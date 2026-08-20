@@ -1,0 +1,45 @@
+id: consult-script-candidate
+description: Advise the next single small operation script to compile under ~/data/scripts — deterministic, no LLM
+
+packages: [nodejs]
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  existingScripts:
+    type: string
+    required: false
+  pain:
+    type: string
+    required: false
+  stageHint:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: result.json
+  validate: validation.mjs
+  inlineTool: true

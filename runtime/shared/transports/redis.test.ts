@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 
 import type Redis from 'ioredis';
 
-import { RedisPublisher } from '@/shared/transports/redis';
+import { RedisPublisher, RedisSubscriber } from '@/shared/transports/redis';
 
 const storage = {
   context: new Map<string, unknown>([['x', 1]]),
@@ -328,5 +328,101 @@ describe('RedisPublisher local tool results', () => {
     assert.equal(emitted.length, 1);
     assert.equal(emitted[0]?.toolCallId, toolCall.id);
     assert.equal(emitted[0]?.result, '# route-analysis\n');
+  });
+});
+
+describe('RedisSubscriber orchestrator tool results', () => {
+  it('matches tool results to tool_call_id and re-queues orphans', async () => {
+    const sessionId = 'sess-orchestrator-tool';
+    const requestId = 'req-orchestrator-tool';
+    const toolResultChannel = `yahl:tool-result:${sessionId}:${requestId}`;
+    const toolCallChannel = `yahl:tool:${sessionId}:${requestId}`;
+    const firstCall = {
+      function: { arguments: '{"key":"a"}', name: 'set_context' },
+      id: 'call-first',
+      type: 'function',
+    };
+    const secondCall = {
+      function: { arguments: '{"key":"b"}', name: 'set_context' },
+      id: 'call-second',
+      type: 'function',
+    };
+    const queuedResults = [
+      JSON.stringify({ hasError: false, result: 'second', toolCallId: 'call-second' }),
+      JSON.stringify({ hasError: false, result: 'first', toolCallId: 'call-first' }),
+    ];
+
+    const redis = {
+      brpop: async (...args: unknown[]) => {
+        const key = args[0] as string;
+
+        if (key === toolResultChannel) {
+          return queuedResults.length > 0
+            ? [toolResultChannel, queuedResults.pop()!]
+            : null;
+        }
+
+        return null;
+      },
+      duplicate: () => redis,
+      lpush: async () => 1,
+      lpop: async () => null,
+      ping: async () => 'PONG' as const,
+      quit: async () => 'OK' as const,
+      removeAllListeners: () => {},
+    } as unknown as Redis;
+
+    const subscriber = new RedisSubscriber(redis, sessionId);
+    const reply = subscriber.getReply(requestId);
+
+    const firstResult = await reply.toolCall(firstCall);
+
+    assert.equal(firstResult.result, 'first');
+
+    const secondResult = await reply.toolCall(secondCall);
+
+    assert.equal(secondResult.result, 'second');
+  });
+
+  it('buffers out-of-order orchestrator tool results by tool_call_id', async () => {
+    const sessionId = 'sess-orchestrator-orphan';
+    const requestId = 'req-orchestrator-orphan';
+    const toolResultChannel = `yahl:tool-result:${sessionId}:${requestId}`;
+    const firstCall = {
+      function: { arguments: '{"key":"a"}', name: 'set_context' },
+      id: 'call-first',
+      type: 'function',
+    };
+    const queuedResults = [
+      JSON.stringify({ hasError: false, result: 'first', toolCallId: 'call-first' }),
+      JSON.stringify({ hasError: false, result: 'second', toolCallId: 'call-second' }),
+    ];
+
+    const redis = {
+      brpop: async (...args: unknown[]) => {
+        const key = args[0] as string;
+
+        if (key === toolResultChannel) {
+          return queuedResults.length > 0
+            ? [toolResultChannel, queuedResults.pop()!]
+            : null;
+        }
+
+        return null;
+      },
+      duplicate: () => redis,
+      lpush: async () => 1,
+      lpop: async () => null,
+      ping: async () => 'PONG' as const,
+      quit: async () => 'OK' as const,
+      removeAllListeners: () => {},
+    } as unknown as Redis;
+
+    const subscriber = new RedisSubscriber(redis, sessionId);
+    const reply = subscriber.getReply(requestId);
+
+    const firstResult = await reply.toolCall(firstCall);
+
+    assert.equal(firstResult.result, 'first');
   });
 });

@@ -53,6 +53,10 @@ export type TToolCallResult = {
   newStorage?: TStorage;
 };
 
+export type TToolCallResultWire = TToolCallResult & {
+  toolCallId?: string;
+};
+
 export type TLocalToolResultEnvelope = {
   hasError: boolean;
   result: string;

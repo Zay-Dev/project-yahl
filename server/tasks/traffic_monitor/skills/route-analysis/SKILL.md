@@ -4,11 +4,13 @@ Fetch and compare multi-route driving ETAs for resolved origin → destination.
 
 ## Place resolution
 
-Resolve brands/abbrevs/malls before probe. Prefer `origin_resolved` / `destination_resolved` for every bind. Reject autocomplete that changes district/landmark. **Estate ≠ nearby transit hub** unless PLACE has `verified_proxy`. Implausible distance → geocode fail (not a multi-route source fail). Novel PLACE identity → submit when worth persisting.
+Resolve brands/abbrevs/malls before probe. Prefer `origin_resolved` / `destination_resolved` for every **browser bind**. Reject autocomplete that changes district/landmark. **Estate ≠ nearby transit hub** unless PLACE has `verified_proxy`. Implausible distance → geocode fail (not a multi-route source fail). Novel PLACE identity → submit when worth persisting. Notify/day-page titles use `origin_display` / `destination_display` when set.
 
 ## Fetch
 
-Browser against goto rebuilt every poll from resolved OD + `traffic_source.howto_md` + `*read(source_ops_md)`. Core `howto_md` stays OD-generic. Maps fallback → `/opt/skills/google-maps-directions/SKILL.md`.
+Browser against goto rebuilt every poll from resolved OD + `traffic_source.howto_md` + `source_ops_md` (already in Input when allowlisted). Core `howto_md` stays OD-generic. Maps fallback → `/opt/skills/google-maps-directions/SKILL.md`.
+
+**Scripts:** when `knowledgeToScript` is on (default), reuse `~/data/scripts/` ops. Before inventing a new script or growing a fat recipe: Read `~/task-skills/nixery-consult-script-candidate/SKILL.md` when present and follow it once — implement **only** the advised `scriptId` (or skip). Prefer small companions (`extract-routes-normalize.js`, `format-fetch-section.js`, …) over whole-fetch monoliths.
 
 Directions URL: placeholder templates only; bind with deterministic `encodeURIComponent` (node one-liner). Prefer English names in URL when needed; local-script for labels/notify. No SPA `data=!…` URLs. OD chip mismatch → fetch miss. **≤ 2** browser attempts per poll/probe.
 
@@ -41,7 +43,7 @@ Match by `label` / `via`. Abnormal when ETA **> 120%** of prior, new incident, *
 - Notes: …
 ```
 
-Miss: same header + Origin/Destination + `Fetch missed` / `Using previous routes`. Pass `origin` / `destination` into format helpers. Times use `timezone` wall clock.
+Miss: same header + Origin/Destination + `Fetch missed` / `Using previous routes`. Pass display labels into format helpers. Times use `timezone` wall clock.
 
 ## Daily report
 

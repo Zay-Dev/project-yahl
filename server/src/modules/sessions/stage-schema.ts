@@ -58,11 +58,13 @@ const whileSetupSchema = Joi.alternatives().try(
 export const yahlStageSchema = Joi.object<TYahlStage>({
   agentOverrides: agentOverridesSchema.optional(),
   askUser: Joi.array().items(askUserEntrySchema).min(1).optional(),
+  cacheMaxAge: Joi.number().integer().min(1).optional(),
   conditionMode: Joi.boolean().optional(),
   contextKeys: stringArraySchema.optional(),
   contextMode: Joi.boolean().optional(),
   goto: Joi.array().items(gotoEntrySchema).min(1).optional(),
   id: Joi.string().trim().pattern(STAGE_ID_PATTERN).optional(),
+  knowledgeToScript: Joi.boolean().optional(),
   logic: Joi.string().trim().when('nixeryRun', {
     is: Joi.exist(),
     otherwise: Joi.required(),
@@ -118,6 +120,14 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
       }
     }
 
+    if (value.cacheMaxAge !== undefined) {
+      if (value.contextMode === true || value.conditionMode === true || value.nixeryRun) {
+        return helpers.error('any.invalid', {
+          message: 'cacheMaxAge only valid on AI stages (not contextMode, conditionMode, or nixeryRun)',
+        });
+      }
+    }
+
     if (value.nixeryRun) {
       if (value.contextMode === true || value.conditionMode === true) {
         return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with contextMode or conditionMode' });
@@ -145,6 +155,14 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
 
       if (!value.nixeryInput || Object.keys(value.nixeryInput).length === 0) {
         return helpers.error('any.invalid', { message: 'nixeryInput is required when nixeryRun is set' });
+      }
+    }
+
+    if (value.knowledgeToScript === true) {
+      if (value.contextMode === true || value.conditionMode === true || value.nixeryRun) {
+        return helpers.error('any.invalid', {
+          message: 'knowledgeToScript cannot enable on contextMode, conditionMode, or nixeryRun stages',
+        });
       }
     }
 

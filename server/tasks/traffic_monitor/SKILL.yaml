@@ -73,7 +73,7 @@ types: |
 stages:
   - contextMode: true
     contextKeys: [monitor_minutes, notify_to, origin, destination, city, timezone]
-    produceContextKeys: [monitor_minutes, notify_to, origin, destination, city, timezone, holidays_topic, holidays_file_prefix, traffic_source_file, city_slug, knowledge_topic]
+    produceContextKeys: [monitor_minutes, notify_to, origin, destination, city, timezone, holidays_topic, holidays_file_prefix, traffic_source_file, city_slug, knowledge_topic, knowledge_cache_max_age]
     logic: |
       (() => {
         const cityRaw = String(context.context.city ?? '').trim() || 'Hong_Kong';
@@ -92,6 +92,7 @@ stages:
           traffic_source_file: isHk ? 'traffic_source.md' : `${slugUnderscored}_traffic_source.md`,
           city_slug: slug,
           knowledge_topic: 'traffic-monitor',
+          knowledge_cache_max_age: 1440,
         };
       })
 
@@ -104,30 +105,31 @@ stages:
 
   - contextKeys: [notify_to]
     produceContextKeys: [notifyChannel, notifyTo, notifyName, notifyPreference, notifyIsUser]
+    knowledgeToScript: false
+    maxTurns: 12
     logic: |
       Read ~/nixery/resolve-notification-target/notify-target.json (or result.json) from the session workspace.
       Parse JSON once. When a string value is itself a JSON-encoded string (starts and ends with quotes), unwrap with JSON.parse once so values are bare scalars (whatsapp not "whatsapp").
       Set notifyChannel from channel (default whatsapp), notifyTo from to (fallback notify_to), notifyName from name (or ''), notifyPreference from preference (or ''), notifyIsUser from isUser (boolean; default false).
       Never JSON.stringify scalars before set_context.
 
-  - contextKeys: [knowledge_topic, city_slug]
-    nixeryRun: get-knowledge
-    nixeryInput:
-      purpose: >
-        Verbatim source-ops-{city_slug} (and lean sources-{city_slug}) from processed
-        knowledge only; write source-knowledge.md. Absent pages → absent:true. No raw/.
-      topic: knowledge_topic
-      output: source-knowledge.md
-    logic: "(nixery)"
-
-  - contextKeys: [city_slug]
+  - contextKeys: [city_slug, knowledge_cache_max_age]
     produceContextKeys: [source_ops_md]
+    knowledgeToScript: false
+    maxTurns: 16
+    maxBashCalls: 8
     logic: |
-      Read ~/nixery/get-knowledge/source-knowledge.md from the session workspace.
-      If missing or empty after trim, set source_ops_md to '<none>'.
-      Otherwise set source_ops_md to the source-ops-{city_slug} page body only
-      (strip any Overview/History/sources preamble the extract may have added; keep HOWTO/PLACE/Q&A/ops-log).
-      Do not keep a multi-OD essay scrapbook — prefer the verbatim wiki page body.
+      # Prefer durable ~/data/source-ops-{city_slug}.md when present and mtime age <= knowledge_cache_max_age minutes.
+      # Do not call get-knowledge when the durable file is fresh — accuracy comes from the file body.
+      IF: *file_fresh(~/data/source-ops-{city_slug}.md, maxAgeMin: knowledge_cache_max_age);
+        const source_ops_md = *read(~/data/source-ops-{city_slug}.md);
+        Keep HOWTO/PLACE/Q&A/ops-log body only (strip Overview/History scrapbook if present).
+      ELSE IF: *exists(~/data/source-ops-{city_slug}.md) && *file_nonempty(~/data/source-ops-{city_slug}.md);
+        const source_ops_md = *read(~/data/source-ops-{city_slug}.md);
+        Note: file older than knowledge_cache_max_age — still reuse lean body this run; explorer may refresh ops.
+      ELSE:
+        const source_ops_md = '<none>';
+      END:
 
   - contextKeys: [origin, destination, city, holidays_topic, holidays_file_prefix, traffic_source_file]
     nixeryRun: plan
@@ -142,18 +144,11 @@ stages:
       output: plan.md
     logic: "(nixery)"
 
-  - contextKeys: [holidays_topic]
-    nixeryRun: get-knowledge
-    nixeryInput:
-      purpose: >
-        Processed holidays for the current calendar year; write holidays.md.
-        No dated rows → absent:true. No raw/.
-      topic: holidays_topic
-      output: holidays.md
-    logic: "(nixery)"
-
-  - contextKeys: [holidays_topic, holidays_file_prefix, city, timezone]
+  - contextKeys: [holidays_topic, holidays_file_prefix, city, timezone, knowledge_cache_max_age]
     produceContextKeys: [holidays_md, holidays_year]
+    knowledgeToScript: false
+    maxTurns: 24
+    maxBashCalls: 12
     verify:
       defId: stage-verify
       autoRetry: true
@@ -166,14 +161,9 @@ stages:
     logic: |
       Read ~/nixery/plan/plan.md when execution steps need clarification.
       # *holidays_list_usable: absent when missing/empty/'<none>'/absent:true/diagnostic-only/no dated rows for year.
+      # Prefer durable ~/data file (fresh or stale-but-usable) before research — skip get-knowledge.
       const holidays_year = *current_calendar_year_in_tz(timezone);
-      Read ~/nixery/get-knowledge/holidays.md from the session workspace.
-      If missing or empty after trim, set holidays_extract to '<none>'; otherwise set holidays_extract to the file's full markdown content.
-      const extract_usable = *holidays_list_usable(holidays_extract, year: holidays_year);
-      IF: extract_usable;
-        const holidays_md = holidays_extract;
-        *save(~/data/{holidays_file_prefix}_{holidays_year}.md, holidays_md);
-      ELSE IF: *exists(~/data/{holidays_file_prefix}_{holidays_year}.md) && *holidays_list_usable(*read(~/data/{holidays_file_prefix}_{holidays_year}.md), year: holidays_year);
+      IF: *exists(~/data/{holidays_file_prefix}_{holidays_year}.md) && *holidays_list_usable(*read(~/data/{holidays_file_prefix}_{holidays_year}.md), year: holidays_year);
         const holidays_md = *read(~/data/{holidays_file_prefix}_{holidays_year}.md);
       ELSE:
         const holidays_md = /nixery(
@@ -204,8 +194,9 @@ stages:
       END:
 
   - id: explorer
-    contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, source_instruction, instruction_active, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
-    produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources, origin_resolved, destination_resolved]
+    cacheMaxAge: 1440
+    contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, source_instruction, instruction_active, notifyPreference, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
+    produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources, origin_resolved, destination_resolved, origin_display, destination_display]
     maxTurns: 80
     verify:
       defId: stage-verify
@@ -213,6 +204,7 @@ stages:
       minScore: 0.75
       rubric: |
         Pass when origin_resolved and destination_resolved are non-empty (canonical; district when raw OD was brand/abbrev/mall/cinema),
+        and origin_display and destination_display are non-empty,
         and they do NOT substitute a nearby MTR station for an estate/building runInput unless PLACE verified_proxy,
         and traffic_source.url is http(s) with {origin}/{destination} placeholders OR (kind browser and howto_md documents form-fill OD bind),
         and howto_md is inline markdown length >= 80 (not a ~/data path) and when kind browser has no concrete run OD/POI literals,
@@ -225,15 +217,17 @@ stages:
         and when instruction_active is true the run applied source_instruction (no blind known-failed skip ignoring it;
         no trust-only lock with what_tried 'trusted durable cache; no re-probe' unless instruction clearly allows trust/skip-probe),
         and ONE of:
-        (Trust path — cold start only, instruction_active false) probe_fetch.trusted_cache === true, source_url matches traffic_source.url,
-        is_fallback false, tried_sources ok with what_tried 'trusted durable cache; no re-probe';
+        (Trust path — cold start only, instruction_active false, durable file age <= stage.cacheMaxAge minutes)
+        probe_fetch.trusted_cache === true, source_url matches traffic_source.url,
+        is_fallback false, tried_sources ok with what_tried 'trusted durable cache; no re-probe',
         OR (Live probe path) probe_fetch has >= 2 numeric eta_min routes and http(s) source_url
         OR documented OD geocode fail; browser form-fill chips match resolved places.
-        Fail otherwise. On fail, set resumeAction: rerun.
+        Fail trust-only when durable cache is older than cacheMaxAge. On fail, set resumeAction: rerun.
     logic: |
       Read ~/task-skills/task-mission/SKILL.md.
       *read(source_ops_md);
       *read(instruction_active);
+      *read(notifyPreference);
       IF: instruction_active;
         *read(source_instruction);
       END:
@@ -250,20 +244,18 @@ stages:
       let city_attempts = 0;
       const max_city_attempts = 2;
       const maps_template = 'https://www.google.com/maps/dir/{origin}/{destination}/';
+      const cache_max_age = Number(stage.cacheMaxAge) || 1440;
 
       const origin_resolved = *resolve_place(origin, city: city, role: origin);
       const destination_resolved = *resolve_place(destination, city: city, role: destination);
-      *set_context(origin_resolved, destination_resolved);
+      const origin_display = *place_display(origin_resolved, preference: notifyPreference, fallback: origin);
+      const destination_display = *place_display(destination_resolved, preference: notifyPreference, fallback: destination);
+      *set_context(origin_resolved, destination_resolved, origin_display, destination_display);
       *upsert_novel_place_ops(origin, origin_resolved, destination, destination_resolved);
 
       let candidate = null;
       IF: *exists(~/data/{traffic_source_file});
         candidate = *normalize_traffic_source(*read(~/data/{traffic_source_file}), as: TTrafficSource);
-      ELSE:
-        const from_knowledge = *extract_sources_page(~/nixery/get-knowledge/source-knowledge.md, key: sources-{city_slug});
-        IF: from_knowledge;
-          candidate = *normalize_traffic_source(from_knowledge, as: TTrafficSource);
-        END:
       END:
       IF: candidate && (candidate.is_fallback === true || (String(candidate.url || '').includes('google.com/maps/dir/') && candidate.is_fallback !== false));
         candidate = null;
@@ -284,26 +276,28 @@ stages:
       END:
 
       const candidate_usable = !!candidate && (String(candidate.url || '').includes('{origin}') || (String(candidate.kind || '') === 'browser' && String(candidate.howto_md || '').length >= 80));
+      const cache_fresh = *file_fresh(~/data/{traffic_source_file}, maxAgeMin: cache_max_age);
 
-      IF: candidate_usable && !stage_goto_reason && !instruction_active;
+      IF: candidate_usable && !stage_goto_reason && !instruction_active && cache_fresh;
         let traffic_source = { ...candidate, city: city, is_fallback: false, howto_md: *strip_od_bleed(candidate.howto_md, origin, destination, origin_resolved, destination_resolved) };
         const probe_fetch = { trusted_cache: true, source_url: String(traffic_source.url || ''), routes: [] };
-        tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'trusted durable cache; no re-probe', outcome: 'ok', why: 'cold-start non-fallback cache present and not known-failed', at: new Date().toISOString() }];
+        tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'trusted durable cache; no re-probe', outcome: 'ok', why: 'cold-start non-fallback cache present, within cacheMaxAge, and not known-failed', at: new Date().toISOString() }];
         *save(~/data/{traffic_source_file}, traffic_source);
         *ensure_howto_and_lock(traffic_source, source_ops_md);
-        *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
+        *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources, origin_display, destination_display);
         locked = true;
+        Do not Read platform, nixery, stagehand, or knowledge-to-script skills; do not open browser; finish.
       END:
 
       IF: !locked && candidate_usable;
         let traffic_source = { ...candidate, city: city, is_fallback: false, howto_md: *strip_od_bleed(candidate.howto_md, origin, destination, origin_resolved, destination_resolved) };
         const probe_fetch = *fetch_driving_routes(origin: origin_resolved, destination: destination_resolved, mode: private_car_driving, max_routes: 3, source: traffic_source, as: TTrafficFetch);
         IF: *probe_ok(probe_fetch) && !*od_geocode_failed(probe_fetch, origin_resolved, destination_resolved);
-          tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'cached non-fallback probe', outcome: 'ok', why: 'probe returned usable multi-route ETAs', at: new Date().toISOString() }];
+          tried_sources = [...tried_sources, { name: *source_display_name(traffic_source), url: traffic_source.url, what_tried: 'cached non-fallback probe', outcome: 'ok', why: cache_fresh ? 'probe returned usable multi-route ETAs' : 'durable cache older than cacheMaxAge; live-probe ok', at: new Date().toISOString() }];
           *save(~/data/{traffic_source_file}, traffic_source);
           *ensure_howto_and_lock(traffic_source, source_ops_md);
           *upsert_novel_fetch_ops(miss: false, source: traffic_source, fetch: probe_fetch);
-          *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
+          *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources, origin_display, destination_display);
           locked = true;
         ELSE:
           city_attempts = city_attempts + 1;
@@ -354,7 +348,7 @@ stages:
             *save(~/data/{traffic_source_file}, traffic_source);
             *ensure_howto_and_lock(traffic_source, source_ops_md);
             *upsert_novel_fetch_ops(miss: false, source: traffic_source, fetch: probe_fetch);
-            *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources);
+            *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources, origin_display, destination_display);
             locked = true;
           ELSE:
             const why = *od_geocode_failed(probe_fetch, origin_resolved, destination_resolved) ? (*geocode_fail_reason(probe_fetch, origin_resolved, destination_resolved) || 'OD geocode/district mismatch') : (*probe_fail_reason(probe_fetch) || 'probe failed');
@@ -377,12 +371,12 @@ stages:
         IF: *exists(~/data/{traffic_source_file}) && *file_is_maps_fallback(~/data/{traffic_source_file});
           *delete(~/data/{traffic_source_file});
         END:
-        *set_context(traffic_source, probe_fetch, source_ops_md, explore_started_at, tried_sources, origin_resolved, destination_resolved);
+        *set_context(traffic_source, probe_fetch, source_ops_md, explore_started_at, tried_sources, origin_resolved, destination_resolved, origin_display, destination_display);
       END:
 
   - contextMode: true
-    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note]
-    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note]
+    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, poll_success_count]
+    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, poll_success_count]
     logic: |
       (() => {
         const existing = context.context.started_at;
@@ -397,6 +391,7 @@ stages:
             day_page: String(context.context.day_page || ''),
             last_heartbeat_at: String(context.context.last_heartbeat_at || ''),
             prev_incident_note: String(context.context.prev_incident_note || ''),
+            poll_success_count: Number(context.context.poll_success_count) || 0,
           };
         }
         const started_at = new Date().toISOString();
@@ -413,6 +408,7 @@ stages:
           day_page: `raw/fetches-${y}`,
           last_heartbeat_at: '',
           prev_incident_note: '',
+          poll_success_count: 0,
         };
       });
 
@@ -420,8 +416,8 @@ stages:
     goto:
       - command: '/stage(explorer)'
         description: 'when the cached/locked traffic source is no longer available or usable'
-    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, holidays_md, origin, destination, origin_resolved, destination_resolved, monitor_minutes, timezone, knowledge_topic, city_slug, source_instruction, instruction_active, TTrafficFetch, TRouteSample, TMonitorResult]
-    updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md]
+    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, knowledge_topic, city_slug, source_instruction, instruction_active, TTrafficFetch, TRouteSample, TMonitorResult]
+    updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count]
     agentOverrides:
       bashTimeoutMs: 360000
     maxBashCalls: 120
@@ -430,9 +426,6 @@ stages:
       condition: "(Date.now() - Date.parse(String(context.context.started_at))) < Number(context.context.monitor_minutes) * 60 * 1000"
       doAtLeast: 2
     warmUp: |
-      Read /opt/skills/platform/SKILL.md.
-      Read /opt/skills/nixery/SKILL.md.
-      Read /opt/skills/stagehand/SKILL.md.
       Read ~/task-skills/monitor-loop/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
       Read ~/task-skills/worth-persisting-knowledge/SKILL.md.
@@ -440,14 +433,18 @@ stages:
         *read(source_instruction);
       END:
       *read(source_ops_md);
-      *read(holidays_md);
       const bind_origin = origin_resolved || origin;
       const bind_destination = destination_resolved || destination;
+      const label_origin = origin_display || origin;
+      const label_destination = destination_display || destination;
+      Read ~/task-skills/nixery-consult-script-candidate/SKILL.md.
+      *consult_script_candidate(existingScripts: *list_scripts(~/data/scripts), pain: monitor warmUp, stageHint: monitor);
       Do not fetch, notify, append day-page, or sleep.
     logic: |
       const bind_origin = origin_resolved || origin;
       const bind_destination = destination_resolved || destination;
-      *read(source_ops_md);
+      const label_origin = origin_display || origin;
+      const label_destination = destination_display || destination;
       const fetch = *fetch_driving_routes(
         origin: bind_origin,
         destination: bind_destination,
@@ -464,44 +461,42 @@ stages:
           topic: knowledge_topic,
           page: day_page,
           mode: append,
-          content: *format_miss_section(prev_routes, origin: bind_origin, destination: bind_destination, timezone: timezone),
+          content: *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone),
         );
         *submit_novel_ops(miss: true, fetch: fetch, source: traffic_source, source_ops_md);
-        const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180);
+        const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
       ELSE:
-        const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, holidays_md, ~/task-skills/route-analysis/SKILL.md);
+        const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, ~/task-skills/route-analysis/SKILL.md);
         const fetch_with_status = { ...fetch, ...analysis.patch };
         *extend_context(fetches, value: fetch_with_status);
         prev_routes = fetch_with_status.routes;
-        *set_context(prev_routes);
-        fetches = [...fetches, fetch_with_status];
+        poll_success_count = poll_success_count + 1;
+        *set_context(prev_routes, poll_success_count);
         /nixery(
           append-raw-knowledge-page,
           topic: knowledge_topic,
           page: day_page,
           mode: append,
-          content: *format_fetch_section(fetch_with_status, analysis, origin: bind_origin, destination: bind_destination, timezone: timezone),
+          content: *format_fetch_section(fetch_with_status, analysis, origin: label_origin, destination: label_destination, timezone: timezone),
         );
-        IF: fetches.length <== 2 && !summary_notified;
-          *propose_kind_a_summary(fetches, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications);
-          summary_notified = fetches.length >== 2;
+        IF: poll_success_count <== 2 && !summary_notified;
+          *propose_kind_a_summary(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
+          summary_notified = poll_success_count >== 2;
           *set_context(summary_notified, notifications);
         END:
         IF: *heartbeat_due(notifyPreference, started_at, last_heartbeat_at);
-          *propose_kind_b_heartbeat(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications);
+          *propose_kind_b_heartbeat(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
           last_heartbeat_at = new Date().toISOString();
           *set_context(last_heartbeat_at, notifications);
         END:
-        IF: fetches.length >= 2 && analysis.should_notify_abnormal;
-          *propose_kind_c_abnormal(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications);
+        IF: poll_success_count >= 2 && analysis.should_notify_abnormal;
+          *propose_kind_c_abnormal(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
           *set_context(notifications);
         END:
         prev_incident_note = analysis.incident_note || '';
         *set_context(prev_incident_note);
         *submit_novel_ops(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis, source_ops_md);
-        const sleep_sec = fetches.length === 1
-          ? 300
-          : *adaptive_sleep_sec(fetch_with_status, prev_primary_eta: analysis.prev_primary_eta);
+        const sleep_sec = *adaptive_sleep_sec(fetch_with_status, prev_primary_eta: analysis.prev_primary_eta, started_at, monitor_minutes);
       END:
       *run_bash(sleep ${sleep_sec});
     verify:
@@ -514,9 +509,16 @@ stages:
         clock elapsed vs started_at is >= monitor_minutes OR elapsed already past window on retry,
         day_page non-empty, fetches is an array of real polls (no invented polls),
         miss_count is a number, notifications subset of real propose-notification outcomes.
-        When window allowed >=2 polls, require fetches.length + miss_count >= 2 with miss sections covering gaps.
+        Count distinct polls by deduping fetches on fetched_at (±60s) plus primary-route eta_min;
+        identical duplicate entries from retried context writes do not increase distinct poll count
+        and must not fail the stage by themselves.
+        Do not fail solely because raw fetches.length exceeds distinct poll count.
+        For fetched_at vs Clock: do not treat timestamps as invented when they fall within
+        [started_at, now_iso + 9h] (timezone mislabel tolerance) or when day-page section times corroborate;
+        only fail future timestamps with no corroborating day-page or iteration evidence.
+        When window allowed >=2 polls, require distinct_poll_count + miss_count >= 2 with miss sections covering gaps.
         This-run day-page sections (matching Origin/Destination) present with Origin and Destination lines;
-        count >= fetches.length + miss_count - 1. Fail when any this-run section lacks Origin or Destination.
+        count >= distinct_poll_count + miss_count - 1. Fail when any this-run section lacks Origin or Destination.
         On fail, set resumeAction: rerun.
 
   - contextMode: true
@@ -524,13 +526,31 @@ stages:
     produceContextKeys: [monitor]
     logic: |
       (() => {
-        const fetches = Array.isArray(context.context.fetches) ? context.context.fetches : [];
+        const rawFetches = Array.isArray(context.context.fetches) ? context.context.fetches : [];
         const miss_count = Number(context.context.miss_count) || 0;
         const notifications = Array.isArray(context.context.notifications) ? context.context.notifications : [];
         const started_at = String(context.context.started_at || '');
         const day_page = String(context.context.day_page || '');
         const ended_at = new Date().toISOString();
         const startedMs = Date.parse(started_at);
+        const primaryEta = (fetch) => {
+          const routes = Array.isArray(fetch?.routes) ? fetch.routes : [];
+          const eta = routes[0]?.eta_min;
+          return Number.isFinite(Number(eta)) ? Number(eta) : null;
+        };
+        const dedupeKey = (fetch) => {
+          const at = Date.parse(String(fetch?.fetched_at || ''));
+          const bucket = Number.isFinite(at) ? Math.floor(at / 60000) : String(fetch?.fetched_at || '');
+          const eta = primaryEta(fetch);
+          return `${bucket}:${eta ?? 'na'}`;
+        };
+        const seen = new Set();
+        const fetches = rawFetches.filter((fetch) => {
+          const key = dedupeKey(fetch);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
         return {
           monitor: {
             started_at,
@@ -547,7 +567,7 @@ stages:
         };
       })
 
-  - contextKeys: [started_at, monitor, holidays_md, day_page, origin, destination, city, timezone, knowledge_topic, traffic_source, TResult, TMonitorResult]
+  - contextKeys: [started_at, monitor, holidays_md, day_page, origin, destination, origin_display, destination_display, city, timezone, knowledge_topic, traffic_source, TResult, TMonitorResult]
     produceContextKeys: [result]
     verify:
       defId: stage-verify
@@ -557,7 +577,7 @@ stages:
         Pass when result.day_kind is weekday|weekend|public_holiday, result.summary_md is non-empty,
         and result.monitor.fetch_count matches monitor.fetch_count, and result.monitor.miss_count
         matches monitor.miss_count,
-        and summary_md / notification bodies use runInput origin and destination labels (not bound MTR/station proxies),
+        and summary_md / notification bodies use origin_display/destination_display when set (else runInput origin/destination),
         and summary_md names the locked traffic_source (Google Maps only when traffic_source.is_fallback is true
         or url is the Maps directions template; otherwise name the city source from traffic_source.url / howto),
         and every report raw upsert returned ok:true with canonicalTopic equal to knowledge_topic
@@ -573,12 +593,14 @@ stages:
     logic: |
       Read ~/task-skills/route-analysis/SKILL.md.
       *read(holidays_md);
+      const label_origin = origin_display || origin;
+      const label_destination = destination_display || destination;
       const day_kind = *classify_day_kind(started_at, holidays_md, tz: timezone);
       const summary_md = *write_daily_traffic_report(
         monitor,
         day_kind,
         holidays_md,
-        route: origin to destination driving,
+        route: label_origin to label_destination driving,
         city: city,
         tz: timezone,
         traffic_source: traffic_source,
@@ -586,8 +608,8 @@ stages:
       const report_page = `raw/report-${day_page.replace('raw/fetches-', '')}`;
       const report_append_md = *format_report_run_append(
         summary_md,
-        origin: origin,
-        destination: destination,
+        origin: label_origin,
+        destination: label_destination,
         monitor: monitor,
         timezone: timezone,
       );

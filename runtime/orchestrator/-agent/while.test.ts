@@ -161,6 +161,72 @@ describe('handleWhile', () => {
     assert.deepEqual(indexes, [0, 1]);
   });
 
+  it('keeps extend_context accumulators when they stay on contextKeys', async () => {
+    const stage = compileStage({
+      contextKeys: ['fetches', 'poll_success_count'],
+      logic: 'extend fetches',
+      maxTurns: 5,
+      updateContextKeys: ['fetches', 'poll_success_count'],
+      whileSetup: { condition: 'false', doAtLeast: 2 },
+    }, 1);
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      const nested = options?.useStorage?.() ?? storageFrom({});
+      const prior = Array.isArray(nested.context.get('fetches'))
+        ? [...(nested.context.get('fetches') as unknown[])]
+        : [];
+      const nextCount = Number(nested.context.get('poll_success_count') ?? 0) + 1;
+      prior.push({ n: nextCount });
+      nested.context.set('fetches', prior);
+      nested.context.set('poll_success_count', nextCount);
+
+      return {
+        storage: nested,
+        usage: { bashCalls: 0, turns: 1 },
+      };
+    };
+
+    const storage = storageFrom({ fetches: [], poll_success_count: 0 });
+
+    await handleWhile(stage, storage, runner);
+
+    assert.deepEqual(storage.context.get('fetches'), [{ n: 1 }, { n: 2 }]);
+    assert.equal(storage.context.get('poll_success_count'), 2);
+  });
+
+  it('wipes extend_context accumulators when omitted from contextKeys', async () => {
+    const stage = compileStage({
+      contextKeys: ['poll_success_count'],
+      logic: 'extend fetches',
+      maxTurns: 5,
+      updateContextKeys: ['fetches', 'poll_success_count'],
+      whileSetup: { condition: 'false', doAtLeast: 2 },
+    }, 1);
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      const nested = options?.useStorage?.() ?? storageFrom({});
+      const prior = Array.isArray(nested.context.get('fetches'))
+        ? [...(nested.context.get('fetches') as unknown[])]
+        : [];
+      const nextCount = Number(nested.context.get('poll_success_count') ?? 0) + 1;
+      prior.push({ n: nextCount });
+      nested.context.set('fetches', prior);
+      nested.context.set('poll_success_count', nextCount);
+
+      return {
+        storage: nested,
+        usage: { bashCalls: 0, turns: 1 },
+      };
+    };
+
+    const storage = storageFrom({ fetches: [], poll_success_count: 0 });
+
+    await handleWhile(stage, storage, runner);
+
+    assert.deepEqual(storage.context.get('fetches'), [{ n: 2 }]);
+    assert.equal(storage.context.get('poll_success_count'), 2);
+  });
+
   it('strips verify on warmUp and each iteration', async () => {
     const verifies: unknown[] = [];
 
