@@ -7,6 +7,8 @@ description: Compile and replay narrow operation scripts under ~/data/scripts/ �
 
 **knowledgeToScript** is on for this AI stage (unless the stage YAML sets `knowledgeToScript: false`). You still execute the **entire stage logic**. Scripts accelerate **individual sub-operations** only.
 
+**Agent decision** — you choose when a narrow op should become or reuse a script under `~/data/scripts/`. Stage `logic` may use human `*virtual_func(...)` sugar for other work; that is separate from this feature. Do not wait for baked `/nixery` consult calls in YAML.
+
 ## When to script
 
 Any **narrow, replayable** sub-op may become a script — first-class candidates include:
@@ -24,7 +26,7 @@ Any **narrow, replayable** sub-op may become a script — first-class candidates
 
 Before writing a **new** script or expanding a fat recipe:
 
-1. If this install’s nixery catalog (`/opt/skills/nixery/SKILL.md`) or an already-available `~/task-skills/` skill documents a **consult gate for new operation scripts**, Read that skill once and follow it (advise → implement only that piece; skip → reuse existing artifacts).
+1. If this install’s nixery catalog (`/opt/skills/nixery/SKILL.md`) or an already-available `~/task-skills/` skill documents a **consult gate for new operation scripts**, Read that skill once and follow it (advise → implement only that piece; skip → reuse existing artifacts). When calling the gate, briefly supply a **stage logic summary** (what this stage is doing) and a **short completion plan** (ordered steps you intend), plus purpose/need — not one-word pains.
 2. If no such gate is present: invent **one small piece** this turn; **do not invent a `/nixery` defId** or a multi-op monolith.
 
 ## Layout

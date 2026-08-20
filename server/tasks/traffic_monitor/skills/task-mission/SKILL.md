@@ -23,4 +23,4 @@ When Input `instruction_active` is true, **read and apply** free-text `source_in
 
 Attend via `*read(source_ops_md)` before site use; do not paste ops into `howto_md`. Submit novel source-ops / PLACE notes when worth persisting — never `upsert-knowledge-page`.
 
-Notify kinds / poll loop / path extract → monitor-loop + route-analysis. Before breaking sleep/window/thresholds/skills, `/nixery(consult-breaking-change)`. Before inventing or growing a script: Read `~/task-skills/nixery-consult-script-candidate/SKILL.md` when present and follow it (once, early — warmUp or before first script write); not mid-browser transcript.
+Notify kinds / poll loop / path extract → monitor-loop + route-analysis. Before breaking sleep/window/thresholds/skills, `/nixery(consult-breaking-change)`. Script reuse/compile is knowledge-to-script (agent decision): before inventing or growing, follow a consult gate under `~/task-skills/` when present (once, early); not mid-browser transcript.

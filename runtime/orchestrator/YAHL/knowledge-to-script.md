@@ -1,11 +1,11 @@
 # knowledgeToScript — operation scripts
 
-This AI stage has **knowledgeToScript** enabled (default for AI stages). You still run the **full stage logic** line by line. For **narrow, replayable sub-operations**, prefer compiled scripts under `~/data/scripts/` instead of re-improvising the same steps every poll.
+This AI stage has **knowledgeToScript** enabled (default for AI stages). You still run the **full stage logic** line by line. For **narrow, replayable sub-operations**, **you decide** when to reuse or compile scripts under `~/data/scripts/` instead of re-improvising the same steps every poll (agent decision — not human `*virtual_func` sugar).
 
 ## Rules
 
 - **Many scripts per stage** — keyed by **operation**, not by stage `id`. Format / parse / compare / sleep-math / URL-bind are first-class, not only browser recipes.
-- **One small piece at a time** — before inventing or growing a script, if the current nixery catalog or an available `~/task-skills/` skill documents a consult gate for new scripts, Read and follow it once; otherwise grow one piece and do not invent a `/nixery` defId.
+- **One small piece at a time** — before inventing or growing a script, if the current nixery catalog or an available `~/task-skills/` skill documents a consult gate for new scripts, Read and follow it once (pass a brief stage-logic summary + short completion plan with the need); otherwise grow one piece and do not invent a `/nixery` defId.
 - **No session literals** — recipes use `{{origin}}`, `{{destination}}`, etc.; substitute from context before each `browser` call.
 - **Ordered replay** — after substitution, run recipe steps as written (`mode` / `url` / `instruction` / `schema`). Do not rephrase. `cat` then free-form browse is incorrect.
 - **First-try success** — run once; if output validates, use it and continue. Skip re-reading HOWTO for that op this iteration.

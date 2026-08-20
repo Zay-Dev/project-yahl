@@ -1,7 +1,17 @@
 id: consult-script-candidate
-description: Advise the next single small operation script to compile under ~/data/scripts — deterministic, no LLM
+description: LLM consultant — advise the next single small operation script under ~/data/scripts
 
 packages: [nodejs]
+
+env:
+  OPENAI_BASE_URL: ""
+  LLM_PROXY_TOKEN: ""
+  OPENAI_PROVIDER_DOMAIN: ""
+  OPENAI_MODEL: deepseek-v4-pro
+  OPENAI_API_KEY: ""
+  LLM_CALL_RETRY_MAX: ""
+  OPENAI_TEMPERATURE: "0.2"
+  OPENAI_MAX_TOKENS: "2048"
 
 nixery:
   default: "true"
@@ -17,7 +27,28 @@ input:
   pain:
     type: string
     required: false
+  need:
+    type: string
+    required: false
+  mission:
+    type: string
+    required: false
   stageHint:
+    type: string
+    required: false
+  stageBrief:
+    type: string
+    required: false
+  plan:
+    type: string
+    required: false
+  guidelinePath:
+    type: string
+    required: false
+  source:
+    type: string
+    required: false
+  taskId:
     type: string
     required: false
   output:
@@ -27,6 +58,12 @@ input:
 mount:
   /opt/nixery/plugin:
     host: plugin
+    mode: ro
+  /session:
+    host: session-root
+    mode: ro
+  /tasks:
+    host: data/workspace/tasks
     mode: ro
   /workspace:
     host: session

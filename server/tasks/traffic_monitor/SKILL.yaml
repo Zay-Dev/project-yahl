@@ -437,8 +437,6 @@ stages:
       const bind_destination = destination_resolved || destination;
       const label_origin = origin_display || origin;
       const label_destination = destination_display || destination;
-      Read ~/task-skills/nixery-consult-script-candidate/SKILL.md.
-      *consult_script_candidate(existingScripts: *list_scripts(~/data/scripts), pain: monitor warmUp, stageHint: monitor);
       Do not fetch, notify, append day-page, or sleep.
     logic: |
       const bind_origin = origin_resolved || origin;

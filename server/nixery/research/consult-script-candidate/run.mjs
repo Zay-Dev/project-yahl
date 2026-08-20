@@ -1,57 +1,29 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
+import { runSingleLlmCompletion } from '../lib/llm-completion.mjs';
+import {
+  appendNixeryRetryUserMessage,
+  readNixeryRetryFeedback,
+} from '../lib/nixery-retry-feedback.mjs';
 import { logProgress, resolveDefId } from '../lib/run-agent.mjs';
+import {
+  extractJsonFromText,
+  readGuidelineSnippet,
+  readSessionFile,
+} from '../lib/session-fs.mjs';
 
 const SCRIPT_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+const TASK_ID_PATTERN = /^[a-zA-Z0-9_.-]+$/;
+const SESSION_SCRIPTS_DIR = '/session/scripts';
+const SESSION_DATA_SCRIPTS_DIR = '/session/data/scripts';
+const TASKS_ROOT = '/tasks';
+const PER_FILE_CHARS = 2_000;
+const TOTAL_SNIPPET_CHARS = 12_000;
+const KINDS = new Set(['js', 'recipe', 'normalize']);
 
-const CANDIDATES = [
-  {
-    scriptId: 'extract-routes-normalize',
-    kind: 'normalize',
-    contract: 'stdin extract JSON → stdout coerced TTrafficFetch.routes-shaped object',
-    when: ({ ids, pain }) => ids.has('extract-routes') && !ids.has('extract-routes-normalize')
-      || /\b(extract|schema|coerce|normalize|No object generated)\b/i.test(pain),
-  },
-  {
-    scriptId: 'format-fetch-section',
-    kind: 'js',
-    contract: 'stdin {fetch, analysis, origin, destination, timezone} → stdout day-page markdown section',
-    when: ({ ids, pain, stageHint }) => !ids.has('format-fetch-section')
-      && (/\b(day-?page|format.?section|fetch.?section)\b/i.test(pain)
-        || /\bmonitor\b/i.test(stageHint)),
-  },
-  {
-    scriptId: 'adaptive-sleep-sec',
-    kind: 'js',
-    contract: 'stdin {fetch, prev_primary_eta} → stdout { sleep_sec: number }',
-    when: ({ ids, pain }) => !ids.has('adaptive-sleep-sec')
-      && /\b(sleep|eta.?%|adaptive)\b/i.test(pain),
-  },
-  {
-    scriptId: 'format-report-run',
-    kind: 'js',
-    contract: 'stdin report fields → stdout markdown append for raw/report page',
-    when: ({ ids, pain, stageHint }) => !ids.has('format-report-run')
-      && (/\breport\b/i.test(pain) || /\breport\b/i.test(stageHint)),
-  },
-  {
-    scriptId: 'bind-directions-url',
-    kind: 'js',
-    contract: 'stdin {template, origin, destination} → stdout { url: string } via encodeURIComponent',
-    when: ({ ids, pain }) => !ids.has('bind-directions-url')
-      && /\b(url|encodeURIComponent|directions.?template)\b/i.test(pain),
-  },
-  {
-    scriptId: 'extract-routes',
-    kind: 'recipe',
-    contract: 'ordered browser recipe for multi-route ETA extract; placeholders {{bind_origin}} {{bind_destination}}',
-    when: ({ ids, pain }) => !ids.has('extract-routes')
-      && /\b(browser|recipe|howto|fetch.?routes|stagehand)\b/i.test(pain),
-  },
-];
-
-const parseExisting = (raw) => {
+export const parseExisting = (raw) => {
   if (typeof raw !== 'string' || !raw.trim()) {
     return [];
   }
@@ -63,10 +35,12 @@ const parseExisting = (raw) => {
       const parsed = JSON.parse(trimmed);
 
       if (Array.isArray(parsed)) {
-        return parsed.map((item) => String(item).trim()).filter(Boolean);
+        return parsed
+          .map((item) => String(item).trim().replace(/\.(js|recipe\.json|meta\.json)$/i, ''))
+          .filter(Boolean);
       }
     } catch {
-      // fall through to line/comma split
+      // fall through
     }
   }
 
@@ -76,53 +50,234 @@ const parseExisting = (raw) => {
     .filter(Boolean);
 };
 
+const scriptIdFromName = (name) => {
+  const js = name.match(/^([a-zA-Z][a-zA-Z0-9_-]*)\.js$/);
+
+  if (js?.[1]) {
+    return { id: js[1], kind: 'js' };
+  }
+
+  const recipe = name.match(/^([a-zA-Z][a-zA-Z0-9_-]*)\.recipe\.json$/);
+
+  if (recipe?.[1]) {
+    return { id: recipe[1], kind: 'recipe' };
+  }
+
+  const meta = name.match(/^([a-zA-Z][a-zA-Z0-9_-]*)\.meta\.json$/);
+
+  if (meta?.[1]) {
+    return { id: meta[1], kind: 'meta' };
+  }
+
+  return null;
+};
+
+export const taskScriptsDir = (taskId) => {
+  const trimmed = typeof taskId === 'string' ? taskId.trim() : '';
+
+  if (trimmed && TASK_ID_PATTERN.test(trimmed) && !trimmed.includes('..') && !trimmed.includes('/')) {
+    return path.join(TASKS_ROOT, trimmed, 'scripts');
+  }
+
+  return null;
+};
+
+export const resolveScriptsDir = (taskId) =>
+  taskScriptsDir(taskId) ?? SESSION_SCRIPTS_DIR;
+
+export const listScriptInventory = async (scriptsDir = SESSION_SCRIPTS_DIR) => {
+  let names = [];
+
+  try {
+    names = await fs.readdir(scriptsDir);
+  } catch {
+    return { ids: [], snippets: [], scriptsDir };
+  }
+
+  const ids = new Set();
+  const snippets = [];
+  let used = 0;
+
+  for (const name of names.sort()) {
+    const parsed = scriptIdFromName(name);
+
+    if (!parsed || !SCRIPT_ID_PATTERN.test(parsed.id)) {
+      continue;
+    }
+
+    ids.add(parsed.id);
+
+    if (parsed.kind === 'meta' || used >= TOTAL_SNIPPET_CHARS) {
+      continue;
+    }
+
+    let body = '';
+
+    try {
+      body = await fs.readFile(path.join(scriptsDir, name), 'utf8');
+    } catch {
+      continue;
+    }
+
+    const slice = body.slice(0, PER_FILE_CHARS);
+    const room = TOTAL_SNIPPET_CHARS - used;
+
+    if (room <= 0) {
+      break;
+    }
+
+    const text = slice.length > room ? slice.slice(0, room) : slice;
+
+    snippets.push({ file: name, id: parsed.id, text });
+    used += text.length;
+  }
+
+  return { ids: [...ids].sort(), snippets, scriptsDir };
+};
+
+export const resolveInventoryScriptsDir = async (taskId) => {
+  const candidates = [SESSION_SCRIPTS_DIR, SESSION_DATA_SCRIPTS_DIR];
+  const taskDir = taskScriptsDir(taskId);
+
+  if (taskDir) {
+    candidates.push(taskDir);
+  }
+
+  for (const dir of candidates) {
+    const inventory = await listScriptInventory(dir);
+
+    if (inventory.ids.length > 0 || inventory.snippets.length > 0) {
+      return inventory;
+    }
+  }
+
+  return listScriptInventory(SESSION_SCRIPTS_DIR);
+};
+
+export const mergeExistingIds = (fromInput, fromFs) =>
+  [...new Set([...fromInput, ...fromFs].filter((id) => SCRIPT_ID_PATTERN.test(id)))].sort();
+
+export const buildMessages = ({
+  mission,
+  need,
+  pain,
+  stageHint,
+  stageBrief,
+  plan,
+  existingScripts,
+  snippets,
+  scriptsDir,
+  guidelineContent,
+  sourceContent,
+}) => {
+  const consultNeed = (need || pain || '').trim();
+  const snippetBlock = snippets.length === 0
+    ? `(no script bodies available under ${scriptsDir || 'scripts dir'})`
+    : snippets
+      .map((item) => `--- ${item.file} ---\n${item.text}`)
+      .join('\n\n');
+
+  return [
+    {
+      role: 'system',
+      content: [
+        'You are the YAHL operation-script consultant.',
+        'Return JSON only with shape:',
+        '{"action":"advise"|"skip","scriptId":string|null,"kind":"js"|"recipe"|"normalize"|null,"contract":string|null,"reasons":string[],"existingScripts":string[]}',
+        'Advise at most ONE next small script (or skip). Never a multi-op monolith.',
+        'kind must be js|recipe|normalize when action is advise; null when skip.',
+        'scriptId / kind / contract must be null when action is skip.',
+        'contract describes stdin→stdout or recipe role — no session place names or other run literals.',
+        'Before advising: prefer reuse/extend from the script inventory and guideline/source excerpts.',
+        'Session layout under /session (scripts, root *.md knowledge, nixery/, data/, task-skills/, plans/) is mounted — weigh that context when provided in this prompt.',
+        'Prefer a normalize companion or rewrite of one existing op over inventing a whole-fetch super script.',
+        'skip when reuse already covers the need, inventory is enough, or mission/need/stageBrief/plan context is too thin to advise safely.',
+        'Echo existingScripts as the merged inventory ids you were given.',
+      ].join(' '),
+    },
+    {
+      role: 'user',
+      content: [
+        mission ? `Mission:\n${mission}` : '',
+        stageBrief ? `Stage brief:\n${stageBrief}` : '',
+        plan ? `Plan:\n${plan}` : '',
+        consultNeed ? `Need:\n${consultNeed}` : 'Need: (none)',
+        pain && need ? `Pain (legacy):\n${pain}` : '',
+        `stageHint: ${stageHint || '(none)'}`,
+        `scriptsDir: ${scriptsDir || '(unknown)'}`,
+        `existingScripts: ${JSON.stringify(existingScripts)}`,
+        'Session paths to inspect when needed: /session/scripts, /session/*.md, /session/nixery/, /session/data/, /session/task-skills/, /session/plans/',
+        guidelineContent || '',
+        sourceContent
+          ? `Source / ops excerpt:\n${sourceContent}`
+          : '',
+        'Script snippets (truncated):',
+        snippetBlock,
+      ].filter(Boolean).join('\n\n'),
+    },
+  ];
+};
+
+export const normalizeGate = (parsed, existingScripts) => {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('consult-script-candidate returned invalid JSON');
+  }
+
+  const action = parsed.action === 'advise' ? 'advise' : parsed.action === 'skip' ? 'skip' : null;
+
+  if (!action) {
+    throw new Error('consult-script-candidate action must be advise or skip');
+  }
+
+  const reasons = Array.isArray(parsed.reasons)
+    ? parsed.reasons.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+
+  if (reasons.length === 0) {
+    throw new Error('consult-script-candidate reasons must be a non-empty string array');
+  }
+
+  if (action === 'skip') {
+    return {
+      action: 'skip',
+      scriptId: null,
+      kind: null,
+      contract: null,
+      reasons,
+      existingScripts,
+    };
+  }
+
+  const scriptId = typeof parsed.scriptId === 'string' ? parsed.scriptId.trim() : '';
+  const kind = typeof parsed.kind === 'string' ? parsed.kind.trim() : '';
+  const contract = typeof parsed.contract === 'string' ? parsed.contract.trim() : '';
+
+  if (!SCRIPT_ID_PATTERN.test(scriptId)) {
+    throw new Error('consult-script-candidate advise requires valid scriptId');
+  }
+
+  if (!KINDS.has(kind)) {
+    throw new Error('consult-script-candidate advise kind must be js|recipe|normalize');
+  }
+
+  if (!contract) {
+    throw new Error('consult-script-candidate advise requires non-empty contract');
+  }
+
+  return {
+    action: 'advise',
+    scriptId,
+    kind,
+    contract,
+    reasons,
+    existingScripts,
+  };
+};
+
 const readJson = async (filePath) => {
   const raw = await fs.readFile(filePath, 'utf8');
 
   return JSON.parse(raw);
-};
-
-const evaluate = (existingScripts, pain, stageHint) => {
-  const ids = new Set(
-    existingScripts
-      .map((id) => id.replace(/\.(js|recipe\.json|meta\.json)$/i, ''))
-      .filter((id) => SCRIPT_ID_PATTERN.test(id)),
-  );
-  const ctx = { ids, pain, stageHint };
-
-  for (const candidate of CANDIDATES) {
-    if (!candidate.when(ctx)) {
-      continue;
-    }
-
-    if (ids.has(candidate.scriptId)) {
-      continue;
-    }
-
-    return {
-      action: 'advise',
-      scriptId: candidate.scriptId,
-      kind: candidate.kind,
-      contract: candidate.contract,
-      reasons: [
-        `Next single script: ${candidate.scriptId} (${candidate.kind}).`,
-        'Implement only this piece; do not grow a multi-op monolith this turn.',
-      ],
-      existingScripts: [...ids],
-    };
-  }
-
-  return {
-    action: 'skip',
-    scriptId: null,
-    kind: null,
-    contract: null,
-    reasons: [
-      'No new small script advised.',
-      'Reuse existing ~/data/scripts artifacts; rewrite only on miss of a specific op.',
-    ],
-    existingScripts: [...ids],
-  };
 };
 
 const main = async () => {
@@ -135,21 +290,62 @@ const main = async () => {
     : 'result.json';
   const outputPath = path.join(workspace, outputName);
 
-  const existingScripts = parseExisting(
+  const fromInput = parseExisting(
     typeof input.existingScripts === 'string' ? input.existingScripts : '',
   );
   const pain = typeof input.pain === 'string' ? input.pain.trim() : '';
+  const need = typeof input.need === 'string' ? input.need.trim() : '';
+  const mission = typeof input.mission === 'string' ? input.mission.trim() : '';
   const stageHint = typeof input.stageHint === 'string' ? input.stageHint.trim() : '';
+  const stageBrief = typeof input.stageBrief === 'string' ? input.stageBrief.trim() : '';
+  const plan = typeof input.plan === 'string' ? input.plan.trim() : '';
+  const taskId = typeof input.taskId === 'string' ? input.taskId.trim() : '';
 
-  logProgress(defId, `start existing=${existingScripts.length} pain=${pain.slice(0, 60)}`);
+  const inventory = await resolveInventoryScriptsDir(taskId);
+  const existingScripts = mergeExistingIds(fromInput, inventory.ids);
+  const guidelineContent = await readGuidelineSnippet(input.guidelinePath);
+  const sourceContent = typeof input.source === 'string' && input.source.trim()
+    ? await readSessionFile(input.source, 8_000)
+    : '';
 
-  const gate = evaluate(existingScripts, pain, stageHint);
+  logProgress(
+    defId,
+    `start existing=${existingScripts.length} snippets=${inventory.snippets.length} `
+    + `dir=${inventory.scriptsDir} need=${(need || pain).slice(0, 60)}`,
+  );
+
+  const messages = buildMessages({
+    mission,
+    need,
+    pain,
+    stageHint,
+    stageBrief,
+    plan,
+    existingScripts,
+    snippets: inventory.snippets,
+    scriptsDir: inventory.scriptsDir,
+    guidelineContent,
+    sourceContent,
+  });
+
+  appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
+
+  const content = await runSingleLlmCompletion({ defId, messages });
+
+  if (!String(content ?? '').trim()) {
+    throw new Error('consult-script-candidate returned empty LLM content');
+  }
+
+  const parsed = extractJsonFromText(content);
+  const gate = normalizeGate(parsed, existingScripts);
 
   await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
   logProgress(defId, `done action=${gate.action} scriptId=${gate.scriptId ?? 'none'}`);
 };
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

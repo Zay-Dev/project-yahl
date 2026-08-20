@@ -23,7 +23,7 @@ Single sleep per wait (`bashTimeoutMs: 360000`). No chunking / background / alte
 
 ## Poll sequence
 
-1. Fetch routes (route-analysis) for resolved OD bind names. Prefer scripts under `~/data/scripts/` when present. Early (warmUp or before inventing/growing a script): Read `~/task-skills/nixery-consult-script-candidate/SKILL.md` when present and follow it — not mid-fat browser transcript.
+1. Fetch routes (route-analysis) for resolved OD bind names. Prefer scripts under `~/data/scripts/` when present. Script reuse/compile is an **agent decision** via knowledge-to-script — before inventing or growing, follow a consult gate skill under `~/task-skills/` when present (once, early; not mid-fat browser transcript). Pass stage-logic summary + short plan + need; never one-word pain.
 2. Success: `extend_context` on `fetches` (never `set_context` + `operation: extend`) + bump `poll_success_count` + update `prev_routes` / `prev_incident_note` **before** day-page append. `fetched_at` = `now_iso`; `timezone` for day-page headings only. Keep `fetches` on stage `contextKeys` — while segments merge by replace; dropping it from Input wipes prior polls.
 3. Append section via `append-raw-knowledge-page` (`raw/fetches-YYYY-MM-DD`) with Path lines when present. Origin/Destination lines use `origin_display` / `destination_display` (fallback runInput).
 4. Notify checks (below), then novel-only ops observations.
