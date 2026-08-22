@@ -35,6 +35,7 @@ export type TRunYahl = (
     pipelineStageIndex?: number;
     prefixMessages?: ChatApiMessage[];
     produceKeysResumeAttempt?: boolean;
+    repairMode?: boolean;
     startFromStageIndex?: number;
     systemAppend?: string;
     runInput?: Record<string, unknown>;

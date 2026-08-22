@@ -2,6 +2,7 @@ import type { TResponseStageDetail, TResponseStageModelResponseItem } from "@pro
 import type { TParsedStage } from "@project-yahl/server/modules/sessions/-types";
 
 import { StageContextCompare } from "@/pages/sessions/components/stage-context-compare";
+import { StageRepairButton } from "@/pages/sessions/components/stage-repair-button";
 import { StageRerunDialog } from "@/pages/sessions/components/stage-rerun-dialog";
 import { StageLoopMeta } from "@/pages/sessions/components/stage-loop-meta";
 import { StageModelResponseCard } from "@/pages/sessions/components/stage-model-response-card";
@@ -39,7 +40,8 @@ export function StageDetailPanel({
 
   return (
     <div className="space-y-4 border-t bg-background/60 px-4 py-4 text-sm">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <StageRepairButton detail={detail} />
         <StageRerunDialog
           detail={detail}
           originalStages={originalStages}

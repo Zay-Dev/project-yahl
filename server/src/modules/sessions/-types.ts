@@ -108,8 +108,9 @@ export type TSessionForkedFrom = {
 };
 
 export type TSessionRunCursor = {
-  kind: 'pipeline';
+  kind: 'pipeline' | 'repair';
   loopMeta?: TStageLoopMeta;
+  repairInstruction?: string;
   stageIndex: number;
 };
 
@@ -125,6 +126,7 @@ export interface IForkSession extends TWithTimestamps {
   _id: string;
   anchorStageId: string;
   forkSessionId: string;
+  repairInstruction?: string;
   setups: TForkSessionStageSetup[];
   sourceSessionId: string;
   targetSessionId: string;

@@ -861,6 +861,19 @@ class YahlAgentRunner {
         return gotoTransfer.targetStageIndex;
       }
 
+      if (this.options.repairMode === true) {
+        if (!parsedStagesMatchSlot(this.activeStage, this.boundStage)) {
+          throw new Error(
+            `stage slot integrity: activeStage sourceStartLine=${this.activeStage.sourceStartLine} ` +
+            `does not match bound stage sourceStartLine=${this.boundSourceStartLine}`,
+          );
+        }
+
+        publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
+        await globalThis.sessionTracker?.flush?.();
+        return undefined;
+      }
+
       console.log(
         `[yahl-diag] verify gate start requestId=${this.requestId} stageIndex=${this.pipelineStageIndex} pid=${process.pid}`,
       );

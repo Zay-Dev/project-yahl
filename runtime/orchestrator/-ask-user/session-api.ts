@@ -45,8 +45,9 @@ export type TStageDetailForResume = {
 };
 
 export type TSessionRunCursor = {
-  kind: 'pipeline';
+  kind: 'pipeline' | 'repair';
   loopMeta?: Record<string, unknown>;
+  repairInstruction?: string;
   stageIndex: number;
 };
 

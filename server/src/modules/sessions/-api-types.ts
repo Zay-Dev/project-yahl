@@ -269,6 +269,16 @@ export type TResponseCreateForkSession = {
   targetSessionId: string;
 };
 
+export type TRequestCreateRepairSessionBody = {
+  anchorStageId: string;
+  instruction: string;
+};
+
+export type TResponseCreateRepairSession = {
+  forkSessionId: string;
+  targetSessionId: string;
+};
+
 export type TResponseDeleteSession = {
   ok: true;
 };

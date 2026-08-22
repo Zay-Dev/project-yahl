@@ -1,8 +1,10 @@
 import type {
   TRequestCreateForkSessionBody,
+  TRequestCreateRepairSessionBody,
   TResponseAskUserQuestionDetail,
   TResponseAskUserQuestionListItem,
   TResponseCreateForkSession,
+  TResponseCreateRepairSession,
   TResponseDeleteSession,
   TResponsePendingAskUserQuestion,
   TResponseStageDetail,
@@ -50,6 +52,20 @@ export const createForkSession = async (
   });
 
   return parseJson<TResponseCreateForkSession>(response);
+};
+
+export const createRepairSession = async (
+  sessionId: string,
+  body: TRequestCreateRepairSessionBody,
+) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}/repair-sessions`;
+  const response = await fetch(url, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  return parseJson<TResponseCreateRepairSession>(response);
 };
 
 export const fetchPendingAskUserQuestions = async (sessionId: string) => {

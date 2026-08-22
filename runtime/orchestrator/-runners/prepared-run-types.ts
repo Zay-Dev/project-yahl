@@ -2,9 +2,10 @@ import type { TAskUserResumeFrom, TLoopMeta, TStorage } from '@/shared/transport
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 export type TRunStartCursor = {
-  kind: 'pipeline';
+  kind: 'pipeline' | 'repair';
   loopMeta?: TLoopMeta;
   produceKeysResumeAttempt?: boolean;
+  repairInstruction?: string;
   resumeStage?: {
     loopMeta?: TLoopMeta;
     requestId: string;

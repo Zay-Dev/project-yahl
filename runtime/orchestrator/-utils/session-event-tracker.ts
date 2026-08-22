@@ -258,7 +258,12 @@ export const createSessionEventTracker = () => {
     body: {
       liveViewVncPort?: number | null;
       result?: unknown;
-      runCursor?: { kind: 'pipeline'; stageIndex: number; loopMeta?: unknown };
+      runCursor?: {
+        kind: 'pipeline' | 'repair';
+        loopMeta?: unknown;
+        repairInstruction?: string;
+        stageIndex: number;
+      } | undefined;
     },
   ) => {
     enqueue(async () => {

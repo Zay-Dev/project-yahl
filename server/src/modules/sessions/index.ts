@@ -4,6 +4,7 @@ import './-inject';
 
 import { getForkSession } from './use-cases/fork-session-read';
 import { createForkSession } from './use-cases/fork-session-write';
+import { createRepairSession } from './use-cases/repair-session-write';
 import { createModelResponse } from './use-cases/model-response-write';
 import { getSessionEventsStream } from './use-cases/session-events-stream';
 import { deleteSession } from './use-cases/delete-session';
@@ -49,6 +50,7 @@ exposedRoute('/api/sessions')
   .get('/:sessionId/stages/replay', getSessionStagesReplay)
   .get('/:sessionId/stages', getSessionStages)
   .post('/:sessionId/fork-sessions', createForkSession)
+  .post('/:sessionId/repair-sessions', createRepairSession)
   .post('/:sessionId/stages', createStage)
   .get('/:sessionId/stages/:requestId', getSessionStage)
   .patch('/:sessionId/stages/:requestId', patchStage)

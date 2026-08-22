@@ -178,7 +178,12 @@ runCommand.action(async options => {
 
     const { resultContextKey, storage } = await runSessionFrom(sessionId, prepared);
 
-    await publishSessionResult(sessionId, resultContextKey, storage);
+    if (prepared.cursor.kind !== 'repair') {
+      await publishSessionResult(sessionId, resultContextKey, storage);
+    } else {
+      await globalThis.sessionTracker?.patchSession?.(sessionId, { runCursor: undefined });
+      await tracker.flush();
+    }
   } catch (error) {
     const catchKind = error instanceof AskUserPausedError
       ? 'AskUserPausedError'

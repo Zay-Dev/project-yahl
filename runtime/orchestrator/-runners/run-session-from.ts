@@ -4,12 +4,17 @@ import type { TPipelinePosition } from './pipeline-continuation';
 
 import { resolveLoopStageIndex, runPipelineContinuation } from './pipeline-continuation';
 import { resumeVerifyFromPrepared } from './resume-verify';
+import { runRepairStage } from './run-repair-stage';
 
 export const runSessionFrom = async (
   sessionId: string,
   prepared: TPreparedRunInput,
 ): Promise<TPreparedRunResult> => {
   const { cursor, parsedStages, storage, systemAppend } = prepared;
+
+  if (cursor.kind === 'repair') {
+    return runRepairStage(prepared);
+  }
 
   if (cursor.verifyWasUnavailable) {
     return resumeVerifyFromPrepared(sessionId, prepared);

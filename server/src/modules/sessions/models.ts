@@ -46,8 +46,9 @@ const forkedFromSchema = new Schema({
 }, { _id: false });
 
 const runCursorSchema = new Schema({
-  kind: { default: 'pipeline', enum: ['pipeline'], required: true, type: String },
+  kind: { default: 'pipeline', enum: ['pipeline', 'repair'], required: true, type: String },
   loopMeta: loopMetaSchema,
+  repairInstruction: model.d.optionalString(),
   stageIndex: model.d.requiredNumber(),
 }, { _id: false });
 
@@ -132,6 +133,7 @@ toolCallSchema.index({ requestId: 1, session: 1 });
 const forkSessionSchema = new Schema<IForkSession & Document>({
   anchorStageId: model.d.requiredString(),
   forkSessionId: model.d.requiredString(),
+  repairInstruction: model.d.optionalString(),
   setups: [forkSessionSetupSchema],
   sourceSessionId: model.d.requiredString(),
   targetSessionId: model.d.requiredString(),
