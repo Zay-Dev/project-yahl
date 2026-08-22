@@ -183,15 +183,21 @@ export const buildMessages = ({
       content: [
         'You are the YAHL operation-script consultant.',
         'Return JSON only with shape:',
-        '{"action":"advise"|"skip","scriptId":string|null,"kind":"js"|"recipe"|"normalize"|null,"contract":string|null,"reasons":string[],"existingScripts":string[]}',
+        '{"action":"advise"|"skip","scriptId":string|null,"kind":"js"|"recipe"|"normalize"|null,"contract":string|null,"reasons":string[],"existingScripts":string[],"notesHint":string}',
         'Advise at most ONE next small script (or skip). Never a multi-op monolith.',
         'kind must be js|recipe|normalize when action is advise; null when skip.',
+        'Prefer kind js for browser ops: agent-authored ~/data/scripts/*.js that drive Stagehand via yahl-browser (agent-free). kind recipe is legacy ordered payloads; prefer js+yahl-browser when advising new browser work.',
         'scriptId / kind / contract must be null when action is skip.',
-        'contract describes stdin→stdout or recipe role — no session place names or other run literals.',
+        'contract describes stdin→stdout and, for browser scripts, that the script calls yahl-browser — no session place names or other run literals.',
         'Before advising: prefer reuse/extend from the script inventory and guideline/source excerpts.',
         'Session layout under /session (scripts, root *.md knowledge, nixery/, data/, task-skills/, plans/) is mounted — weigh that context when provided in this prompt.',
         'Prefer a normalize companion or rewrite of one existing op over inventing a whole-fetch super script.',
-        'skip when reuse already covers the need, inventory is enough, or mission/need/stageBrief/plan context is too thin to advise safely.',
+        'KTS notes: always set notesHint to a short non-empty string the stage agent should use (or paraphrase) for set_context __knowledge-to-script__notes.',
+        'notesHint must name any ad-hoc free-flow / one-off bash or stage-agent browser that should become a yahl-browser script (or say none), and either that a script should be created/grown or why no new script after consideration.',
+        'notesHint must NOT list scripts already run — that is normal stage work, not notes content.',
+        'notesHint must NOT be only "reviewed" or "inventory covers" when the stage reports observe-recovery, act ok:false that still completed the op, free-flow browser, or stage-agent browser click loops that should be scripted — those cases usually need a rewrite/grow advise.',
+        'When stageBrief/need reports observe-recovery / extract ok:false then observe / act ok:false with success / free-flow or stage-agent browser that should be agent-free: prefer action advise to rewrite/grow a js script (yahl-browser) or normalize companion; do not skip with inventory-covers unless first-try script already matched the successful chain.',
+        'skip when reuse already covers the need with no recovery divergence, inventory is enough, or mission/need/stageBrief/plan context is too thin to advise safely.',
         'Echo existingScripts as the merged inventory ids you were given.',
       ].join(' '),
     },
@@ -218,6 +224,24 @@ export const buildMessages = ({
   ];
 };
 
+export const normalizeNotesHint = (parsed) => {
+  if (typeof parsed?.notesHint === 'string' && parsed.notesHint.trim()) {
+    return parsed.notesHint.trim();
+  }
+
+  if (Array.isArray(parsed?.reasons)) {
+    const fromReasons = parsed.reasons
+      .map((item) => String(item).trim())
+      .find((item) => /^notes:\s*/i.test(item));
+
+    if (fromReasons) {
+      return fromReasons.replace(/^notes:\s*/i, '').trim();
+    }
+  }
+
+  return '';
+};
+
 export const normalizeGate = (parsed, existingScripts) => {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('consult-script-candidate returned invalid JSON');
@@ -237,6 +261,12 @@ export const normalizeGate = (parsed, existingScripts) => {
     throw new Error('consult-script-candidate reasons must be a non-empty string array');
   }
 
+  const notesHint = normalizeNotesHint(parsed);
+
+  if (!notesHint) {
+    throw new Error('consult-script-candidate requires non-empty notesHint');
+  }
+
   if (action === 'skip') {
     return {
       action: 'skip',
@@ -245,6 +275,7 @@ export const normalizeGate = (parsed, existingScripts) => {
       contract: null,
       reasons,
       existingScripts,
+      notesHint,
     };
   }
 
@@ -271,7 +302,51 @@ export const normalizeGate = (parsed, existingScripts) => {
     contract,
     reasons,
     existingScripts,
+    notesHint,
   };
+};
+
+export const EMPTY_CONTENT_RETRY_NUDGE =
+  'Reply with the gate JSON object only — no prose. Shape: '
+  + '{"action":"advise"|"skip","scriptId":string|null,"kind":"js"|"recipe"|"normalize"|null,'
+  + '"contract":string|null,"reasons":string[],"existingScripts":string[],"notesHint":string}';
+
+export const isRetryableConsultLlmFailure = (error) => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return /empty LLM content/i.test(message) || /finish_reason=length/i.test(message);
+};
+
+export const completeGateLlmContent = async ({
+  defId,
+  messages,
+  complete = runSingleLlmCompletion,
+}) => {
+  let content = '';
+
+  try {
+    content = await complete({ defId, messages, round: 0 });
+  } catch (error) {
+    if (!isRetryableConsultLlmFailure(error)) {
+      throw error;
+    }
+
+    logProgress(defId, `llm empty/truncated; retrying once (${error instanceof Error ? error.message : error})`);
+    messages.push({ content: EMPTY_CONTENT_RETRY_NUDGE, role: 'user' });
+    content = await complete({ defId, messages, round: 1 });
+  }
+
+  if (!String(content ?? '').trim()) {
+    logProgress(defId, 'llm empty on first pass; retrying once with JSON-only nudge');
+    messages.push({ content: EMPTY_CONTENT_RETRY_NUDGE, role: 'user' });
+    content = await complete({ defId, messages, round: 1 });
+  }
+
+  if (!String(content ?? '').trim()) {
+    throw new Error('consult-script-candidate returned empty LLM content');
+  }
+
+  return String(content).trim();
 };
 
 const readJson = async (filePath) => {
@@ -330,11 +405,7 @@ const main = async () => {
 
   appendNixeryRetryUserMessage(messages, readNixeryRetryFeedback(input));
 
-  const content = await runSingleLlmCompletion({ defId, messages });
-
-  if (!String(content ?? '').trim()) {
-    throw new Error('consult-script-candidate returned empty LLM content');
-  }
+  const content = await completeGateLlmContent({ defId, messages });
 
   const parsed = extractJsonFromText(content);
   const gate = normalizeGate(parsed, existingScripts);

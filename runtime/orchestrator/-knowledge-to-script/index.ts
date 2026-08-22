@@ -33,6 +33,12 @@ export { execNodeScript } from './exec-node-script';
 
 export type { TExecNodeScriptResult } from './exec-node-script';
 
+export {
+  KNOWLEDGE_TO_SCRIPT_NOTES_KEY,
+  isKnowledgeToScriptNotesSatisfied,
+  seedKnowledgeToScriptNotes,
+} from '@project-yahl/shared/yahl/knowledge-to-script';
+
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 const knowledgeToScriptPromptPath = path.join(moduleDir, '../YAHL/knowledge-to-script.md');
@@ -63,6 +69,8 @@ export const buildStageSystemAppend = () => {
       'Operation scripts (knowledgeToScript) are enabled for this AI stage.',
       'Read /opt/skills/knowledge-to-script/SKILL.md once per stage (skip re-read on while polls when already in transcript).',
       `Scripts live under ${AGENT_SCRIPTS_DIR}/ as many narrow ops per stage — not one script per stage id.`,
+      'Browser replayables: prefer echo|node ~/data/scripts via yahl-browser (agent-free); stage-agent browser is explore/recovery only.',
+      'Before finishing, set_context __knowledge-to-script__notes: review ad-hoc free-flow / stage-agent browser that should become a script (or why none after consideration); do not list scripts already run; reviewed only when free-flow checked and nothing further.',
     ].join('\n');
   }
 

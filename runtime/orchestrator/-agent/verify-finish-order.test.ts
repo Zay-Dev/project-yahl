@@ -68,11 +68,19 @@ describe('verify finish order', () => {
 
     const resetBody = src.slice(resetStart, resetStart + 1800);
     const seedIdx = resetBody.indexOf('seedDefaultContext(this.storage)');
+    const notesIdx = resetBody.indexOf('seedKnowledgeToScriptNotes(this.storage)');
     const filterIdx = resetBody.indexOf('this.filteredStorage = filterStorageForStage');
 
     assert.ok(seedIdx >= 0, 'seedDefaultContext missing from resetStageContext');
+    assert.ok(notesIdx >= 0, 'seedKnowledgeToScriptNotes missing from resetStageContext');
     assert.ok(filterIdx >= 0, 'filterStorageForStage missing from resetStageContext');
     assert.ok(seedIdx < filterIdx, 'seedDefaultContext must run before filterStorageForStage');
+    assert.ok(notesIdx < filterIdx, 'seedKnowledgeToScriptNotes must run before filterStorageForStage');
+    assert.doesNotMatch(
+      resetBody.slice(0, filterIdx),
+      /if \(isKnowledgeToScriptEnabled[\s\S]*seedKnowledgeToScriptNotes/,
+      'notes seed must be unconditional',
+    );
   });
 
   it('runWhileWithParentVerify wraps handleWhile before suffix stages', () => {

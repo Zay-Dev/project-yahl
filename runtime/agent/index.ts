@@ -25,6 +25,14 @@ run()
     console.error(`[Agent Error] ${message}\n`);
     process.exit(1);
   })
-  .finally(() => {
+  .finally(async () => {
+    try {
+      const { stopStagehandBrowserBridge } = await import("./-browser/stagehand-browser-bridge");
+
+      await stopStagehandBrowserBridge();
+    } catch {
+      // ignore
+    }
+
     void globalThis.subscriber?.close().catch(() => { });
   });

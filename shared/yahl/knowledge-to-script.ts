@@ -75,3 +75,23 @@ export const scriptFileName = (
 };
 
 export const AGENT_SCRIPTS_DIR = '~/data/scripts';
+
+export const KNOWLEDGE_TO_SCRIPT_NOTES_KEY = '__knowledge-to-script__notes';
+
+export const isKnowledgeToScriptNotesSatisfied = (value: unknown): boolean => {
+  if (value == null || value === false) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+
+  return Boolean(value);
+};
+
+export const seedKnowledgeToScriptNotes = (
+  storage: { context: Map<string, unknown> },
+): void => {
+  storage.context.set(KNOWLEDGE_TO_SCRIPT_NOTES_KEY, null);
+};

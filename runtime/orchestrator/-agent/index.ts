@@ -26,7 +26,9 @@ import {
 import {
   buildStageSystemAppend,
   isEnabled as isKnowledgeToScriptEnabled,
+  seedKnowledgeToScriptNotes,
 } from '@/orchestrator/-knowledge-to-script';
+import { KNOWLEDGE_TO_SCRIPT_NOTES_KEY } from '@project-yahl/shared/yahl/knowledge-to-script';
 import { runVerifyGate, isVerifyRubricFailure } from '@/orchestrator/-verify';
 import {
   applyVerifyRecoveryToStorage,
@@ -61,6 +63,14 @@ import {
   produceKeysMaxRetries,
   writeProduceKeysDiagnostic,
 } from './produce-keys-retry';
+import {
+  buildKnowledgeToScriptNotesSystemAppend,
+  isKnowledgeToScriptNotesMissing,
+  isKnowledgeToScriptNotesRetryAppend,
+  knowledgeToScriptNotesMaxRetries,
+  pauseForKnowledgeToScriptNotes,
+  resetKnowledgeToScriptNotes,
+} from './knowledge-to-script-notes-retry';
 import { handleLoop } from './loop';
 import { handleWhile } from './while';
 import {
@@ -95,6 +105,8 @@ class YahlAgentRunner {
 
   private readonly maxProduceKeysRetries = produceKeysMaxRetries();
 
+  private readonly maxKnowledgeToScriptNotesRetries = knowledgeToScriptNotesMaxRetries();
+
   private readonly maxNixeryInlineRetries = resolveNixeryInlineRetryMax();
 
   private nixerySoftFails = 0;
@@ -110,6 +122,8 @@ class YahlAgentRunner {
   private systemAppendParts: string[] = [];
 
   private produceKeysAttempt = 0;
+
+  private knowledgeToScriptNotesAttempt = 0;
 
   private resumeStage?: TResumeStage;
 
@@ -300,6 +314,7 @@ class YahlAgentRunner {
       : this.boundStage;
 
     seedDefaultContext(this.storage);
+    seedKnowledgeToScriptNotes(this.storage);
 
     this.filteredStorage = filterStorageForStage(
       this.storage,
@@ -311,6 +326,7 @@ class YahlAgentRunner {
     this.systemAppendParts = [];
     this.requestId = this.resumeStage?.requestId ?? randomUUID();
     this.produceKeysAttempt = 0;
+    this.knowledgeToScriptNotesAttempt = 0;
     this.verifyRetryAttempt = 0;
 
     if (this.options.systemAppend) {
@@ -341,10 +357,56 @@ class YahlAgentRunner {
         break;
       }
 
-      if ((await this.resolveProduceKeysRetry()) === 'break') {
-        break;
+      if ((await this.resolveProduceKeysRetry()) === 'continue') {
+        continue;
       }
+
+      if ((await this.resolveKnowledgeToScriptNotesRetry()) === 'continue') {
+        continue;
+      }
+
+      break;
     }
+  }
+
+  private async resolveKnowledgeToScriptNotesRetry(): Promise<TProduceKeysRetryOutcome> {
+    if (!isKnowledgeToScriptEnabled(this.activeStage.spec)) {
+      return 'break';
+    }
+
+    if (!isKnowledgeToScriptNotesMissing(this.storage)) {
+      return 'break';
+    }
+
+    if (this.knowledgeToScriptNotesAttempt < this.maxKnowledgeToScriptNotesRetries) {
+      this.knowledgeToScriptNotesAttempt += 1;
+      resetKnowledgeToScriptNotes(this.storage);
+      this.filteredStorage.context.set(KNOWLEDGE_TO_SCRIPT_NOTES_KEY, null);
+
+      this.systemAppendParts = this.systemAppendParts.filter(
+        (part) => !isKnowledgeToScriptNotesRetryAppend(part),
+      );
+      this.systemAppendParts.push(buildKnowledgeToScriptNotesSystemAppend());
+      return 'continue';
+    }
+
+    if (this.options.produceKeysResumeAttempt) {
+      throw new Error(
+        'stage finished without truthy __knowledge-to-script__notes',
+      );
+    }
+
+    await pauseForKnowledgeToScriptNotes({
+      agentName: this.agentName,
+      attempt: this.knowledgeToScriptNotesAttempt + 1,
+      pipelineStageIndex: this.pipelineStageIndex,
+      requestId: this.requestId,
+      sessionId: this.sessionId,
+      stage: this.activeStage,
+      storage: this.storage,
+    });
+
+    return 'break';
   }
 
   private async resolveProduceKeysRetry(): Promise<TProduceKeysRetryOutcome> {
@@ -416,7 +478,9 @@ class YahlAgentRunner {
     };
 
     const stageSpec = this.activeStage.spec;
-    const skipStageCreate = this.produceKeysAttempt > 0 || Boolean(this.resumeStage);
+    const skipStageCreate = this.produceKeysAttempt > 0
+      || this.knowledgeToScriptNotesAttempt > 0
+      || Boolean(this.resumeStage);
     const systemAppend = this.systemAppendParts.filter(Boolean).join('\n\n') || undefined;
 
     if (!skipStageCreate) {

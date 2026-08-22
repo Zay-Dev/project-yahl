@@ -286,7 +286,7 @@ stages:
         *ensure_howto_and_lock(traffic_source, source_ops_md);
         *set_context(traffic_source, probe_fetch, source_ops_md, tried_sources, origin_display, destination_display);
         locked = true;
-        Do not Read platform, nixery, stagehand, or knowledge-to-script skills; do not open browser; finish.
+        Do not Read platform, nixery, or stagehand skills; do not open browser; finish.
       END:
 
       IF: !locked && candidate_usable;

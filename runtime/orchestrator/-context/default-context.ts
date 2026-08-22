@@ -10,6 +10,7 @@ export const PLATFORM_CONTEXT_KEYS = [
   'verify_rebuttal_count',
   'stage_goto_reason',
   'stage_goto_from',
+  '__knowledge-to-script__notes',
 ] as const;
 
 export type TPlatformContextKey = typeof PLATFORM_CONTEXT_KEYS[number];

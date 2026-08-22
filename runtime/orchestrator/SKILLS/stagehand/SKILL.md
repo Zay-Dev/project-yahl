@@ -5,11 +5,29 @@ description: Browser automation via Stagehand — web search, page fetch, struct
 
 # stagehand — Browser automation (Stagehand)
 
-**Use the `browser` API tool for all web search and browse tasks.** Do not use Brave Search for `/stagehand(...)`.
+**Two ways to drive Stagehand (same session):**
 
-- **Browse/search:** use `browser` only — no curl for page fetch, search, or scraping.
-- **Post-extraction validation:** after `browser` returns URLs, use `run_bash` with the curl HEAD pattern below to sanity-check reachability before `set_context`.
+| Who | When |
+|-----|------|
+| **`yahl-browser` / `~/data/scripts/*.js`** | Replayable ops (preferred when knowledgeToScript is on) — agent-free |
+| **`browser` API tool** | Explore, first discovery, one-shot recovery |
+
+Do not use Brave Search for `/stagehand(...)`.
+
+- **Browse/search:** use Stagehand (`yahl-browser` or `browser`) — no curl for page fetch, search, or scraping.
+- **Post-extraction validation:** after Stagehand returns URLs, use `run_bash` with the curl HEAD pattern below to sanity-check reachability before `set_context`.
 - **`url` is only for `mode: "goto"`.** On `act` / `extract` / `observe`, omit `url`. Passing `url` on those modes **reloads the page** and wipes form state (typed text, autocomplete, open dialogs).
+
+## Agent-free scripts (`yahl-browser`)
+
+When a narrow browser op should be replayable, put it in `~/data/scripts/{op}.js` and drive Stagehand from the script:
+
+```bash
+echo '{"mode":"goto","url":"https://example.com","instruction":"navigate"}' | yahl-browser
+echo '{"mode":"act","instruction":"Type the query into the search box"}' | yahl-browser
+```
+
+The CLI talks to the agent’s localhost bridge (same Stagehand singleton as the `browser` tool). Prefer this path for monitor polls after discovery. See `/opt/skills/knowledge-to-script/SKILL.md`.
 
 ## Stage YAML: `stagehand`
 

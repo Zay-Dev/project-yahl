@@ -68,6 +68,11 @@ export const startRedisDaemon = async () => {
     console.warn("[WARN] Running without LLM_PROXY_TOKEN\n");
   }
 
+  const { ensureStagehandBrowserBridge } = await import("./-browser/stagehand-browser-bridge");
+  const bridge = await ensureStagehandBrowserBridge();
+
+  console.log(`[yahl-browser-bridge] ready ${bridge.baseURL} (scripts: yahl-browser / echo JSON | yahl-browser)\n`);
+
   const cli = config.cliOptions;
 
   const agentmd = await readFileUtf8(cli.agentMdPath);

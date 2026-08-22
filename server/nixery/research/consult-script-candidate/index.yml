@@ -1,5 +1,5 @@
 id: consult-script-candidate
-description: LLM consultant — advise the next single small operation script under ~/data/scripts
+description: LLM consultant — advise next ~/data/scripts op (prefer js+yahl-browser) and draft KTS notesHint
 
 packages: [nodejs]
 
@@ -7,11 +7,11 @@ env:
   OPENAI_BASE_URL: ""
   LLM_PROXY_TOKEN: ""
   OPENAI_PROVIDER_DOMAIN: ""
-  OPENAI_MODEL: deepseek-v4-pro
+  OPENAI_MODEL: gpt-5.6-sol
   OPENAI_API_KEY: ""
   LLM_CALL_RETRY_MAX: ""
   OPENAI_TEMPERATURE: "0.2"
-  OPENAI_MAX_TOKENS: "2048"
+  OPENAI_MAX_TOKENS: "8192"
 
 nixery:
   default: "true"
