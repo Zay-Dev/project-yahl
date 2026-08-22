@@ -7,7 +7,7 @@ description: Session API skills — dispatch runs, notifications, knowledge tran
 
 Use the **`platform`** API tool for `/platform(...)` in stage logic. Calls go to the session server (not mastermind). Read this file before calling — do not grep `/opt`, `/omniflex`, or other sessions for the contract.
 
-**Knowledge writes for stage agents:** `/nixery(submit-knowledge-observation, …)` only. Overnight manager is multi-stage `knowledge_manager`. Cron: `taskPath: "knowledge_manager"`. See `/opt/skills/nixery/SKILL.md`.
+**Knowledge writes for stage agents:** follow `/opt/skills/nixery/SKILL.md` and any `~/task-skills/` write skills already provided for this task — do not invent defIds. Overnight manager is multi-stage `knowledge_manager`. Cron: `taskPath: "knowledge_manager"`.
 
 ## `propose-notification`
 

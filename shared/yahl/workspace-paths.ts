@@ -75,6 +75,11 @@ export const taskWorkspaceRoot = (taskId: string) =>
 export const sessionTaskDataPath = (sessionId: string) =>
   path.join(sessionWorkspaceRoot(sessionId), 'data');
 
+export const TASK_SCRIPTS_DIR = 'scripts';
+
+export const taskScriptsDir = (taskId: string) =>
+  path.join(taskWorkspaceRoot(taskId), TASK_SCRIPTS_DIR);
+
 export const ensureTaskWorkspace = async (
   taskId: string,
   logTag: TWorkspaceLogTag = 'orchestrator',
@@ -86,6 +91,7 @@ export const ensureTaskWorkspace = async (
   }
 
   await fsPromises.mkdir(taskWorkspaceRoot(trimmed), { recursive: true });
+  await fsPromises.mkdir(taskScriptsDir(trimmed), { recursive: true });
 };
 
 const _unlinkSessionTaskData = async (sessionRoot: string) => {

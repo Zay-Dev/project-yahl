@@ -12,6 +12,8 @@ import {
   parseStageGotoCommand,
   STAGE_ID_PATTERN,
 } from './stage-goto';
+import { validateCacheMaxAgeField } from './cache-max-age';
+import { validateKnowledgeToScriptField } from './knowledge-to-script';
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
 
@@ -478,6 +480,20 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
   const verify = normalizeVerifySpec(stage.verify, label);
   const agentOverrides = validateAgentOverrides(stage.agentOverrides, label);
   const stagehand = validateStagehandConfig(stage.stagehand, label);
+  const knowledgeToScript = validateKnowledgeToScriptField(stage.knowledgeToScript, label, {
+    conditionMode: stage.conditionMode === true,
+    contextMode: stage.contextMode === true,
+    nixeryRun,
+  });
+  const cacheMaxAge = validateCacheMaxAgeField(stage.cacheMaxAge, label);
+
+  if (cacheMaxAge !== undefined) {
+    if (stage.contextMode === true || stage.conditionMode === true || nixeryRun) {
+      throw new Error(
+        `${label}.cacheMaxAge: only valid on AI stages (not contextMode, conditionMode, or nixeryRun)`,
+      );
+    }
+  }
 
   return {
     logic: logicRaw || '(nixery)',
@@ -504,6 +520,9 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     ...(isStringArray(stage.produceTypeKeys) ? { produceTypeKeys: stage.produceTypeKeys } : {}),
     ...(verify ? { verify } : {}),
     ...(stage.version !== undefined ? { version: Number(stage.version) } : {}),
+    ...(knowledgeToScript === false ? { knowledgeToScript: false } : {}),
+    ...(knowledgeToScript === true ? { knowledgeToScript: true } : {}),
+    ...(cacheMaxAge !== undefined ? { cacheMaxAge } : {}),
   };
 };
 

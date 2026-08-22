@@ -288,11 +288,20 @@ describe("parseYahlFile", () => {
       2,
     );
     assert.match(monitor?.spec.warmUp ?? "", /bind_origin/);
-    assert.match(monitor?.spec.warmUp ?? "", /stagehand\/SKILL\.md/);
+    assert.match(monitor?.spec.warmUp ?? "", /monitor-loop\/SKILL\.md/);
+    assert.match(monitor?.spec.warmUp ?? "", /origin_display/);
+    assert.equal(monitor?.spec.cacheMaxAge, undefined);
+    assert.ok(!(monitor?.contextKeys ?? []).includes("fetches"));
+    assert.ok((monitor?.contextKeys ?? []).includes("poll_success_count"));
+    assert.ok((monitor?.contextKeys ?? []).includes("origin_display"));
     assert.ok(monitor?.spec.verify);
     assert.equal(assemble?.spec.contextMode, true);
     assert.equal(assemble?.spec.verify, undefined);
     assert.deepEqual(assemble?.produceContextKeys, ["monitor"]);
+
+    const explorer = stages.find((stage) => stage.spec.id === "explorer");
+    assert.equal(explorer?.spec.cacheMaxAge, 1440);
+    assert.ok((explorer?.produceContextKeys ?? []).includes("origin_display"));
   });
 
   it("prepends types as synthetic stage", () => {

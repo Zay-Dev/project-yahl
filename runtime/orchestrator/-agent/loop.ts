@@ -1,6 +1,8 @@
 import type { TRunYahl, TStorage, TLoopMeta } from './-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
+import { seedKnowledgeToScriptNotes } from '@project-yahl/shared/yahl/knowledge-to-script';
+
 import {
   filterLoopBucket,
   loopIndexNameFromLines,
@@ -130,6 +132,8 @@ export const runLoopIteration = async (
   }
 
   const resolvedLoopMeta = { ...loopMeta, indexName };
+
+  seedKnowledgeToScriptNotes(storage);
 
   const isExtends = (key: string) =>
     stage.lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`));

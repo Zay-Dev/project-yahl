@@ -5,6 +5,7 @@ import type {
 } from "@/shared/stage-contract";
 
 import { PLATFORM_CONTEXT_KEYS } from "./default-context";
+import { KNOWLEDGE_TO_SCRIPT_NOTES_KEY } from "@project-yahl/shared/yahl/knowledge-to-script";
 import {
   filterContextByKeys,
   pickContextUpdates,
@@ -47,6 +48,10 @@ export const shouldApplySetContext = (
   key: string,
   stage: ParsedStage,
 ) => {
+  if (key === KNOWLEDGE_TO_SCRIPT_NOTES_KEY) {
+    return true;
+  }
+
   const produceAllowed = Boolean(
     stage.produceContextKeys?.includes(key) ||
     stage.produceTypeKeys?.includes(key),

@@ -160,6 +160,7 @@ export const closeStagehandSession = async () => {
   consecutiveBrowserFailures = 0;
 
   await stopStagehandLlmProxy();
+  // browser bridge stays up for the agent daemon lifetime (scripts may call again)
 
   if (!current) return;
 

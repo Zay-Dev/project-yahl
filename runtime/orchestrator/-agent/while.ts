@@ -4,6 +4,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import { STAGE_GOTO_REASON_KEY } from '@project-yahl/shared/yahl/stage-goto';
 import { parseYahlWhileSetup } from '@project-yahl/shared/yahl/while-setup';
+import { seedKnowledgeToScriptNotes } from '@project-yahl/shared/yahl/knowledge-to-script';
 
 import { runPredicateScript } from '@/agent/-utils/vm-client';
 import {
@@ -105,6 +106,7 @@ const runWhileSegment = async (
   },
 ) => {
   seedDefaultContext(storage);
+  seedKnowledgeToScriptNotes(storage);
 
   const stageInput = filterStageBucket(
     logic,

@@ -52,6 +52,7 @@ describe("filterStageBucket", () => {
       now_iso: "2026-06-22T00:00:00.000Z",
       stage_goto_reason: "cache dead",
       stage_goto_from: "monitor",
+      "__knowledge-to-script__notes": null,
     };
     const filtered = filterStageBucket(
       "x = foo;",
@@ -64,6 +65,7 @@ describe("filterStageBucket", () => {
     assert.equal(filtered.now_iso, "2026-06-22T00:00:00.000Z");
     assert.equal(filtered.stage_goto_reason, "cache dead");
     assert.equal(filtered.stage_goto_from, "monitor");
+    assert.equal(filtered["__knowledge-to-script__notes"], null);
   });
 });
 
@@ -96,6 +98,16 @@ describe("shouldApplySetContext", () => {
     assert.equal(shouldApplySetContext("sources", stage), true);
     assert.equal(shouldApplySetContext("knowledge_paths", stage), true);
     assert.equal(shouldApplySetContext("study_plan", stage), false);
+  });
+
+  it("always allows knowledge-to-script notes key", () => {
+    assert.equal(
+      shouldApplySetContext(
+        "__knowledge-to-script__notes",
+        plainStage({ produceContextKeys: ["a"] }),
+      ),
+      true,
+    );
   });
 });
 

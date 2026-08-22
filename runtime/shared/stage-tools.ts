@@ -130,7 +130,7 @@ export const STAGE_TOOLS = [
   {
     function: {
       description:
-        "Read /opt/skills/stagehand/SKILL.md first. Stagehand goto/act/extract/observe. Pass url only with goto. Returns JSON { ok, data } or { ok: false, error }.",
+        "Read /opt/skills/stagehand/SKILL.md first. Stagehand goto/act/extract/observe (explore/recovery). For replayable ops prefer echo|node ~/data/scripts via yahl-browser. Pass url only with goto. Returns JSON { ok, data } or { ok: false, error }.",
       name: "browser",
       parameters: {
         properties: {

@@ -5,3 +5,4 @@ task_skills:
   - task-skills/nixery-extract-info
   - task-skills/nixery-design-questions
   - task-skills/nixery-consult-breaking-change
+  - task-skills/nixery-consult-script-candidate

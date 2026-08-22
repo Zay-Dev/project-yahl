@@ -35,4 +35,10 @@ if [ -n "${CHROME_PATH:-}" ]; then
   echo "[stagehand] CHROME_PATH=$CHROME_PATH"
 fi
 
+# Agent-free Stagehand bridge CLI for ~/data/scripts (JSON stdin → localhost bridge)
+if [ -f ./agent/-browser/yahl-browser.mjs ]; then
+  install -m 755 ./agent/-browser/yahl-browser.mjs /usr/local/bin/yahl-browser
+  echo "[stagehand] yahl-browser CLI installed → /usr/local/bin/yahl-browser"
+fi
+
 exec "$@"

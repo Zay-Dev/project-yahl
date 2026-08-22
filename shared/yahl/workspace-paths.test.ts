@@ -9,7 +9,32 @@ import {
   ensureTaskWorkspace,
   removeSessionWorkspace,
   SESSION_TASK_DATA_DIR,
+  taskScriptsDir,
 } from './workspace-paths';
+
+describe('ensureTaskWorkspace', () => {
+  let workspaceRoot = '';
+  let previousWorkspaceRoot: string | undefined;
+
+  after(async () => {
+    process.env.WORKSPACE_ROOT = previousWorkspaceRoot;
+
+    if (workspaceRoot) {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('creates task root and scripts directory', async () => {
+    previousWorkspaceRoot = process.env.WORKSPACE_ROOT;
+    workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-task-ws-'));
+    process.env.WORKSPACE_ROOT = workspaceRoot;
+
+    const taskId = 'traffic_monitor';
+
+    await ensureTaskWorkspace(taskId);
+    await access(taskScriptsDir(taskId));
+  });
+});
 
 describe('copySessionWorkspace', () => {
   let workspaceRoot = '';

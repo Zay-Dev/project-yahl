@@ -154,6 +154,17 @@ describe('snapshot catalog', () => {
       true,
     );
   });
+
+  it('includes timezone tolerance hint when timezone is present', () => {
+    const block = formatClockBlock({
+      now_iso: '2026-08-19T22:02:17.458Z',
+      timezone: 'Asia/Hong_Kong',
+      today: '2026-08-19',
+    });
+
+    assert.match(block, /timezone: "Asia\/Hong_Kong"/);
+    assert.match(block, /mislabel local wall clock as UTC/);
+  });
 });
 
 describe('parseVerifyContent from write_workspace_file JSON', () => {
