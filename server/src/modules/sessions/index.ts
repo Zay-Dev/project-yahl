@@ -35,6 +35,9 @@ import {
   resolveVerifyStart,
   resumeVerifyCheckpoint,
 } from './use-cases/verify-write';
+import { getUsageSummary } from './use-cases/usage-summary-read';
+import { getQuotaStatus } from './use-cases/quota-status-read';
+import { patchQuota } from './use-cases/quota-write';
 
 exposedRoute('/api/fork-sessions')
   .get('/:forkSessionId', getForkSession);
@@ -68,3 +71,10 @@ exposedRoute('/api/sessions')
   .get('/:sessionId/verify-checkpoints/:verifyId', getVerifyCheckpoint)
   .post('/:sessionId/verify-checkpoints/:verifyId/resume', resumeVerifyCheckpoint)
   .post('/:sessionId/verify-checkpoints/:verifyId/edit-answer', editVerifyCheckpointAnswer);
+
+exposedRoute('/api/quota')
+  .get('/status', getQuotaStatus);
+
+exposedRoute('/api/internal')
+  .get('/usage/summary', getUsageSummary)
+  .post('/quota', patchQuota);

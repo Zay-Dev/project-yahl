@@ -60,3 +60,14 @@ export type TResponseKnowledgeManagerInstruction = {
 export type TRequestPutKnowledgeManagerInstructionBody = {
   text: string;
 };
+
+export type TResponseWhatsAppChannel = {
+  qrDataUrl?: string;
+  status: 'pending' | 'ready' | 'disconnected';
+  updatedAt: string | null;
+};
+
+export type TRequestPutWhatsAppChannelBody = {
+  qrDataUrl?: string;
+  status: 'pending' | 'ready' | 'disconnected';
+};

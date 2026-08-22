@@ -2,8 +2,11 @@ import type { Message } from 'whatsapp-web.js';
 
 import path from 'node:path';
 
-import qrcode from 'qrcode-terminal';
+import qrcodeTerminal from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import wweb from 'whatsapp-web.js';
+
+import { putWhatsAppChannelState } from '../../-queue/platform-channel-api.js';
 
 import { applyChannelMessageSanitizer } from '../sanitize-channel-message.js';
 import { clearChromiumProfileLocks } from './clear-profile-locks.js';
@@ -36,12 +39,19 @@ const seenMessageIds = new Set<string>();
 const SEEN_MESSAGE_ID_CAP = 500;
 
 const BROWSER_DEATH_RE = /target closed|protocol error|session closed|browser has been closed/i;
+const RECOVERABLE_INIT_RE = /already exists|exposeFunction/i;
 
 export const isWhatsAppBrowserDeathError = (error: unknown): boolean => {
   const name = error instanceof Error ? error.name : '';
   const message = error instanceof Error ? error.message : String(error);
 
   return name === 'TargetCloseError' || BROWSER_DEATH_RE.test(message);
+};
+
+export const isWhatsAppRecoverableInitError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return RECOVERABLE_INIT_RE.test(message);
 };
 
 const reinitDelayForReason = (reason: string): number => {
@@ -348,12 +358,23 @@ export const initWhatsApp = async (): Promise<void> => {
 
     next.on('qr', (qr) => {
       console.log('[worker][whatsapp] scan QR to log in:');
-      qrcode.generate(qr, { small: true });
+      qrcodeTerminal.generate(qr, { small: true });
+
+      void (async () => {
+        try {
+          const qrDataUrl = await QRCode.toDataURL(qr);
+
+          await putWhatsAppChannelState({ qrDataUrl, status: 'pending' });
+        } catch (error) {
+          console.warn('[worker][whatsapp] failed to publish QR to server', error);
+        }
+      })();
     });
 
     next.on('ready', () => {
       ready = true;
       console.log('[worker][whatsapp] client ready');
+      void putWhatsAppChannelState({ status: 'ready' });
       onReadyListener?.();
     });
 
@@ -364,12 +385,14 @@ export const initWhatsApp = async (): Promise<void> => {
     next.on('auth_failure', (message) => {
       ready = false;
       console.error('[worker][whatsapp] auth_failure', message);
+      void putWhatsAppChannelState({ status: 'disconnected' });
       scheduleWhatsAppReinit('auth_failure');
     });
 
     next.on('disconnected', (reason) => {
       ready = false;
       console.warn('[worker][whatsapp] disconnected', reason);
+      void putWhatsAppChannelState({ status: 'disconnected' });
       scheduleWhatsAppReinit(`disconnected:${reason}`);
     });
 
@@ -401,9 +424,16 @@ export const initWhatsApp = async (): Promise<void> => {
 
     await next.initialize();
   } catch (error) {
-    console.error('[worker][whatsapp] initialize failed', error);
+    if (isWhatsAppRecoverableInitError(error)) {
+      console.warn('[worker][whatsapp] recoverable initialize error', error);
+    } else {
+      console.error('[worker][whatsapp] initialize failed', error);
+    }
+
     await destroyWhatsAppClient();
-    scheduleWhatsAppReinit('initialize_failed');
+    scheduleWhatsAppReinit(
+      isWhatsAppRecoverableInitError(error) ? 'expose_function_conflict' : 'initialize_failed',
+    );
   } finally {
     starting = false;
   }

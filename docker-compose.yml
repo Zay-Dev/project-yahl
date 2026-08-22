@@ -184,6 +184,7 @@ services:
       - ./data/whatsapp_auth:/whatsapp/auth
       - ./data/whatsapp_inbox:/whatsapp/inbox
       - ./worker:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker
+      - /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker/node_modules
       - ${SANITIZE_CHANNEL_MESSAGE:-./worker/sanitize-channel-message.mjs}:/sanitize/sanitize-channel-message.mjs:ro
     depends_on:
       server:

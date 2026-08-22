@@ -100,6 +100,14 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       ),
     },
     {
+      title: "Channels",
+      url: "/platform/channels",
+      icon: (
+        <ActivityIcon
+        />
+      ),
+    },
+    {
       title: "Cron jobs",
       url: "/platform/cron-jobs",
       icon: (

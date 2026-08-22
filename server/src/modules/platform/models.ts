@@ -1,4 +1,4 @@
-import type { ICronJob, IPlatformProposal } from './-types';
+import type { ICronJob, IPlatformChannelState, IPlatformProposal } from './-types';
 
 import type { Document } from 'mongoose';
 
@@ -6,6 +6,7 @@ import { model as createModel, Schema } from 'mongoose';
 
 export type TDbPlatformProposal = IPlatformProposal & Document;
 export type TDbCronJob = ICronJob & Document;
+export type TDbPlatformChannelState = IPlatformChannelState & Document;
 
 const proposalSchema = new Schema<TDbPlatformProposal>({
   approvedAt: model.d.optionalDate(),
@@ -57,4 +58,20 @@ export const modelPlatformProposal = createModel<TDbPlatformProposal>(
 export const modelCronJob = createModel<TDbCronJob>(
   modelsName.CronJobs,
   cronJobSchema,
+);
+
+const channelStateSchema = new Schema<TDbPlatformChannelState>({
+  channel: model.d.requiredString(),
+  qrDataUrl: model.d.optionalString(),
+  status: model.d.requiredString(),
+}, {
+  collection: modelsName.PlatformChannelStates,
+  timestamps: true,
+});
+
+channelStateSchema.index({ channel: 1 }, { unique: true });
+
+export const modelPlatformChannelState = createModel<TDbPlatformChannelState>(
+  modelsName.PlatformChannelStates,
+  channelStateSchema,
 );

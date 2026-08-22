@@ -175,15 +175,18 @@ From [`.env.example`](../.env.example):
 | `SYSTEM_ADMIN_EMAIL` | Alert target when WhatsApp is unavailable mid-send |
 | `EMAIL_WHITELIST` | Comma-separated emails; matching propose recipients are pre-approved |
 | `PLATFORM_APPROVAL_TOKEN` | Required for human approve at `/platform/approvals` (`X-Approval-Token`); empty disables approve |
+| `WORKER_INTERNAL_TOKEN` | Same value on **server** and **worker**; worker pushes WhatsApp QR/status to server for `/platform/channels` |
 | `SANITIZE_CHANNEL_MESSAGE` | Optional host path mounted into worker as `/sanitize/sanitize-channel-message.mjs` |
 
 Compose mounts host `data/whatsapp_auth` and `data/whatsapp_inbox` into the worker (outside the agent workspace). Worker health listens on `127.0.0.1:${WORKER_HEALTH_PORT}` inside the container (default **4091**; compose healthcheck only — not published to the host).
 
 **First login**
 
-1. Set `WHATSAPP_ENABLED=true` (and `PLATFORM_APPROVAL_TOKEN` / whitelists as needed) in `.env`.
-2. `pnpm run compose:up` (or restart the `worker` service).
-3. Scan the QR printed in the **worker** console once; session persists under `data/whatsapp_auth`.
+1. Set `WHATSAPP_ENABLED=true` and `WORKER_INTERNAL_TOKEN` (same secret on server + worker) in `.env`.
+2. `pnpm run compose:up` (or restart `server` and `worker` after changing `.env`).
+3. Open **`/platform/channels`** in the web UI and scan the QR when status is **pending** (terminal QR in worker logs is a fallback).
+
+If `/platform/channels` stays **disconnected**, check worker logs for `WORKER_INTERNAL_TOKEN is unset` or `channel state update failed HTTP 401` (token mismatch between worker and server).
 
 **Operator flow**
 
@@ -313,7 +316,7 @@ The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_b
 
 #### Example: WhatsApp wiki stack cron
 
-With `WHATSAPP_ENABLED=true`, scan the QR printed in the worker console once. Greet a phone/group via task `greets` (optionally `register_channel: true` to enable inbox capture), then create:
+With `WHATSAPP_ENABLED=true`, set `WORKER_INTERNAL_TOKEN` in `.env` (server + worker), then scan the QR at **`/platform/channels`** once. Greet a phone/group via task `greets` (optionally `register_channel: true` to enable inbox capture), then create:
 
 ```json
 {

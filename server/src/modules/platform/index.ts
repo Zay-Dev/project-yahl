@@ -19,6 +19,8 @@ import {
   markNotificationDone,
   markSettingDone,
 } from './use-cases/work-read';
+import { getWhatsAppChannel } from './use-cases/channel-whatsapp-read';
+import { putWhatsAppChannel } from './use-cases/channel-whatsapp-write';
 
 exposedRoute('/api/platform/proposals/notifications')
   .post('/', createNotificationProposal);
@@ -57,3 +59,9 @@ exposedRoute('/api/platform/cron/jobs')
 exposedRoute('/api/platform/knowledge-manager-instruction')
   .get('/', getKnowledgeManagerInstruction)
   .put('/', putKnowledgeManagerInstruction);
+
+exposedRoute('/api/platform/channels')
+  .get('/whatsapp', getWhatsAppChannel);
+
+exposedRoute('/api/platform/internal')
+  .put('/whatsapp', putWhatsAppChannel);

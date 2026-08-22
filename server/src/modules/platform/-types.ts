@@ -1,5 +1,14 @@
 import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
+export type TWhatsAppChannelStatus = 'pending' | 'ready' | 'disconnected';
+
+export interface IPlatformChannelState extends TWithTimestamps {
+  _id: string;
+  channel: string;
+  qrDataUrl?: string;
+  status: TWhatsAppChannelStatus;
+}
+
 export type TProposalKind = 'notification' | 'setting' | 'knowledge_transfer';
 
 export type TProposalStatus = 'pending' | 'approved' | 'rejected';
