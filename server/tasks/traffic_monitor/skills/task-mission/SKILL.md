@@ -1,6 +1,6 @@
 # task-mission
 
-Monitor private-car driving from `origin` → `destination` for about `monitor_minutes` (default 60). Resolve notify target, load city source-ops from durable files when fresh, explore/lock a live multi-route ETA source (**≤ 2** city-local attempts this explore; Maps is budget fallback only), poll top 2–3 routes, append day-page sections, propose notifications (see monitor-loop), submit novel+evidenced observations per `~/task-skills/worth-persisting-knowledge/SKILL.md`, then append a daily report raw page under topic `traffic-monitor`. Defaults: Kowloon Tong → HKIA, city Hong_Kong, timezone Asia/Hong_Kong. Wall clocks use `timezone`.
+Monitor private-car driving from `origin` → `destination` for about `monitor_minutes` (default 60). Resolve notify target, load city source-ops from durable files when fresh, explore/lock a live multi-route ETA source (**≤ 2** city-local attempts this explore; Maps is budget fallback only), poll top 2–3 routes, append day-page sections, propose notifications (see monitor-loop), submit novel+evidenced observations per `~/task-skills/worth-persisting-knowledge/SKILL.md`, then append a daily report raw page under topic `traffic-monitor`. The knowledge registry may canonicalize `traffic-monitor` to a merged slug (e.g. `traffic-notify`); that redirect is expected — not a validation failure. Defaults: Kowloon Tong → HKIA, city Hong_Kong, timezone Asia/Hong_Kong. Wall clocks use `timezone`.
 
 ## `source_instruction` override
 

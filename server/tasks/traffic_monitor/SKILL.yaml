@@ -73,7 +73,7 @@ types: |
 stages:
   - contextMode: true
     contextKeys: [monitor_minutes, notify_to, origin, destination, city, timezone]
-    produceContextKeys: [monitor_minutes, notify_to, origin, destination, city, timezone, holidays_topic, holidays_file_prefix, traffic_source_file, city_slug, knowledge_topic, knowledge_cache_max_age]
+    produceContextKeys: [monitor_minutes, notify_to, origin, destination, city, timezone, holidays_topic, holidays_file_prefix, traffic_source_file, city_slug, knowledge_cache_max_age]
     logic: |
       (() => {
         const cityRaw = String(context.context.city ?? '').trim() || 'Hong_Kong';
@@ -91,7 +91,6 @@ stages:
           holidays_file_prefix: isHk ? 'hk_public_holidays' : `${slugUnderscored}_public_holidays`,
           traffic_source_file: isHk ? 'traffic_source.md' : `${slugUnderscored}_traffic_source.md`,
           city_slug: slug,
-          knowledge_topic: 'traffic-monitor',
           knowledge_cache_max_age: 1440,
         };
       })
@@ -195,7 +194,7 @@ stages:
 
   - id: explorer
     cacheMaxAge: 1440
-    contextKeys: [origin, destination, city, city_slug, traffic_source_file, knowledge_topic, source_ops_md, source_instruction, instruction_active, notifyPreference, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
+    contextKeys: [origin, destination, city, city_slug, traffic_source_file, source_ops_md, source_instruction, instruction_active, notifyPreference, TTrafficSource, TTrafficFetch, TRouteSample, TTriedSource]
     produceContextKeys: [traffic_source, probe_fetch, explore_started_at, source_ops_md, tried_sources, origin_resolved, destination_resolved, origin_display, destination_display]
     maxTurns: 80
     verify:
@@ -416,7 +415,7 @@ stages:
     goto:
       - command: '/stage(explorer)'
         description: 'when the cached/locked traffic source is no longer available or usable'
-    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, knowledge_topic, city_slug, source_instruction, instruction_active, TTrafficFetch, TRouteSample, TMonitorResult]
+    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, city_slug, source_instruction, instruction_active, TTrafficFetch, TRouteSample, TMonitorResult]
     updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count]
     agentOverrides:
       bashTimeoutMs: 360000
@@ -456,7 +455,7 @@ stages:
         *set_context(miss_count);
         /nixery(
           append-raw-knowledge-page,
-          topic: knowledge_topic,
+          topic: traffic-monitor,
           page: day_page,
           mode: append,
           content: *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone),
@@ -472,7 +471,7 @@ stages:
         *set_context(prev_routes, poll_success_count);
         /nixery(
           append-raw-knowledge-page,
-          topic: knowledge_topic,
+          topic: traffic-monitor,
           page: day_page,
           mode: append,
           content: *format_fetch_section(fetch_with_status, analysis, origin: label_origin, destination: label_destination, timezone: timezone),
@@ -565,7 +564,7 @@ stages:
         };
       })
 
-  - contextKeys: [started_at, monitor, holidays_md, day_page, origin, destination, origin_display, destination_display, city, timezone, knowledge_topic, traffic_source, TResult, TMonitorResult]
+  - contextKeys: [started_at, monitor, holidays_md, day_page, origin, destination, origin_display, destination_display, city, timezone, traffic_source, TResult, TMonitorResult]
     produceContextKeys: [result]
     verify:
       defId: stage-verify
@@ -578,10 +577,13 @@ stages:
         and summary_md / notification bodies use origin_display/destination_display when set (else runInput origin/destination),
         and summary_md names the locked traffic_source (Google Maps only when traffic_source.is_fallback is true
         or url is the Maps directions template; otherwise name the city source from traffic_source.url / howto),
-        and every report raw upsert returned ok:true with canonicalTopic equal to knowledge_topic
-        (path under topics/traffic-monitor/ — never topics/general/).
+        and every report raw upsert returned ok:true with topic_arg (or nixery input topic) traffic-monitor
+        and canonicalTopic is the registry canonical for traffic-monitor (traffic-notify today when alias-merged),
+        or redirectedFrom is traffic-monitor when canonical differs from the request topic.
+        Path under topics/{canonicalTopic}/raw/ is success — do not fail solely because path is not topics/traffic-monitor/.
         Fail when day_kind or summary_md is missing.
-        Fail when any report raw upsert omitted topic, returned ok:false, or landed outside traffic-monitor.
+        Fail when any report raw upsert omitted topic, returned ok:false, landed under topics/general/,
+        or canonicalTopic does not match registry resolution of traffic-monitor.
         Do not require a SUMMARY submit-knowledge-observation.
         Day page may contain earlier same-day runs — do NOT fail solely because total `## HH:MM`
         count exceeds this run's fetch_count + miss_count. Require this-run sections (Origin/Destination
@@ -613,7 +615,7 @@ stages:
       );
       const report_up = /nixery(
         append-raw-knowledge-page,
-        topic: knowledge_topic,
+        topic: traffic-monitor,
         page: report_page,
         mode: append,
         content: report_append_md,
@@ -621,13 +623,13 @@ stages:
       IF: !*last_nixery_ok();
         /nixery(
           append-raw-knowledge-page,
-          topic: knowledge_topic,
+          topic: traffic-monitor,
           page: report_page,
           mode: append,
           content: report_append_md,
         );
       END:
-      *assert_upsert_topic(report_up, topic: knowledge_topic);
+      *assert_upsert_topic(report_up, topic: traffic-monitor);
       const result = {
         started_at,
         day_kind,

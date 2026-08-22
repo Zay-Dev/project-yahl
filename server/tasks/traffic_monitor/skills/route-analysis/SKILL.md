@@ -47,4 +47,4 @@ Miss: same header + Origin/Destination + `Fetch missed` / `Using previous routes
 
 ## Daily report
 
-Classify day via `holidays_md` + `timezone`. Summarize ETA series; include primary `path` when present. Name locked `traffic_source` (Maps only when `is_fallback` or Maps URL). Append via `*format_report_run_append` to `raw/report-YYYY-MM-DD` under `knowledge_topic`.
+Classify day via `holidays_md` + `timezone`. Summarize ETA series; include primary `path` when present. Name locked `traffic_source` (Maps only when `is_fallback` or Maps URL). Append via `*format_report_run_append` to `raw/report-YYYY-MM-DD` under topic `traffic-monitor`. Registry may store under a canonical merged slug when `traffic-monitor` is an alias — that is success, not an error.

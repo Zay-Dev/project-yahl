@@ -51,7 +51,13 @@ const main = async () => {
     ? String(result.wikiPath ?? result.pagePath ?? result.path ?? '').replace(/^en\//, '')
     : '';
   const gate = result.ok && wikiPath
-    ? { ok: true, path: wikiPath }
+    ? {
+      ok: true,
+      path: wikiPath,
+      canonicalTopic: typeof result.canonicalTopic === 'string' ? result.canonicalTopic : undefined,
+      redirectedFrom: typeof result.redirectedFrom === 'string' ? result.redirectedFrom : undefined,
+      topic_arg: topic,
+    }
     : { ok: false, error: result.error ?? 'raw append failed' };
 
   await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');

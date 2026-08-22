@@ -27,6 +27,20 @@ describe('append-raw-knowledge-page validation.mjs', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  it('accepts success gate with alias redirect fields', async () => {
+    const { dir, outputPath } = await writeGate({
+      ok: true,
+      path: 'topics/traffic-notify/raw/report-2026-08-05',
+      canonicalTopic: 'traffic-notify',
+      redirectedFrom: 'traffic-monitor',
+      topic_arg: 'traffic-monitor',
+    });
+
+    assert.deepEqual(await validateOutput({ outputPath }), { ok: true });
+
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
   it('accepts failed gate with error string', async () => {
     const { dir, outputPath } = await writeGate({
       ok: false,

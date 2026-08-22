@@ -13,7 +13,7 @@ description: Compile and replay narrow operation scripts under ~/data/scripts/ â
 
 **The task orchestrator** - when you have more than one script files for the stage, start to consider a orchestrator script that used to handle multiple steps by **only calling** the exists scripts.
 
-**The consultant** - if you have executed any bash or shell command and the consultant exist, consult the consultant for recommendations of how should you further grow/improve the scripts. Ideally group your narrow ops and submit to the consultant for quality recommendations.
+**The consultant** - if you have executed any run_bash tool or shell command and the consultant exist, consult the consultant for recommendations of how should you further grow/improve the scripts. Ideally group your narrow ops and submit to the consultant for quality recommendations.
 
 **Agent decision** â€” you choose when a narrow op should become or reuse a script. Stage `logic` may use human `*virtual_func(...)` sugar for other work; that is separate.
 
