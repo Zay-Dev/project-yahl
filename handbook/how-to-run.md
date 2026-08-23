@@ -35,9 +35,9 @@ Copy `server/.env.example` to `server/.env` if you run the server standalone.
 | [`docker-compose.yml`](docker-compose.yml) | Infra and optional built server/web |
 | [`docker-compose.agent.yml`](docker-compose.agent.yml) | Per-session agent container (orchestrator only) |
 
-**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, wiki, **worker**.
+**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, wiki, **code-server**, **worker**.
 
-**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173). Does not start worker — use `compose:up` for worker, or start it manually from the same compose file.
+**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173), **code-server** (`127.0.0.1:${CODE_SERVER_PORT:-8080}`). Does not start worker — use `compose:up` for worker, or start it manually from the same compose file.
 
 Image build context is the **Omniflex monorepo root** (`..` from project-yahl). App paths use `OMNIFLEX_APP_DIR` (default `project-yahl`). `COMPOSE_PROJECT_NAME` is independent (Docker naming only).
 
@@ -73,6 +73,7 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to server (`platform` tool) / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
 | **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
+| **Code-server** | `code-server` container (`127.0.0.1:${CODE_SERVER_PORT:-8080}` on host; `/code/` via gateway in prod) | Tenant files: `data/knowledge_export` (ro), `data/workspace/sessions` (ro), `data/workspace/tasks`, `runtime/orchestrator/SKILLS`, `runtime/orchestrator/YAHL`, `server/tasks`, `server/nixery` | `docker.sock`, vault keys — gateway auth only |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive, SMTP outbound | Does not spawn orchestrator or agent containers; WhatsApp/email I/O is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
@@ -128,8 +129,8 @@ Individual commands:
 
 | Command | What it does |
 |---------|--------------|
-| `pnpm run compose:up` | Infra only (mongo, redis, onecli, wiki, worker) |
-| `pnpm run compose:up:all` | Full Docker stack (infra + built server + web) |
+| `pnpm run compose:up` | Infra only (mongo, redis, onecli, wiki, code-server, worker) |
+| `pnpm run compose:up:all` | Full Docker stack (infra + built server + web + code-server) |
 | `pnpm run dev` | Server + runtime on the host |
 | `pnpm run dev:server` | API server only |
 | `pnpm run dev:web` | Web UI only |

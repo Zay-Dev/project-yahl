@@ -140,8 +140,8 @@ Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI), and [
 
 ```bash
 cd project-yahl
-pnpm run compose:up          # mongo, redis, onecli, wiki, worker, llm-proxy
-pnpm run compose:up:all      # optional: built server + web
+pnpm run compose:up          # mongo, redis, onecli, wiki, code-server, worker, llm-proxy
+pnpm run compose:up:all      # optional: built server + web + code-server
 # or: pnpm run dev && pnpm run dev:web
 curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
   -H 'Content-Type: application/json' \

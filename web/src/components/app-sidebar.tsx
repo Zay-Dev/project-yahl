@@ -15,9 +15,9 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { ActivityIcon, BookOpenIcon, ClockIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon, RefreshCwIcon } from "lucide-react"
+import { ActivityIcon, BookOpenIcon, ClockIcon, FolderOpenIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon, RefreshCwIcon } from "lucide-react"
 
-import { WIKI_PUBLIC_URL } from "@/providers/constants"
+import { WIKI_PUBLIC_URL, CODE_SERVER_PUBLIC_URL } from "@/providers/constants"
 
 const data = {
   user: {
@@ -121,6 +121,15 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       url: `${WIKI_PUBLIC_URL}/`,
       icon: (
         <BookOpenIcon
+        />
+      ),
+    },
+    {
+      title: "Files",
+      external: true,
+      url: `${CODE_SERVER_PUBLIC_URL}/`,
+      icon: (
+        <FolderOpenIcon
         />
       ),
     },
