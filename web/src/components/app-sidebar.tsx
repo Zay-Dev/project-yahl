@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sidebar"
 import { ActivityIcon, BookOpenIcon, ClockIcon, FolderOpenIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon, RefreshCwIcon } from "lucide-react"
 
-import { WIKI_PUBLIC_URL, CODE_SERVER_PUBLIC_URL } from "@/providers/constants"
+import { CODE_SERVER_KNOWLEDGE_URL, CODE_SERVER_PUBLIC_URL } from "@/providers/constants"
 
 const data = {
   user: {
@@ -118,7 +118,7 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
     {
       title: "Knowledge",
       external: true,
-      url: `${WIKI_PUBLIC_URL}/`,
+      url: CODE_SERVER_KNOWLEDGE_URL,
       icon: (
         <BookOpenIcon
         />

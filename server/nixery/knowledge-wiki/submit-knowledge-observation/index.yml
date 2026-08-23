@@ -4,8 +4,6 @@ description: Append a validated observation note under topics/{slug}/raw/observa
 packages: [nodejs]
 
 env:
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
 
 nixery:
@@ -56,7 +54,7 @@ input:
 mount:
   /data/knowledge_export:
     host: data/knowledge_export
-    mode: ro
+    mode: rw
   /workspace:
     host: session
     mode: rw

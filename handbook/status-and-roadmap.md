@@ -33,7 +33,7 @@ But more importantly — it does feel like patching in the right direction. No m
 | Stage repair | Works | Session Detail one-off instruction at an anchor stage; orchestrator runs `kind: 'repair'` without rewriting the whole task. |
 | Quota gating | Works | Server + llm-proxy read SaaS quota from `QUOTA_STATE_FILE`; control-plane writes via `CONTROL_PLANE_SERVICE_TOKEN`. |
 | Task-local skills | Works | Echoed from session snapshot to agent `~/task-skills/`; see [yahl-syntax.md](yahl-syntax.md). |
-| Knowledge store | Works | Wiki.js canonical pages + `data/knowledge_export` Local FS export; agents read session extracts only — see the root README and [security.md](security.md). |
+| Knowledge store | Works | Filesystem corpus at `data/knowledge_export` (`en/topics/`, `whatsapp/`, `greets/`); humans edit via code-server; nixery read defs ro / write defs rw — see [security.md](security.md). |
 | Topic governance | Works | Global Knowledge Manager instruction + overnight cron `knowledge_manager` (full corpus); observations inbox; cross-topic `knowledge_transfer` approvals; within-topic `dedup-knowledge` after approved transfers. |
 | Background sessions | Works | Cron/utility runs hidden by default on `/sessions` (toggle to show). |
 | Platform UI | Works | `/platform/approvals` (`PLATFORM_APPROVAL_TOKEN` / `X-Approval-Token`); `/platform/cron-jobs` create/edit/delete (worker ticks via `POST /api/runs`); `/platform/channels` WhatsApp QR/status. Example: `traffic_monitor` at `0 8 * * *` / `Asia/Hong_Kong` with `runInput` — see [how-to-run.md](how-to-run.md). |

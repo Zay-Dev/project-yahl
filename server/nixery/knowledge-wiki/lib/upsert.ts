@@ -245,7 +245,7 @@ export const runUpsertKnowledgePage = async (
 
   if (!wikiConfigured()) {
     return {
-      error: 'Wiki.js not configured (WIKI_API_TOKEN required)',
+      error: 'Knowledge corpus not configured (KNOWLEDGE_EXPORT_ROOT required)',
       ok: false,
     };
   }

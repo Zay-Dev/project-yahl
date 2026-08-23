@@ -3,7 +3,7 @@ import { mapKnowledgeKeyToPage } from './knowledge-key-map.js';
 import { listKnowledgeWikiPages } from './load-corpus.js';
 import { readExportPageByPath } from './read-export-corpus.js';
 import { isJsonFenceOnlyContent } from './section-merge.js';
-import { getWikiPageByPath, wikiConfigured } from './wiki-client.js';
+import { getWikiPageByPath } from './wiki-client.js';
 
 export type TTopicWikiIssue =
   | 'orphan_page'
@@ -47,12 +47,10 @@ const isCanonicalRelativePage = (page: string): boolean => {
 };
 
 const readPageContent = async (pagePath: string): Promise<string> => {
-  if (wikiConfigured()) {
-    const full = await getWikiPageByPath(pagePath);
+  const full = await getWikiPageByPath(pagePath);
 
-    if (full?.content) {
-      return full.content;
-    }
+  if (full?.content) {
+    return full.content;
   }
 
   return (await readExportPageByPath(pagePath)) ?? '';

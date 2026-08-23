@@ -80,7 +80,7 @@ Returns `found` / `not_found` / `unavailable` with citations. Soft-fail never ab
 | `/nixery(apply-manager-topic, topic: …)` | hone + ApplyPlan + consume one topic |
 | `/nixery(merge-topic, sourceTopic: …, targetTopic: …)` | alias + rehome pages (incl. raw) into canonical, then delete source wiki tree (same-domain siblings only) |
 
-Wiki-backed writes need host `WIKI_API_TOKEN`. Defs with `inlineTool: false` (e.g. `dedup-knowledge`, `upsert-knowledge-page`) run only via orchestrator `nixeryRun`.
+Corpus-backed writes use nixery write defs with rw mounts on `data/knowledge_export`. Defs with `inlineTool: false` (e.g. `dedup-knowledge`, `upsert-knowledge-page`) run only via orchestrator `nixeryRun`.
 
 Overnight Knowledge Manager is a **multi-stage** task: list topics → per-topic validate (`plan`/`research` → observation feedback) → `apply-manager-topic` → group topics → `merge-topic` for obvious siblings → residual cross-topic `propose-knowledge-transfer` → `apply-approved-transfers` → within-topic `dedup-knowledge` on affected/canonical topics. Start via cron `taskPath: "knowledge_manager"` or `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
 

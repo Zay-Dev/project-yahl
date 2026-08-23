@@ -4,8 +4,6 @@ description: Merge a sibling knowledge topic into a canonical (alias + retire so
 packages: [nodejs]
 
 env:
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
   TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
   SESSION_API_BASE_URL: ""
@@ -34,7 +32,7 @@ input:
 mount:
   /data/knowledge_export:
     host: data/knowledge_export
-    mode: ro
+    mode: rw
   /data/mastermind:
     host: data/mastermind
     mode: rw

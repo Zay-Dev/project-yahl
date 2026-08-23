@@ -21,8 +21,6 @@ env:
   OPENAI_TEMPERATURE_PLAN: "0.3"
   OPENAI_TEMPERATURE_EXECUTE: "0.1"
   OPENAI_TEMPERATURE_REVIEW: "0.2"
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
   MAX_EXECUTE_REVIEW_CYCLES: "3"
 
@@ -53,7 +51,7 @@ input:
 mount:
   /data/knowledge_export:
     host: data/knowledge_export
-    mode: ro
+    mode: rw
   /workspace:
     host: session
     mode: rw

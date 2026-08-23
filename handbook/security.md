@@ -1,29 +1,29 @@
 # Protecting the knowledge store
 
-Curated knowledge lives in **Wiki.js** (Postgres) with a Local FS export at `data/knowledge_export/`. Stage agents do **not** get wiki, export files, or legacy flat keys mounted — they only see nixery session artifacts and task skills.
+Curated knowledge lives in the filesystem corpus at `data/knowledge_export/` (`en/topics/`, `whatsapp/`, `greets/`). Stage agents do **not** get the export tree or legacy flat keys mounted — they only see nixery session artifacts and task skills.
 
 ```mermaid
 sequenceDiagram
   participant Orch as Orchestrator
   participant Nix as NixeryContainer
   participant Agent as StageAgent
-  participant Wiki as Wiki.js
+  participant Corpus as knowledge_export
 
   Orch->>Nix: nixeryRun get-knowledge
+  Nix->>Corpus: read ro mount
   Nix->>Agent: ~/nixery/get-knowledge/intake.md
-  Agent->>Nix: /nixery upsert-knowledge-page
-  Nix->>Wiki: GraphQL write
-  Wiki-->>Agent: wiki path in result
+  Agent->>Nix: /nixery submit-knowledge-observation
+  Nix->>Corpus: write rw mount
 ```
 
-- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** wiki/export/knowledges ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Nixery defs mount export mirror ro and session workspace as needed.
-- **No direct corpus access** — agents must not read wiki HTTP, export mirror, or legacy `~/knowledges/`; canonical store is server/nixery-private only.
+- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** export/knowledges ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Nixery **read** defs mount `data/knowledge_export` **ro**; nixery **write** defs mount it **rw**.
+- **No direct corpus access** — agents must not read the export mirror or legacy `~/knowledges/`; canonical store is server/nixery-private only.
 - **Session-scoped reads** — `nixeryRun: get-knowledge` explores export mirror in-container, writes markdown to `~/nixery/get-knowledge/{output}`; agent reads full file content in following stages.
 - **Path injection blocked** — upsert rejects caller `source` / `file` / `path` args.
 - **Controlled writes** — `upsert-knowledge-page` accepts `key`+`value` or `page`+`content` with `topic` only; known keys are suggestions (unknown keys soft-default to a slug page).
-- **Human browse** — Wiki.js at `WIKI_PUBLIC_URL` (dev: `http://127.0.0.1:3001`); web sidebar links there directly; agents never use this route.
+- **Human browse/edit** — code-server at `/code/` (dev: `127.0.0.1:${CODE_SERVER_PORT:-8080}`); web sidebar **Knowledge** opens `data/knowledge_export` in the IDE; agents never use this route.
 - **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on nixery `research` get an explicit untrusted-content banner in the prompt.
-- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `get-knowledge` = curated wiki corpus via export mirror. Different defs, different trust boundary.
+- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `get-knowledge` = curated corpus via export mirror. Different defs, different trust boundary.
 
 ### Outbound channels
 

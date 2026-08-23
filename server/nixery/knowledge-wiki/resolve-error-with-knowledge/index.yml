@@ -12,8 +12,6 @@ env:
   LLM_CALL_RETRY_MAX: ""
   OPENAI_TEMPERATURE: "0.2"
   OPENAI_MAX_TOKENS: "4096"
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
 
 nixery:
@@ -67,7 +65,7 @@ input:
 mount:
   /data/knowledge_export:
     host: data/knowledge_export
-    mode: ro
+    mode: rw
   /workspace:
     host: session
     mode: rw

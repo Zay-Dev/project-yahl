@@ -36,7 +36,7 @@ Copy `server/.env.example` to `server/.env` if you run the server standalone.
 | [`docker-compose.yml`](docker-compose.yml) | Infra and optional built server/web |
 | [`docker-compose.agent.yml`](docker-compose.agent.yml) | Per-session agent container (orchestrator only) |
 
-**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, wiki, **code-server**, **worker**, **llm-proxy**.
+**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, **code-server**, **worker**, **llm-proxy**.
 
 **`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173), **code-server** (`127.0.0.1:${CODE_SERVER_PORT:-8080}`), **worker**, **llm-proxy**.
 
@@ -57,7 +57,7 @@ Docker only reads `.dockerignore` from the **build context root**, so put it at 
 
 The agent compose file sets `SESSION_API_BASE_URL` (default `http://server:4000`) for platform skills.
 
-**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind data dir, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
+**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind data dir, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides). Create **`data/knowledge_export`** before the first observation or upsert (`mkdir -p data/knowledge_export`) if upgrading from Wiki.js.
 
 **Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (built on the host when orchestrator runs).
 
@@ -73,8 +73,8 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Server** | Host (`pnpm run dev:server`) or `server` container (prod) | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic; control plane only |
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to server (`platform` tool) / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
-| **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
-| **Code-server** | `code-server` container (`127.0.0.1:${CODE_SERVER_PORT:-8080}` on host; `/code/` via gateway in prod) | Tenant files: `data/knowledge_export` (ro), `data/workspace/sessions` (ro), `data/workspace/tasks`, `runtime/orchestrator/SKILLS`, `runtime/orchestrator/YAHL`, `server/tasks`, `server/nixery` | `docker.sock`, vault keys — gateway auth only |
+| **Knowledge corpus** | `data/knowledge_export` on host; nixery read defs mount **ro**, write defs **rw** | Markdown under `en/topics/`, `whatsapp/`, `greets/` | Agent access — humans browse/edit via code-server |
+| **Code-server** | `code-server` container (`127.0.0.1:${CODE_SERVER_PORT:-8080}` on host; `/code/` via gateway in prod) | Tenant files: `data/knowledge_export` (**rw**), `data/workspace/sessions` (ro), `data/workspace/tasks`, `runtime/orchestrator/SKILLS`, `runtime/orchestrator/YAHL`, `server/tasks`, `server/nixery` | `docker.sock`, vault keys — gateway auth only |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive, SMTP outbound | Does not spawn orchestrator or agent containers; WhatsApp/email I/O is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
@@ -130,7 +130,7 @@ Individual commands:
 
 | Command | What it does |
 |---------|--------------|
-| `pnpm run compose:up` | Infra only (mongo, redis, onecli, wiki, code-server, worker, llm-proxy) |
+| `pnpm run compose:up` | Infra only (mongo, redis, onecli, code-server, worker, llm-proxy) |
 | `pnpm run compose:up:all` | Full Docker stack (infra + built server + web + code-server + worker + llm-proxy) |
 | `pnpm run dev` | Server + runtime on the host |
 | `pnpm run dev:server` | API server only |

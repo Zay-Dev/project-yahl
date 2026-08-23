@@ -19,7 +19,7 @@ Recent shape: the old **mastermind** gateway is gone. Stage agents call **`/plat
 - **`/platform(...)`** → server (dispatch runs, notifications, Knowledge Manager instruction).
 - **`/nixery(...)`** → plug-in one-shot containers under `server/nixery/{plugin}/` ([`handbook/nixery.md`](handbook/nixery.md)).
 - **LLM** → `llm-proxy` → OneCLI (retries, token usage back to the session).
-- **Wiki + Knowledge Manager** — durable memory humans browse; agents read session extracts and submit observations.
+- **Knowledge corpus + Knowledge Manager** — durable memory humans browse/edit in code-server; agents read session extracts and submit observations.
 
 Pipeline detail: [`handbook/how-it-works.md`](handbook/how-it-works.md).
 
@@ -88,11 +88,11 @@ The meta-win is the workflow. When something lied, we chopped the stage, re-ran 
 
 Models change; your curated knowledge doesn't. YAHL's value compounds when the assistant remembers *your* subjects, goals, and context — not when it one-shots a clever reply.
 
-**User first.** Knowledge is what you browse, trust, edit, and link. Wiki pages under `topics/{slug}/` are the product surface, not a debug dump of JSON keys. The **Knowledge Manager** cron keeps the corpus current without re-running full capture pipelines.
+**User first.** Knowledge is what you browse, trust, edit, and link. Markdown pages under `topics/{slug}/` are the product surface, not a debug dump of JSON keys. The **Knowledge Manager** cron keeps the corpus current without re-running full capture pipelines.
 
 **Agents second (downstream).** Stage agents never read the full corpus; they get session extracts from orchestrator `nixeryRun: get-knowledge` at `~/nixery/get-knowledge/{output}.md`. Writes go through **`submit-knowledge-observation`** — overnight **`knowledge_manager`** decides topic and apply shape. Better pages → better extracts → better behavior on every task that reads knowledge. Garbage summaries → repeated questions and wrong assumptions — that's a knowledge problem, not a model problem.
 
-**Why so much effort.** Knowledge quality is the primary lever on product quality — more than picking a slightly newer model. Wiki.js + export mirror + Knowledge Manager + observation inbox are the investment.
+**Why so much effort.** Knowledge quality is the primary lever on product quality — more than picking a slightly newer model. Filesystem corpus + Knowledge Manager + observation inbox are the investment.
 
 ## Syntax snapshot
 
@@ -126,7 +126,7 @@ Full syntax and authoring: [`handbook/yahl-syntax.md`](handbook/yahl-syntax.md).
 
 ## Trust boundary
 
-Stage agents never mount the wiki or export corpus — only session scratch and read-only skills. Knowledge reads go through nixery session extracts; writes go through observation submit (not direct upsert). Nixery is **plugin-scoped** — zero plugins means an empty `/nixery` catalog, which is a valid deployment.
+Stage agents never mount the export corpus — only session scratch and read-only skills. Knowledge reads go through nixery session extracts; writes go through observation submit (not direct upsert). Nixery is **plugin-scoped** — zero plugins means an empty `/nixery` catalog, which is a valid deployment.
 
 Full roles, mounts, and blast-radius design: [`handbook/security.md`](handbook/security.md).
 
@@ -144,7 +144,7 @@ Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI), and [
 
 ```bash
 cd project-yahl
-pnpm run compose:up          # mongo, redis, onecli, wiki, code-server, worker, llm-proxy
+pnpm run compose:up          # mongo, redis, onecli, code-server, worker, llm-proxy
 pnpm run compose:up:all      # optional: built server + web + code-server
 # or: pnpm run dev && pnpm run dev:web
 curl -sS -X POST "http://127.0.0.1:4000/api/runs" \

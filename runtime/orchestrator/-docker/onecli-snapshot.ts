@@ -36,7 +36,7 @@ const remapTransportEnv = (env: Record<string, string>) =>
     Object.entries(env).map(([key, value]) => [key, remapTransportEnvValue(value)]),
   );
 
-export const agentNoProxy = 'localhost,127.0.0.1,::1,redis,server,mongo,onecli,wiki,wiki_postgres,worker,llm-proxy,host.docker.internal';
+export const agentNoProxy = 'localhost,127.0.0.1,::1,redis,server,mongo,onecli,worker,llm-proxy,host.docker.internal';
 
 export type TOneCliVolumeMount = {
   containerPath: string;

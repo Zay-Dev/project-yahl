@@ -1,11 +1,10 @@
 id: upsert-whatsapp-page
-description: Upsert a Wiki.js page under whatsapp/{chatFolder}/ (not topics/)
+description: Upsert a knowledge page under whatsapp/{chatFolder}/ (not topics/)
 
 packages: [nodejs]
 
 env:
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
 
 nixery:
   default: "true"
@@ -35,6 +34,9 @@ input:
     required: false
 
 mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: rw
   /workspace:
     host: session
     mode: rw

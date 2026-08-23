@@ -1,5 +1,5 @@
 name: Knowledge Wiki
-description: Read/write curated wiki topics for knowledge manager
+description: Read/write curated knowledge corpus for knowledge manager
 skills:
   - SKILLS/nixery
 prompts:

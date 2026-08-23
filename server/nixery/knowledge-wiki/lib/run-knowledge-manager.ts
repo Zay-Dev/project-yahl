@@ -29,7 +29,6 @@ import {
   getWikiPageByPath,
   listWikiPagesUnderPrefix,
   upsertWikiPage,
-  wikiConfigured,
 } from './wiki-client.js';
 import { resolveTopicWikiPrefix } from './wiki-paths.js';
 
@@ -293,19 +292,17 @@ export const listPendingObservations = async (topic: string): Promise<TPendingOb
   const found: TPendingObservation[] = [];
   const prefix = `${resolveTopicWikiPrefix(topic)}/${WIKI_OBSERVATIONS_PREFIX}`;
 
-  if (wikiConfigured()) {
-    const pages = await listWikiPagesUnderPrefix(prefix);
+  const pages = await listWikiPagesUnderPrefix(prefix);
 
-    for (const page of pages) {
-      if (!page.content?.trim()) {
-        continue;
-      }
+  for (const page of pages) {
+    if (!page.content?.trim()) {
+      continue;
+    }
 
-      const parsed = parseObservationMarkdown(page.content, page.path);
+    const parsed = parseObservationMarkdown(page.content, page.path);
 
-      if (parsed) {
-        found.push(parsed);
-      }
+    if (parsed) {
+      found.push(parsed);
     }
   }
 
@@ -395,10 +392,6 @@ export const honeTopicPages = async (topic: string): Promise<{
   applied: number;
   skipped: number;
 }> => {
-  if (!wikiConfigured()) {
-    return { applied: 0, skipped: 0 };
-  }
-
   const pages = await listWikiPagesUnderPrefix(resolveTopicWikiPrefix(topic));
   let applied = 0;
   let skipped = 0;
@@ -816,26 +809,24 @@ const markObservationStatus = async (params: {
       (line) => `${line}\n- status: ${params.status}`,
     );
 
-  if (wikiConfigured()) {
-    const wikiPath = params.observation.pagePath.startsWith('topics/')
-      ? params.observation.pagePath
-      : `${resolveTopicWikiPrefix(params.topic)}/${params.observation.pagePath.replace(/^\/+/, '')}`;
+  const wikiPath = params.observation.pagePath.startsWith('topics/')
+    ? params.observation.pagePath
+    : `${resolveTopicWikiPrefix(params.topic)}/${params.observation.pagePath.replace(/^\/+/, '')}`;
 
-    try {
-      const existing = await getWikiPageByPath(wikiPath);
+  try {
+    const existing = await getWikiPageByPath(wikiPath);
 
-      if (existing) {
-        await upsertWikiPage({
-          content: stamped,
-          mode: 'replace',
-          pagePath: wikiPath,
-        });
+    if (existing) {
+      await upsertWikiPage({
+        content: stamped,
+        mode: 'replace',
+        pagePath: wikiPath,
+      });
 
-        return true;
-      }
-    } catch {
-      // fall through
+      return true;
     }
+  } catch {
+    // fall through
   }
 
   const page = params.observation.pagePath.includes(WIKI_OBSERVATIONS_PREFIX)
