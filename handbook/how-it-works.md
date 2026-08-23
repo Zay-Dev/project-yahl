@@ -9,6 +9,7 @@
   - `updateContextKeys` — which produced keys get merged back into global context after the stage (on loops, after each iteration)
 - The AI talks back through structured tools — **`set_context`** (overwrite), **`extend_context`** (append arrays), shell, browser, ask-user, platform, nixery.
 - Platform context keys (`now_iso`, `today`, verify recovery fields, …) are orchestrator-seeded. Each **`whileSetup` poll** refreshes `now_iso` before the iteration body runs.
+- Default-on **knowledge-to-script** (`knowledgeToScript`) lets AI stages keep narrow recipes under `~/data/scripts/` (Stagehand via `yahl-browser`); **repair** runs (`kind: 'repair'`) inject a one-off Session Detail instruction at an anchor stage without rewriting the task.
 
 ```mermaid
 flowchart LR

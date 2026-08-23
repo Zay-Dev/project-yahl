@@ -8,8 +8,9 @@
 |------|----------------|
 | `runtime/` | `@project-yahl/runtime` — YAHL runtime + orchestrator |
 | `server/` | `@project-yahl/server` — Express + Mongoose session/tasks API |
-| `web/` | Vite + shadcn — Sessions, Tasks, platform approvals, cron jobs |
-| `worker/` | Cron ticks (via server API), platform approvals |
+| `web/` | Vite + shadcn — Sessions, Tasks, platform approvals, cron jobs, channels |
+| `worker/` | Cron ticks (via server API), platform approvals, WhatsApp/SMTP |
+| `llm-proxy/` | `@project-yahl/llm-proxy` — OpenAI-compatible LLM hub (retries, usage postback, quota) |
 
 Install and build framework packages from the **Omniflex repo root**:
 
@@ -35,9 +36,9 @@ Copy `server/.env.example` to `server/.env` if you run the server standalone.
 | [`docker-compose.yml`](docker-compose.yml) | Infra and optional built server/web |
 | [`docker-compose.agent.yml`](docker-compose.agent.yml) | Per-session agent container (orchestrator only) |
 
-**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, wiki, **code-server**, **worker**.
+**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, wiki, **code-server**, **worker**, **llm-proxy**.
 
-**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173), **code-server** (`127.0.0.1:${CODE_SERVER_PORT:-8080}`). Does not start worker — use `compose:up` for worker, or start it manually from the same compose file.
+**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173), **code-server** (`127.0.0.1:${CODE_SERVER_PORT:-8080}`), **worker**, **llm-proxy**.
 
 Image build context is the **Omniflex monorepo root** (`..` from project-yahl). App paths use `OMNIFLEX_APP_DIR` (default `project-yahl`). `COMPOSE_PROJECT_NAME` is independent (Docker naming only).
 
@@ -129,8 +130,8 @@ Individual commands:
 
 | Command | What it does |
 |---------|--------------|
-| `pnpm run compose:up` | Infra only (mongo, redis, onecli, wiki, code-server, worker) |
-| `pnpm run compose:up:all` | Full Docker stack (infra + built server + web + code-server) |
+| `pnpm run compose:up` | Infra only (mongo, redis, onecli, wiki, code-server, worker, llm-proxy) |
+| `pnpm run compose:up:all` | Full Docker stack (infra + built server + web + code-server + worker + llm-proxy) |
 | `pnpm run dev` | Server + runtime on the host |
 | `pnpm run dev:server` | API server only |
 | `pnpm run dev:web` | Web UI only |
@@ -177,7 +178,9 @@ From [`.env.example`](../.env.example):
 | `EMAIL_WHITELIST` | Comma-separated emails; matching propose recipients are pre-approved |
 | `PLATFORM_APPROVAL_TOKEN` | Required for human approve at `/platform/approvals` (`X-Approval-Token`); empty disables approve |
 | `WORKER_INTERNAL_TOKEN` | Same value on **server** and **worker**; worker pushes WhatsApp QR/status to server for `/platform/channels` |
-| `SANITIZE_CHANNEL_MESSAGE` | Optional host path mounted into worker as `/sanitize/sanitize-channel-message.mjs` |
+| `CONTROL_PLANE_SERVICE_TOKEN` | Shared secret for control-plane → tenant quota/usage routes; empty rejects those internal calls |
+| `QUOTA_STATE_FILE` | Path to SaaS quota JSON (tenant). When set, **server** and **llm-proxy** enforce quota from that file |
+| `SANITIZE_CHANNEL_MESSAGE` | Optional host path mounted into worker as `/sanitize/sanitize-channel-message.mjs`
 
 Compose mounts host `data/whatsapp_auth` and `data/whatsapp_inbox` into the worker (outside the agent workspace). Worker health listens on `127.0.0.1:${WORKER_HEALTH_PORT}` inside the container (default **4091**; compose healthcheck only — not published to the host).
 

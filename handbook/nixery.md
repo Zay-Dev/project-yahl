@@ -51,7 +51,7 @@ server/nixery/
 
 ### Optional plugins
 
-A plugin may ship abilities plus optional skills / prompts / task-skills linked on install. Domain behavior — curated stores, channel helpers, verify gates, research helpers, and so on — lives entirely in plugins the operator chooses to install, not in the empty platform. Mount and write-boundary detail: [security.md](security.md).
+A plugin may ship abilities plus optional skills / prompts / task-skills linked on install. Domain behavior — curated stores, channel helpers, verify gates, research helpers, and so on — lives entirely in plugins the operator chooses to install, not in the empty platform. Example: research plugin ability `consult-script-candidate` advises the next knowledge-to-script op (prefer `js` + `yahl-browser`). Mount and write-boundary detail: [security.md](security.md).
 
 ## Invocation model
 

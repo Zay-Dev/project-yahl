@@ -28,11 +28,14 @@ Pipeline detail: [`handbook/how-it-works.md`](handbook/how-it-works.md).
 - **Staged pseudo-code with verify + rerun** — chop a scary prompt into stages, slap `verify` on each, re-run the one that lied.
 - **`whileSetup` + `warmUp`** — orchestrator do-while for polling and monitoring. `loopSetup` counts sheep; `whileSetup` babysits traffic until the window closes. **`warmUp`** reads the manual once; later polls carry that transcript forward instead of starting cold every time.
 - **`goto`** — jump-and-continue between labeled stages (`/stage(id)`) without fork-and-pray at the failure point.
+- **knowledge-to-script** — default-on for AI stages (`knowledgeToScript`); narrow operation scripts under `~/data/scripts/`, with a Stagehand/`yahl-browser` bridge so agents can drive the browser from scripts. Opt out per stage with `false`.
+- **`cacheMaxAge`** — AI-stage grace window (minutes) for trusting durable cache files before live-probing again — fewer token burns on cold re-reads.
+- **Per-stage repair** — from Session Detail, inject a one-off instruction at an anchor stage (`kind: 'repair'`) without rewriting the whole task.
 - **Plug-in nixery** — typed one-shot containers; install plugins, run `pnpm nixery:link`, grow or shrink the `/nixery` surface.
-- **LLM proxy** — OpenAI-compatible hub with retries (408/429/5xx), usage postback, Anthropic translation.
+- **LLM proxy** — OpenAI-compatible hub with retries (408/429/5xx), usage postback, Anthropic translation; optional SaaS **quota** gating via `QUOTA_STATE_FILE`.
 - **Platform skills** — cron jobs, notification proposals, task dispatch via `/platform(...)` on the server.
 - **Knowledge Manager** — overnight multi-stage corpus review (`knowledge_manager` cron); stage agents submit observations, not direct wiki edits.
-- **WhatsApp + cron** — worker owns channels; tasks like `greets`, `whatsapp_wiki_stack`, and `traffic_monitor` propose outbound; SMTP fallback when WhatsApp ghosts you.
+- **WhatsApp + cron** — worker owns channels; scan the QR at **`/platform/channels`**; tasks like `greets`, `whatsapp_wiki_stack`, and `traffic_monitor` propose outbound; SMTP fallback when WhatsApp ghosts you.
 
 ### Polling without prompt soup
 
@@ -67,7 +70,7 @@ With the tasks in `server/tasks/`, about 95% of runs follow the same path (as of
 
 But more importantly — it does feel like patching in the right direction. No more roll the dice and fingers crossed.
 
-**`traffic_monitor`** is the living proof task on this branch — cron-friendly, real `runInput`, and the integration test for `whileSetup`, `goto`, and knowledge persist. The worker can talk WhatsApp: scan a QR in the console, run `greets`, let `whatsapp_wiki_stack` vacuum inbox text into the knowledge store on a cron. Setup and env knobs live in the handbook — this paragraph is just the victory dance.
+**`traffic_monitor`** is the living proof task on this branch — cron-friendly, real `runInput`, and the integration test for `whileSetup`, `goto`, knowledge-to-script, and knowledge persist. The worker can talk WhatsApp: scan the QR at **`/platform/channels`**, run `greets`, let `whatsapp_wiki_stack` vacuum inbox text into the knowledge store on a cron. Setup and env knobs live in the handbook — this paragraph is just the victory dance.
 
 What works / what's next: [`handbook/status-and-roadmap.md`](handbook/status-and-roadmap.md).
 
@@ -115,6 +118,7 @@ warmUp: |
 - `CONTEXT:` / `IF:` / `ELSE:` / `END:` / `EXTENDS:` — VM and stage control
 - **`loopSetup`** — for-loops; **`whileSetup`** — do-while + optional **`warmUp`**
 - **`goto`** — `/stage(id)` jump-and-continue between labeled stages
+- **`knowledgeToScript`** / **`cacheMaxAge`** — script recipes + durable-cache trust window (see [yahl-syntax](handbook/yahl-syntax.md))
 - `/ask-user-batch(...)`, `/platform(...)`, `/nixery(...)` — platform tools
 - `*do_something(...)` — invent with the model (opt-in)
 
