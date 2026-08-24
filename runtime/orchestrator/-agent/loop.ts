@@ -9,6 +9,7 @@ import {
   pickContextUpdates,
 } from '@/orchestrator/-context';
 import { toLoopIterationStage } from '@/orchestrator/-utils/yahl';
+import { maybePauseForUserRequest } from '@/orchestrator/-control/maybe-pause';
 
 export const resolveLoopIndexName = (
   stage: ParsedStage,
@@ -228,6 +229,16 @@ export const handleLoop = async (
       temperature,
       value: currentValue,
     };
+
+    await maybePauseForUserRequest({
+      agentName: `agent-${globalThis.sessionId}`,
+      loopMeta,
+      requestId: globalThis.sessionId,
+      sessionId: globalThis.sessionId,
+      stage,
+      ...(pipelineStageIndex === undefined ? {} : { stageIndex: pipelineStageIndex }),
+      storage,
+    });
 
     await runLoopIteration(
       stage,

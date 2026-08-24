@@ -5,3 +5,9 @@ export const isQuotaExhausted = (): boolean => {
 
   return state?.exhausted ?? false;
 };
+
+export const assertQuotaAllowsSpawn = (): void => {
+  if (isQuotaExhausted()) {
+    throw errors.custom('token quota exhausted', 402);
+  }
+};

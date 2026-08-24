@@ -14,7 +14,7 @@ export function SessionStuckBanner({ session }: TSessionStuckBannerProps) {
       <p className="text-sm font-medium text-destructive">Run stopped unexpectedly</p>
       <p className="mt-1 text-sm text-muted-foreground">
         The orchestrator is no longer running, but at least one stage is still marked as in progress.
-        Check the orchestrator log on the server or resume from the last verify checkpoint if one exists.
+        Use Resume in the session header if a checkpoint exists, or check the orchestrator log on the server.
       </p>
     </div>
   );

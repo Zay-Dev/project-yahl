@@ -60,6 +60,10 @@ export const resolvePreparedRun = async (
     return resolvePreparedResumeRun(sessionId, run.resumeId, 'produce-keys');
   }
 
+  if (run.mode === 'user-pause-resume') {
+    return resolvePreparedResumeRun(sessionId, run.resumeId, 'user-pause');
+  }
+
   const session = await fetchSession(sessionId);
 
   if (!session.parsedStages.length) {

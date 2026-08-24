@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
+import { assertQuotaAllowsSpawn } from '@/-quota';
+
 import { assertSessionRunAllowed } from '../-agent-run-active';
 import { resolveWorkspaceRoot, sessionWorkspaceRoot } from '../-workspace-paths';
 import { waitForOrchestratorIdle } from '../-orchestrator-run-lock';
@@ -247,6 +249,8 @@ export const spawnOrchestrate = async (
   sessionId: string,
   args: string[],
 ) => {
+  assertQuotaAllowsSpawn();
+
   const session = await resolveSessionBySessionId(sessionId);
 
   await assertSessionRunAllowed({

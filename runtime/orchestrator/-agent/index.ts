@@ -17,6 +17,8 @@ import {
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
+import { UserPausedError } from '@/orchestrator/-user-pause/errors';
+import { maybePauseForUserRequest } from '@/orchestrator/-control/maybe-pause';
 import {
   buildGotoSystemAppend,
   clearStageGotoContext,
@@ -703,6 +705,15 @@ class YahlAgentRunner {
 
     const heartbeat = startStageWaitHeartbeat({
       getElapsedMs: () => Date.now() - waitStartedAt,
+      onPoll: () => maybePauseForUserRequest({
+        agentName: this.agentName,
+        loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
+        requestId: this.requestId,
+        sessionId: this.sessionId,
+        stage: this.activeStage,
+        stageIndex: this.boundParsedStageIndex,
+        storage: this.storage,
+      }),
       requestId: this.requestId,
       sessionId: this.sessionId,
       stageId: this.activeStage?.spec?.id,
@@ -746,6 +757,10 @@ class YahlAgentRunner {
       };
 
       if (error instanceof AskUserPausedError) {
+        throw error;
+      }
+
+      if (error instanceof UserPausedError) {
         throw error;
       }
 
@@ -799,6 +814,16 @@ class YahlAgentRunner {
   }
 
   private async runOneStage(): Promise<number | undefined> {
+    await maybePauseForUserRequest({
+      agentName: this.agentName,
+      loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
+      requestId: this.requestId,
+      sessionId: this.sessionId,
+      stage: this.activeStage,
+      stageIndex: this.boundParsedStageIndex,
+      storage: this.storage,
+    });
+
     const nixeryRun = this.activeStage.spec.nixeryRun;
 
     if (nixeryRun) {

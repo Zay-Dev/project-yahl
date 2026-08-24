@@ -5,6 +5,7 @@ const _modelsName = {
   PlatformProposals: 'PlatformProposals',
   SessionAskUserQuestions: 'SessionAskUserQuestions',
   SessionModelResponses: 'SessionModelResponses',
+  SessionUserPauseCheckpoints: 'SessionUserPauseCheckpoints',
   SessionVerifyCheckpoints: 'SessionVerifyCheckpoints',
   Sessions: 'Sessions',
   SessionToolCalls: 'SessionToolCalls',

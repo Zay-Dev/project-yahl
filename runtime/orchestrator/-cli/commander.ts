@@ -20,15 +20,19 @@ export const runCommand = program
   .description("Run the orchestrator")
   .addOption(
     new Option('--resume-id <id>')
-      .conflicts(['verify-resume-id', 'produce-keys-resume-id'])
+      .conflicts(['verify-resume-id', 'produce-keys-resume-id', 'user-pause-resume-id'])
   )
   .addOption(
     new Option('--verify-resume-id <id>')
-      .conflicts(['resume-id', 'produce-keys-resume-id'])
+      .conflicts(['resume-id', 'produce-keys-resume-id', 'user-pause-resume-id'])
   )
   .addOption(
     new Option('--produce-keys-resume-id <id>')
-      .conflicts(['resume-id', 'verify-resume-id'])
+      .conflicts(['resume-id', 'verify-resume-id', 'user-pause-resume-id'])
+  )
+  .addOption(
+    new Option('--user-pause-resume-id <id>')
+      .conflicts(['resume-id', 'verify-resume-id', 'produce-keys-resume-id'])
   )
   .addOption(
     new Option('--session-id <id>')

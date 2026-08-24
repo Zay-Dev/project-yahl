@@ -22,6 +22,8 @@ import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
 
 import { AskUserPausedError } from './-ask-user';
+import { UserPausedError } from './-user-pause/errors';
+import { clearSessionControl } from './-control/read-signal';
 
 import { prepareTaskWorkspace } from './-runners/prepare-task-workspace';
 import { resolvePreparedRun } from './-runners/resolve-prepared-run';
@@ -187,7 +189,9 @@ runCommand.action(async options => {
   } catch (error) {
     const catchKind = error instanceof AskUserPausedError
       ? 'AskUserPausedError'
-      : error instanceof VerifyFailedError
+      : error instanceof UserPausedError
+        ? 'UserPausedError'
+        : error instanceof VerifyFailedError
         ? 'VerifyFailedError'
         : error instanceof VerifyUnavailableError
           ? 'VerifyUnavailableError'
@@ -201,6 +205,11 @@ runCommand.action(async options => {
 
     if (error instanceof AskUserPausedError) {
       skipFinallyTeardown = true;
+      await tracker.flush();
+      exitCode = 0;
+    } else if (error instanceof UserPausedError) {
+      skipFinallyTeardown = true;
+      await clearSessionControl(sessionId);
       await tracker.flush();
       exitCode = 0;
     } else if (error instanceof VerifyFailedError) {

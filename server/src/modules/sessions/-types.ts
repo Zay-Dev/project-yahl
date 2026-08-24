@@ -262,3 +262,20 @@ export interface IVerifyCheckpoint extends TWithTimestamps {
   unavailable?: boolean;
   verifyId: string;
 }
+
+export type TUserPauseCheckpointStatus = 'pending' | 'resumed';
+
+export interface IUserPauseCheckpoint extends TWithTimestamps {
+  _id: string;
+  contextSnapshot: Record<string, unknown>;
+  loopMeta?: TStageLoopMeta;
+  parsedStageSnapshot?: TParsedStageSnapshot;
+  pauseId: string;
+  repairInstruction?: string;
+  requestId: string;
+  session: string;
+  stage: TYahlStage;
+  stageIndex?: number;
+  status: TUserPauseCheckpointStatus;
+  storageSnapshot: Record<string, unknown>;
+}

@@ -26,8 +26,10 @@ import {
   buildResumedStage,
   resolveResumeStartIndex,
 } from './resume';
+import { buildRepairSystemAppend } from '@/orchestrator/-repair/repair-helpers';
+import { fetchUserPauseCheckpoint } from '@/orchestrator/-user-pause/session-api';
 
-export type TResumeKind = 'ask-user' | 'produce-keys' | 'verify';
+export type TResumeKind = 'ask-user' | 'produce-keys' | 'user-pause' | 'verify';
 
 const _resolveBaseParsed = (
   checkpoint: Awaited<ReturnType<typeof fetchAskUserCheckpoint>>,
@@ -285,6 +287,64 @@ const _resolveVerifyPrepared = async (
   };
 };
 
+const _resolveUserPausePrepared = async (
+  sessionId: string,
+  pauseId: string,
+): Promise<TPreparedRunInput> => {
+  const checkpoint = await fetchUserPauseCheckpoint(sessionId, pauseId);
+  const session = await fetchSession(sessionId);
+  const yahlStages = session.parsedStages;
+
+  if (!yahlStages.length) {
+    throw new Error('user_pause resume: session missing parsedStages');
+  }
+
+  const storage = deserializeCheckpointStorage(checkpoint.storageSnapshot);
+  const stageIndex = checkpoint.stageIndex ?? 0;
+  const loopMeta = checkpoint.loopMeta as TLoopMeta | undefined;
+  const repairInstruction = checkpoint.repairInstruction?.trim();
+  const baseParsed = checkpoint.parsedStageSnapshot
+    ? parsedStageFromSnapshot(checkpoint.stage as YahlStage, checkpoint.parsedStageSnapshot)
+    : yahlStages[stageIndex]!;
+
+  if (!baseParsed) {
+    throw new Error(`user_pause resume: stage not found at index ${stageIndex}`);
+  }
+
+  if (repairInstruction) {
+    return {
+      cursor: {
+        kind: 'repair',
+        loopMeta,
+        repairInstruction,
+        stageIndex,
+      },
+      parsedStages: yahlStages,
+      resultContextKey: session.resultContextKey ?? 'result',
+      storage,
+      systemAppend: buildRepairSystemAppend(repairInstruction),
+      taskYahl: session.taskYahl,
+    };
+  }
+
+  return {
+    cursor: {
+      kind: 'pipeline',
+      loopMeta,
+      resumeStage: {
+        loopMeta,
+        requestId: checkpoint.requestId,
+        stage: baseParsed,
+      },
+      stageIndex,
+    },
+    parsedStages: yahlStages,
+    resultContextKey: session.resultContextKey ?? 'result',
+    storage,
+    taskYahl: session.taskYahl,
+  };
+};
+
 export const resolvePreparedResumeRun = async (
   sessionId: string,
   resumeId: string,
@@ -303,6 +363,10 @@ export const resolvePreparedResumeRun = async (
     }
 
     return prepared;
+  }
+
+  if (kind === 'user-pause') {
+    return _resolveUserPausePrepared(sessionId, resumeId);
   }
 
   const prepared = await _resolveVerifyPrepared(sessionId, resumeId, options?.systemAppend);

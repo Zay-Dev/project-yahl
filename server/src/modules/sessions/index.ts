@@ -38,6 +38,14 @@ import {
 import { getUsageSummary } from './use-cases/usage-summary-read';
 import { getQuotaStatus } from './use-cases/quota-status-read';
 import { patchQuota } from './use-cases/quota-write';
+import { stopSession } from './use-cases/stop-session-write';
+import {
+  createUserPauseCheckpoint,
+  getUserPauseCheckpoint,
+  listUserPauseCheckpoints,
+  requestSessionPauseRun,
+  resumeUserPauseCheckpoint,
+} from './use-cases/user-pause-write';
 
 exposedRoute('/api/fork-sessions')
   .get('/:forkSessionId', getForkSession);
@@ -49,6 +57,8 @@ exposedRoute('/api/sessions')
   .patch('/:sessionId', patchSession)
   .get('/:sessionId', getSession)
   .delete('/:sessionId', deleteSession)
+  .post('/:sessionId/stop', stopSession)
+  .post('/:sessionId/pause', requestSessionPauseRun)
   .get('/:sessionId/events/stream', getSessionEventsStream)
   .get('/:sessionId/stages/replay', getSessionStagesReplay)
   .get('/:sessionId/stages', getSessionStages)
@@ -70,7 +80,11 @@ exposedRoute('/api/sessions')
   .get('/:sessionId/verify-checkpoints', listVerifyCheckpoints)
   .get('/:sessionId/verify-checkpoints/:verifyId', getVerifyCheckpoint)
   .post('/:sessionId/verify-checkpoints/:verifyId/resume', resumeVerifyCheckpoint)
-  .post('/:sessionId/verify-checkpoints/:verifyId/edit-answer', editVerifyCheckpointAnswer);
+  .post('/:sessionId/verify-checkpoints/:verifyId/edit-answer', editVerifyCheckpointAnswer)
+  .post('/:sessionId/user-pause-checkpoints', createUserPauseCheckpoint)
+  .get('/:sessionId/user-pause-checkpoints', listUserPauseCheckpoints)
+  .get('/:sessionId/user-pause-checkpoints/:pauseId', getUserPauseCheckpoint)
+  .post('/:sessionId/user-pause-checkpoints/:pauseId/resume', resumeUserPauseCheckpoint);
 
 exposedRoute('/api/quota')
   .get('/status', getQuotaStatus);

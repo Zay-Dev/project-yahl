@@ -15,7 +15,8 @@ const isVerifyCheckpointEvent = (event: TSessionLiveEvent | null) =>
   || event?.type === 'produce_keys.failed'
   || event?.type === 'verify.passed'
   || event?.type === 'verify.resumed'
-  || event?.type === 'produce_keys.resumed';
+  || event?.type === 'produce_keys.resumed'
+  || event?.type === 'session.stopped';
 
 type TUseVerifyCheckpointsParams = {
   lastEvent: TSessionLiveEvent | null;

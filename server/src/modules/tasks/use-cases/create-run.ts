@@ -7,7 +7,6 @@ import Joi from 'joi';
 
 import { Repository } from '@/core';
 
-import { isQuotaExhausted } from '@/-quota';
 
 import { Middlewares } from '@omni-infra/express';
 
@@ -33,10 +32,6 @@ export const createRun = [
       body: joi.getValidatedOrThrow(bodySchema, req.body),
     }))
     .next(async (express, { body }) => {
-      if (isQuotaExhausted()) {
-        throw errors.custom('token quota exhausted', 402);
-      }
-
       if (!(await taskExists(body.taskId))) {
         throw errors.notFound();
       }

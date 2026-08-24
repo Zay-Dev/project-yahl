@@ -7,11 +7,14 @@ import { createRepairSession } from "@/pages/sessions/lib/sessions-api";
 
 const REPAIR_INSTRUCTION_MAX_LENGTH = 4096;
 
+import type { TResponseGetSession } from "@project-yahl/server/modules/sessions/-api-types";
+
 type TSessionRepairBarProps = {
+  runState?: TResponseGetSession["runState"];
   sessionId: string;
 };
 
-export function SessionRepairBar({ sessionId }: TSessionRepairBarProps) {
+export function SessionRepairBar({ runState, sessionId }: TSessionRepairBarProps) {
   const navigate = useNavigate();
   const {
     anchorRequestId,
@@ -120,7 +123,7 @@ export function SessionRepairBar({ sessionId }: TSessionRepairBarProps) {
           ) : null}
         </div>
         <Button
-          disabled={submitting || trimmedLength === 0}
+          disabled={submitting || trimmedLength === 0 || runState === "active"}
           onClick={() => void handleStartRepair()}
           size="sm"
           type="button"

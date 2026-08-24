@@ -71,7 +71,7 @@ export const useSessionEventsStream = ({
 
         setLastEvent(event);
 
-        if (event.type === 'session.updated') {
+        if (event.type === 'session.updated' || event.type === 'session.stopped') {
           onSessionUpdatedRef.current?.();
         }
 
