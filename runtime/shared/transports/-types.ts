@@ -121,6 +121,8 @@ export interface IPublisher extends IBase {
   once: EventEmitter<IPublisherEventMap>['once'];
   emit: EventEmitter<IPublisherEventMap>['emit'];
 
+  drainRequestQueue: () => Promise<number>;
+
   emitStageFinish: (envelope: {
     contextAfter: TStorage | Record<string, unknown>;
     requestId: string;

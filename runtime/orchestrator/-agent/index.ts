@@ -19,6 +19,7 @@ import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/sta
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
 import { UserPausedError } from '@/orchestrator/-user-pause/errors';
 import { maybePauseForUserRequest } from '@/orchestrator/-control/maybe-pause';
+import { buildUserPauseCheckpointPayload } from '@/orchestrator/-user-pause/checkpoint-payload';
 import {
   buildGotoSystemAppend,
   clearStageGotoContext,
@@ -705,15 +706,19 @@ class YahlAgentRunner {
 
     const heartbeat = startStageWaitHeartbeat({
       getElapsedMs: () => Date.now() - waitStartedAt,
-      onPoll: () => maybePauseForUserRequest({
-        agentName: this.agentName,
-        loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
-        requestId: this.requestId,
-        sessionId: this.sessionId,
-        stage: this.activeStage,
-        stageIndex: this.boundParsedStageIndex,
-        storage: this.storage,
-      }),
+      onPoll: () => {
+        const pauseParams = this._userPauseCheckpointParams();
+
+        return maybePauseForUserRequest({
+          agentName: this.agentName,
+          loopMeta: pauseParams.loopMeta,
+          requestId: pauseParams.requestId,
+          sessionId: this.sessionId,
+          stage: pauseParams.stage,
+          stageIndex: pauseParams.stageIndex,
+          storage: this.storage,
+        });
+      },
       requestId: this.requestId,
       sessionId: this.sessionId,
       stageId: this.activeStage?.spec?.id,
@@ -813,14 +818,35 @@ class YahlAgentRunner {
     await globalThis.sessionTracker?.flush?.();
   }
 
+  private _userPauseCheckpointParams() {
+    const payload = buildUserPauseCheckpointPayload({
+      activeStage: this.activeStage,
+      boundParsedStageIndex: this.boundParsedStageIndex,
+      loopMeta: this.options.loopMeta,
+      pipelineStageIndex: this.pipelineStageIndex,
+      recoveryStages: this.options.recoveryStages,
+      requestId: this.requestId,
+      resumeStage: this.resumeStage ?? this.options.resumeStage,
+    });
+
+    return {
+      loopMeta: payload.loopMeta,
+      requestId: payload.requestId,
+      stage: payload.stage,
+      stageIndex: payload.stageIndex,
+    };
+  }
+
   private async runOneStage(): Promise<number | undefined> {
+    const pauseParams = this._userPauseCheckpointParams();
+
     await maybePauseForUserRequest({
       agentName: this.agentName,
-      loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
-      requestId: this.requestId,
+      loopMeta: pauseParams.loopMeta,
+      requestId: pauseParams.requestId,
       sessionId: this.sessionId,
-      stage: this.activeStage,
-      stageIndex: this.boundParsedStageIndex,
+      stage: pauseParams.stage,
+      stageIndex: pauseParams.stageIndex,
       storage: this.storage,
     });
 

@@ -11,7 +11,7 @@ import { assertSessionResumeAllowed } from '../-agent-run-active';
 import { emitSessionEvent } from '../-session-events';
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { resolveSessionRunState } from '../-session-run-state';
-import { requestSessionPause } from '../-session-control-redis';
+import { clearSessionControl, requestSessionPause } from '../-session-control-redis';
 import { modelStage, modelUserPauseCheckpoint } from '../models';
 import { parsedStageSnapshotSchema, yahlStageSchema } from '../stage-schema';
 import { spawnOrchestrate } from './spawn-orchestrate';
@@ -203,19 +203,18 @@ export const resumeUserPauseCheckpoint = [
         sessionId: session.sessionId,
       });
 
-      const checkpoint = await Queries.hasExactOne(modelUserPauseCheckpoint, {
-        pauseId: params.pauseId,
-        session: session._id,
-      });
-
-      if (checkpoint.status !== 'pending') {
-        throw errors.conflict('User pause checkpoint is not pending');
-      }
-
-      await modelUserPauseCheckpoint.updateOne(
-        { pauseId: params.pauseId },
+      const checkpoint = await modelUserPauseCheckpoint.findOneAndUpdate(
+        {
+          pauseId: params.pauseId,
+          session: session._id,
+          status: 'pending',
+        },
         { $set: { status: 'resumed' } },
       );
+
+      if (!checkpoint) {
+        throw errors.conflict('User pause checkpoint is not pending');
+      }
 
       emitSessionEvent(params.sessionId, {
         pauseId: params.pauseId,
@@ -223,7 +222,18 @@ export const resumeUserPauseCheckpoint = [
         type: 'user_pause.resumed',
       });
 
-      await spawnOrchestrate(params.sessionId, ['--user-pause-resume-id', params.pauseId]);
+      await clearSessionControl(params.sessionId);
+
+      try {
+        await spawnOrchestrate(params.sessionId, ['--user-pause-resume-id', params.pauseId]);
+      } catch (error) {
+        await modelUserPauseCheckpoint.updateOne(
+          { pauseId: params.pauseId, session: session._id },
+          { $set: { status: 'pending' } },
+        );
+
+        throw error;
+      }
 
       express.respondOne({ ok: true, pauseId: params.pauseId });
     })

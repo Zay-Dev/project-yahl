@@ -68,6 +68,14 @@ const _setupPublisher = async (tracker: ReturnType<typeof createSessionEventTrac
     });
 
   await publisher.waitForReady();
+
+  const drained = await publisher.drainRequestQueue();
+
+  if (drained > 0) {
+    console.log(
+      `[orchestrator] drained stale request queue sessionId=${sessionId} count=${drained}`,
+    );
+  }
 };
 
 const isStagehandLiveview = () => {

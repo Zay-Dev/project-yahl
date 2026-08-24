@@ -4,6 +4,7 @@ import type { YahlStage } from '@/shared/yahl-stage';
 import type { TPreparedRunInput } from './prepared-run-types';
 import {
   applyAskUserAnswerToStage,
+  fetchAnsweredAskUserQuestionIdByRequestId,
   fetchAskUserCheckpoint,
   fetchSession,
   fetchStageDetail,
@@ -11,7 +12,7 @@ import {
 } from '@/orchestrator/-ask-user';
 import type { TStageDetailForResume } from '@/orchestrator/-ask-user/session-api';
 
-import { buildResumeFrom } from '@/orchestrator/-ask-user/resume-from';
+import { buildMidTurnResumeFrom, buildResumeFrom } from '@/orchestrator/-ask-user/resume-from';
 import { isStageFinished } from '@/shared/stage-status';
 import {
   applyVerifyRecoveryToStorage,
@@ -22,6 +23,7 @@ import {
 } from '@/orchestrator/-verify/resume-helpers';
 
 import { deserializeCheckpointStorage, loadCheckpointResumeContext } from './checkpoint-resume-load';
+import { isLoopStageCheckpoint } from './pipeline-continuation';
 import {
   buildResumedStage,
   resolveResumeStartIndex,
@@ -123,6 +125,33 @@ const _resolveAskUserPrepared = async (
     storage,
     taskYahl: session.taskYahl,
   };
+};
+
+const _hasMidTurnActivity = (stageDetail: TStageDetailForResume) =>
+  stageDetail.modelResponses.length > 0 || stageDetail.toolCalls.length > 0;
+
+const _tryResolveUserPauseViaAskUser = async (
+  sessionId: string,
+  requestId: string,
+  pauseStorageSnapshot: Record<string, unknown>,
+): Promise<TPreparedRunInput | null> => {
+  const questionId = await fetchAnsweredAskUserQuestionIdByRequestId(sessionId, requestId);
+
+  if (!questionId) {
+    return null;
+  }
+
+  const stageDetail = await fetchStageDetail(sessionId, requestId);
+
+  if (isStageFinished(stageDetail) || !_hasMidTurnActivity(stageDetail as TStageDetailForResume)) {
+    return null;
+  }
+
+  const prepared = await _resolveAskUserPrepared(sessionId, questionId);
+
+  prepared.storage = deserializeCheckpointStorage(pauseStorageSnapshot);
+
+  return prepared;
 };
 
 const _resolveProduceKeysPrepared = async (
@@ -327,6 +356,43 @@ const _resolveUserPausePrepared = async (
     };
   }
 
+  const viaAskUser = await _tryResolveUserPauseViaAskUser(
+    sessionId,
+    checkpoint.requestId,
+    checkpoint.storageSnapshot,
+  );
+
+  if (viaAskUser) {
+    return viaAskUser;
+  }
+
+  const stageDetail = await fetchStageDetail(sessionId, checkpoint.requestId);
+  const detail = stageDetail as TStageDetailForResume;
+
+  if (
+    isStageFinished(stageDetail)
+    && loopMeta
+    && isLoopStageCheckpoint(loopMeta, yahlStages, stageIndex)
+  ) {
+    return {
+      cursor: {
+        kind: 'pipeline',
+        completedRequestId: checkpoint.requestId,
+        loopContinueOnly: true,
+        loopMeta,
+        stageIndex,
+      },
+      parsedStages: yahlStages,
+      resultContextKey: session.resultContextKey ?? 'result',
+      storage,
+      taskYahl: session.taskYahl,
+    };
+  }
+
+  const resumeFrom = _hasMidTurnActivity(detail)
+    ? buildMidTurnResumeFrom(detail)
+    : undefined;
+
   return {
     cursor: {
       kind: 'pipeline',
@@ -334,6 +400,7 @@ const _resolveUserPausePrepared = async (
       resumeStage: {
         loopMeta,
         requestId: checkpoint.requestId,
+        ...(resumeFrom ? { resumeFrom } : {}),
         stage: baseParsed,
       },
       stageIndex,

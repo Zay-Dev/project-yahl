@@ -3,6 +3,8 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 export type TRunStartCursor = {
   kind: 'pipeline' | 'repair';
+  completedRequestId?: string;
+  loopContinueOnly?: boolean;
   loopMeta?: TLoopMeta;
   produceKeysResumeAttempt?: boolean;
   repairInstruction?: string;

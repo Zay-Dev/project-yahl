@@ -159,6 +159,22 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
       await super.waitForReady(options);
     };
 
+  drainRequestQueue: IPublisher['drainRequestQueue'] = async () => {
+    let drained = 0;
+
+    while (true) {
+      const raw = await this.redis.lpop(this.requestQueue);
+
+      if (!raw) {
+        break;
+      }
+
+      drained += 1;
+    }
+
+    return drained;
+  };
+
   private async _drainModelResponses(requestId: string) {
     const queue = this._modelResponseQueue(requestId);
 

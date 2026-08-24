@@ -25,7 +25,17 @@ export const runSessionFrom = async (
   let position: TPipelinePosition;
   let fromStageIndex: number;
 
-  if (cursor.resumeStage) {
+  if (cursor.loopContinueOnly && cursor.loopMeta) {
+    position = {
+      kind: 'loopAfterIteration',
+      loopMeta: cursor.loopMeta,
+      loopStageIndex: cursor.stageIndex,
+      ...(cursor.loopMeta.kind === 'warmup' && cursor.completedRequestId
+        ? { warmupRequestId: cursor.completedRequestId }
+        : {}),
+    };
+    fromStageIndex = cursor.stageIndex + 1;
+  } else if (cursor.resumeStage) {
     position = {
       kind: 'resumeStageThenContinue',
       loopMeta: cursor.loopMeta ?? cursor.resumeStage.loopMeta,
