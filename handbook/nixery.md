@@ -12,7 +12,7 @@ It is not a chat black box. Each ability (when installed) is a human-authored co
 | **Typed shell, fuzzy core** | Each ability is a human contract (`index.yml` / `run` / `validation`); the model only fills fuzzy work inside that shell. |
 | **One-shot isolation** | Each call is a disposable container with declared mounts — blast radius is per ability, not the whole host. Details: [security.md](security.md). |
 | **Discover, don’t hardcode** | Orchestrator and agents resolve against whatever is installed; catalogs/skills are live install snapshots. |
-| **Compose with stages** | Abilities plug in mid-stage (inline) or as orchestrator stages (`nixeryRun`); exhausted inline soft-fails so the stage can continue; exhausted `nixeryRun` hard-fails. |
+| **Compose with stages** | Same catalog via mid-stage `/nixery` or orchestrator `nixeryRun`; call site owns soft-fail vs hard-fail after retries. |
 | **Artifacts travel with the plugin** | Optional skills / prompts / task-skills publish via link when installed and leave when uninstalled. |
 
 Root product framing: [README.md](../README.md).
@@ -57,21 +57,23 @@ A plugin may ship abilities plus optional skills / prompts / task-skills linked 
 
 ```mermaid
 flowchart TB
-  StageAgent["Stage agent"] -->|"inlineTool true"| Inline["/nixery inline"]
+  StageAgent["Stage agent"] -->|"/nixery"| Inline["Inline mid-stage"]
   Orch["Orchestrator"] -->|"nixeryRun"| Run["nixeryRun stage"]
   Inline --> Container["One-shot container"]
   Run --> Container
   Container --> Session["~/nixery/defId/artifacts"]
 ```
 
-| Mode | Who | When |
-|------|-----|------|
-| **Inline** (`nixery` tool) | Stage agent mid-logic | Def has `output.inlineTool: true` |
-| **`nixeryRun` stage** | Orchestrator | Non-inline defs; following stages read session artifacts under `~/nixery/{defId}/` |
+Same ability catalog either way — call site only changes who invokes and how failure is handled (`output.inlineTool` retired).
+
+| Call site | Who | Retry / failure |
+|-----------|-----|-----------------|
+| `/nixery(...)` (agent tool) | Stage agent mid-logic | Default 1 attempt (`output.retry` overrides); exhausted → soft-fail, stage continues |
+| `nixeryRun` stage | Orchestrator (no agent) | Default 10 attempts; exhausted → hard-fail; following stages read `~/nixery/{defId}/` |
 
 Calls resolve only if the owning plugin is still installed. Otherwise fix args, pick another path from the current install’s skill/catalog, or skip.
 
-Each `runNixeryDef` retries up to `output.retry` attempts (default **10**). On validation or gate failure, the orchestrator rewrites `input.json` with `nixeryRetry.feedback` for in-container LLM agents. Pure Node defs ignore feedback safely.
+On validation or gate failure, the orchestrator rewrites `input.json` with `nixeryRetry.feedback` for in-container LLM agents. Pure Node defs ignore feedback safely.
 
 Mount tokens in `index.yml` (`session`, `def`, `plugin`, `data/…`, …) resolve in the orchestrator. Containers always see `/opt/nixery/def` (ability) and `/opt/nixery/plugin` (owning plugin, read-only).
 

@@ -81,13 +81,13 @@ Returns `found` / `not_found` / `unavailable` with citations. Soft-fail never ab
 | `/nixery(apply-manager-topic, topic: …)` | hone + ApplyPlan + consume one topic |
 | `/nixery(merge-topic, sourceTopic: …, targetTopic: …)` | alias + rehome pages (incl. raw) into canonical, then delete source wiki tree (same-domain siblings only) |
 
-Corpus-backed writes use nixery write defs with rw mounts on `data/knowledge_export`. Defs with `inlineTool: false` (e.g. `dedup-knowledge`, `upsert-knowledge-page`) run only via orchestrator `nixeryRun`.
+Corpus-backed writes use nixery write defs with rw mounts on `data/knowledge_export`. Prefer `/nixery(...)` mid-stage when the task needs it; use orchestrator `nixeryRun` for agent-free hard-fail stages (e.g. overnight `apply-approved-transfers`, `dedup-knowledge`).
 
 Overnight Knowledge Manager is a **multi-stage** task: list topics → per-topic validate (`plan`/`research` → observation feedback) → `apply-manager-topic` → group topics → `merge-topic` for obvious siblings → residual cross-topic `propose-knowledge-transfer` → `apply-approved-transfers` → within-topic `dedup-knowledge` on affected/canonical topics. Start via cron `taskPath: "knowledge_manager"` or `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
 
 ## Reads
 
-Knowledge reads use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `list-manager-topics`, `group-manager-topics`). After those stages, read `~/nixery/{defId}/{output}` in the session workspace. `get-knowledge` and `search-knowledge` remain orchestrator-only (`inlineTool: false`).
+Knowledge reads often use orchestrator `nixeryRun` stages (`get-knowledge`, `list-knowledge-pages`, `search-knowledge`, `list-manager-topics`, `group-manager-topics`) so the following AI stage can read `~/nixery/{defId}/{output}`. The same abilities may also be called inline via `/nixery(...)` when a stage discovers them mid-logic.
 
 Ability id is global (`/nixery(get-knowledge)`); plugins are install folders under `server/nixery/` on the host — not visible in this container.
 
@@ -97,7 +97,7 @@ Each nixery def run retries up to `output.retry` attempts (default **10**). On v
 
 After that budget is exhausted, inline calls return `{ ok: false, abandoned: true }` — **continue the stage**. Soft-fail never aborts the stage; orchestrator `nixeryRun` stages remain hard failures after exhaustion.
 
-Pre-run failures only (invalid tool argv, def not inline) use a thin stage budget (`YAHL_NIXERY_INLINE_RETRY_MAX`, default **1**).
+Pre-run failures only (invalid tool argv, unknown def) use a thin stage budget (`YAHL_NIXERY_INLINE_RETRY_MAX`, default **1**).
 
 ## Rules
 

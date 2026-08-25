@@ -3,9 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import { listInlineNixeryDefIds, listNixeryDefIds, resolveNixeryAbilityLocation } from './list-defs';
-import { resolveNixeryOutputSpec } from './output-contract';
-import { loadNixeryDefFromFile } from './load-def';
+import { listNixeryDefIds, resolveNixeryAbilityLocation } from './list-defs';
 
 const nixeryRoot = path.join(import.meta.dirname, '..', '..', 'server', 'nixery');
 
@@ -22,22 +20,5 @@ describe('listNixeryDefIds', () => {
       await fs.access(location.indexPath);
       await fs.access(path.join(location.pluginDir, 'plugin.yml'));
     }
-  });
-});
-
-describe('listInlineNixeryDefIds', () => {
-  it('returns only defs with output.inlineTool: true', async () => {
-    const ids = await listInlineNixeryDefIds(nixeryRoot);
-    const defs = await Promise.all(ids.map(async (defId) => {
-      const location = await resolveNixeryAbilityLocation(nixeryRoot, defId);
-
-      return loadNixeryDefFromFile(location.indexPath);
-    }));
-
-    assert.ok(defs.every((def) => resolveNixeryOutputSpec(def).inlineTool));
-    assert.ok(ids.includes('resolve-error-with-knowledge'));
-    assert.ok(!ids.includes('get-knowledge'));
-    assert.ok(!ids.includes('search-knowledge'));
-    assert.ok(defs.length >= 1);
   });
 });

@@ -11,7 +11,9 @@ const WHATSAPP_CHANNEL = 'whatsapp';
 
 const whatsAppBodySchema = Joi.object<TRequestPutWhatsAppChannelBody>({
   qrDataUrl: Joi.string().trim().allow('').optional(),
-  status: Joi.string().valid('pending', 'ready', 'disconnected').required(),
+  status: Joi.string()
+    .valid('connecting', 'authenticated', 'pending', 'ready', 'disconnected')
+    .required(),
 });
 
 export const putWhatsAppChannel = [
@@ -31,7 +33,7 @@ export const putWhatsAppChannel = [
         set.qrDataUrl = qrDataUrl;
       }
 
-      if (status === 'ready' || status === 'disconnected') {
+      if (status !== 'pending') {
         set.qrDataUrl = null;
       }
 

@@ -41,7 +41,6 @@ const inputFieldSchema = z.object({
 
 const outputSpecSchema = z.object({
   default: z.string().trim().min(1).optional(),
-  inlineTool: z.boolean().optional(),
   retry: z.number().int().min(0).optional(),
   validate: z.string().trim().min(1).regex(/\.mjs$/).optional(),
 });

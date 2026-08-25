@@ -29,3 +29,7 @@ Include: identity, participants, recurring topics, durable facts, open questions
 ## digests/{yyyy-mm-dd-HH}
 
 One digest per stack run window: bullet summary of new messages, notable quotes (short), image-to-text summaries, unparsed attachment notes, and new facts. Use the current time in Asia/Hong_Kong for the page segment when possible. Label platform outbound as the assistant name from facts, not as a separate bot. Digests are the unbounded archive; overview stays bounded.
+
+## Persist
+
+Write only via `/nixery(upsert-whatsapp-page, …)` into `whatsapp/{folder}/` (overview + digests/{yyyy-mm-dd-HH}). Do **not** copy markdown into `~/data/wiki-stack` or other task-data paths as a substitute. Clear the inbox only after both upserts succeed.

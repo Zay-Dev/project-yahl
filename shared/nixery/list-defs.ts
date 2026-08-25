@@ -5,7 +5,6 @@ import YAML from 'yaml';
 
 import { assertNixeryPluginArtifacts } from './assert-plugin-artifacts';
 import { loadNixeryDefFromFile } from './load-def';
-import { resolveNixeryOutputSpec } from './output-contract';
 import { validateNixeryPluginMeta } from './validate-def';
 
 import type { TNixeryAbilityLocation, TNixeryDef, TNixeryPluginMeta } from './types';
@@ -156,11 +155,3 @@ export const loadAllNixeryDefs = async (nixeryRoot: string): Promise<TNixeryDef[
   }));
 };
 
-export const listInlineNixeryDefIds = async (nixeryRoot: string): Promise<string[]> => {
-  const defs = await loadAllNixeryDefs(nixeryRoot);
-
-  return defs
-    .filter((def) => resolveNixeryOutputSpec(def).inlineTool)
-    .map((def) => def.id)
-    .sort();
-};

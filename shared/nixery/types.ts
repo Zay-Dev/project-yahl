@@ -1,6 +1,5 @@
 export type TNixeryOutputSpec = {
   default?: string;
-  inlineTool?: boolean;
   retry?: number;
   validate?: string;
 };

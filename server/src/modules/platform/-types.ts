@@ -1,6 +1,11 @@
 import type { TSoftDeletable, TWithTimestamps } from '@omni-infra/types/entities';
 
-export type TWhatsAppChannelStatus = 'pending' | 'ready' | 'disconnected';
+export type TWhatsAppChannelStatus =
+  | 'connecting'
+  | 'authenticated'
+  | 'pending'
+  | 'ready'
+  | 'disconnected';
 
 export interface IPlatformChannelState extends TWithTimestamps {
   _id: string;

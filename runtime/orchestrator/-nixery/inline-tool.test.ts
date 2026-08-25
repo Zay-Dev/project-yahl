@@ -9,7 +9,6 @@ const upsertDef = (): TNixeryDef => ({
   id: 'upsert-knowledge-page',
   output: {
     default: 'result.json',
-    inlineTool: true,
     validate: 'validation.mjs',
   },
   packages: ['nodejs'],
@@ -29,14 +28,14 @@ describe('resolveNixeryToolOutputHint', () => {
 });
 
 describe('runNixeryInlineTool', () => {
-  it('returns ok:false for defs with output.inlineTool: false', async () => {
+  it('returns ok:false for unknown def ids', async () => {
     const result = await runNixeryInlineTool({
       args: {},
-      defId: 'get-knowledge',
+      defId: 'definitely-not-a-nixery-def',
       sessionId: 'test-session',
     });
 
     assert.equal(result.ok, false);
-    assert.match(result.error ?? '', /not enabled for inline tool calls/);
+    assert.match(result.error ?? '', /not found|invalid/i);
   });
 });

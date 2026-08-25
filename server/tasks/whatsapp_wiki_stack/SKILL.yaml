@@ -13,6 +13,7 @@ types: |
     count?: number;
     wikiPaths?: string[];
     cleared?: boolean;
+    error?: string;
   };
 
   type TResult = {
@@ -84,12 +85,29 @@ stages:
             mode: replace,
             title: Digest,
           );
-          const clear_result = /nixery(
-            whatsapp-inbox,
-            action: clear,
-            folder: batch.channel.folder,
-            output: clear-{batch.channel.folder}.json,
-          );
-          Push { folder, skipped: false, count: batch.count, wikiPaths: [...], cleared: true } onto channels.
+          IF: overview_upsert.ok && digest_upsert.ok;
+            const clear_result = /nixery(
+              whatsapp-inbox,
+              action: clear,
+              folder: batch.channel.folder,
+              output: clear-{batch.channel.folder}.json,
+            );
+            Push {
+              folder: batch.channel.folder,
+              skipped: false,
+              count: batch.count,
+              wikiPaths: [overview_upsert.path, digest_upsert.path],
+              cleared: clear_result.ok === true,
+            } onto channels;
+          ELSE;
+            Push {
+              folder: batch.channel.folder,
+              skipped: false,
+              count: batch.count,
+              cleared: false,
+              error: "upsert failed; inbox not cleared",
+            } onto channels;
+            Do not write wiki-stack or other task-data fallbacks — only /nixery(upsert-whatsapp-page).
+          END:
         const result = { channels };
       END:

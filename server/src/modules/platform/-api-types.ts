@@ -62,12 +62,13 @@ export type TRequestPutKnowledgeManagerInstructionBody = {
 };
 
 export type TResponseWhatsAppChannel = {
+  enabled: boolean;
   qrDataUrl?: string;
-  status: 'pending' | 'ready' | 'disconnected';
+  status: 'connecting' | 'authenticated' | 'pending' | 'ready' | 'disconnected';
   updatedAt: string | null;
 };
 
 export type TRequestPutWhatsAppChannelBody = {
   qrDataUrl?: string;
-  status: 'pending' | 'ready' | 'disconnected';
+  status: 'connecting' | 'authenticated' | 'pending' | 'ready' | 'disconnected';
 };

@@ -1,6 +1,11 @@
 import { config } from '../config.js';
 
-export type TWhatsAppChannelStatus = 'pending' | 'ready' | 'disconnected';
+export type TWhatsAppChannelStatus =
+  | 'connecting'
+  | 'authenticated'
+  | 'pending'
+  | 'ready'
+  | 'disconnected';
 
 let warnedMissingWorkerToken = false;
 

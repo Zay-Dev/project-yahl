@@ -57,4 +57,3 @@ run:
 output:
   default: output.md
   validate: validation.mjs
-  inlineTool: false

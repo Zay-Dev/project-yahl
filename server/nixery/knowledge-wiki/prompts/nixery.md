@@ -4,13 +4,13 @@ Plug-and-play defs for `/nixery(defId, …)`. The set of defs can change — tre
 
 ## Model
 
-- **Inline** (`nixery` tool): stage agents call defs with `output.inlineTool: true` (or manager bypass where allowed).
-- **Orchestrator `nixeryRun`**: non-inline defs (e.g. knowledge reads). After the stage, read `~/nixery/{defId}/{output}` when the task/stage expects it.
-- If a `defId` is missing, not inline-enabled, or forbidden for this task: fix args, pick another path from the skill, or skip — do not invent defs.
+- **Inline** (`nixery` tool): stage agents may call any installed ability mid-logic.
+- **Orchestrator `nixeryRun`**: agent-free stage that runs one ability; following stages read `~/nixery/{defId}/{output}` when the task expects it.
+- If a `defId` is missing or forbidden for this task: fix args, pick another path from the skill, or skip — do not invent defs.
 
 ## Soft-fail (unified)
 
-Each `runNixeryDef` call retries up to `output.retry` **attempts** (default **10**, override in the def `index.yml`). On validation failure or gate `{ ok: false }`, the orchestrator rewrites `input.json` with:
+Each `runNixeryDef` call retries by **call site**: inline defaults to **1** attempt (`output.retry` overrides); `nixeryRun` defaults to **10** (override in the def `index.yml`). On validation failure or gate `{ ok: false }`, the orchestrator rewrites `input.json` with:
 
 ```json
 "nixeryRetry": {
@@ -28,12 +28,12 @@ After the attempt budget is exhausted:
 - **Inline**: tool result `{ ok: false, error, abandoned: true }` — **continue the stage** (skip that call / move on). Soft-fail never aborts the stage.
 - **`nixeryRun`**: hard failure.
 
-Pre-run failures only (invalid `/nixery` argv, def not inline, namespace gate) still use a thin stage soft-fail budget (`YAHL_NIXERY_INLINE_RETRY_MAX`, default **1**).
+Pre-run failures only (invalid `/nixery` argv, unknown def, namespace gate) still use a thin stage soft-fail budget (`YAHL_NIXERY_INLINE_RETRY_MAX`, default **1**).
 
 ## Policy pointers
 
 - Knowledge writes and tool-error recovery → sibling `knowledge-persist.md` and `~/task-skills/resolve-errors-with-knowledge` when present.
-- Current call shapes, allowlists, and helper catalog → `/opt/skills/nixery/SKILL.md` (read that file; do not hunt host paths).
+- Current call shapes and helper catalog → `/opt/skills/nixery/SKILL.md` (read that file; do not hunt host paths).
 
 ## Breaking changes
 

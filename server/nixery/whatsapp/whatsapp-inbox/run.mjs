@@ -135,10 +135,14 @@ const materializeAttachment = async (folder, message, attachment) => {
     };
   }
 
-  const messageId = typeof message.messageId === 'string' && message.messageId.trim()
-    ? message.messageId.replace(/[^\w.\-]+/g, '_').slice(0, 120)
+  const pathParts = relativePath.split(/[/\\]/).filter(Boolean);
+  const safeId = pathParts.length >= 2
+    ? pathParts[pathParts.length - 2]
     : 'unknown';
-  const workspaceRel = path.join('inbox-attachments', folder, messageId, filename);
+  const fileName = pathParts.length >= 1
+    ? pathParts[pathParts.length - 1]
+    : filename;
+  const workspaceRel = path.join('inbox-attachments', folder, safeId, fileName);
   const src = path.join(INBOX_ROOT, folder, relativePath);
   const dest = path.join('/workspace', workspaceRel);
 
