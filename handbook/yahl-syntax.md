@@ -33,7 +33,7 @@ Syntax reference:
 - `/stage(id)` — end this AI stage and jump-and-continue to a labeled stage declared in `goto` (tool: `goto_stage`; injects `stage_goto_reason` / `stage_goto_from`).
 - `/skill_name(...)` — call into a skill from the skills folder.
 - `/platform(...)` — dispatch runs, notification/knowledge-transfer proposals, KM instruction (session API).
-- `/nixery(...)` — knowledge writes, research, design-questions, extract-info (see `/opt/skills/nixery/SKILL.md`).
+- `/nixery(...)` — knowledge writes, research, design-questions, extract-info, image-to-text (see `/opt/skills/nixery/SKILL.md`).
 - `*do_something(...)` — the `*` means "I don't have this function, AI please figure it out" (bash is the usual fallback).
 - `*set_context(key, …)` — overwrite a context key via the `set_context` tool (`global` or `types` scope).
 - `*extend_context(key, value: item)` — append onto an array via the `extend_context` tool (use for poll lists, notification history, etc.).

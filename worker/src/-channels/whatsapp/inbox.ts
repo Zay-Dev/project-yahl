@@ -2,9 +2,13 @@ import { appendFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import { whatsappConfig } from './config.js';
+import type { TInboxAttachment } from './media.js';
 import { findOnboardedChannel } from './registry.js';
 
+export type { TInboxAttachment } from './media.js';
+
 export type TInboxMessage = {
+  attachments?: TInboxAttachment[];
   author?: string;
   body: string;
   chatId: string;

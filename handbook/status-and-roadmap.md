@@ -21,7 +21,7 @@ But more importantly — it does feel like patching in the right direction. No m
 | Orchestrator debugger | Works | Attach the orchestrator to a debugger, hit breakpoints, and poke variables while tracing execution. |
 | Platform + worker | Works | Worker (cron/approvals + channels) in `docker compose`; stage agents use `/platform(...)` → server for dispatch/proposals/KM instruction; stage verify via nixery `verify.defId`; `/nixery(...)` for knowledge, topic resolve, LLM helpers. |
 | WhatsApp channel | Works | Worker owns `whatsapp-web.js` (QR at `/platform/channels` when `WHATSAPP_ENABLED=true`; console QR is fallback); send/receive are pure runtime. `WHATSAPP_WHITELIST` match on propose = pre-approved. Volumes `data/whatsapp_auth` / `data/whatsapp_inbox` (outside agent workspace). Nixery: `whatsapp-register-channel`, `whatsapp-inbox`, get/upsert greets & whatsapp pages, `resolve-notification-target`. |
-| Greets + wiki stack | Works | Task `greets` writes `greets/{entity}/` + `whatsapp/{slug}/` and optionally registers inbox capture; cron `whatsapp_wiki_stack` stacks onboarded inbox text into wiki then clears (media logged/skipped). Not under `topics/`. |
+| Greets + wiki stack | Works | Task `greets` writes `greets/{entity}/` + `whatsapp/{slug}/` and optionally registers inbox capture; cron `whatsapp_wiki_stack` stacks onboarded inbox (text + image-to-text for images) into wiki then clears. Not under `topics/`. |
 | Outbound email (SMTP) | Works | Real SMTP on the worker (`SMTP_*`, `EMAIL_WHITELIST`). When WhatsApp is unavailable mid-send, worker can email `SYSTEM_ADMIN_EMAIL` if SMTP is configured. |
 | Cron `runInput` | Works | Cron jobs accept a string-map `runInput` validated against the task’s defaults; web cron form has schedule presets (daily / hourly / every N minutes / weekday / custom). |
 | Nixery tools | Works | Plugin folders under `server/nixery/{plugin}/` each expose abilities (`{plugin}/{ability}/index.yml`). Orchestrator-direct reads (`nixeryRun: get-knowledge`, …); inline abilities (`research`, `submit-knowledge-observation`, …); manager writes (`apply-manager-topic`, `merge-topic`, …); stage gate `stage-verify`. Packages-only images (no ability Dockerfiles). Concepts: [nixery.md](nixery.md). |
@@ -40,7 +40,7 @@ But more importantly — it does feel like patching in the right direction. No m
 | Direct user ↔ assistant chat | Planned | Deferred for v1; skills stay stateless for now. |
 | A2UI | Planned | Real structured UI payloads — earlier bolt-on attempt failed; avoid another half-measure. |
 | Restart from arbitrary stage | Planned | Agent `goto` and Session Detail **repair** (one-off instruction at an anchor) already cover jump-and-continue and targeted re-run. Still want a plain UI restart-from-stage that reuses upstream context without a repair instruction — not fork-and-pray at the failure point. |
-| Media understanding | Planned | Image/PDF → text via **capable stage agents** (multimodal / tool-capable), not a dedicated nixery ability or custom container image. |
+| Media understanding | Works (images) | Nixery `image-to-text` (DeepSeek vision) with `background` + `userPrompt`. WhatsApp stores typed attachment refs; `whatsapp_wiki_stack` calls vision for `kind=image`. PDF/Word/Excel deferred (same envelope). |
 | Per-stage I/O visibility | Ongoing | Good enough to debug most days, never quite "done." |
 | OneCLI integration | Ongoing | Polish for safer secret handling. |
 | YAHL authoring UI | Ongoing | Polish around authoring and inspecting YAHL scripts. |

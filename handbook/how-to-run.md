@@ -198,7 +198,7 @@ If `/platform/channels` stays **disconnected**, check worker logs for `WORKER_IN
 2. Create a cron for `whatsapp_wiki_stack` (e.g. every 4h) — see API examples below.
 3. Optional morning `traffic_monitor` cron with `runInput` (origin, destination, `notify_to`, …).
 
-Inbound text for onboarded chats lands in `data/whatsapp_inbox`; stack clears processed messages after wiki upsert. Media is logged and skipped.
+Inbound text and attachments for onboarded chats land in `data/whatsapp_inbox` (files under `{folder}/attachments/`). `whatsapp_wiki_stack` materializes image attachments, runs nixery `image-to-text`, merges into wiki, then clears messages and attachment files. Non-image types are stored and noted in digests but not parsed yet.
 
 ### Smoke tests
 
@@ -331,7 +331,7 @@ With `WHATSAPP_ENABLED=true`, set `WORKER_INTERNAL_TOKEN` in `.env` (server + wo
 }
 ```
 
-Pending inbox text (onboarded chats only) is stacked into wiki under `whatsapp/{folder}/` and then cleared. Media is logged and skipped.
+Pending inbox (onboarded chats only) is stacked into wiki under `whatsapp/{folder}/` and then cleared. Image attachments are converted via nixery `image-to-text`; other file types are noted but not parsed yet.
 
 Long poll stages (e.g. `traffic_monitor` monitor) set stage `agentOverrides.bashTimeoutMs` (e.g. `360000`) so a single `sleep 300` can finish. Shared agent default remains **60000** when unset — do not pin timeout in compose.
 

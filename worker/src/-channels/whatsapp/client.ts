@@ -12,8 +12,13 @@ import { applyChannelMessageSanitizer } from '../sanitize-channel-message.js';
 import { clearChromiumProfileLocks } from './clear-profile-locks.js';
 import { whatsappConfig } from './config.js';
 import { appendInboxMessage } from './inbox.js';
-import { logSkippedMediaFromMessage } from './media.js';
-import { rememberChannelLid, rememberPlatformIdentity } from './registry.js';
+import type { TInboxAttachment } from './media.js';
+import { storeWhatsAppAttachment } from './media.js';
+import {
+  findOnboardedChannel,
+  rememberChannelLid,
+  rememberPlatformIdentity,
+} from './registry.js';
 import { resolveCanonicalChatId } from './resolve-chat-id.js';
 import {
   matchOutboundFlight,
@@ -191,19 +196,9 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       return;
     }
 
-    if (msg.hasMedia) {
-      logSkippedMediaFromMessage(msg);
-      return;
-    }
-
     const rawChatId = msg.fromMe ? msg.to : msg.from;
     const isGroup = rawChatId.endsWith('@g.us');
     const body = typeof msg.body === 'string' ? msg.body : '';
-
-    if (!body.trim()) {
-      console.log(`[worker][whatsapp] skip empty body raw=${rawChatId}`);
-      return;
-    }
 
     if (!client) {
       console.warn('[worker][whatsapp] skip no client');
@@ -221,6 +216,35 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       console.log(
         `[worker][whatsapp] resolved raw=${resolved.raw} pn=${resolved.canonical}`,
       );
+    }
+
+    const channel = await findOnboardedChannel(resolved.canonical, resolved.lid);
+
+    if (!channel) {
+      console.log('[worker][whatsapp] skip not onboarded', resolved.canonical);
+
+      if (msg.fromMe) {
+        console.log(`[worker][whatsapp] sendSeen skipped fromMe chat=${resolved.canonical} reason=not_onboarded`);
+      }
+
+      return;
+    }
+
+    let attachments: TInboxAttachment[] | undefined;
+
+    if (msg.hasMedia) {
+      const attachment = await storeWhatsAppAttachment({
+        folder: channel.folder,
+        messageId: messageId || dedupeKey,
+        msg,
+      });
+
+      attachments = [attachment];
+    }
+
+    if (!body.trim() && !attachments?.length) {
+      console.log(`[worker][whatsapp] skip empty body raw=${rawChatId}`);
+      return;
     }
 
     if (msg.fromMe === true) {
@@ -271,12 +295,13 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
 
     const sanitizedBody = typeof draft.body === 'string' ? draft.body : body;
 
-    if (!sanitizedBody.trim()) {
+    if (!sanitizedBody.trim() && !attachments?.length) {
       console.log(`[worker][whatsapp] skip empty body after sanitize raw=${rawChatId}`);
       return;
     }
 
     const persisted = await appendInboxMessage({
+      attachments,
       author: typeof draft.author === 'string' ? draft.author : msg.author ?? undefined,
       body: sanitizedBody,
       chatId: resolved.canonical,

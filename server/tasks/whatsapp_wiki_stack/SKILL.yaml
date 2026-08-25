@@ -57,7 +57,16 @@ stages:
           );
           Read overview_get.markdown and facts_get.markdown under ~/nixery/get-whatsapp-page/ (or workspace paths from those results).
           Read the batch markdown file under ~/nixery/whatsapp-inbox/{batch.markdown}.
-          Synthesize a merged overview from existing overview/facts + this inbox window (observation only). Never rewrite overview from the window alone.
+          For each [attachment kind=image … path=~/… ] line in that markdown:
+            const vision = /nixery(
+              image-to-text,
+              source: attachment_path,
+              background: "WhatsApp inbox for channel {batch.channel.folder}; stacking into wiki",
+              userPrompt: message_caption_or_default,
+            );
+            Fold vision.text into the inbox window context for this batch.
+          For non-image attachment markers: note filename/mime as present-but-unparsed (no vision).
+          Synthesize a merged overview from existing overview/facts + this inbox window (including image-to-text results). Never rewrite overview from the window alone.
           Synthesize a window-only digest page (detail belongs here, not in overview).
           const overview_upsert = /nixery(
             upsert-whatsapp-page,

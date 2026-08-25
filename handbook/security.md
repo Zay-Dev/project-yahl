@@ -23,7 +23,7 @@ sequenceDiagram
 - **Controlled writes** — `upsert-knowledge-page` accepts `key`+`value` or `page`+`content` with `topic` only; known keys are suggestions (unknown keys soft-default to a slug page).
 - **Human browse/edit** — code-server at `/code/` (dev: `127.0.0.1:${CODE_SERVER_PORT:-8080}`); web sidebar **Knowledge** opens `data/knowledge_export` in the IDE; agents never use this route.
 - **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on nixery `research` get an explicit untrusted-content banner in the prompt.
-- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `get-knowledge` = curated corpus via export mirror. Different defs, different trust boundary.
+- **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `image-to-text` = DeepSeek vision over session image files; `get-knowledge` = curated corpus via export mirror. Different defs, different trust boundary.
 
 ### Outbound channels
 

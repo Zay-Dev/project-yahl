@@ -67,6 +67,7 @@ Returns `found` / `not_found` / `unavailable` with citations. Soft-fail never ab
 | Call | Use `data` field |
 |------|------------------|
 | `/nixery(extract-info, source: ~/…, need: …)` | `text` |
+| `/nixery(image-to-text, source: ~/…, background: …, userPrompt?: …)` | `text` |
 | `/nixery(design-questions, stage: …, gaps: …, priorQa: …, mission: …)` | `batches` |
 | `/nixery(research, topic: …, source: ~/…, mission: …, guidelinePath: …)` | `markdown` |
 | `/nixery(consult-breaking-change, proposedChange: …, reason: …, context?: …)` | `{ agree, reasons, alternatives }` |
