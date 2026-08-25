@@ -336,10 +336,12 @@ export function SessionTimeline({
   };
 
   const stageLabels = useMemo(() => buildStageLabels(stages), [stages]);
+  const clockLive = session.runState === "active";
   const hasLiveStage = stages.some((item) => item.status !== "finished");
+  const tickLive = clockLive && hasLiveStage;
 
   useEffect(() => {
-    if (!hasLiveStage) {
+    if (!tickLive) {
       return;
     }
 
@@ -350,11 +352,11 @@ export function SessionTimeline({
     return () => {
       window.clearInterval(timer);
     };
-  }, [hasLiveStage]);
+  }, [tickLive]);
 
   const currentStage = resolveCurrentStage(stages);
   const currentElapsed = currentStage
-    ? resolveStageElapsed(currentStage.stage, nowMs)
+    ? resolveStageElapsed(currentStage.stage, nowMs, { clockLive })
     : null;
 
   return (

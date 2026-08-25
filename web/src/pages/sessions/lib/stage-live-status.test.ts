@@ -103,4 +103,40 @@ describe("resolveStageElapsed", () => {
     assert.equal(elapsed.currentMs, 2500);
     assert.equal(elapsed.totalMs, 12_000);
   });
+
+  it("freezes open stages when clockLive is false", () => {
+    const elapsed = resolveStageElapsed(
+      stage({
+        lastModelDurationMs: 4000,
+        lastModelResponseAt: "2026-08-19T01:00:10.000Z",
+        lastToolCallAt: "2026-08-19T01:00:20.000Z",
+        modelDurationMs: 9000,
+        status: "running",
+      }),
+      Date.parse("2026-08-19T01:00:30.000Z"),
+      { clockLive: false },
+    );
+
+    assert.equal(elapsed.inFlight, false);
+    assert.equal(elapsed.currentMs, 4000);
+    assert.equal(elapsed.totalMs, 9000);
+  });
+
+  it("still ticks when clockLive is true", () => {
+    const elapsed = resolveStageElapsed(
+      stage({
+        lastModelDurationMs: 4000,
+        lastModelResponseAt: "2026-08-19T01:00:10.000Z",
+        lastToolCallAt: "2026-08-19T01:00:20.000Z",
+        modelDurationMs: 9000,
+        status: "running",
+      }),
+      Date.parse("2026-08-19T01:00:30.000Z"),
+      { clockLive: true },
+    );
+
+    assert.equal(elapsed.inFlight, true);
+    assert.equal(elapsed.currentMs, 10_000);
+    assert.equal(elapsed.totalMs, 19_000);
+  });
 });
