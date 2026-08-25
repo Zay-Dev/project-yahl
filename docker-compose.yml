@@ -62,7 +62,6 @@ services:
     environment:
       TZ: ${TZ:-Asia/Hong_Kong}
       HOST_REPO_ROOT: ${HOST_REPO_ROOT}
-      KNOWLEDGE_DATA_ROOT: /data/mastermind
       MONGODB_URI: mongodb://mongo:27017/yahl
       OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
       OMNIFLEX_BUILD_CONTEXT: /omniflex
@@ -211,13 +210,13 @@ services:
     ports:
       - "127.0.0.1:${CODE_SERVER_PORT:-8080}:8080"
     volumes:
-      - ./data/knowledge_export:/home/coder/yahl/data/knowledge_export:rw
-      - ./data/workspace/sessions:/home/coder/yahl/data/workspace/sessions:ro
-      - ./data/workspace/tasks:/home/coder/yahl/data/workspace/tasks:rw
-      - ./runtime/orchestrator/SKILLS:/home/coder/yahl/runtime/orchestrator/SKILLS:rw
-      - ./runtime/orchestrator/YAHL:/home/coder/yahl/runtime/orchestrator/YAHL:rw
-      - ./server/tasks:/home/coder/yahl/server/tasks:rw
-      - ./server/nixery:/home/coder/yahl/server/nixery:rw
+      - ./data/knowledge_export:/home/coder/yahl/knowledge_export:rw
+      - ./data/workspace/sessions:/home/coder/yahl/sessions:ro
+      - ./data/workspace/tasks:/home/coder/yahl/workspace_tasks:rw
+      - ./runtime/orchestrator/SKILLS:/home/coder/yahl/SKILLS:rw
+      - ./runtime/orchestrator/YAHL:/home/coder/yahl/YAHL:rw
+      - ./server/tasks:/home/coder/yahl/tasks:rw
+      - ./server/nixery:/home/coder/yahl/nixery:rw
 
 networks:
   default:

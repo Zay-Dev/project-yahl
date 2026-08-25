@@ -90,7 +90,6 @@ export {
   omitAliasManagerTopics,
   loadTopicExcerpts,
   observationValidationReasons,
-  readInstructionFile,
   resolveManagerDepth,
   resolvePlacePageForTopic,
   shouldUseHeuristicApplyPlan,

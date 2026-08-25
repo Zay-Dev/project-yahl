@@ -1,13 +1,13 @@
 ---
 name: platform
-description: Session API skills — dispatch runs, notifications, knowledge transfers, KM instruction
+description: Session API skills — dispatch runs, notifications, knowledge transfers
 ---
 
 # platform (stage agent)
 
 Use the **`platform`** API tool for `/platform(...)` in stage logic. Calls go to the session server (not mastermind). Read this file before calling — do not grep `/opt`, `/omniflex`, or other sessions for the contract.
 
-**Knowledge writes for stage agents:** follow `/opt/skills/nixery/SKILL.md` and any `~/task-skills/` write skills already provided for this task — do not invent defIds. Overnight manager is multi-stage `knowledge_manager`. Cron: `taskPath: "knowledge_manager"`.
+**Knowledge writes for stage agents:** follow `/opt/skills/nixery/SKILL.md` and any `~/task-skills/` write skills already provided for this task — do not invent defIds. Overnight manager is multi-stage `knowledge_manager`. Cron: `taskPath: "knowledge_manager"` with `runInput.knowledge_manager_instruction`.
 
 ## `propose-notification`
 
@@ -43,14 +43,16 @@ Queue a task via `POST /api/runs`.
 | Key | Required |
 |-----|----------|
 | `taskId` | yes (e.g. `knowledge_manager`) |
-| `runInput` | no — object of string fields |
+| `runInput` | no — object of string fields (KM: `knowledge_manager_instruction`, optional `additional_instruction`) |
 
 ```json
 {
   "skill": "dispatch-task-run",
   "args": {
     "taskId": "knowledge_manager",
-    "runInput": {}
+    "runInput": {
+      "knowledge_manager_instruction": "Do:\n- …\nDon't:\n- …\nFocus:\n- topic-slug"
+    }
   }
 }
 ```
@@ -77,15 +79,3 @@ Cross-topic apply proposal + notify SYSTEM_ADMIN.
   }
 }
 ```
-
-## `get-knowledge-manager-instruction`
-
-No args. Returns `{ ok: true, data: { text } }`.
-
-## `put-knowledge-manager-instruction`
-
-Update global KM free-text. Requires host `PLATFORM_APPROVAL_TOKEN`.
-
-| Key | Required |
-|-----|----------|
-| `text` | yes |

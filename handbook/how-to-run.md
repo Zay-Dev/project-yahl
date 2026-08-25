@@ -74,7 +74,7 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to server (`platform` tool) / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
 | **Knowledge corpus** | `data/knowledge_export` on host; nixery read defs mount **ro**, write defs **rw** | Markdown under `en/topics/`, `whatsapp/`, `greets/` | Agent access — humans browse/edit via code-server |
-| **Code-server** | `code-server` container (`127.0.0.1:${CODE_SERVER_PORT:-8080}` on host; `/code/` via gateway in prod) | Tenant files: `data/knowledge_export` (**rw**), `data/workspace/sessions` (ro), `data/workspace/tasks`, `runtime/orchestrator/SKILLS`, `runtime/orchestrator/YAHL`, `server/tasks`, `server/nixery` | `docker.sock`, vault keys — gateway auth only |
+| **Code-server** | `code-server` container (`127.0.0.1:${CODE_SERVER_PORT:-8080}` on host; `/code/` via gateway in prod) | Flat under `/home/coder/yahl/`: `knowledge_export` (**rw**), `sessions` (ro), `workspace_tasks`, `SKILLS`, `YAHL`, `tasks`, `nixery` | `docker.sock`, vault keys — gateway auth only |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive, SMTP outbound | Does not spawn orchestrator or agent containers; WhatsApp/email I/O is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
@@ -280,7 +280,7 @@ pnpm run orchestrate
 
 #### Example: Knowledge Manager overnight
 
-Schedule full-corpus review (global instruction; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers → within-topic dedup):
+Schedule full-corpus review (global instruction via cron `runInput`; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers → within-topic dedup):
 
 ```json
 {
@@ -288,11 +288,14 @@ Schedule full-corpus review (global instruction; every topic) by starting multi-
   "id": "knowledge-manager-overnight",
   "schedule": "0 2 * * *",
   "timezone": "Asia/Hong_Kong",
-  "taskPath": "knowledge_manager"
+  "taskPath": "knowledge_manager",
+  "runInput": {
+    "knowledge_manager_instruction": "Do:\n- Prefer evidence-backed PLACE notes\nDon't:\n- Invent facts\nFocus:\n- project-yahl\n- hk-weather"
+  }
 }
 ```
 
-Edit focus via `/platform/knowledge-policies` or task `knowledge_settings`. Manual / from another stage: `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
+Edit Focus/Do/Don't by updating the cron job’s `runInput.knowledge_manager_instruction` (or pass it on a manual run). Optional this-run mission addon: `additional_instruction` — see [tricks.md](tricks.md). Manual / from another stage: `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: { knowledge_manager_instruction: "…" })`.
 
 #### Example: traffic monitor cron
 

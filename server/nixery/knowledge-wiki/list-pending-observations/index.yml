@@ -18,6 +18,9 @@ input:
   topic:
     type: string
     required: true
+  instruction:
+    type: string
+    required: true
   output:
     type: string
     required: false

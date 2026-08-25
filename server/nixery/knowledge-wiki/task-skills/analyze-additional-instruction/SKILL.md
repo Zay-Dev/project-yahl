@@ -5,7 +5,7 @@ description: Parse optional runInput.additional_instruction for YAHL tasks
 
 # analyze-additional-instruction
 
-Parse optional `runInput.additional_instruction` (this-run free-text override). Durable task config stays elsewhere — this key never writes the durable Knowledge Manager instruction file.
+Parse optional `runInput.additional_instruction` (this-run free-text mission addon). Global KM Focus/Do/Don't lives in `runInput.knowledge_manager_instruction` — this key never replaces it.
 
 ## Output — `instruction_followup`
 
@@ -44,4 +44,4 @@ Use when `additional_instruction` is missing, empty, or whitespace-only:
 
 - Ask the user.
 - Invent URLs or scopes not supported by the instruction text.
-- Persist this text into durable wiki / KM instruction storage.
+- Treat this text as a substitute for `knowledge_manager_instruction`.

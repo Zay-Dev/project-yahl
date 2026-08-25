@@ -189,62 +189,6 @@ const runProposeKnowledgeTransfer = async (
   };
 };
 
-const runGetKnowledgeManagerInstruction = async (): Promise<TPlatformSkillResponse> => {
-  const res = await platformFetch(`${sessionApiBaseUrl()}/api/platform/knowledge-manager-instruction`);
-  const payload = await parseJson(res);
-
-  if (!res.ok) {
-    return failure(
-      typeof payload.error === 'string'
-        ? payload.error
-        : `get-knowledge-manager-instruction failed (${res.status})`,
-    );
-  }
-
-  const data = unwrapData(payload) as { text?: string };
-
-  return {
-    data: { text: data.text ?? '' },
-    ok: true,
-  };
-};
-
-const runPutKnowledgeManagerInstruction = async (
-  args: Record<string, unknown>,
-): Promise<TPlatformSkillResponse> => {
-  const text = typeof args.text === 'string' ? args.text : '';
-  const token = process.env.PLATFORM_APPROVAL_TOKEN?.trim() ?? '';
-
-  if (!token) {
-    return failure('put-knowledge-manager-instruction requires PLATFORM_APPROVAL_TOKEN');
-  }
-
-  const res = await platformFetch(`${sessionApiBaseUrl()}/api/platform/knowledge-manager-instruction`, {
-    body: JSON.stringify({ text }),
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Approval-Token': token,
-    },
-    method: 'PUT',
-  });
-  const payload = await parseJson(res);
-
-  if (!res.ok) {
-    return failure(
-      typeof payload.error === 'string'
-        ? payload.error
-        : `put-knowledge-manager-instruction failed (${res.status})`,
-    );
-  }
-
-  const data = unwrapData(payload) as { text?: string };
-
-  return {
-    data: { text: data.text ?? text },
-    ok: true,
-  };
-};
-
 export const callPlatformSkill = async (
   name: string,
   args: Record<string, unknown>,
@@ -273,12 +217,6 @@ export const callPlatformSkill = async (
         break;
       case 'propose-knowledge-transfer':
         result = await runProposeKnowledgeTransfer(args, sessionId);
-        break;
-      case 'get-knowledge-manager-instruction':
-        result = await runGetKnowledgeManagerInstruction();
-        break;
-      case 'put-knowledge-manager-instruction':
-        result = await runPutKnowledgeManagerInstruction(args);
         break;
       default:
         result = failure(`unknown platform skill: ${name}`);

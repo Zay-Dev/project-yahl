@@ -6,7 +6,6 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { AppLayout } from "@/layouts/app-layout";
 import { DashboardPage } from "@/pages/dashboard";
 import { HealthPage } from "@/pages/health";
-import { KnowledgePoliciesPage } from "@/pages/platform/knowledge-policies";
 import { PlatformApprovalsPage } from "@/pages/platform/approvals";
 import { PlatformChannelsPage } from "@/pages/platform/channels";
 import { CronJobsPage } from "@/pages/platform/cron-jobs";
@@ -61,7 +60,6 @@ export function App() {
             <Route path="tasks/:taskId" element={<TaskDetailPage />} />
             <Route path="platform/approvals" element={<PlatformApprovalsPage />} />
             <Route path="platform/channels" element={<PlatformChannelsPage />} />
-            <Route path="platform/knowledge-policies" element={<KnowledgePoliciesPage />} />
             <Route path="platform/cron-jobs" element={<CronJobsPage />} />
             <Route path="platform/cron-jobs/new" element={<CronJobCreatePage />} />
             <Route path="platform/cron-jobs/:jobId" element={<CronJobEditPage />} />

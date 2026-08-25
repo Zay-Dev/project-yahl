@@ -2,10 +2,11 @@ name: knowledge-manager
 description: |
   Multi-stage overnight Knowledge Manager — per-topic validate/apply + cross-topic transfer proposals + within-topic dedup.
   Start via cron taskPath knowledge_manager (handbook/how-to-run.md) or
-  /platform(dispatch-task-run, taskId: knowledge_manager, runInput: {}).
+  /platform(dispatch-task-run, taskId: knowledge_manager, runInput: { knowledge_manager_instruction: "…" }).
 background: true
 resultContextKey: result
 runInput:
+  - knowledge_manager_instruction
   - additional_instruction
 
 types: |
@@ -60,21 +61,23 @@ stages:
 
   - nixeryRun: list-manager-topics
     nixeryInput:
+      instruction: knowledge_manager_instruction
       output: result.json
+    contextKeys: [knowledge_manager_instruction]
     logic: "(nixery)"
 
   - produceContextKeys: [topics, instructionPreview, missionText]
-    contextKeys: [missionText, instruction_followup]
+    contextKeys: [missionText, instruction_followup, knowledge_manager_instruction]
     logic: |
       Read ~/nixery/list-manager-topics/result.json from the session workspace.
       Parse the gate JSON. If ok and topics is an array, set topics to that array and instructionPreview to instructionPreview or ''.
-      Otherwise set topics to [] and instructionPreview to ''.
+      Otherwise set topics to [] and instructionPreview to (knowledge_manager_instruction || '').slice(0, 240).
       IF: instruction_followup && instruction_followup.actionable && instruction_followup.missionAddon;
         const missionText = (missionText || '') + '\n\nThis-run additional_instruction:\n' + instruction_followup.missionAddon;
       END:
 
   - loopSetup: for each topic of [topics]
-    contextKeys: [missionText, topic, topics, reviews_acc, transfers_proposed_acc, instruction_followup]
+    contextKeys: [missionText, topic, topics, reviews_acc, transfers_proposed_acc, instruction_followup, knowledge_manager_instruction]
     updateContextKeys: [reviews_acc, transfers_proposed_acc]
     verify:
       defId: stage-verify
@@ -92,7 +95,7 @@ stages:
       Read ~/task-skills/task-mission/SKILL.md.
       Read ~/task-skills/validate-and-feedback/SKILL.md.
       const intakeOut = 'intake-' + topic + '.json';
-      /nixery(list-pending-observations, topic: topic, output: intakeOut);
+      /nixery(list-pending-observations, topic: topic, instruction: knowledge_manager_instruction, output: intakeOut);
       Read the gate JSON under ~/nixery/list-pending-observations/ named intakeOut from the session workspace.
       Parse the gate JSON. Set intake to intake object when ok; otherwise intake = { observations: [], needsValidation: [], depth: 'light', excerpts: {}, placePage: 'facts', topic }.
       const needs = intake.needsValidation || [];
@@ -130,7 +133,7 @@ stages:
         EXTENDS: reviews_acc = [...(reviews_acc || []), review];
       ELSE:
         const applyOut = 'apply-' + topic + '.json';
-        /nixery(apply-manager-topic, topic: topic, output: applyOut);
+        /nixery(apply-manager-topic, topic: topic, instruction: knowledge_manager_instruction, output: applyOut);
         Read the apply gate under ~/nixery/apply-manager-topic/ named applyOut from the session workspace.
         Parse the gate JSON.
         IF: gate.ok AND gate.review AND gate.review.topic === topic;

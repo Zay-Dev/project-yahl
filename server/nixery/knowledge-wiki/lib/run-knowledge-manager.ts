@@ -7,7 +7,6 @@ import {
   type TApplyPlan,
   type TApplyPlanOp,
 } from './apply-plan.js';
-import { readKnowledgeWikiConfig } from './config.js';
 import { WIKI_OBSERVATIONS_PREFIX } from './content-model.js';
 import { applyDedupAction } from './dedup.js';
 import {
@@ -98,17 +97,6 @@ export type TCompleteApplyPlan = (params: {
 const sessionApiBase = () =>
   (process.env.SESSION_API_BASE_URL?.trim() || 'http://server:4000').replace(/\/+$/, '');
 
-export const readInstructionFile = async (): Promise<string> => {
-  const registryPath = readKnowledgeWikiConfig().topicsRegistryPath;
-  const filePath = path.join(path.dirname(registryPath), 'knowledge-manager-instruction.md');
-
-  try {
-    return await fs.readFile(filePath, 'utf8');
-  } catch {
-    return '';
-  }
-};
-
 export const resolveManagerDepth = (topic: string, instruction: string): TManagerDepth => {
   const focusBlock = instruction.match(/Focus:\s*([\s\S]*?)(?:\n\s*\n|$)/i)?.[1] ?? instruction;
   const slug = topic.trim().toLowerCase();
@@ -155,12 +143,11 @@ export const listManagerTopics = async (): Promise<string[]> => {
   return omitAliasManagerTopics(slugs, aliasSlugs);
 };
 
-export const listManagerTopicRows = async (instruction?: string): Promise<TManagerTopicRow[]> => {
-  const text = instruction ?? await readInstructionFile();
+export const listManagerTopicRows = async (instruction: string): Promise<TManagerTopicRow[]> => {
   const topics = await listManagerTopics();
 
   return topics.map((topic) => ({
-    depth: resolveManagerDepth(topic, text),
+    depth: resolveManagerDepth(topic, instruction),
     topic,
   }));
 };
@@ -345,11 +332,10 @@ export const loadTopicExcerpts = async (topic: string): Promise<TTopicIntake['ex
 };
 
 export const buildTopicIntake = async (params: {
-  instruction?: string;
+  instruction: string;
   topic: string;
 }): Promise<TTopicIntake> => {
-  const instruction = params.instruction ?? await readInstructionFile();
-  const depth = resolveManagerDepth(params.topic, instruction);
+  const depth = resolveManagerDepth(params.topic, params.instruction);
   const observations = await listPendingObservations(params.topic);
   const excerpts = await loadTopicExcerpts(params.topic);
   const placePage = await resolvePlacePageForTopic(params.topic);
@@ -882,11 +868,11 @@ export const consumeObservations = async (params: {
 export const applyManagerTopic = async (options: {
   completeApplyPlan?: TCompleteApplyPlan;
   dryRun?: boolean;
-  instruction?: string;
+  instruction: string;
   sessionId?: string;
   topic: string;
 }): Promise<TTopicReviewRecord & { consumed: number }> => {
-  const instruction = options.instruction ?? await readInstructionFile();
+  const instruction = options.instruction;
   const topic = options.topic.trim();
   const depth = resolveManagerDepth(topic, instruction);
   const placePage = await resolvePlacePageForTopic(topic);

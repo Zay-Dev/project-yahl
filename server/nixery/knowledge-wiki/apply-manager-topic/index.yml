@@ -26,6 +26,9 @@ input:
   topic:
     type: string
     required: true
+  instruction:
+    type: string
+    required: true
   dryRun:
     type: string
     required: false

@@ -53,14 +53,6 @@ export type TResponseCronJobMutation = {
   ok: true;
 };
 
-export type TResponseKnowledgeManagerInstruction = {
-  text: string;
-};
-
-export type TRequestPutKnowledgeManagerInstructionBody = {
-  text: string;
-};
-
 export type TResponseWhatsAppChannel = {
   enabled: boolean;
   qrDataUrl?: string;

@@ -246,8 +246,6 @@ export const STAGE_TOOLS = [
               "dispatch-task-run",
               "propose-notification",
               "propose-knowledge-transfer",
-              "get-knowledge-manager-instruction",
-              "put-knowledge-manager-instruction",
             ],
             type: "string",
           },

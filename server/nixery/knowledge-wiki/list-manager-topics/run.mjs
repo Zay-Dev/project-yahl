@@ -1,10 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import {
-  listManagerTopicRows,
-  readInstructionFile,
-} from '/opt/nixery/plugin/lib/dist/index.js';
+import { listManagerTopicRows } from '/opt/nixery/plugin/lib/dist/index.js';
 import { logProgress, resolveDefId } from '../lib/run-agent.mjs';
 
 const readJson = async (filePath) => {
@@ -22,11 +19,11 @@ const main = async () => {
     ? input.output.trim()
     : 'result.json';
   const outputPath = path.join(workspace, outputName);
+  const instruction = typeof input.instruction === 'string' ? input.instruction : '';
 
   logProgress(defId, 'start');
 
   try {
-    const instruction = await readInstructionFile();
     const rows = await listManagerTopicRows(instruction);
     const topics = rows.map((row) => row.topic);
     const gate = {

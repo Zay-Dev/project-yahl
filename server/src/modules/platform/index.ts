@@ -2,8 +2,6 @@ import { exposedRoute } from '@/servers';
 
 import { getCronJob, listCronJobs } from './use-cases/cron-read';
 import { createCronJob, deleteCronJob, updateCronJob } from './use-cases/cron-write';
-import { getKnowledgeManagerInstruction } from './use-cases/knowledge-instruction-read';
-import { putKnowledgeManagerInstruction } from './use-cases/knowledge-instruction-write';
 import {
   approveProposal,
   createKnowledgeTransferProposal,
@@ -55,10 +53,6 @@ exposedRoute('/api/platform/cron/jobs')
   .get('/:id', getCronJob)
   .patch('/:id', updateCronJob)
   .delete('/:id', deleteCronJob);
-
-exposedRoute('/api/platform/knowledge-manager-instruction')
-  .get('/', getKnowledgeManagerInstruction)
-  .put('/', putKnowledgeManagerInstruction);
 
 exposedRoute('/api/platform/channels')
   .get('/whatsapp', getWhatsAppChannel);

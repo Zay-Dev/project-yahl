@@ -4,13 +4,13 @@ Multi-stage overnight Knowledge Manager.
 
 ## How to start
 
-- Cron: `POST /api/platform/cron/jobs` with `taskPath: "knowledge_manager"` (see handbook/how-to-run.md).
-- Manual / from another stage: `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
-- Optional this-run override: `runInput.additional_instruction` (does not rewrite the durable KM instruction file).
+- Cron: `POST /api/platform/cron/jobs` with `taskPath: "knowledge_manager"` and `runInput.knowledge_manager_instruction` (see handbook/how-to-run.md).
+- Manual / from another stage: `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: { knowledge_manager_instruction: "…" })`.
+- Optional this-run mission addon: `runInput.additional_instruction` (does not replace `knowledge_manager_instruction`).
 
 ## Pass A — same-topic note-making
 
-1. `list-manager-topics` → every topic (Focus changes depth only; durable instruction file + optional `additional_instruction`). Alias slugs are omitted (merged siblings are not first-class).
+1. `list-manager-topics` → every topic (Focus in `knowledge_manager_instruction` changes depth only; optional `additional_instruction` adds mission text). Alias slugs are omitted (merged siblings are not first-class).
 2. Per topic: `list-pending-observations` → optional `research` for doubtful PLACE/weak evidence → feedback via `submit-knowledge-observation` (quoted vs inferred) → `apply-manager-topic` (hone + ApplyPlan + consume). ApplyPlan may set `targetTopic` to re-home cross-cutting notes by content — do not force task domain slugs for cross-cutting lessons.
 3. Use unique per-topic nixery outputs (`intake-{topic}.json`, `research-{topic}.md`, `apply-{topic}.json`). Never fabricate a success review when apply gate is missing/`ok:false` — set `applyFailed` and fail verify. Stage-verify judges **reviews_acc in context only** (do not require gate file paths in the rubric).
 4. Skip `apply-manager-topic` when depth is `light` and both observations and needsValidation are empty (`skippedEmpty: true`). Focus topics still run apply (hone/quiz).
