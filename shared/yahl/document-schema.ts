@@ -1,4 +1,5 @@
-import { parseRunInputContextKeys } from './run-input-keys';
+import type { TRunInputField } from './run-input-keys';
+import { parseRunInputFields } from './run-input-keys';
 import { assertDocumentStageIdsAndGoto } from './assert-stage-goto-graph';
 
 import type { TYahlStage } from './types';
@@ -8,7 +9,7 @@ export type TYahlDocument = {
   description: string;
   name: string;
   resultContextKey?: string;
-  runInput?: string[];
+  runInput?: TRunInputField[];
   stages: TYahlStage[];
   types?: string;
 };
@@ -48,7 +49,7 @@ export const validateYahlDocument = (raw: unknown): TYahlDocument => {
     throw new Error('resultContextKey: must be a non-empty string when present');
   }
 
-  const runInput = parseRunInputContextKeys(doc.runInput);
+  const runInput = parseRunInputFields(doc.runInput);
   const stages = doc.stages.map((stage, index) => validateYahlStage(stage, index));
 
   assertDocumentStageIdsAndGoto(stages);

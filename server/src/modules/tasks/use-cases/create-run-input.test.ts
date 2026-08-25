@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  parseRunInputFieldsFromYahl,
   parseRunInputKeysFromYahl,
   validateRunInputPayload,
 } from '@project-yahl/shared/yahl/run-input-keys';
@@ -18,8 +19,13 @@ describe('create run runInput validation', () => {
   it('reads runInputKeys from knowledge_manager SKILL.yaml', () => {
     const yahl = readFileSync(knowledgeManagerPath, 'utf8');
     const keys = parseRunInputKeysFromYahl(yahl);
+    const fields = parseRunInputFieldsFromYahl(yahl);
 
-    assert.deepEqual(keys, ['additional_instruction']);
+    assert.deepEqual(keys, ['knowledge_manager_instruction', 'additional_instruction']);
+    assert.deepEqual(fields, [
+      { key: 'knowledge_manager_instruction', type: 'textarea' },
+      { key: 'additional_instruction', type: 'textarea' },
+    ]);
   });
 
   it('accepts declared runInput keys', () => {

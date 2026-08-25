@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto';
 
-import { validateRunInputPayload } from '@project-yahl/shared/yahl/run-input-keys';
+import {
+  applyRunInputDefaults,
+  validateRunInputPayload,
+} from '@project-yahl/shared/yahl/run-input-keys';
 import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
 
 import Joi from 'joi';
@@ -38,7 +41,8 @@ export const createRun = [
 
       const sessionId = body.sessionId?.trim() || randomUUID();
       const task = await readTaskFile(body.taskId);
-      const validation = validateRunInputPayload(body.runInput, task.runInputKeys);
+      const runInput = applyRunInputDefaults(body.runInput, task.runInputFields);
+      const validation = validateRunInputPayload(runInput, task.runInputFields);
 
       if (!validation.ok) {
         throw errors.badRequest(validation.message);
@@ -52,7 +56,7 @@ export const createRun = [
         parsedStages: stages,
         resultContextKey,
         runCursor: { kind: 'pipeline', stageIndex: 0 },
-        runInput: body.runInput,
+        runInput,
         sessionId,
         storageSeed: { context: {}, types: {} },
         taskId: body.taskId,

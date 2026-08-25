@@ -25,7 +25,7 @@ const _seedFreshTaskStorage = (
   taskYahl: string,
 ) => {
   const runInputContextKeys = taskYahl.trim()
-    ? parseYahlDocument(taskYahl).runInput
+    ? parseYahlDocument(taskYahl).runInput?.map((field) => field.key)
     : undefined;
 
   seedRunInputContext(storage, runInput, runInputContextKeys);

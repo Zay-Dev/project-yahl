@@ -1,4 +1,5 @@
 import type { TRequestCreateCronJobBody } from "@project-yahl/server/modules/platform/-api-types";
+import type { TRunInputField } from "@project-yahl/server/modules/tasks/-api-types";
 
 import { useEffect, useState } from "react";
 
@@ -11,6 +12,10 @@ import {
   type TCronPreset,
   type TCronScheduleUi,
 } from "@/pages/platform/lib/cron-schedule";
+import {
+  initialRunInputValues,
+  RunInputFieldsForm,
+} from "@/pages/tasks/components/run-input-fields";
 import { getTask, listTasks } from "@/pages/tasks/lib/tasks-api";
 
 export type TCronJobFormValues = {
@@ -68,10 +73,14 @@ export const toCreateCronJobBody = (values: TCronJobFormValues): TRequestCreateC
 };
 
 export function CronJobForm({ idReadOnly = false, onChange, values }: TCronJobFormProps) {
-  const [tasks, setTasks] = useState<{ runInputKeys?: string[]; taskId: string; name: string }[]>([]);
+  const [tasks, setTasks] = useState<{
+    name: string;
+    runInputFields?: TRunInputField[];
+    taskId: string;
+  }[]>([]);
   const [tasksError, setTasksError] = useState<string | null>(null);
-  const [runInputKeys, setRunInputKeys] = useState<string[]>([]);
-  const [runInputKeysReady, setRunInputKeysReady] = useState(false);
+  const [runInputFields, setRunInputFields] = useState<TRunInputField[]>([]);
+  const [runInputFieldsReady, setRunInputFieldsReady] = useState(false);
   const [scheduleUi, setScheduleUi] = useState<TCronScheduleUi>(() =>
     parseCronExpression(values.schedule || EMPTY_CRON_SCHEDULE_UI.raw),
   );
@@ -83,7 +92,8 @@ export function CronJobForm({ idReadOnly = false, onChange, values }: TCronJobFo
 
         setTasks(items.map((task) => ({
           name: task.name || task.taskId,
-          runInputKeys: task.runInputKeys,
+          runInputFields: task.runInputFields
+            ?? (task.runInputKeys ?? []).map((key: string) => ({ key, type: "text" as const })),
           taskId: task.taskId,
         })));
       } catch (loadError) {
@@ -99,20 +109,20 @@ export function CronJobForm({ idReadOnly = false, onChange, values }: TCronJobFo
   }, [values.schedule]);
 
   useEffect(() => {
-    const loadKeys = async () => {
+    const loadFields = async () => {
       if (!values.taskPath.trim()) {
-        setRunInputKeys([]);
-        setRunInputKeysReady(true);
+        setRunInputFields([]);
+        setRunInputFieldsReady(true);
         return;
       }
 
-      setRunInputKeysReady(false);
+      setRunInputFieldsReady(false);
 
       const listed = tasks.find((task) => task.taskId === values.taskPath);
 
       if (listed) {
-        setRunInputKeys(listed.runInputKeys ?? []);
-        setRunInputKeysReady(true);
+        setRunInputFields(listed.runInputFields ?? []);
+        setRunInputFieldsReady(true);
         return;
       }
 
@@ -122,32 +132,32 @@ export function CronJobForm({ idReadOnly = false, onChange, values }: TCronJobFo
 
       try {
         const task = await getTask(values.taskPath);
+        const fields = task.runInputFields
+          ?? (task.runInputKeys ?? []).map((key: string) => ({ key, type: "text" as const }));
 
-        setRunInputKeys(task.runInputKeys ?? []);
+        setRunInputFields(fields);
       } catch {
-        setRunInputKeys([]);
+        setRunInputFields([]);
       } finally {
-        setRunInputKeysReady(true);
+        setRunInputFieldsReady(true);
       }
     };
 
-    void loadKeys();
+    void loadFields();
   }, [tasks, values.taskPath]);
 
   useEffect(() => {
-    if (!runInputKeysReady) {
+    if (!runInputFieldsReady) {
       return;
     }
 
     onChange({
       ...values,
-      runInput: Object.fromEntries(
-        runInputKeys.map((key) => [key, values.runInput[key] ?? ""]),
-      ),
+      runInput: initialRunInputValues(runInputFields, values.runInput),
     });
-    // Sync runInput shape when task keys are ready / change only
+    // Sync runInput shape when task fields are ready / change only
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runInputKeys.join("|"), runInputKeysReady, values.taskPath]);
+  }, [runInputFields.map((field) => field.key).join("|"), runInputFieldsReady, values.taskPath]);
 
   const setField = <K extends keyof TCronJobFormValues>(key: K, value: TCronJobFormValues[K]) => {
     onChange({ ...values, [key]: value });
@@ -267,26 +277,12 @@ export function CronJobForm({ idReadOnly = false, onChange, values }: TCronJobFo
         {tasksError ? <span className="text-xs text-destructive">{tasksError}</span> : null}
       </label>
 
-      {runInputKeys.length > 0 ? (
-        <div className="flex flex-col gap-3 rounded-lg border bg-background p-4">
-          <p className="text-sm font-medium">Task run input</p>
-          {runInputKeys.map((key) => (
-            <label className="flex flex-col gap-2 text-sm" key={key}>
-              <span className="font-medium">{key}</span>
-              <Input
-                className="font-mono text-xs"
-                onChange={(event) => {
-                  setField("runInput", {
-                    ...values.runInput,
-                    [key]: event.target.value,
-                  });
-                }}
-                value={values.runInput[key] ?? ""}
-              />
-            </label>
-          ))}
-        </div>
-      ) : null}
+      <RunInputFieldsForm
+        fields={runInputFields}
+        onChange={(runInput) => setField("runInput", runInput)}
+        title="Task run input"
+        values={values.runInput}
+      />
 
       <label className="flex items-center gap-2 text-sm">
         <input

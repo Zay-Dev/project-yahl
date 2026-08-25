@@ -1,14 +1,18 @@
+import type { TRunInputField } from '@project-yahl/shared/yahl/run-input-keys';
+import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
+
+export type { TRunInputField };
+
 export type TResponseTaskListItem = {
   background?: boolean;
   description: string;
   id: string;
   name: string;
   path: string;
+  runInputFields?: TRunInputField[];
   runInputKeys?: string[];
   taskId: string;
 };
-
-import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
 
 export type TResponseTask = TResponseTaskListItem & {
   taskSkills: TTaskSkillFile[];

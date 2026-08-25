@@ -2,6 +2,30 @@
 
 Operator tips that are easy to miss.
 
+## Typed `runInput` fields (YAHL)
+
+Task `runInput` may be a list of string keys (legacy → `text`) or field objects:
+
+```yaml
+runInput:
+  - monitor_minutes                    # shorthand → type: text
+  - key: source_instruction
+    type: textarea
+  - key: monitor_minutes
+    type: text
+    default: "60"
+  - key: city
+    type: enum
+    options:
+      - Hong Kong
+      - Singapore
+    default: Hong Kong
+```
+
+- `type`: `text` | `textarea` | `enum`
+- `default`: optional; applied when the key is missing/blank on create-run (and shown in the web run / cron forms)
+- `enum`: requires `options`; web renders a dropdown
+
 ## `knowledge_manager_instruction` (YAHL `runInput`)
 
 Global Knowledge Manager Focus/Do/Don't for task `knowledge_manager`. Store it on the overnight cron job’s `runInput` (or pass it when dispatching a run). Nixery `list-manager-topics` / `list-pending-observations` / `apply-manager-topic` receive it as `instruction`. Empty/missing → all topics `light` depth.

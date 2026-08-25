@@ -161,7 +161,7 @@ class YahlAgentRunner {
   ) {
     this.storage = useStorage();
     const runInputContextKeys = yahl.trim()
-      ? parseYahlDocument(yahl).runInput
+      ? parseYahlDocument(yahl).runInput?.map((field) => field.key)
       : undefined;
 
     seedRunInputContext(

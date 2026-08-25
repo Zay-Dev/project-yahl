@@ -6,13 +6,22 @@ description: >
 resultContextKey: result
 background: true
 runInput:
-  - monitor_minutes
-  - notify_to
-  - origin
-  - destination
-  - source_instruction
-  - city
-  - timezone
+  - key: monitor_minutes
+    type: text
+    default: "60"
+  - key: notify_to
+    type: text
+  - key: origin
+    type: text
+  - key: destination
+    type: text
+  - key: source_instruction
+    type: textarea
+  - key: city
+    type: text
+  - key: timezone
+    type: text
+    default: Asia/Hong_Kong
 
 types: |
   type TRouteSample = {
@@ -80,6 +89,7 @@ stages:
         const slug = cityRaw.toLowerCase().replace(/[_\s]+/g, '-');
         const slugUnderscored = slug.replace(/-/g, '_');
         const isHk = cityRaw === 'Hong_Kong' || slug === 'hong-kong';
+        
         return {
           monitor_minutes: String(context.context.monitor_minutes ?? '').trim() || '60',
           notify_to: String(context.context.notify_to ?? '').trim() || '91234567',

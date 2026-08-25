@@ -6,8 +6,10 @@ description: |
 background: true
 resultContextKey: result
 runInput:
-  - knowledge_manager_instruction
-  - additional_instruction
+  - key: knowledge_manager_instruction
+    type: textarea
+  - key: additional_instruction
+    type: textarea
 
 types: |
   type TReviewRecord = {
