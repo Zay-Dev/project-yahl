@@ -13,6 +13,7 @@
     "declaration": true
   },
   "include": [
+    "agent-files/**/*.ts",
     "email/**/*.ts",
     "knowledge-qa/**/*.ts",
     "nixery/**/*.ts",

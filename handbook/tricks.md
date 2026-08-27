@@ -2,9 +2,50 @@
 
 Operator tips that are easy to miss.
 
+## Typed `runInput` fields (YAHL)
+
+Task `runInput` may be a list of string keys (legacy → `text`) or field objects:
+
+```yaml
+runInput:
+  - monitor_minutes                    # shorthand → type: text
+  - key: source_instruction
+    type: textarea
+  - key: monitor_minutes
+    type: text
+    default: "60"
+  - key: city
+    type: enum
+    options:
+      - Hong Kong
+      - Singapore
+    default: Hong Kong
+```
+
+- `type`: `text` | `textarea` | `enum`
+- `default`: optional; applied when the key is missing/blank on create-run (and shown in the web run / cron forms)
+- `enum`: requires `options`; web renders a dropdown
+
+## `knowledge_manager_instruction` (YAHL `runInput`)
+
+Global Knowledge Manager Focus/Do/Don't for task `knowledge_manager`. Store it on the overnight cron job’s `runInput` (or pass it when dispatching a run). Nixery `list-manager-topics` / `list-pending-observations` / `apply-manager-topic` receive it as `instruction`. Empty/missing → all topics `light` depth.
+
+Example:
+
+```bash
+curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "taskId": "knowledge_manager",
+    "runInput": {
+      "knowledge_manager_instruction": "Do:\n- Prefer evidence-backed PLACE notes\nDon't:\n- Invent facts\nFocus:\n- project-yahl\n- hk-weather"
+    }
+  }'
+```
+
 ## `additional_instruction` (YAHL `runInput`)
 
-Optional free-text **this-run** override. Declare the key under the task's `runInput:` list. Blank/missing → ignore. Never writes durable Knowledge Manager instruction or wiki.
+Optional free-text **this-run** mission addon. Declare the key under the task's `runInput:` list. Blank/missing → ignore. Does not replace `knowledge_manager_instruction`.
 
 `knowledge_manager` parses it into `instruction_followup` (`missionAddon` merges into this-run mission).
 
@@ -16,7 +57,8 @@ curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
   -d '{
     "taskId": "knowledge_manager",
     "runInput": {
-      "additional_instruction": "Focus depth on project-yahl and hk-weather tonight"
+      "knowledge_manager_instruction": "Focus:\n- project-yahl",
+      "additional_instruction": "Spend extra time on PLACE quality tonight"
     }
   }'
 ```

@@ -136,6 +136,10 @@
       "development": "./nixery/list-defs.ts",
       "import": "./dist/nixery/list-defs.js"
     },
+    "./agent-files/prepare-agent-files": {
+      "development": "./agent-files/prepare-agent-files.ts",
+      "import": "./dist/agent-files/prepare-agent-files.js"
+    },
     "./nixery/ensure-plugin-links": {
       "development": "./nixery/ensure-plugin-links.ts",
       "import": "./dist/nixery/ensure-plugin-links.js"

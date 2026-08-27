@@ -1,9 +1,11 @@
 const _modelsName = {
   CronJobs: 'CronJobs',
   ForkSessions: 'ForkSessions',
+  PlatformChannelStates: 'PlatformChannelStates',
   PlatformProposals: 'PlatformProposals',
   SessionAskUserQuestions: 'SessionAskUserQuestions',
   SessionModelResponses: 'SessionModelResponses',
+  SessionUserPauseCheckpoints: 'SessionUserPauseCheckpoints',
   SessionVerifyCheckpoints: 'SessionVerifyCheckpoints',
   Sessions: 'Sessions',
   SessionToolCalls: 'SessionToolCalls',

@@ -19,7 +19,7 @@ Recent shape: the old **mastermind** gateway is gone. Stage agents call **`/plat
 - **`/platform(...)`** → server (dispatch runs, notifications, Knowledge Manager instruction).
 - **`/nixery(...)`** → plug-in one-shot containers under `server/nixery/{plugin}/` ([`handbook/nixery.md`](handbook/nixery.md)).
 - **LLM** → `llm-proxy` → OneCLI (retries, token usage back to the session).
-- **Wiki + Knowledge Manager** — durable memory humans browse; agents read session extracts and submit observations.
+- **Knowledge corpus + Knowledge Manager** — durable memory humans browse/edit in code-server; agents read session extracts and submit observations.
 
 Pipeline detail: [`handbook/how-it-works.md`](handbook/how-it-works.md).
 
@@ -28,11 +28,14 @@ Pipeline detail: [`handbook/how-it-works.md`](handbook/how-it-works.md).
 - **Staged pseudo-code with verify + rerun** — chop a scary prompt into stages, slap `verify` on each, re-run the one that lied.
 - **`whileSetup` + `warmUp`** — orchestrator do-while for polling and monitoring. `loopSetup` counts sheep; `whileSetup` babysits traffic until the window closes. **`warmUp`** reads the manual once; later polls carry that transcript forward instead of starting cold every time.
 - **`goto`** — jump-and-continue between labeled stages (`/stage(id)`) without fork-and-pray at the failure point.
-- **Plug-in nixery** — typed one-shot containers; install plugins, run `pnpm nixery:link`, grow or shrink the `/nixery` surface.
-- **LLM proxy** — OpenAI-compatible hub with retries (408/429/5xx), usage postback, Anthropic translation.
+- **knowledge-to-script** — default-on for AI stages (`knowledgeToScript`); narrow operation scripts under `~/data/scripts/`, with a Stagehand/`yahl-browser` bridge so agents can drive the browser from scripts. Opt out per stage with `false`.
+- **`cacheMaxAge`** — AI-stage grace window (minutes) for trusting durable cache files before live-probing again — fewer token burns on cold re-reads.
+- **Per-stage repair** — from Session Detail, inject a one-off instruction at an anchor stage (`kind: 'repair'`) without rewriting the whole task.
+- **Plug-in nixery** — typed one-shot containers; install plugins; orchestrator materializes [`runtime/.agent-files/`](../runtime/.agent-files/) at start (or `pnpm nixery:link` locally) to grow or shrink the `/nixery` surface.
+- **LLM proxy** — OpenAI-compatible hub with retries (408/429/5xx), usage postback, Anthropic translation; optional SaaS **quota** gating via `QUOTA_STATE_FILE`.
 - **Platform skills** — cron jobs, notification proposals, task dispatch via `/platform(...)` on the server.
 - **Knowledge Manager** — overnight multi-stage corpus review (`knowledge_manager` cron); stage agents submit observations, not direct wiki edits.
-- **WhatsApp + cron** — worker owns channels; tasks like `greets`, `whatsapp_wiki_stack`, and `traffic_monitor` propose outbound; SMTP fallback when WhatsApp ghosts you.
+- **WhatsApp + cron** — worker owns channels; scan the QR at **`/platform/channels`**; tasks like `greets`, `whatsapp_wiki_stack`, and `traffic_monitor` propose outbound; SMTP fallback when WhatsApp ghosts you.
 
 ### Polling without prompt soup
 
@@ -44,7 +47,7 @@ whileSetup:
   doAtLeast: 2
 warmUp: |
   Read ~/task-skills/monitor-loop/SKILL.md.
-  Read ~/task-skills/worth-persisting-knowledge/SKILL.md.
+  Read /opt/skills/worth-persisting-knowledge/SKILL.md.
 ```
 
 Full schema: [`handbook/yahl-syntax.md`](handbook/yahl-syntax.md).
@@ -67,7 +70,7 @@ With the tasks in `server/tasks/`, about 95% of runs follow the same path (as of
 
 But more importantly — it does feel like patching in the right direction. No more roll the dice and fingers crossed.
 
-**`traffic_monitor`** is the living proof task on this branch — cron-friendly, real `runInput`, and the integration test for `whileSetup`, `goto`, and knowledge persist. The worker can talk WhatsApp: scan a QR in the console, run `greets`, let `whatsapp_wiki_stack` vacuum inbox text into the knowledge store on a cron. Setup and env knobs live in the handbook — this paragraph is just the victory dance.
+**`traffic_monitor`** is the living proof task on this branch — cron-friendly, real `runInput`, and the integration test for `whileSetup`, `goto`, knowledge-to-script, and knowledge persist. The worker can talk WhatsApp: scan the QR at **`/platform/channels`**, run `greets`, let `whatsapp_wiki_stack` vacuum inbox text into the knowledge store on a cron. Setup and env knobs live in the handbook — this paragraph is just the victory dance.
 
 What works / what's next: [`handbook/status-and-roadmap.md`](handbook/status-and-roadmap.md).
 
@@ -85,11 +88,11 @@ The meta-win is the workflow. When something lied, we chopped the stage, re-ran 
 
 Models change; your curated knowledge doesn't. YAHL's value compounds when the assistant remembers *your* subjects, goals, and context — not when it one-shots a clever reply.
 
-**User first.** Knowledge is what you browse, trust, edit, and link. Wiki pages under `topics/{slug}/` are the product surface, not a debug dump of JSON keys. The **Knowledge Manager** cron keeps the corpus current without re-running full capture pipelines.
+**User first.** Knowledge is what you browse, trust, edit, and link. Markdown pages under `topics/{slug}/` are the product surface, not a debug dump of JSON keys. The **Knowledge Manager** cron keeps the corpus current without re-running full capture pipelines.
 
 **Agents second (downstream).** Stage agents never read the full corpus; they get session extracts from orchestrator `nixeryRun: get-knowledge` at `~/nixery/get-knowledge/{output}.md`. Writes go through **`submit-knowledge-observation`** — overnight **`knowledge_manager`** decides topic and apply shape. Better pages → better extracts → better behavior on every task that reads knowledge. Garbage summaries → repeated questions and wrong assumptions — that's a knowledge problem, not a model problem.
 
-**Why so much effort.** Knowledge quality is the primary lever on product quality — more than picking a slightly newer model. Wiki.js + export mirror + Knowledge Manager + observation inbox are the investment.
+**Why so much effort.** Knowledge quality is the primary lever on product quality — more than picking a slightly newer model. Filesystem corpus + Knowledge Manager + observation inbox are the investment.
 
 ## Syntax snapshot
 
@@ -111,10 +114,11 @@ warmUp: |
   Read ~/task-skills/setup/SKILL.md.
 ```
 
-- `~/…` — session scratch; `~/task-skills/…` — task-local skills
+- `~/…` — session scratch; `~/task-skills/…` — task-local skills only; `/opt/skills/…` — shareable catalog (platform + installed nixery plugins)
 - `CONTEXT:` / `IF:` / `ELSE:` / `END:` / `EXTENDS:` — VM and stage control
 - **`loopSetup`** — for-loops; **`whileSetup`** — do-while + optional **`warmUp`**
 - **`goto`** — `/stage(id)` jump-and-continue between labeled stages
+- **`knowledgeToScript`** / **`cacheMaxAge`** — script recipes + durable-cache trust window (see [yahl-syntax](handbook/yahl-syntax.md))
 - `/ask-user-batch(...)`, `/platform(...)`, `/nixery(...)` — platform tools
 - `*do_something(...)` — invent with the model (opt-in)
 
@@ -122,7 +126,7 @@ Full syntax and authoring: [`handbook/yahl-syntax.md`](handbook/yahl-syntax.md).
 
 ## Trust boundary
 
-Stage agents never mount the wiki or export corpus — only session scratch and read-only skills. Knowledge reads go through nixery session extracts; writes go through observation submit (not direct upsert). Nixery is **plugin-scoped** — zero plugins means an empty `/nixery` catalog, which is a valid deployment.
+Stage agents never mount the export corpus — only session scratch and read-only skills. Knowledge reads go through nixery session extracts; writes go through observation submit (not direct upsert). Nixery is **plugin-scoped** — zero plugins means an empty `/nixery` catalog, which is a valid deployment.
 
 Full roles, mounts, and blast-radius design: [`handbook/security.md`](handbook/security.md).
 
@@ -140,8 +144,8 @@ Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI), and [
 
 ```bash
 cd project-yahl
-pnpm run compose:up          # mongo, redis, onecli, wiki, worker, llm-proxy
-pnpm run compose:up:all      # optional: built server + web
+pnpm run compose:up          # mongo, redis, onecli, code-server, worker, llm-proxy
+pnpm run compose:up:all      # optional: built server + web + code-server
 # or: pnpm run dev && pnpm run dev:web
 curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
   -H 'Content-Type: application/json' \

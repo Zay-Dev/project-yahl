@@ -13,6 +13,7 @@ import {
   seedDefaultContext,
 } from '@/orchestrator/-context';
 import { toLoopIterationStage } from '@/orchestrator/-utils/yahl';
+import { maybePauseForUserRequest } from '@/orchestrator/-control/maybe-pause';
 
 import {
   loadWarmupPrefixForParsedStage,
@@ -272,8 +273,26 @@ export const handleWhile = async (
   }
 
   let iteration = 0;
+  let lastRequestId: string | undefined;
 
   while (remainingTurns >= 1) {
+    await maybePauseForUserRequest({
+      agentName: `agent-${globalThis.sessionId}`,
+      loopMeta: {
+        arraySnapshot: [],
+        index: iteration,
+        kind: 'while',
+        remainingBashCalls,
+        remainingTurns,
+        value: null,
+      },
+      requestId: lastRequestId ?? globalThis.sessionId,
+      sessionId: globalThis.sessionId,
+      stage,
+      ...(pipelineStageIndex === undefined ? {} : { stageIndex: pipelineStageIndex }),
+      storage,
+    });
+
     if (iteration >= doAtLeast) {
       const shouldContinue = await runPredicateScript(condition, storage);
 
@@ -283,6 +302,7 @@ export const handleWhile = async (
     }
 
     const result = await runBody(iteration);
+    lastRequestId = result.requestId;
     const outcome = applySegmentOutcome(storage, remainingTurns, remainingBashCalls, result);
 
     if ('gotoTargetStageIndex' in outcome) {

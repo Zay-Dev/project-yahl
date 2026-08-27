@@ -12,6 +12,7 @@ import {
 } from './request-meta.js';
 import { LlmHttpError, withLlmCallRetry } from './retry.js';
 import { deriveModelResponseTags, mergeTags } from './tags.js';
+import { isQuotaExhausted } from './quota-state.js';
 
 const readJsonBody = async (req: Request): Promise<Record<string, unknown>> => {
   const raw = await req.text();
@@ -169,6 +170,13 @@ export const handleChatCompletions = async (req: Request): Promise<Response> => 
       return Response.json(
         { error: { message: 'invalid llm proxy token', type: 'unauthorized' } },
         { status: 401 },
+      );
+    }
+
+    if (isQuotaExhausted()) {
+      return Response.json(
+        { error: { message: 'token quota exhausted', type: 'quota_exhausted' } },
+        { status: 429 },
       );
     }
 

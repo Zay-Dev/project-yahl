@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { buildResumeFrom } from './resume-from';
+import { buildMidTurnResumeFrom, buildResumeFrom } from './resume-from';
 import type { TAskUserCheckpoint, TStageDetailForResume } from './session-api';
 
 const checkpoint = (overrides: Partial<TAskUserCheckpoint> = {}): TAskUserCheckpoint => ({
@@ -93,5 +93,42 @@ describe('buildResumeFrom', () => {
 
     assert.equal(result.batchAnswers[0]?.freeText, 'custom');
     assert.deepEqual(result.batchAnswers[0]?.selectedOptionIds, undefined);
+  });
+});
+
+describe('buildMidTurnResumeFrom', () => {
+  it('builds transcript resume without ask-user batch', () => {
+    const result = buildMidTurnResumeFrom(stageDetail({
+      modelResponses: [{
+        durationMs: 5,
+        response: {
+          choices: [{
+            message: {
+              content: 'set c',
+              tool_calls: [{
+                function: { arguments: '{"key":"c"}', name: 'set_context' },
+                id: 'tool-set-1',
+                type: 'function',
+              }],
+            },
+          }],
+          id: 'cmpl-2',
+          model: 'gpt-test',
+        },
+      }],
+      toolCalls: [{
+        tools: [{
+          arguments: { key: 'c' },
+          id: 'tool-set-1',
+          name: 'set_context',
+        }],
+      }],
+    }));
+
+    assert.equal(result.batchAnswers.length, 0);
+    assert.equal(result.batch.questions.length, 0);
+    assert.equal(result.pendingToolCallId, '');
+    assert.equal(result.toolCalls[0]?.function.name, 'set_context');
+    assert.equal(result.modelResponses.length, 1);
   });
 });

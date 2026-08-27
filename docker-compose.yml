@@ -62,7 +62,6 @@ services:
     environment:
       TZ: ${TZ:-Asia/Hong_Kong}
       HOST_REPO_ROOT: ${HOST_REPO_ROOT}
-      KNOWLEDGE_DATA_ROOT: /data/mastermind
       MONGODB_URI: mongodb://mongo:27017/yahl
       OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
       OMNIFLEX_BUILD_CONTEXT: /omniflex
@@ -74,6 +73,7 @@ services:
       SESSION_API_BASE_URL: http://server:4000
       WORKSPACE_ROOT: /workspace
       EMAIL_WHITELIST: ${EMAIL_WHITELIST:-}
+      WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-false}
       WHATSAPP_WHITELIST: ${WHATSAPP_WHITELIST:-}
       YAHL_NIXERY_INLINE_RETRY_MAX: ${YAHL_NIXERY_INLINE_RETRY_MAX:-1}
     ports:
@@ -103,8 +103,7 @@ services:
       dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/web/Dockerfile
       args:
         OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
-        VITE_API_BASE_URL: http://localhost:${SERVER_PORT:-4000}
-        VITE_WIKI_PUBLIC_URL: http://127.0.0.1:${WIKI_PORT:-3001}
+        VITE_CODE_SERVER_PUBLIC_URL: http://127.0.0.1:${CODE_SERVER_PORT:-8080}
     environment:
       TZ: ${TZ:-Asia/Hong_Kong}
     ports:
@@ -128,12 +127,12 @@ services:
       LLM_PROXY_TOKEN: ${LLM_PROXY_TOKEN:-}
       NODE_EXTRA_CA_CERTS: /onecli/combined-ca.pem
       NODE_USE_ENV_PROXY: "1"
-      NO_PROXY: localhost,127.0.0.1,::1,redis,server,mongo,onecli,wiki,wiki_postgres,worker,llm-proxy,host.docker.internal
+      NO_PROXY: localhost,127.0.0.1,::1,redis,server,mongo,onecli,worker,llm-proxy,host.docker.internal
       SESSION_API_BASE_URL: http://server:4000
       SSL_CERT_FILE: /onecli/combined-ca.pem
       DENO_CERT: /onecli/combined-ca.pem
       ONECLI_DASHBOARD_URL: http://onecli:10254
-      no_proxy: localhost,127.0.0.1,::1,redis,server,mongo,onecli,wiki,wiki_postgres,worker,llm-proxy,host.docker.internal
+      no_proxy: localhost,127.0.0.1,::1,redis,server,mongo,onecli,worker,llm-proxy,host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -184,6 +183,7 @@ services:
       - ./data/whatsapp_auth:/whatsapp/auth
       - ./data/whatsapp_inbox:/whatsapp/inbox
       - ./worker:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker
+      - /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker/node_modules
       - ${SANITIZE_CHANNEL_MESSAGE:-./worker/sanitize-channel-message.mjs}:/sanitize/sanitize-channel-message.mjs:ro
     depends_on:
       server:
@@ -195,39 +195,28 @@ services:
       retries: 5
       start_period: 90s
 
-  wiki_postgres:
-    image: postgres:16-alpine
+  code-server:
+    image: codercom/code-server:4.104.2
     environment:
       TZ: ${TZ:-Asia/Hong_Kong}
-      POSTGRES_DB: wiki
-      POSTGRES_PASSWORD: ${WIKI_DB_PASSWORD:-wikijs}
-      POSTGRES_USER: wikijs
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wikijs -d wiki"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    volumes:
-      - ./data/wiki_postgres:/var/lib/postgresql/data
-
-  wiki:
-    image: ghcr.io/requarks/wiki:2
-    depends_on:
-      wiki_postgres:
-        condition: service_healthy
-    environment:
-      TZ: ${TZ:-Asia/Hong_Kong}
-      DB_TYPE: postgres
-      DB_HOST: wiki_postgres
-      DB_PORT: "5432"
-      DB_USER: wikijs
-      DB_PASS: ${WIKI_DB_PASSWORD:-wikijs}
-      DB_NAME: wiki
+    command:
+      - --bind-addr
+      - 0.0.0.0:8080
+      - --auth
+      - none
+      - --disable-telemetry
+      - --disable-update-check
+      - /home/coder/yahl
     ports:
-      - "127.0.0.1:${WIKI_PORT:-3001}:3000"
+      - "127.0.0.1:${CODE_SERVER_PORT:-8080}:8080"
     volumes:
-      - ./data/wiki:/wiki/data
-      - ./data/knowledge_export:/wiki/data/repo
+      - ./data/knowledge_export:/home/coder/yahl/knowledge_export:rw
+      - ./data/workspace/sessions:/home/coder/yahl/sessions:ro
+      - ./data/workspace/tasks:/home/coder/yahl/workspace_tasks:rw
+      - ./runtime/orchestrator/SKILLS:/home/coder/yahl/SKILLS:rw
+      - ./runtime/orchestrator/YAHL:/home/coder/yahl/YAHL:rw
+      - ./server/tasks:/home/coder/yahl/tasks:rw
+      - ./server/nixery:/home/coder/yahl/nixery:rw
 
 networks:
   default:

@@ -12,8 +12,13 @@ const storage = {
 
 const createMockRedis = (
   brpop: () => Promise<unknown>,
-  options?: { onLpush?: () => void },
+  options?: {
+    onLpush?: () => void;
+    lpopQueue?: string[];
+  },
 ) => {
+  const queue = [...(options?.lpopQueue ?? [])];
+
   const duplicateRedis = {
     brpop: brpop as Redis['brpop'],
     disconnected: false,
@@ -34,7 +39,7 @@ const createMockRedis = (
 
   return {
     duplicate: () => duplicateRedis,
-    lpop: async () => null,
+    lpop: async () => queue.shift() ?? null,
     lpush: async () => {
       options?.onLpush?.();
 
@@ -424,5 +429,19 @@ describe('RedisSubscriber orchestrator tool results', () => {
     const firstResult = await reply.toolCall(firstCall);
 
     assert.equal(firstResult.result, 'first');
+  });
+});
+
+describe('RedisPublisher drainRequestQueue', () => {
+  it('pops all pending request envelopes and returns the count', async () => {
+    const redis = createMockRedis(async () => null, {
+      lpopQueue: ['{"requestId":"stale-1"}', '{"requestId":"stale-2"}'],
+    });
+    const publisher = new RedisPublisher(redis, 'sess-drain');
+
+    const drained = await publisher.drainRequestQueue();
+
+    assert.equal(drained, 2);
+    assert.equal(await publisher.drainRequestQueue(), 0);
   });
 });

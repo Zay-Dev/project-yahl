@@ -21,6 +21,12 @@ type TServices = {
     taskYahl: string;
   }) => Promise<void>;
   spawnOrchestrate: (sessionId: string, args: string[]) => Promise<ChildProcess>;
+  sumUsageSince: (input: { since: Date }) => Promise<{
+    completionTokens: number;
+    promptTokens: number;
+    since: string;
+    totalTokens: number;
+  }>;
   validateSessionById: (sessionId: string) => Promise<TYahlDocument>;
   validateTaskRunInput: (
     taskId: string,
@@ -40,6 +46,8 @@ export namespace Repository {
   export const registerCreatePendingSession = _asValue('createPendingSession');
 
   export const registerSpawnOrchestrate = _asValue('spawnOrchestrate');
+
+  export const registerSumUsageSince = _asValue('sumUsageSince');
 
   export const registerValidateSessionById = _asValue('validateSessionById');
 

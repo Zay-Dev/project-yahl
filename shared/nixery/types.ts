@@ -1,6 +1,5 @@
 export type TNixeryOutputSpec = {
   default?: string;
-  inlineTool?: boolean;
   retry?: number;
   validate?: string;
 };
@@ -51,7 +50,6 @@ export type TNixeryPluginMeta = {
   name?: string;
   prompts?: string[];
   skills?: string[];
-  task_skills?: string[];
 };
 
 export type TNixeryAbilityLocation = {

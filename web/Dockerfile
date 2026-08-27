@@ -21,9 +21,9 @@ COPY ${OMNIFLEX_APP_DIR}/server/tsconfig.json ./${OMNIFLEX_APP_DIR}/server/tscon
 COPY ${OMNIFLEX_APP_DIR}/web ./${OMNIFLEX_APP_DIR}/web
 
 ARG VITE_API_BASE_URL=http://localhost:4000
-ARG VITE_WIKI_PUBLIC_URL=http://127.0.0.1:3001
+ARG VITE_CODE_SERVER_PUBLIC_URL=/code
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ENV VITE_WIKI_PUBLIC_URL=$VITE_WIKI_PUBLIC_URL
+ENV VITE_CODE_SERVER_PUBLIC_URL=$VITE_CODE_SERVER_PUBLIC_URL
 
 RUN pnpm --filter @project-yahl/shared --filter @omni-infra/types run build \
   && pnpm --filter @project-yahl/web run build

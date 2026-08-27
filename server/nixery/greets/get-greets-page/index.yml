@@ -1,11 +1,10 @@
 id: get-greets-page
-description: Read a Wiki.js page under greets/{entity}/ into the session workspace
+description: Read a knowledge page under greets/{entity}/ into the session workspace
 
 packages: [nodejs]
 
 env:
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
 
 nixery:
   default: "true"
@@ -26,6 +25,9 @@ input:
     required: false
 
 mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: ro
   /workspace:
     host: session
     mode: rw
@@ -43,4 +45,3 @@ run:
 output:
   default: result.json
   validate: validation.mjs
-  inlineTool: true

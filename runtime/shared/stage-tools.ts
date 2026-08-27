@@ -246,8 +246,6 @@ export const STAGE_TOOLS = [
               "dispatch-task-run",
               "propose-notification",
               "propose-knowledge-transfer",
-              "get-knowledge-manager-instruction",
-              "put-knowledge-manager-instruction",
             ],
             type: "string",
           },
@@ -270,7 +268,7 @@ export const STAGE_TOOLS = [
             type: "object",
           },
           defId: {
-            description: "Nixery ability id (globally unique under server/nixery/{plugin}/) with output.inlineTool: true.",
+            description: "Nixery ability id (globally unique under server/nixery/{plugin}/).",
             type: "string",
           },
         },

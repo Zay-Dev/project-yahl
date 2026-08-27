@@ -96,7 +96,8 @@ export type TParsedStage = {
 };
 
 export type TSessionRunCursor = {
-  kind: 'pipeline';
+  kind: 'pipeline' | 'repair';
   loopMeta?: TStageLoopMeta;
+  repairInstruction?: string;
   stageIndex: number;
 };

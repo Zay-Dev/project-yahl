@@ -5,7 +5,6 @@ import {
   getWikiPageByPath,
   listWikiPagesUnderPrefix,
   upsertWikiPage,
-  wikiConfigured,
 } from './wiki-client.js';
 import { resolveTopicWikiPrefix } from './wiki-paths.js';
 
@@ -89,10 +88,6 @@ export const retireTopicWikiTree = async (topic: string): Promise<TRetireTopicWi
     throw new Error('retireTopicWikiTree requires topic');
   }
 
-  if (!wikiConfigured()) {
-    throw new Error('Wiki GraphQL is not configured');
-  }
-
   const pages = await listWikiPagesUnderPrefix(resolveTopicWikiPrefix(slug));
   let pagesRetired = 0;
 
@@ -132,10 +127,6 @@ export const mergeTopic = async (options: {
   }
 
   assertSameDomainMerge(sourceTopic, targetTopic);
-
-  if (!wikiConfigured()) {
-    throw new Error('Wiki GraphQL is not configured');
-  }
 
   let pagesMerged = 0;
   const honeablePageNames = ['facts', 'overview', 'howto', 'brief', 'todo', 'sources'] as const;

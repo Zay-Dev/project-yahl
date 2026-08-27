@@ -97,7 +97,7 @@ stages:
   - logic: "x = 1;"
 `);
 
-    assert.deepEqual(doc.runInput, ["knowledge_topic"]);
+    assert.deepEqual(doc.runInput, [{ key: "knowledge_topic", type: "text" }]);
   });
 
   it("omits runInput when absent", () => {

@@ -6,13 +6,22 @@ description: >
 resultContextKey: result
 background: true
 runInput:
-  - monitor_minutes
-  - notify_to
-  - origin
-  - destination
-  - source_instruction
-  - city
-  - timezone
+  - key: monitor_minutes
+    type: text
+    default: "60"
+  - key: notify_to
+    type: text
+  - key: origin
+    type: text
+  - key: destination
+    type: text
+  - key: source_instruction
+    type: textarea
+  - key: city
+    type: text
+  - key: timezone
+    type: text
+    default: Asia/Hong_Kong
 
 types: |
   type TRouteSample = {
@@ -80,6 +89,7 @@ stages:
         const slug = cityRaw.toLowerCase().replace(/[_\s]+/g, '-');
         const slugUnderscored = slug.replace(/-/g, '_');
         const isHk = cityRaw === 'Hong_Kong' || slug === 'hong-kong';
+        
         return {
           monitor_minutes: String(context.context.monitor_minutes ?? '').trim() || '60',
           notify_to: String(context.context.notify_to ?? '').trim() || '91234567',
@@ -374,8 +384,8 @@ stages:
       END:
 
   - contextMode: true
-    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, poll_success_count]
-    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, poll_success_count]
+    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count]
+    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count]
     logic: |
       (() => {
         const existing = context.context.started_at;
@@ -388,6 +398,7 @@ stages:
             notifications: Array.isArray(context.context.notifications) ? context.context.notifications : [],
             miss_count: Number(context.context.miss_count) || 0,
             day_page: String(context.context.day_page || ''),
+            day_page_sections: Array.isArray(context.context.day_page_sections) ? context.context.day_page_sections : [],
             last_heartbeat_at: String(context.context.last_heartbeat_at || ''),
             prev_incident_note: String(context.context.prev_incident_note || ''),
             poll_success_count: Number(context.context.poll_success_count) || 0,
@@ -405,6 +416,7 @@ stages:
           notifications: [],
           miss_count: 0,
           day_page: `raw/fetches-${y}`,
+          day_page_sections: [],
           last_heartbeat_at: '',
           prev_incident_note: '',
           poll_success_count: 0,
@@ -415,8 +427,8 @@ stages:
     goto:
       - command: '/stage(explorer)'
         description: 'when the cached/locked traffic source is no longer available or usable'
-    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, city_slug, source_instruction, instruction_active, TTrafficFetch, TRouteSample, TMonitorResult]
-    updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count]
+    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, city_slug, source_instruction, instruction_active, verify_feedback, TTrafficFetch, TRouteSample, TMonitorResult]
+    updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count, day_page_sections]
     agentOverrides:
       bashTimeoutMs: 360000
     maxBashCalls: 120
@@ -427,7 +439,7 @@ stages:
     warmUp: |
       Read ~/task-skills/monitor-loop/SKILL.md.
       Read ~/task-skills/route-analysis/SKILL.md.
-      Read ~/task-skills/worth-persisting-knowledge/SKILL.md.
+      Read /opt/skills/worth-persisting-knowledge/SKILL.md.
       IF: instruction_active;
         *read(source_instruction);
       END:
@@ -438,6 +450,10 @@ stages:
       const label_destination = destination_display || destination;
       Do not fetch, notify, append day-page, or sleep.
     logic: |
+      IF: verify_feedback;
+        day_page_sections = [];
+        *set_context(day_page_sections);
+      END:
       const bind_origin = origin_resolved || origin;
       const bind_destination = destination_resolved || destination;
       const label_origin = origin_display || origin;
@@ -453,12 +469,14 @@ stages:
       IF: *fetch_failed(fetch);
         miss_count = miss_count + 1;
         *set_context(miss_count);
+        const miss_section = *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone);
+        *extend_context(day_page_sections, value: miss_section);
         /nixery(
           append-raw-knowledge-page,
           topic: traffic-monitor,
           page: day_page,
           mode: append,
-          content: *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone),
+          content: miss_section,
         );
         *submit_novel_ops(miss: true, fetch: fetch, source: traffic_source, source_ops_md);
         const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
@@ -469,12 +487,14 @@ stages:
         prev_routes = fetch_with_status.routes;
         poll_success_count = poll_success_count + 1;
         *set_context(prev_routes, poll_success_count);
+        const section_md = *format_fetch_section(fetch_with_status, analysis, origin: label_origin, destination: label_destination, timezone: timezone);
+        *extend_context(day_page_sections, value: section_md);
         /nixery(
           append-raw-knowledge-page,
           topic: traffic-monitor,
           page: day_page,
           mode: append,
-          content: *format_fetch_section(fetch_with_status, analysis, origin: label_origin, destination: label_destination, timezone: timezone),
+          content: section_md,
         );
         IF: poll_success_count <== 2 && !summary_notified;
           *propose_kind_a_summary(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
@@ -511,15 +531,18 @@ stages:
         and must not fail the stage by themselves.
         Do not fail solely because raw fetches.length exceeds distinct poll count.
         For fetched_at vs Clock: do not treat timestamps as invented when they fall within
-        [started_at, now_iso + 9h] (timezone mislabel tolerance) or when day-page section times corroborate;
-        only fail future timestamps with no corroborating day-page or iteration evidence.
+        [started_at, now_iso + 9h] (timezone mislabel tolerance) or when day_page_sections times corroborate;
+        only fail future timestamps with no corroborating section or iteration evidence.
         When window allowed >=2 polls, require distinct_poll_count + miss_count >= 2 with miss sections covering gaps.
-        This-run day-page sections (matching Origin/Destination) present with Origin and Destination lines;
-        count >= distinct_poll_count + miss_count - 1. Fail when any this-run section lacks Origin or Destination.
+        Use read_context_key('day_page_sections'), fetches, origin_display, destination_display, origin, destination, miss_count.
+        day_page_sections is a string array of append markdown for this run; do not read knowledge files or day_page path on disk.
+        Dedupe sections by ## HH:MM header line; retried batches may duplicate entries — count distinct sections only.
+        Each distinct section must contain Origin and Destination lines matching origin_display/destination_display (else runInput origin/destination).
+        Distinct section count >= distinct_poll_count + miss_count - 1. Fail when any distinct section lacks Origin or Destination.
         On fail, set resumeAction: rerun.
 
   - contextMode: true
-    contextKeys: [started_at, fetches, miss_count, notifications, day_page, monitor_minutes]
+    contextKeys: [started_at, fetches, miss_count, notifications, day_page, day_page_sections, monitor_minutes]
     produceContextKeys: [monitor]
     logic: |
       (() => {
@@ -528,6 +551,7 @@ stages:
         const notifications = Array.isArray(context.context.notifications) ? context.context.notifications : [];
         const started_at = String(context.context.started_at || '');
         const day_page = String(context.context.day_page || '');
+        const day_page_sections = Array.isArray(context.context.day_page_sections) ? context.context.day_page_sections : [];
         const ended_at = new Date().toISOString();
         const startedMs = Date.parse(started_at);
         const primaryEta = (fetch) => {
@@ -558,20 +582,32 @@ stages:
             fetch_count: fetches.length,
             miss_count,
             day_page,
+            day_page_sections,
             fetches,
             notifications,
           },
         };
       })
 
-  - contextKeys: [started_at, monitor, holidays_md, day_page, origin, destination, origin_display, destination_display, city, timezone, traffic_source, TResult, TMonitorResult]
+  - contextKeys: [started_at, holidays_md, timezone]
+    produceContextKeys: [day_kind]
+    verify:
+      defId: stage-verify
+      autoRetry: true
+      minScore: 1
+      rubric: |
+        Pass when result.day_kind is weekday|weekend|public_holiday
+    logic: |
+      const day_kind = *classify_day_kind(started_at, holidays_md, tz: timezone);
+
+  - contextKeys: [day_kind, started_at, monitor, holidays_md, day_page, origin, destination, origin_display, destination_display, city, timezone, traffic_source, TResult, TMonitorResult]
     produceContextKeys: [result]
     verify:
       defId: stage-verify
       autoRetry: true
       minScore: 0.75
       rubric: |
-        Pass when result.day_kind is weekday|weekend|public_holiday, result.summary_md is non-empty,
+        Pass when result.summary_md is non-empty,
         and result.monitor.fetch_count matches monitor.fetch_count, and result.monitor.miss_count
         matches monitor.miss_count,
         and summary_md / notification bodies use origin_display/destination_display when set (else runInput origin/destination),
@@ -585,9 +621,9 @@ stages:
         Fail when any report raw upsert omitted topic, returned ok:false, landed under topics/general/,
         or canonicalTopic does not match registry resolution of traffic-monitor.
         Do not require a SUMMARY submit-knowledge-observation.
-        Day page may contain earlier same-day runs — do NOT fail solely because total `## HH:MM`
-        count exceeds this run's fetch_count + miss_count. Require this-run sections (Origin/Destination
-        matching context) to be present with Origin and Destination lines; count >= fetch+miss - 1.
+        Use monitor.day_page_sections (string array) for this-run section checks — do not read knowledge files on disk.
+        Dedupe sections by ## HH:MM header; distinct section count may exceed fetch_count + miss_count when prior verify retries duplicated entries.
+        Require distinct sections with Origin and Destination lines matching origin_display/destination_display (else runInput); count >= monitor.fetch_count + monitor.miss_count - 1.
         Fail when summary_md claims Google Maps but traffic_source.is_fallback is false and url is not Maps.
         On fail, set resumeAction: rerun.
     logic: |
@@ -595,7 +631,7 @@ stages:
       *read(holidays_md);
       const label_origin = origin_display || origin;
       const label_destination = destination_display || destination;
-      const day_kind = *classify_day_kind(started_at, holidays_md, tz: timezone);
+      
       const summary_md = *write_daily_traffic_report(
         monitor,
         day_kind,

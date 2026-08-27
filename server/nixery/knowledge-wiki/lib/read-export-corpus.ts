@@ -176,7 +176,11 @@ export const readExportPageByPath = async (pagePath: string): Promise<string | n
 
   const candidates = normalized.endsWith('.md')
     ? [normalized]
-    : [`${normalized}.md`, normalized];
+    : [
+      `en/${normalized}.md`,
+      `${normalized}.md`,
+      normalized,
+    ];
 
   for (const candidate of candidates) {
     const absolute = resolveUnderExportRoot(candidate);

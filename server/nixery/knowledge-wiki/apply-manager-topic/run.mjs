@@ -48,6 +48,7 @@ const main = async () => {
     : 'result.json';
   const outputPath = path.join(workspace, outputName);
   const topic = typeof input.topic === 'string' ? input.topic.trim() : '';
+  const instruction = typeof input.instruction === 'string' ? input.instruction : '';
   const dryRun = parseBool(input.dryRun) === true;
   const skipLlmPlan = parseBool(input.skipLlmPlan) === true;
   const sessionId = typeof input.sessionId === 'string' ? input.sessionId : undefined;
@@ -91,6 +92,7 @@ const main = async () => {
     const review = await applyManagerTopic({
       completeApplyPlan,
       dryRun,
+      instruction,
       sessionId,
       topic,
     });

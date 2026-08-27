@@ -2,15 +2,23 @@ import type { Message } from 'whatsapp-web.js';
 
 import path from 'node:path';
 
-import qrcode from 'qrcode-terminal';
+import qrcodeTerminal from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import wweb from 'whatsapp-web.js';
+
+import { putWhatsAppChannelState } from '../../-queue/platform-channel-api.js';
 
 import { applyChannelMessageSanitizer } from '../sanitize-channel-message.js';
 import { clearChromiumProfileLocks } from './clear-profile-locks.js';
 import { whatsappConfig } from './config.js';
 import { appendInboxMessage } from './inbox.js';
-import { logSkippedMediaFromMessage } from './media.js';
-import { rememberChannelLid, rememberPlatformIdentity } from './registry.js';
+import type { TInboxAttachment } from './media.js';
+import { storeWhatsAppAttachment } from './media.js';
+import {
+  findOnboardedChannel,
+  rememberChannelLid,
+  rememberPlatformIdentity,
+} from './registry.js';
 import { resolveCanonicalChatId } from './resolve-chat-id.js';
 import {
   matchOutboundFlight,
@@ -24,6 +32,11 @@ let ready = false;
 let starting = false;
 let reinitInFlight = false;
 let reinitTimer: ReturnType<typeof setTimeout> | null = null;
+let connectingTimer: ReturnType<typeof setTimeout> | null = null;
+let authenticatedTimer: ReturnType<typeof setTimeout> | null = null;
+let consecutiveConnectFailures = 0;
+let channelPhase: 'up' | 'down' | 'unknown' = 'unknown';
+let initAttemptId = 0;
 let onReadyListener: (() => void) | null = null;
 
 export const setWhatsAppReadyListener = (listener: (() => void) | null): void => {
@@ -32,10 +45,16 @@ export const setWhatsAppReadyListener = (listener: (() => void) | null): void =>
 
 const REINIT_DELAY_MS = 3000;
 const LOGOUT_REINIT_DELAY_MS = 10_000;
+const CONNECTING_TIMEOUT_MS = 120_000;
+const AUTHENTICATED_TIMEOUT_MS = 90_000;
+const CONNECT_FAILURE_BACKOFF_MS = 30_000;
+const MAX_CONNECT_FAILURES_BEFORE_WARN = 3;
 const seenMessageIds = new Set<string>();
 const SEEN_MESSAGE_ID_CAP = 500;
 
 const BROWSER_DEATH_RE = /target closed|protocol error|session closed|browser has been closed/i;
+const RECOVERABLE_INIT_RE = /already exists|exposeFunction/i;
+const CONNECT_TIMEOUT_RE = /connecting_timeout|authenticated_timeout|initialize_failed|initialize_timeout/i;
 
 export const isWhatsAppBrowserDeathError = (error: unknown): boolean => {
   const name = error instanceof Error ? error.name : '';
@@ -44,12 +63,107 @@ export const isWhatsAppBrowserDeathError = (error: unknown): boolean => {
   return name === 'TargetCloseError' || BROWSER_DEATH_RE.test(message);
 };
 
+export const isWhatsAppRecoverableInitError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return RECOVERABLE_INIT_RE.test(message);
+};
+
+const clearConnectTimers = (): void => {
+  if (connectingTimer) {
+    clearTimeout(connectingTimer);
+    connectingTimer = null;
+  }
+
+  if (authenticatedTimer) {
+    clearTimeout(authenticatedTimer);
+    authenticatedTimer = null;
+  }
+};
+
+const publishChannelStatus = (params: {
+  qrDataUrl?: string;
+  status: 'connecting' | 'authenticated' | 'pending' | 'ready' | 'disconnected';
+}): void => {
+  if (params.status === 'disconnected') {
+    if (channelPhase === 'down') {
+      return;
+    }
+
+    channelPhase = 'down';
+  } else {
+    channelPhase = 'up';
+  }
+
+  void putWhatsAppChannelState(params);
+};
+
+const markWhatsAppNotReady = (): void => {
+  ready = false;
+  clearConnectTimers();
+  publishChannelStatus({ status: 'disconnected' });
+};
+
+const noteConnectFailure = (reason: string): void => {
+  if (!CONNECT_TIMEOUT_RE.test(reason)) {
+    return;
+  }
+
+  consecutiveConnectFailures += 1;
+
+  if (consecutiveConnectFailures >= MAX_CONNECT_FAILURES_BEFORE_WARN) {
+    console.warn(
+      `[worker][whatsapp] ${consecutiveConnectFailures} consecutive connect failures`
+      + ' — LocalAuth may be stuck; wipe ./data/whatsapp_auth (or data/whatsapp_auth/session) then restart worker',
+    );
+  }
+};
+
 const reinitDelayForReason = (reason: string): number => {
   if (/LOGOUT|auth_failure/i.test(reason)) {
     return LOGOUT_REINIT_DELAY_MS;
   }
 
+  if (
+    consecutiveConnectFailures >= MAX_CONNECT_FAILURES_BEFORE_WARN
+    && CONNECT_TIMEOUT_RE.test(reason)
+  ) {
+    return CONNECT_FAILURE_BACKOFF_MS;
+  }
+
   return REINIT_DELAY_MS;
+};
+
+const abortConnectAndReinit = (reason: string): void => {
+  console.warn(`[worker][whatsapp] ${reason}`);
+  noteConnectFailure(reason);
+  initAttemptId += 1;
+  starting = false;
+  markWhatsAppNotReady();
+
+  void destroyWhatsAppClient().then(() => {
+    scheduleWhatsAppReinit(reason);
+  });
+};
+
+const startConnectingDeadline = (): void => {
+  clearConnectTimers();
+
+  connectingTimer = setTimeout(() => {
+    connectingTimer = null;
+    abortConnectAndReinit('connecting_timeout');
+  }, CONNECTING_TIMEOUT_MS);
+};
+
+const startAuthenticatedDeadline = (): void => {
+  if (authenticatedTimer) {
+    clearTimeout(authenticatedTimer);
+  }
+
+  authenticatedTimer = setTimeout(() => {
+    authenticatedTimer = null;
+    abortConnectAndReinit('authenticated_timeout');
+  }, AUTHENTICATED_TIMEOUT_MS);
 };
 
 const messageDedupeKey = (msg: Message): string => {
@@ -108,7 +222,7 @@ export const scheduleWhatsAppReinit = (reason: string): void => {
     return;
   }
 
-  ready = false;
+  markWhatsAppNotReady();
 
   if (reinitTimer) {
     return;
@@ -138,6 +252,7 @@ export const scheduleWhatsAppReinit = (reason: string): void => {
 
 const destroyWhatsAppClient = async (): Promise<void> => {
   ready = false;
+  clearConnectTimers();
   const prev = client;
   client = null;
 
@@ -181,19 +296,9 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       return;
     }
 
-    if (msg.hasMedia) {
-      logSkippedMediaFromMessage(msg);
-      return;
-    }
-
     const rawChatId = msg.fromMe ? msg.to : msg.from;
     const isGroup = rawChatId.endsWith('@g.us');
     const body = typeof msg.body === 'string' ? msg.body : '';
-
-    if (!body.trim()) {
-      console.log(`[worker][whatsapp] skip empty body raw=${rawChatId}`);
-      return;
-    }
 
     if (!client) {
       console.warn('[worker][whatsapp] skip no client');
@@ -211,6 +316,37 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       console.log(
         `[worker][whatsapp] resolved raw=${resolved.raw} pn=${resolved.canonical}`,
       );
+    }
+
+    const channel = await findOnboardedChannel(resolved.canonical, resolved.lid);
+
+    if (!channel) {
+      console.log('[worker][whatsapp] skip not onboarded', resolved.canonical);
+
+      if (msg.fromMe) {
+        console.log(`[worker][whatsapp] sendSeen skipped fromMe chat=${resolved.canonical} reason=not_onboarded`);
+      }
+
+      return;
+    }
+
+    let attachments: TInboxAttachment[] | undefined;
+    let persistedMessageId = messageId || `${msg.timestamp}-${resolved.canonical}`;
+
+    if (msg.hasMedia) {
+      const stored = await storeWhatsAppAttachment({
+        folder: channel.folder,
+        messageId: persistedMessageId,
+        msg,
+      });
+
+      attachments = [stored.attachment];
+      persistedMessageId = stored.safeId;
+    }
+
+    if (!body.trim() && !attachments?.length) {
+      console.log(`[worker][whatsapp] skip empty body raw=${rawChatId}`);
+      return;
     }
 
     if (msg.fromMe === true) {
@@ -255,18 +391,22 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       fromMe: msg.fromMe === true,
       isGroup,
       lid: resolved.lid,
-      messageId,
+      messageId: persistedMessageId,
       ts: new Date(msg.timestamp * 1000).toISOString(),
     });
 
     const sanitizedBody = typeof draft.body === 'string' ? draft.body : body;
 
-    if (!sanitizedBody.trim()) {
+    if (!sanitizedBody.trim() && !attachments?.length) {
       console.log(`[worker][whatsapp] skip empty body after sanitize raw=${rawChatId}`);
       return;
     }
 
+    const draftMessageId = typeof draft.messageId === 'string' ? draft.messageId.trim() : '';
+    const inboxMessageId = draftMessageId || persistedMessageId;
+
     const persisted = await appendInboxMessage({
+      attachments,
       author: typeof draft.author === 'string' ? draft.author : msg.author ?? undefined,
       body: sanitizedBody,
       chatId: resolved.canonical,
@@ -274,7 +414,7 @@ const handleIncomingMessage = async (msg: Message, event: string): Promise<void>
       fromMe: draft.fromMe === true,
       isGroup: draft.isGroup === true,
       lid: typeof draft.lid === 'string' ? draft.lid : resolved.lid,
-      messageId: typeof draft.messageId === 'string' ? draft.messageId : messageId,
+      messageId: inboxMessageId,
       ts: typeof draft.ts === 'string' ? draft.ts : new Date(msg.timestamp * 1000).toISOString(),
     });
 
@@ -321,6 +461,7 @@ export const initWhatsApp = async (): Promise<void> => {
   }
 
   starting = true;
+  const attemptId = ++initAttemptId;
 
   try {
     const chromePath = process.env.CHROME_PATH?.trim() || undefined;
@@ -335,6 +476,13 @@ export const initWhatsApp = async (): Promise<void> => {
 
     await clearChromiumProfileLocks(sessionDir);
 
+    if (attemptId !== initAttemptId) {
+      return;
+    }
+
+    publishChannelStatus({ status: 'connecting' });
+    startConnectingDeadline();
+
     const next = new Client({
       authStrategy: new LocalAuth({
         dataPath: whatsappConfig.authPath,
@@ -348,27 +496,46 @@ export const initWhatsApp = async (): Promise<void> => {
 
     next.on('qr', (qr) => {
       console.log('[worker][whatsapp] scan QR to log in:');
-      qrcode.generate(qr, { small: true });
+      qrcodeTerminal.generate(qr, { small: true });
+      clearConnectTimers();
+
+      void (async () => {
+        try {
+          const qrDataUrl = await QRCode.toDataURL(qr);
+
+          publishChannelStatus({ qrDataUrl, status: 'pending' });
+        } catch (error) {
+          console.warn('[worker][whatsapp] failed to publish QR to server', error);
+        }
+      })();
     });
 
     next.on('ready', () => {
       ready = true;
+      consecutiveConnectFailures = 0;
+      clearConnectTimers();
       console.log('[worker][whatsapp] client ready');
+      publishChannelStatus({ status: 'ready' });
       onReadyListener?.();
     });
 
     next.on('authenticated', () => {
       console.log('[worker][whatsapp] authenticated');
+      if (connectingTimer) {
+        clearTimeout(connectingTimer);
+        connectingTimer = null;
+      }
+
+      publishChannelStatus({ status: 'authenticated' });
+      startAuthenticatedDeadline();
     });
 
     next.on('auth_failure', (message) => {
-      ready = false;
       console.error('[worker][whatsapp] auth_failure', message);
       scheduleWhatsAppReinit('auth_failure');
     });
 
     next.on('disconnected', (reason) => {
-      ready = false;
       console.warn('[worker][whatsapp] disconnected', reason);
       scheduleWhatsAppReinit(`disconnected:${reason}`);
     });
@@ -400,11 +567,29 @@ export const initWhatsApp = async (): Promise<void> => {
     client = next;
 
     await next.initialize();
+
+    if (attemptId !== initAttemptId) {
+      return;
+    }
   } catch (error) {
-    console.error('[worker][whatsapp] initialize failed', error);
+    if (attemptId !== initAttemptId) {
+      return;
+    }
+
+    if (isWhatsAppRecoverableInitError(error)) {
+      console.warn('[worker][whatsapp] recoverable initialize error', error);
+    } else {
+      console.error('[worker][whatsapp] initialize failed', error);
+      noteConnectFailure('initialize_failed');
+    }
+
     await destroyWhatsAppClient();
-    scheduleWhatsAppReinit('initialize_failed');
+    scheduleWhatsAppReinit(
+      isWhatsAppRecoverableInitError(error) ? 'expose_function_conflict' : 'initialize_failed',
+    );
   } finally {
-    starting = false;
+    if (attemptId === initAttemptId) {
+      starting = false;
+    }
   }
 };

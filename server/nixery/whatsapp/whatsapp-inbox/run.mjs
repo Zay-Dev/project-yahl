@@ -72,14 +72,27 @@ const readMessagesFile = async (folder) => {
   }
 };
 
+const clearAttachmentsDir = async (folder) => {
+  const attachmentsRoot = path.join(INBOX_ROOT, folder, 'attachments');
+
+  try {
+    await fs.rm(attachmentsRoot, { force: true, recursive: true });
+    return { attachmentsCleared: true };
+  } catch {
+    return { attachmentsCleared: false };
+  }
+};
+
 const clearMessagesFile = async (folder) => {
   const filePath = path.join(INBOX_ROOT, folder, 'messages.jsonl');
 
   try {
     await fs.writeFile(filePath, '', 'utf8');
-    return { cleared: true, filePath };
+    const attachments = await clearAttachmentsDir(folder);
+
+    return { cleared: true, filePath, ...attachments };
   } catch {
-    return { cleared: false, filePath };
+    return { cleared: false, filePath, attachmentsCleared: false };
   }
 };
 
@@ -97,7 +110,65 @@ const formatSender = (message, platform) => {
   return from;
 };
 
-const toMarkdown = (channel, messages, platform) => {
+const materializeAttachment = async (folder, message, attachment) => {
+  if (!attachment || typeof attachment !== 'object') {
+    return null;
+  }
+
+  const kind = typeof attachment.kind === 'string' ? attachment.kind : 'unknown';
+  const mime = typeof attachment.mime === 'string' ? attachment.mime : '';
+  const filename = typeof attachment.filename === 'string' && attachment.filename.trim()
+    ? attachment.filename.trim()
+    : 'attachment';
+  const status = typeof attachment.status === 'string' ? attachment.status : '';
+  const relativePath = typeof attachment.relativePath === 'string'
+    ? attachment.relativePath.trim()
+    : '';
+
+  if (status !== 'stored' || !relativePath) {
+    const reason = typeof attachment.reason === 'string' ? attachment.reason : status || 'missing';
+
+    return {
+      kind,
+      line: `[attachment kind=${kind} mime=${mime} name=${filename} status=${status || 'missing'} reason=${reason}]`,
+      path: '',
+    };
+  }
+
+  const pathParts = relativePath.split(/[/\\]/).filter(Boolean);
+  const safeId = pathParts.length >= 2
+    ? pathParts[pathParts.length - 2]
+    : 'unknown';
+  const fileName = pathParts.length >= 1
+    ? pathParts[pathParts.length - 1]
+    : filename;
+  const workspaceRel = path.join('inbox-attachments', folder, safeId, fileName);
+  const src = path.join(INBOX_ROOT, folder, relativePath);
+  const dest = path.join('/workspace', workspaceRel);
+
+  try {
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.copyFile(src, dest);
+
+    const sessionPath = `~/nixery/whatsapp-inbox/${workspaceRel.split(path.sep).join('/')}`;
+
+    return {
+      kind,
+      line: `[attachment kind=${kind} mime=${mime} path=${sessionPath} name=${filename}]`,
+      path: sessionPath,
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+
+    return {
+      kind,
+      line: `[attachment kind=${kind} mime=${mime} name=${filename} status=copy_failed reason=${reason}]`,
+      path: '',
+    };
+  }
+};
+
+const toMarkdown = async (channel, messages, platform) => {
   const lines = [
     `# WhatsApp inbox — ${channel.displayName || channel.folder}`,
     '',
@@ -115,8 +186,24 @@ const toMarkdown = (channel, messages, platform) => {
   for (const message of messages) {
     lines.push(`## ${message.ts ?? 'unknown'} — ${formatSender(message, platform)}`);
     lines.push('');
-    lines.push(String(message.body ?? ''));
-    lines.push('');
+
+    const body = String(message.body ?? '').trim();
+
+    if (body) {
+      lines.push(body);
+      lines.push('');
+    }
+
+    const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+
+    for (const attachment of attachments) {
+      const materialized = await materializeAttachment(channel.folder, message, attachment);
+
+      if (materialized?.line) {
+        lines.push(materialized.line);
+        lines.push('');
+      }
+    }
   }
 
   return `${lines.join('\n').trim()}\n`;
@@ -157,8 +244,9 @@ const main = async () => {
     for (const channel of selected) {
       const { messages, raw } = await readMessagesFile(channel.folder);
       const mdName = `inbox-${channel.folder}.md`;
+      const markdown = await toMarkdown(channel, messages, platform);
 
-      await fs.writeFile(path.join(workspace, mdName), toMarkdown(channel, messages, platform), 'utf8');
+      await fs.writeFile(path.join(workspace, mdName), markdown, 'utf8');
       batches.push({
         channel,
         count: messages.length,

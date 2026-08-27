@@ -6,7 +6,10 @@ Merge a pending WhatsApp inbox window into wiki pages.
 
 1. Call `/nixery(get-whatsapp-page, …)` for `overview` and `facts` (facts may be absent).
 2. Read those markdown artifacts plus the inbox window markdown.
-3. Do **not** fetch prior digests for the merge.
+3. Scan the inbox markdown for attachment markers:
+   - `kind=image` with a `path=~/…`: call `/nixery(image-to-text, source: path, background: "WhatsApp inbox for channel {folder}; stacking into wiki", userPrompt: caption or "Describe and extract text for wiki stacking")`. Fold `data.text` into the window context.
+   - Other kinds (document, audio, video, unknown): note filename/mime as present but unparsed — do not invent content.
+4. Do **not** fetch prior digests for the merge.
 
 ## overview
 
@@ -14,7 +17,7 @@ Living cumulative summary — merge new durable signals into the existing page, 
 
 Keep concise (~4–6k chars soft budget). If the existing overview is already large, compress while merging (drop stale open questions, collapse one-offs into topics) rather than appending forever.
 
-Include: identity, participants, recurring topics, durable facts, open questions. **Not** a message log — window detail goes to the digest.
+Include: identity, participants, recurring topics, durable facts, open questions. **Not** a message log — window detail goes to the digest. Image-derived facts belong here only when durable; otherwise keep them in the digest.
 
 ### Platform agent (required)
 
@@ -25,4 +28,8 @@ Include: identity, participants, recurring topics, durable facts, open questions
 
 ## digests/{yyyy-mm-dd-HH}
 
-One digest per stack run window: bullet summary of new messages, notable quotes (short), and new facts. Use the current time in Asia/Hong_Kong for the page segment when possible. Label platform outbound as the assistant name from facts, not as a separate bot. Digests are the unbounded archive; overview stays bounded.
+One digest per stack run window: bullet summary of new messages, notable quotes (short), image-to-text summaries, unparsed attachment notes, and new facts. Use the current time in Asia/Hong_Kong for the page segment when possible. Label platform outbound as the assistant name from facts, not as a separate bot. Digests are the unbounded archive; overview stays bounded.
+
+## Persist
+
+Write only via `/nixery(upsert-whatsapp-page, …)` into `whatsapp/{folder}/` (overview + digests/{yyyy-mm-dd-HH}). Do **not** copy markdown into `~/data/wiki-stack` or other task-data paths as a substitute. Clear the inbox only after both upserts succeed.

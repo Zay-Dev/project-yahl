@@ -40,22 +40,19 @@ describe('resolveNixeryRequestId', () => {
 });
 
 describe('resolveNixeryRunMaxAttempts', () => {
-  it('defaults inlineTool defs to 1 attempt', () => {
-    assert.equal(
-      resolveNixeryRunMaxAttempts(baseDef({ output: { inlineTool: true } })),
-      1,
-    );
+  it('defaults inline call site to 1 attempt', () => {
+    assert.equal(resolveNixeryRunMaxAttempts(baseDef(), 'inline'), 1);
   });
 
-  it('keeps 10 attempts for orchestrator-scheduled defs', () => {
+  it('keeps 10 attempts for nixeryRun call site', () => {
     assert.equal(resolveNixeryRunMaxAttempts(baseDef()), 10);
+    assert.equal(resolveNixeryRunMaxAttempts(baseDef(), 'nixeryRun'), 10);
   });
 
-  it('honors explicit retry on inlineTool defs', () => {
+  it('honors explicit retry on inline call site', () => {
     assert.equal(
-      resolveNixeryRunMaxAttempts(baseDef({ output: { inlineTool: true, retry: 5 } })),
+      resolveNixeryRunMaxAttempts(baseDef({ output: { retry: 5 } }), 'inline'),
       5,
     );
   });
 });
-

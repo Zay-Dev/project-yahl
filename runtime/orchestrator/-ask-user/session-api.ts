@@ -45,8 +45,9 @@ export type TStageDetailForResume = {
 };
 
 export type TSessionRunCursor = {
-  kind: 'pipeline';
+  kind: 'pipeline' | 'repair';
   loopMeta?: Record<string, unknown>;
+  repairInstruction?: string;
   stageIndex: number;
 };
 
@@ -118,6 +119,34 @@ export const fetchAskUserCheckpoint = async (
   }
 
   return response.json() as Promise<TAskUserCheckpoint>;
+};
+
+export type TAskUserQuestionListItem = {
+  questionId: string;
+  requestId: string;
+  status: 'answered' | 'pending';
+};
+
+export const fetchAnsweredAskUserQuestionIdByRequestId = async (
+  sessionId: string,
+  requestId: string,
+) => {
+  const response = await fetch(
+    `${sessionApiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}` +
+    '/ask-user/questions?status=answered',
+  );
+
+  if (!response.ok) {
+    throw new Error(`ask_user questions list failed (${response.status})`);
+  }
+
+  const json = await response.json() as
+    | { data?: TAskUserQuestionListItem[] }
+    | TAskUserQuestionListItem[];
+  const questions = Array.isArray(json) ? json : (json.data ?? []);
+  const match = questions.find((question) => question.requestId === requestId);
+
+  return match?.questionId;
 };
 
 export type TStageListItemForResume = {

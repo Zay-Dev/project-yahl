@@ -4,8 +4,6 @@ description: List pending knowledge observations and PLACE/HOWTO excerpts for on
 packages: [nodejs]
 
 env:
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
   TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
 
@@ -18,6 +16,9 @@ nixery:
 
 input:
   topic:
+    type: string
+    required: true
+  instruction:
     type: string
     required: true
   output:
@@ -48,4 +49,3 @@ run:
 output:
   default: result.json
   validate: validation.mjs
-  inlineTool: true

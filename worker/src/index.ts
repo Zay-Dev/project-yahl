@@ -10,6 +10,7 @@ import {
   initWhatsApp,
   isWhatsAppBrowserDeathError,
   isWhatsAppReady,
+  isWhatsAppRecoverableInitError,
   scheduleWhatsAppReinit,
   setWhatsAppReadyListener,
 } from './-channels/whatsapp/client.js';
@@ -30,11 +31,25 @@ let pollInFlight = false;
 
 const whatsappDownAlertedIds = new Set<string>();
 
+const swallowWhatsAppWorkerError = (error: unknown, label: string): boolean => {
+  if (isWhatsAppBrowserDeathError(error)) {
+    console.warn(`[worker] swallowed WhatsApp browser-death ${label}`, error);
+    scheduleWhatsAppReinit('unhandled_browser_death');
+    return true;
+  }
+
+  if (isWhatsAppRecoverableInitError(error)) {
+    console.warn(`[worker] swallowed WhatsApp recoverable init ${label}`, error);
+    scheduleWhatsAppReinit('expose_function_conflict');
+    return true;
+  }
+
+  return false;
+};
+
 const installProcessSafetyNet = (): void => {
   process.on('unhandledRejection', (reason) => {
-    if (isWhatsAppBrowserDeathError(reason)) {
-      console.warn('[worker] swallowed WhatsApp browser-death rejection', reason);
-      scheduleWhatsAppReinit('unhandled_browser_death');
+    if (swallowWhatsAppWorkerError(reason, 'rejection')) {
       return;
     }
 
@@ -43,9 +58,7 @@ const installProcessSafetyNet = (): void => {
   });
 
   process.on('uncaughtException', (error) => {
-    if (isWhatsAppBrowserDeathError(error)) {
-      console.warn('[worker] swallowed WhatsApp browser-death exception', error);
-      scheduleWhatsAppReinit('unhandled_browser_death');
+    if (swallowWhatsAppWorkerError(error, 'exception')) {
       return;
     }
 

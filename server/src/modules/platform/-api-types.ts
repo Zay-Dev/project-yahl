@@ -53,10 +53,14 @@ export type TResponseCronJobMutation = {
   ok: true;
 };
 
-export type TResponseKnowledgeManagerInstruction = {
-  text: string;
+export type TResponseWhatsAppChannel = {
+  enabled: boolean;
+  qrDataUrl?: string;
+  status: 'connecting' | 'authenticated' | 'pending' | 'ready' | 'disconnected';
+  updatedAt: string | null;
 };
 
-export type TRequestPutKnowledgeManagerInstructionBody = {
-  text: string;
+export type TRequestPutWhatsAppChannelBody = {
+  qrDataUrl?: string;
+  status: 'connecting' | 'authenticated' | 'pending' | 'ready' | 'disconnected';
 };

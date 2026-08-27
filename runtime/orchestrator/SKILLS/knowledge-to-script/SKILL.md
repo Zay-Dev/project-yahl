@@ -5,15 +5,17 @@ description: Compile and replay narrow operation scripts under ~/data/scripts/ �
 
 # knowledge-to-script — Operation scripts (JIT)
 
-**knowledgeToScript** is on for this AI stage (unless the stage YAML sets `knowledgeToScript: false`). You still execute the **entire stage logic**. Scripts accelerate **individual sub-operations** only.
+**knowledgeToScript** is on for AI stages without the stage YAML sets `knowledgeToScript: false`. You still execute the **entire stage logic**. Scripts accelerate **individual sub-operations** only.
 
-**Priority** — if you have already have a previous knowledge/guideline, **replace ad-hoc free-flow bash and stage-agent `browser`** for replayable ops with durable files under `~/data/scripts/`. Inventory and execute existing scripts before inventing one-off shell or click-by-click `browser` turns. Do not “replace” scripts themselves — reuse and grow them.
+**Priority** — if you have already have a previous knowledge/guideline, **replace run_bash and stage-agent `browser`** for replayable ops with durable files under `~/data/scripts/`. Inventory and execute existing scripts before inventing one-off shell or click-by-click `browser` turns. Do not “replace” scripts themselves — reuse and grow them.
 
 **Micro-services style scripts is preferred** - instead of having one monolith script to take care everything, we prefer having a lot of small scripts that take care one step of the big picture. This enable us easier debugging and growing.
 
-**The task orchestrator** - when you have more than one script files for the stage, start to consider a orchestrator script that used to handle multiple steps by **only calling** the exists scripts.
+**The task orchestrator** - when you have more than one script files for the stage, start to consider an orchestrator script that used to handle multiple steps by **only calling** the exists scripts. (naming prefer orchestrate.js)
 
-**The consultant** - if you have executed any run_bash tool or shell command and the consultant exist, consult the consultant for recommendations of how should you further grow/improve the scripts. Ideally group your narrow ops and submit to the consultant for quality recommendations.
+**Existing scripts cleaning** - if you have one script that does more than one step, and is not by calling other scripts (i.e. not the orchestartor script), you must break it and turn it into an orchestrator script.
+
+**The consultant** - Submit your run_bash/browser history to the consultant for recommendations of how should you further grow/improve the scripts base. Ideally also group your narrow ops and submit to the consultant for quality recommendations.
 
 **Agent decision** — you choose when a narrow op should become or reuse a script. Stage `logic` may use human `*virtual_func(...)` sugar for other work; that is separate.
 
@@ -30,6 +32,8 @@ Any **narrow, replayable** sub-op may become a script — first-class candidates
 - URL bind (`encodeURIComponent` into a template)
 - HTTP fetch wrapper
 
+However, you **MUST** also consider candidates beside the above list.
+
 **Do not aim big** — do not fold the whole stage into one script; not one-liner writes; not notify/ask-user prose unless genuinely structured and replayable. Grow **one small piece at a time**.
 
 ## Scripts over ad-hoc bash / stage-agent browser
@@ -45,25 +49,21 @@ When this skill applies, resolving a scriptable `*…` op means **check and run 
 
 ## Stage notes (required)
 
-Before finishing the stage, write:
+Before finishing the stage, check if you need to create/patch a script, after taken the action, write:
 
 ```text
 set_context key=__knowledge-to-script__notes  value=<non-empty string>
 ```
 
-Notes force a short review of **ad-hoc free-flow / one-off bash** that should become a durable `~/data/scripts/` artifact — not a ledger of scripts you already ran. Name any such candidate this attempt (or say none), and either that you created/grew one or **why no new script after consideration** (inventory already covers it / not replayable / deferred / consult said skip).
-
-Examples:
-
-- `free-flow SPA wait via bare sleep — deferred; adaptive-sleep.js covers poll math`
-- `inline jq format for day section — grew format-fetch-section.js`
-- `no ad-hoc candidate; inventory covers ops`
-- literal **`reviewed`** — free-flow checked; nothing further (including no new-script candidate)
+1. You **MUST** not note about when you did or which script you have used.
+2. This is mainly to find opportunity to compile our knowledge to a script for the sake of performance and stablility
+3. Consult consultant and librarian if proper nixery plugins are available
 
 ## Layout
 
 ```
 ~/data/scripts/
+  orchestrate.js                 # that one script to invoke the others for multiple steps
   fill-origin-input.js           # node: stdin bind → yahl-browser act/observe
   pick-origin-suggestion.js
   fetch-driving-routes.js        # compose: goto + fills + search + extract via yahl-browser

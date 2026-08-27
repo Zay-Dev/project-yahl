@@ -15,9 +15,20 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { ActivityIcon, BookOpenIcon, ClockIcon, GalleryVerticalEndIcon, HeartPulseIcon, LayoutDashboardIcon, ListIcon, ListTodoIcon, RefreshCwIcon } from "lucide-react"
+import {
+  ActivityIcon,
+  BadgeCheckIcon,
+  ClockIcon,
+  FolderOpenIcon,
+  GalleryVerticalEndIcon,
+  HeartPulseIcon,
+  LayoutDashboardIcon,
+  ListIcon,
+  ListTodoIcon,
+  MessagesSquareIcon,
+} from "lucide-react"
 
-import { WIKI_PUBLIC_URL } from "@/providers/constants"
+import { CODE_SERVER_PUBLIC_URL } from "@/providers/constants"
 
 const data = {
   user: {
@@ -95,7 +106,15 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       title: "Approvals",
       url: "/platform/approvals",
       icon: (
-        <ActivityIcon
+        <BadgeCheckIcon
+        />
+      ),
+    },
+    {
+      title: "Channels",
+      url: "/platform/channels",
+      icon: (
+        <MessagesSquareIcon
         />
       ),
     },
@@ -108,19 +127,11 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       ),
     },
     {
-      title: "Knowledge",
+      title: "Knowledge / Files",
       external: true,
-      url: `${WIKI_PUBLIC_URL}/`,
+      url: `${CODE_SERVER_PUBLIC_URL}/`,
       icon: (
-        <BookOpenIcon
-        />
-      ),
-    },
-    {
-      title: "Knowledge Manager",
-      url: "/platform/knowledge-policies",
-      icon: (
-        <RefreshCwIcon
+        <FolderOpenIcon
         />
       ),
     },

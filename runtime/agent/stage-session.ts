@@ -204,7 +204,7 @@ export const runStageSession = async (
   const maxBashCalls = options.maxBashCalls ?? 24;
   const maxTurns = options.maxTurns ?? 60;
 
-  const askUserResumePrompt = options.resumeFrom
+  const askUserResumePrompt = options.resumeFrom?.batchAnswers.length
     ? buildAskUserResumePrompt(options.resumeFrom)
     : '';
 

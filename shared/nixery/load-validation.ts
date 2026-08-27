@@ -18,7 +18,7 @@ export type TNixeryValidationResult =
   | { ok: false; reason: string };
 
 export type TNixeryValidationModule = {
-  /** Optional — structured defs with inlineTool (e.g. dedup-knowledge, upsert-knowledge-page). */
+  /** Optional — structured defs (e.g. dedup-knowledge, upsert-knowledge-page). */
   parseOutput?: (raw: string) => unknown;
   validateOutput: (ctx: TNixeryValidationContext) => Promise<TNixeryValidationResult>;
 };

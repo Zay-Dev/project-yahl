@@ -1,19 +1,18 @@
 name: Knowledge Wiki
-description: Read/write curated wiki topics for knowledge manager
+description: Read/write curated knowledge corpus for knowledge manager
 skills:
   - SKILLS/nixery
+  - SKILLS/nixery-get-knowledge
+  - SKILLS/nixery-search-knowledge
+  - SKILLS/nixery-list-knowledge-pages
+  - SKILLS/nixery-dedup-knowledge
+  - SKILLS/nixery-resolve-topic
+  - SKILLS/submit-knowledge-observation
+  - SKILLS/resolve-errors-with-knowledge
+  - SKILLS/worth-persisting-knowledge
+  - SKILLS/knowledge-wiki-style
+  - SKILLS/locate-knowledge
+  - SKILLS/analyze-additional-instruction
 prompts:
   - prompts/nixery.md
   - prompts/knowledge-persist.md
-task_skills:
-  - task-skills/nixery-get-knowledge
-  - task-skills/nixery-search-knowledge
-  - task-skills/nixery-list-knowledge-pages
-  - task-skills/nixery-dedup-knowledge
-  - task-skills/nixery-resolve-topic
-  - task-skills/submit-knowledge-observation
-  - task-skills/resolve-errors-with-knowledge
-  - task-skills/worth-persisting-knowledge
-  - task-skills/knowledge-wiki-style
-  - task-skills/locate-knowledge
-  - task-skills/analyze-additional-instruction

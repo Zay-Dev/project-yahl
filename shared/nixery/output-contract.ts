@@ -18,7 +18,6 @@ export const resolveNixeryOutputRetry = (def: TNixeryDef): number => {
 
 export const resolveNixeryOutputSpec = (def: TNixeryDef): Required<TNixeryOutputSpec> => ({
   default: def.output?.default?.trim() || DEFAULT_NIXERY_OUTPUT_FILE,
-  inlineTool: def.output?.inlineTool === true,
   retry: resolveNixeryOutputRetry(def),
   validate: def.output?.validate?.trim() || DEFAULT_VALIDATION_MODULE,
 });

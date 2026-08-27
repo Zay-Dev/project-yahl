@@ -6,6 +6,8 @@ import Redis from "ioredis";
 
 import { RedisPublisher } from '@/shared/transports/redis';
 
+import { prepareAgentFiles } from '@project-yahl/shared/agent-files/prepare-agent-files';
+
 import {
   buildAgent,
   composeUp,
@@ -14,6 +16,7 @@ import {
   writeAgentSessionOverride,
   writeSharedOneCliOverride,
 } from './-docker';
+import { repoRoot } from './-docker/paths';
 import { program, resolveOrchestratorRun, resolveSessionId, runCommand } from './-cli';
 
 import { loadNixeryDef, parseNixeryRunInputJson, runNixeryDef } from './-nixery';
@@ -22,6 +25,8 @@ import { createSessionEventTracker } from './-utils/session-event-tracker';
 import { publishSessionResult } from './-utils/session-result';
 
 import { AskUserPausedError } from './-ask-user';
+import { UserPausedError } from './-user-pause/errors';
+import { clearSessionControl } from './-control/read-signal';
 
 import { prepareTaskWorkspace } from './-runners/prepare-task-workspace';
 import { resolvePreparedRun } from './-runners/resolve-prepared-run';
@@ -66,6 +71,14 @@ const _setupPublisher = async (tracker: ReturnType<typeof createSessionEventTrac
     });
 
   await publisher.waitForReady();
+
+  const drained = await publisher.drainRequestQueue();
+
+  if (drained > 0) {
+    console.log(
+      `[orchestrator] drained stale request queue sessionId=${sessionId} count=${drained}`,
+    );
+  }
 };
 
 const isStagehandLiveview = () => {
@@ -86,6 +99,8 @@ const _composeUp = async (
   tracker: ReturnType<typeof createSessionEventTracker>,
 ) => {
   const liveView = isStagehandLiveview();
+
+  await prepareAgentFiles({ repoRoot });
 
   const sessionOverrideFilePath = await writeAgentSessionOverride({
     publishVnc: liveView,
@@ -178,11 +193,18 @@ runCommand.action(async options => {
 
     const { resultContextKey, storage } = await runSessionFrom(sessionId, prepared);
 
-    await publishSessionResult(sessionId, resultContextKey, storage);
+    if (prepared.cursor.kind !== 'repair') {
+      await publishSessionResult(sessionId, resultContextKey, storage);
+    } else {
+      await globalThis.sessionTracker?.patchSession?.(sessionId, { runCursor: undefined });
+      await tracker.flush();
+    }
   } catch (error) {
     const catchKind = error instanceof AskUserPausedError
       ? 'AskUserPausedError'
-      : error instanceof VerifyFailedError
+      : error instanceof UserPausedError
+        ? 'UserPausedError'
+        : error instanceof VerifyFailedError
         ? 'VerifyFailedError'
         : error instanceof VerifyUnavailableError
           ? 'VerifyUnavailableError'
@@ -196,6 +218,11 @@ runCommand.action(async options => {
 
     if (error instanceof AskUserPausedError) {
       skipFinallyTeardown = true;
+      await tracker.flush();
+      exitCode = 0;
+    } else if (error instanceof UserPausedError) {
+      skipFinallyTeardown = true;
+      await clearSessionControl(sessionId);
       await tracker.flush();
       exitCode = 0;
     } else if (error instanceof VerifyFailedError) {

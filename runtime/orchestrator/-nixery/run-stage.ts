@@ -3,7 +3,7 @@ import type { TNixeryDef } from '@project-yahl/shared/nixery/types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { writeSharedOneCliOverride } from '@/orchestrator/-docker/compose-onecli';
+import { writeSharedOneCliOverride } from '@/orchestrator/-docker/onecli-snapshot';
 import { workspaceRoot } from '@/orchestrator/-utils/workspace-paths';
 import {
   resolveNixeryOutputHint,
@@ -68,9 +68,14 @@ const resolveDiagnosticsLogPath = (sessionId: string, defId: string) =>
 
 const resolveMaxAttempts = (defRetry: number) => (defRetry < 1 ? 1 : defRetry);
 
-export const resolveNixeryRunMaxAttempts = (def: TNixeryDef) => {
-  if (def.output?.inlineTool === true) {
-    const retry = def.output.retry;
+export type TNixeryCallSite = 'inline' | 'nixeryRun';
+
+export const resolveNixeryRunMaxAttempts = (
+  def: TNixeryDef,
+  callSite: TNixeryCallSite = 'nixeryRun',
+) => {
+  if (callSite === 'inline') {
+    const retry = def.output?.retry;
 
     if (typeof retry === 'number' && Number.isInteger(retry) && retry >= 1) {
       return retry;
@@ -156,6 +161,7 @@ export const resolveNixeryRequestId = (params: {
 };
 
 export const runNixeryDef = async (params: {
+  callSite?: TNixeryCallSite;
   defId: string;
   input: Record<string, unknown>;
   requestId?: string;
@@ -169,7 +175,7 @@ export const runNixeryDef = async (params: {
   const sessionDir = resolveSessionNixeryDir(params.sessionId, params.defId);
   const containerName = resolveNixeryContainerName(params.sessionId, params.defId);
   const diagnosticsLogPath = resolveDiagnosticsLogPath(params.sessionId, params.defId);
-  const maxAttempts = resolveNixeryRunMaxAttempts(def);
+  const maxAttempts = resolveNixeryRunMaxAttempts(def, params.callSite ?? 'nixeryRun');
   const baseInput = { ...params.input };
   const outputHint = resolveNixeryOutputHint(def, baseInput);
   const entry = resolveNixeryDefEntryArgv(def);

@@ -1,8 +1,13 @@
-export type TResumeRunMode = 'ask-user-resume' | 'verify-resume' | 'produce-keys-resume';
+export type TResumeRunMode =
+  | 'ask-user-resume'
+  | 'produce-keys-resume'
+  | 'user-pause-resume'
+  | 'verify-resume';
 
 export type TOrchestratorRunOptions = {
   produceKeysResumeId?: string;
   resumeId?: string;
+  userPauseResumeId?: string;
   verifyResumeId?: string;
 };
 
@@ -21,6 +26,10 @@ export const resolveOrchestratorRun = (options: TOrchestratorRunOptions): TOrche
 
   if (options.produceKeysResumeId) {
     return { mode: 'produce-keys-resume', resumeId: options.produceKeysResumeId };
+  }
+
+  if (options.userPauseResumeId) {
+    return { mode: 'user-pause-resume', resumeId: options.userPauseResumeId };
   }
 
   return { mode: 'session' };

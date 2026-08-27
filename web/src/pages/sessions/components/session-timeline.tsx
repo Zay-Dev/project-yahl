@@ -1,4 +1,10 @@
-import type { TResponseStageDetail, TResponseStageListItem, TSessionLiveEvent } from "@project-yahl/server/modules/sessions/-api-types";
+import type {
+  TResponseGetSession,
+  TResponseStageDetail,
+  TResponseStageListItem,
+  TResponseUserPauseCheckpoint,
+  TSessionLiveEvent,
+} from "@project-yahl/server/modules/sessions/-api-types";
 import type { TParsedStage } from "@project-yahl/server/modules/sessions/-types";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +15,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { SessionTransportControls } from "@/pages/sessions/components/session-transport-controls";
 import { StageDetailPanel } from "@/pages/sessions/components/stage-detail-panel";
 import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
 import { fetchWithConcurrency } from "@/pages/sessions/lib/fetch-with-concurrency";
@@ -25,10 +32,20 @@ type TSessionTimelineProps = {
   error: string | null;
   isLoading: boolean;
   lastEvent: TSessionLiveEvent | null;
+  onActionComplete: () => void;
+  onPausePendingChange: (pending: boolean) => void;
+  onResumePendingChange: (pending: boolean) => void;
   originalStages: TParsedStage[];
+  pausePending: boolean;
+  pauseWaitError?: string | null;
+  pendingUserPause: TResponseUserPauseCheckpoint | null;
+  resumePending: boolean;
+  resumeWaitError?: string | null;
+  session: TResponseGetSession;
   sessionId: string;
   stages: TResponseStageListItem[];
   startingRun?: boolean;
+  verifyAutoRetry?: boolean;
 };
 
 const StatusBadge = ({ label, value }: { label: string; value: string }) => (
@@ -171,10 +188,20 @@ export function SessionTimeline({
   error,
   isLoading,
   lastEvent,
+  onActionComplete,
+  onPausePendingChange,
+  onResumePendingChange,
   originalStages,
+  pausePending,
+  pauseWaitError = null,
+  pendingUserPause,
+  resumePending,
+  resumeWaitError = null,
+  session,
   sessionId,
   stages,
   startingRun = false,
+  verifyAutoRetry = false,
 }: TSessionTimelineProps) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [details, setDetails] = useState<Map<string, TResponseStageDetail>>(() => new Map());
@@ -309,10 +336,12 @@ export function SessionTimeline({
   };
 
   const stageLabels = useMemo(() => buildStageLabels(stages), [stages]);
+  const clockLive = session.runState === "active";
   const hasLiveStage = stages.some((item) => item.status !== "finished");
+  const tickLive = clockLive && hasLiveStage;
 
   useEffect(() => {
-    if (!hasLiveStage) {
+    if (!tickLive) {
       return;
     }
 
@@ -323,11 +352,11 @@ export function SessionTimeline({
     return () => {
       window.clearInterval(timer);
     };
-  }, [hasLiveStage]);
+  }, [tickLive]);
 
   const currentStage = resolveCurrentStage(stages);
   const currentElapsed = currentStage
-    ? resolveStageElapsed(currentStage.stage, nowMs)
+    ? resolveStageElapsed(currentStage.stage, nowMs, { clockLive })
     : null;
 
   return (
@@ -353,6 +382,18 @@ export function SessionTimeline({
           >
             Collapse all
           </Button>
+          <SessionTransportControls
+            onActionComplete={onActionComplete}
+            onPausePendingChange={onPausePendingChange}
+            onResumePendingChange={onResumePendingChange}
+            pausePending={pausePending}
+            pauseWaitError={pauseWaitError}
+            pendingUserPause={pendingUserPause}
+            resumePending={resumePending}
+            resumeWaitError={resumeWaitError}
+            session={session}
+            verifyAutoRetry={verifyAutoRetry}
+          />
           {currentStage ? (
             <>
               <StatusBadge

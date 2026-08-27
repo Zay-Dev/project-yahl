@@ -6,8 +6,6 @@ packages: [nodejs]
 env:
   TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
 
 nixery:
   default: "true"
@@ -54,4 +52,3 @@ run:
 output:
   default: result.json
   validate: validation.mjs
-  inlineTool: true

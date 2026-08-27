@@ -36,7 +36,7 @@ const remapTransportEnv = (env: Record<string, string>) =>
     Object.entries(env).map(([key, value]) => [key, remapTransportEnvValue(value)]),
   );
 
-export const agentNoProxy = 'localhost,127.0.0.1,::1,redis,server,mongo,onecli,wiki,wiki_postgres,worker,llm-proxy,host.docker.internal';
+export const agentNoProxy = 'localhost,127.0.0.1,::1,redis,server,mongo,onecli,worker,llm-proxy,host.docker.internal';
 
 export type TOneCliVolumeMount = {
   containerPath: string;
@@ -377,4 +377,46 @@ export const formatOneCliComposeOverride = (snapshot: TOneCliSnapshot) => {
     ...volumeLines,
     '',
   ].join('\n');
+};
+
+export const writeSharedOneCliOverride = async () => {
+  const onecliApiKey = process.env.ONECLI_API_KEY || '';
+  const onecliDashboardUrl = process.env.ONECLI_DASHBOARD_URL || process.env.ONECLI_URL || '';
+
+  if (!onecliApiKey || !onecliDashboardUrl) {
+    process.stdout.write('[OneCLI] ONECLI_API_KEY or ONECLI_DASHBOARD_URL missing, skip shared override\n');
+    return undefined;
+  }
+
+  if (await sharedOneCliOverrideReady()) {
+    process.stdout.write('[OneCLI] shared override already present, skip rewrite\n');
+    return onecliSharedComposeOverrideFile;
+  }
+
+  try {
+    const snapshot = await loadOneCliSnapshot();
+
+    if (!snapshot) {
+      return undefined;
+    }
+
+    await persistOneCliSnapshot(snapshot);
+    await fs.writeFile(
+      onecliSharedComposeOverrideFile,
+      formatOneCliComposeOverride(snapshot),
+      'utf-8',
+    );
+
+    return onecliSharedComposeOverrideFile;
+  } catch (error) {
+    if (await sharedOneCliOverrideReady()) {
+      process.stdout.write(
+        `[OneCLI] fetch failed (${String(error)}), using cached shared override\n`,
+      );
+
+      return onecliSharedComposeOverrideFile;
+    }
+
+    throw error;
+  }
 };

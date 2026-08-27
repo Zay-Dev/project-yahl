@@ -5,12 +5,11 @@ import YAML from 'yaml';
 
 import { assertNixeryPluginArtifacts } from './assert-plugin-artifacts';
 import { loadNixeryDefFromFile } from './load-def';
-import { resolveNixeryOutputSpec } from './output-contract';
 import { validateNixeryPluginMeta } from './validate-def';
 
 import type { TNixeryAbilityLocation, TNixeryDef, TNixeryPluginMeta } from './types';
 
-const SKIP_ABILITY_NAMES = new Set(['lib', 'SKILLS', 'prompts', 'task-skills']);
+const SKIP_ABILITY_NAMES = new Set(['lib', 'SKILLS', 'prompts']);
 
 const isSkippedDir = (name: string) =>
   name.startsWith('_') || name.startsWith('.') || SKIP_ABILITY_NAMES.has(name);
@@ -156,11 +155,3 @@ export const loadAllNixeryDefs = async (nixeryRoot: string): Promise<TNixeryDef[
   }));
 };
 
-export const listInlineNixeryDefIds = async (nixeryRoot: string): Promise<string[]> => {
-  const defs = await loadAllNixeryDefs(nixeryRoot);
-
-  return defs
-    .filter((def) => resolveNixeryOutputSpec(def).inlineTool)
-    .map((def) => def.id)
-    .sort();
-};

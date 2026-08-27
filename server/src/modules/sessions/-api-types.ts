@@ -220,9 +220,30 @@ export type TResponseVerifyCheckpoint = {
   verifyId: string;
 };
 
+export type TResponseUserPauseCheckpoint = {
+  loopMeta?: TStageLoopMeta;
+  parsedStageSnapshot?: {
+    lines: string;
+    sourceStartLine: number;
+    type: 'loop' | 'plain' | 'while';
+  };
+  pauseId: string;
+  repairInstruction?: string;
+  requestId: string;
+  stage: TYahlStage;
+  stageIndex?: number;
+  status: 'pending' | 'resumed';
+  storageSnapshot: Record<string, unknown>;
+};
+
+export type TResponseStopSession = {
+  runState: TSessionRunState;
+};
+
 export type TSessionLiveEvent =
   | { type: 'ask-user.answered'; questionId: string; requestId: string }
   | { type: 'ask-user.created'; questionId: string; requestId: string }
+  | { type: 'session.stopped' }
   | { type: 'session.updated' }
   | { type: 'stage.created'; requestId: string }
   | { type: 'stage.finished'; requestId: string }
@@ -231,6 +252,8 @@ export type TSessionLiveEvent =
   | { type: 'stage.tool-call'; requestId: string }
   | { type: 'produce_keys.failed'; requestId: string; verifyId: string }
   | { type: 'produce_keys.resumed'; requestId: string; verifyId: string }
+  | { type: 'user_pause.requested'; pauseId: string; requestId: string }
+  | { type: 'user_pause.resumed'; pauseId: string; requestId: string }
   | { type: 'verify.failed'; requestId: string; verifyId: string }
   | { type: 'verify.passed'; requestId: string }
   | { type: 'verify.resumed'; requestId: string; verifyId: string };
@@ -265,6 +288,16 @@ export type TRequestCreateForkSessionBody = {
 };
 
 export type TResponseCreateForkSession = {
+  forkSessionId: string;
+  targetSessionId: string;
+};
+
+export type TRequestCreateRepairSessionBody = {
+  anchorStageId: string;
+  instruction: string;
+};
+
+export type TResponseCreateRepairSession = {
   forkSessionId: string;
   targetSessionId: string;
 };

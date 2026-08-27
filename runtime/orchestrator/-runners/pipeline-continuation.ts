@@ -10,7 +10,12 @@ import { resolveVerifySkipWarmUp } from '@project-yahl/shared/yahl/verify';
 
 export type TPipelinePosition =
   | { kind: 'none' }
-  | { kind: 'loopAfterIteration'; loopMeta: TLoopMeta; loopStageIndex: number }
+  | {
+    kind: 'loopAfterIteration';
+    loopMeta: TLoopMeta;
+    loopStageIndex: number;
+    warmupRequestId?: string;
+  }
   | { 
       kind: 'fromStageIndex';
       produceKeysResumeAttempt?: boolean;
@@ -242,7 +247,12 @@ export const runPipelineContinuation = async (ctx: TPipelineContinuation) => {
   }
 
   if (position.kind === 'loopAfterIteration') {
-    await _continueLoopIterations(ctx, position.loopMeta, position.loopStageIndex);
+    await _continueLoopIterations(
+      ctx,
+      position.loopMeta,
+      position.loopStageIndex,
+      position.warmupRequestId,
+    );
     await _runSuffix(ctx);
 
     return ctx.storage;

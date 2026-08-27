@@ -55,10 +55,6 @@ export const runNixeryInlineTool = async (params: {
     const defId = params.defId.trim();
     const { def } = await loadNixeryDef(defId);
 
-    if (!def.output?.inlineTool) {
-      return toInlineError(new Error(`[nixery] def ${defId} is not enabled for inline tool calls`));
-    }
-
     const output = resolveNixeryOutputHint(def, params.args);
     const input = {
       ...params.args,
@@ -73,6 +69,7 @@ export const runNixeryInlineTool = async (params: {
 
     try {
       await runNixeryDef({
+        callSite: 'inline',
         defId,
         input,
         ...(params.requestId?.trim() ? { requestId: params.requestId.trim() } : {}),

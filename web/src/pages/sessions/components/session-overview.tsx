@@ -1,4 +1,8 @@
-import type { TResponseGetSession, TResponseModelUsageByModel } from "@project-yahl/server/modules/sessions/-api-types";
+import type {
+  TResponseGetSession,
+  TResponseModelUsageByModel,
+  TResponseUserPauseCheckpoint,
+} from "@project-yahl/server/modules/sessions/-api-types";
 
 import { Link } from "react-router";
 
@@ -6,9 +10,19 @@ import { SessionTitle } from "@/pages/sessions/components/session-title";
 import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
 import { SessionDeleteDialog } from "@/pages/sessions/components/session-delete-dialog";
 import { SessionLiveViewMenu } from "@/pages/sessions/components/session-live-view-menu";
+import { SessionTransportControls } from "@/pages/sessions/components/session-transport-controls";
 
 type TSessionOverviewProps = {
+  onActionComplete?: () => void;
+  onPausePendingChange?: (pending: boolean) => void;
+  onResumePendingChange?: (pending: boolean) => void;
+  pausePending?: boolean;
+  pauseWaitError?: string | null;
+  pendingUserPause?: TResponseUserPauseCheckpoint | null;
+  resumePending?: boolean;
+  resumeWaitError?: string | null;
   session: TResponseGetSession;
+  verifyAutoRetry?: boolean;
 };
 
 const formatDate = (value: string | undefined) => {
@@ -54,7 +68,18 @@ const UsageGroup = ({
   );
 };
 
-export function SessionOverview({ session }: TSessionOverviewProps) {
+export function SessionOverview({
+  onActionComplete,
+  onPausePendingChange,
+  onResumePendingChange,
+  pausePending = false,
+  pauseWaitError = null,
+  pendingUserPause = null,
+  resumePending = false,
+  resumeWaitError = null,
+  session,
+  verifyAutoRetry = false,
+}: TSessionOverviewProps) {
   const totals = session.tokenTotals;
   const domains = session.domains;
   const stageUsage = session.stageUsage;
@@ -81,6 +106,18 @@ export function SessionOverview({ session }: TSessionOverviewProps) {
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <SessionTransportControls
+            onActionComplete={() => onActionComplete?.()}
+            onPausePendingChange={(pending) => onPausePendingChange?.(pending)}
+            onResumePendingChange={(pending) => onResumePendingChange?.(pending)}
+            pausePending={pausePending}
+            pauseWaitError={pauseWaitError}
+            pendingUserPause={pendingUserPause}
+            resumePending={resumePending}
+            resumeWaitError={resumeWaitError}
+            session={session}
+            verifyAutoRetry={verifyAutoRetry}
+          />
           {typeof session.liveViewVncPort === 'number' && session.liveViewVncPort > 0 ? (
             <SessionLiveViewMenu port={session.liveViewVncPort} />
           ) : null}
@@ -101,7 +138,13 @@ export function SessionOverview({ session }: TSessionOverviewProps) {
         <div>
           <dt className="text-muted-foreground">Status</dt>
           <dd className="mt-0.5 font-medium">
-            {session.deletedAt ? "Deleted" : "Active"}
+            {session.deletedAt
+              ? "Deleted"
+              : session.runState === "active"
+                ? "Running"
+                : session.runState === "stuck"
+                  ? "Stuck"
+                  : "Idle"}
           </dd>
         </div>
         <div>

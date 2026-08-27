@@ -73,4 +73,3 @@ run:
 output:
   default: plan.json
   validate: validation.mjs
-  inlineTool: false

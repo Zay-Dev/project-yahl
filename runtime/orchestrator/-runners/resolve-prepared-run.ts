@@ -9,6 +9,7 @@ import { fetchSession } from '@/orchestrator/-ask-user';
 
 import { deserializeCheckpointStorage } from './checkpoint-resume-load';
 import { resolvePreparedResumeRun } from './resolve-prepared-resume';
+import { buildRepairSystemAppend } from '@/orchestrator/-repair/repair-helpers';
 
 const _emptyStorage = () => {
   const storage = createStorage();
@@ -24,7 +25,7 @@ const _seedFreshTaskStorage = (
   taskYahl: string,
 ) => {
   const runInputContextKeys = taskYahl.trim()
-    ? parseYahlDocument(taskYahl).runInput
+    ? parseYahlDocument(taskYahl).runInput?.map((field) => field.key)
     : undefined;
 
   seedRunInputContext(storage, runInput, runInputContextKeys);
@@ -59,10 +60,39 @@ export const resolvePreparedRun = async (
     return resolvePreparedResumeRun(sessionId, run.resumeId, 'produce-keys');
   }
 
+  if (run.mode === 'user-pause-resume') {
+    return resolvePreparedResumeRun(sessionId, run.resumeId, 'user-pause');
+  }
+
   const session = await fetchSession(sessionId);
 
   if (!session.parsedStages.length) {
     throw new Error(`[orchestrator] session missing parsedStages sessionId=${sessionId}`);
+  }
+
+  if (session.runCursor?.kind === 'repair') {
+    const stageIndex = session.runCursor.stageIndex;
+    const repairInstruction = session.runCursor.repairInstruction?.trim();
+
+    if (!repairInstruction) {
+      throw new Error(`[orchestrator] repair run missing repairInstruction sessionId=${sessionId}`);
+    }
+
+    const storage = buildFreshRunStorage(session);
+
+    return {
+      cursor: {
+        kind: 'repair',
+        loopMeta: session.runCursor.loopMeta as TLoopMeta | undefined,
+        repairInstruction,
+        stageIndex,
+      },
+      parsedStages: session.parsedStages,
+      resultContextKey: session.resultContextKey ?? 'result',
+      storage,
+      systemAppend: buildRepairSystemAppend(repairInstruction),
+      taskYahl: session.taskYahl,
+    };
   }
 
   const stageIndex = session.runCursor?.stageIndex ?? 0;

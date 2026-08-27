@@ -71,11 +71,10 @@ test('validateNixeryDef accepts write-def shape with plugin mount', () => {
 
 test('validateNixeryDef accepts output block', () => {
   const def = validateNixeryDef({
-    id: 'inline-tool-fixture',
+    id: 'output-fixture',
     packages: ['nodejs'],
     output: {
       default: 'result.json',
-      inlineTool: true,
       retry: 2,
       validate: 'validation.mjs',
     },
@@ -86,7 +85,6 @@ test('validateNixeryDef accepts output block', () => {
   });
 
   assert.equal(def.output?.default, 'result.json');
-  assert.equal(def.output?.inlineTool, true);
   assert.equal(def.output?.retry, 2);
   assert.equal(def.output?.validate, 'validation.mjs');
 });

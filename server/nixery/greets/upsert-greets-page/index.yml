@@ -1,11 +1,10 @@
 id: upsert-greets-page
-description: Upsert a Wiki.js page under greets/{entity}/ (not topics/)
+description: Upsert a knowledge page under greets/{entity}/ (not topics/)
 
 packages: [nodejs]
 
 env:
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
+  KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
 
 nixery:
   default: "true"
@@ -35,6 +34,9 @@ input:
     required: false
 
 mount:
+  /data/knowledge_export:
+    host: data/knowledge_export
+    mode: rw
   /workspace:
     host: session
     mode: rw
@@ -52,4 +54,3 @@ run:
 output:
   default: result.json
   validate: validation.mjs
-  inlineTool: false

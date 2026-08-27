@@ -1,4 +1,7 @@
-import { validateRunInputPayload } from '@project-yahl/shared/yahl/run-input-keys';
+import {
+  applyRunInputDefaults,
+  validateRunInputPayload,
+} from '@project-yahl/shared/yahl/run-input-keys';
 
 import { Repository } from '@/core';
 
@@ -10,6 +13,7 @@ Repository.registerValidateTaskRunInput(async (taskId, runInput) => {
   }
 
   const task = await readTaskFile(taskId);
+  const merged = applyRunInputDefaults(runInput, task.runInputFields);
 
-  return validateRunInputPayload(runInput, task.runInputKeys);
+  return validateRunInputPayload(merged, task.runInputFields);
 });

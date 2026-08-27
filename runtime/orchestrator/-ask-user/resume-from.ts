@@ -3,13 +3,25 @@ import type {
   TChatToolCall,
   TModelResponse,
 } from '@/shared/transports/-types';
+import type { AskUserBatchToolArguments } from '@/shared/ask-user-batch';
 
 import type { TAskUserCheckpoint } from './session-api';
 import type { TStageDetailForResume } from './session-api';
 
-export const buildResumeFrom = (
-  checkpoint: TAskUserCheckpoint,
+const EMPTY_ASK_USER_BATCH: AskUserBatchToolArguments = {
+  batchId: '',
+  questions: [],
+  title: '',
+  version: 'askUserBatch.v1',
+};
+
+export const buildMidTurnResumeFrom = (
   stageDetail: TStageDetailForResume,
+  options?: {
+    batch?: AskUserBatchToolArguments;
+    batchAnswers?: TAskUserResumeFrom['batchAnswers'];
+    pendingToolCallId?: string;
+  },
 ): TAskUserResumeFrom => {
   const modelResponses = stageDetail.modelResponses.map((item) => ({
     ...(item.response as unknown as TModelResponse),
@@ -34,6 +46,22 @@ export const buildResumeFrom = (
     }
   }
 
+  const pendingToolCallId = options?.pendingToolCallId
+    ?? (options?.batchAnswers?.length ? (toolCalls.at(-1)?.id ?? '') : '');
+
+  return {
+    batch: options?.batch ?? EMPTY_ASK_USER_BATCH,
+    batchAnswers: options?.batchAnswers ?? [],
+    modelResponses,
+    pendingToolCallId,
+    toolCalls,
+  };
+};
+
+export const buildResumeFrom = (
+  checkpoint: TAskUserCheckpoint,
+  stageDetail: TStageDetailForResume,
+): TAskUserResumeFrom => {
   const batchAnswers = (checkpoint.batchAnswers ?? []).map((answer) => ({
     answerValue: answer.answerValue,
     ...(answer.freeText ? { freeText: answer.freeText } : {}),
@@ -41,11 +69,9 @@ export const buildResumeFrom = (
     ...(answer.optionIds?.length ? { selectedOptionIds: answer.optionIds } : {}),
   }));
 
-  return {
+  return buildMidTurnResumeFrom(stageDetail, {
     batch: checkpoint.batch,
     batchAnswers,
-    modelResponses,
     pendingToolCallId: checkpoint.toolCallId,
-    toolCalls,
-  };
+  });
 };

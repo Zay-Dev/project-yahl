@@ -11,8 +11,6 @@ env:
   OPENAI_PROVIDER_DOMAIN: ""
   OPENAI_MODEL: gpt-5.6-sol
   OPENAI_TEMPERATURE: "0.2"
-  WIKI_GRAPHQL_URL: ""
-  WIKI_API_TOKEN: ""
   TOPICS_REGISTRY_PATH: /data/mastermind/topics.json
   KNOWLEDGE_EXPORT_ROOT: /data/knowledge_export
   SESSION_API_BASE_URL: ""
@@ -28,6 +26,9 @@ input:
   topic:
     type: string
     required: true
+  instruction:
+    type: string
+    required: true
   dryRun:
     type: string
     required: false
@@ -41,7 +42,7 @@ input:
 mount:
   /data/knowledge_export:
     host: data/knowledge_export
-    mode: ro
+    mode: rw
   /data/mastermind:
     host: data/mastermind
     mode: rw
@@ -62,4 +63,3 @@ run:
 output:
   default: result.json
   validate: validation.mjs
-  inlineTool: true

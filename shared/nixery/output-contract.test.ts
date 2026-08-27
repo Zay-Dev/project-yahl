@@ -16,7 +16,6 @@ describe('resolveNixeryOutputSpec', () => {
   it('defaults to output.md, validation.mjs, and retry 10', () => {
     assert.deepEqual(resolveNixeryOutputSpec(baseDef()), {
       default: 'output.md',
-      inlineTool: false,
       retry: 10,
       validate: 'validation.mjs',
     });

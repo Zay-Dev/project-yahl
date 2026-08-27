@@ -20,6 +20,7 @@ const main = async () => {
     : 'result.json';
   const outputPath = path.join(workspace, outputName);
   const topic = typeof input.topic === 'string' ? input.topic.trim() : '';
+  const instruction = typeof input.instruction === 'string' ? input.instruction : '';
 
   if (!topic) {
     const gate = { ok: false, error: 'topic is required' };
@@ -31,7 +32,7 @@ const main = async () => {
   logProgress(defId, `start topic=${topic}`);
 
   try {
-    const intake = await buildTopicIntake({ topic });
+    const intake = await buildTopicIntake({ instruction, topic });
     const gate = {
       ok: true,
       intake,

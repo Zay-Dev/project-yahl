@@ -49,4 +49,3 @@ run:
 output:
   default: pages.md
   validate: validation.mjs
-  inlineTool: false

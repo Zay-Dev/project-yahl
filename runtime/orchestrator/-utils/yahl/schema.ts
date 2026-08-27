@@ -1,5 +1,6 @@
 import { assertDocumentStageIdsAndGoto } from "@project-yahl/shared/yahl/assert-stage-goto-graph";
-import { parseRunInputContextKeys } from "@project-yahl/shared/yahl/run-input-keys";
+import type { TRunInputField } from "@project-yahl/shared/yahl/run-input-keys";
+import { parseRunInputFields } from "@project-yahl/shared/yahl/run-input-keys";
 
 import type { YahlStage } from "@/shared/yahl-stage";
 import { validateYahlStage } from "@/shared/yahl-stage";
@@ -10,7 +11,7 @@ export interface YahlDocument {
   description: string;
   name: string;
   resultContextKey?: string;
-  runInput?: string[];
+  runInput?: TRunInputField[];
   stages: YahlStage[];
   types?: string;
 }
@@ -50,7 +51,7 @@ export const validateYahlDocument = (raw: unknown): YahlDocument => {
     throw new Error("resultContextKey: must be a non-empty string when present");
   }
 
-  const runInput = parseRunInputContextKeys(doc.runInput);
+  const runInput = parseRunInputFields(doc.runInput);
   const stages = doc.stages.map((stage, index) => validateYahlStage(stage, index));
 
   assertDocumentStageIdsAndGoto(stages);

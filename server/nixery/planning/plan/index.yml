@@ -55,4 +55,3 @@ run:
 output:
   default: plan.md
   validate: validation.mjs
-  inlineTool: false

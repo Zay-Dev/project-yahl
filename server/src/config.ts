@@ -12,28 +12,11 @@ type TConfig = {
   corsOrigin: string[] | true;
   cwd: string;
   hideErrorStack: boolean;
-  knowledgeDataRoot: string;
   mongoDb: {
     url: string;
   };
   requestTimeoutInSeconds: number;
   servers: Map<TServerType, { port: number }>;
-};
-
-const resolveKnowledgeDataRoot = (cwd: string): string => {
-  const explicit = process.env.KNOWLEDGE_DATA_ROOT?.trim();
-
-  if (explicit) {
-    return path.resolve(explicit);
-  }
-
-  const hostRoot = process.env.HOST_REPO_ROOT?.trim();
-
-  if (hostRoot) {
-    return path.join(hostRoot, 'data/mastermind');
-  }
-
-  return path.resolve(cwd, '../data/mastermind');
 };
 
 const corsOrigin = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean);
@@ -55,7 +38,6 @@ export const config: TConfig = {
   corsOrigin: corsOrigin.length > 0 ? corsOrigin : true,
   cwd,
   hideErrorStack: process.env.HIDE_ERROR_STACK === 'true',
-  knowledgeDataRoot: resolveKnowledgeDataRoot(cwd),
   mongoDb,
   requestTimeoutInSeconds: parseInt(process.env.REQUEST_TIMEOUT_IN_SECONDS || '60', 10),
   servers,

@@ -1,12 +1,16 @@
 import type {
   TRequestCreateForkSessionBody,
+  TRequestCreateRepairSessionBody,
   TResponseAskUserQuestionDetail,
   TResponseAskUserQuestionListItem,
   TResponseCreateForkSession,
+  TResponseCreateRepairSession,
   TResponseDeleteSession,
   TResponsePendingAskUserQuestion,
   TResponseStageDetail,
   TResponseStageListItem,
+  TResponseStopSession,
+  TResponseUserPauseCheckpoint,
   TResponseVerifyCheckpoint,
 } from "@project-yahl/server/modules/sessions/-api-types";
 
@@ -50,6 +54,20 @@ export const createForkSession = async (
   });
 
   return parseJson<TResponseCreateForkSession>(response);
+};
+
+export const createRepairSession = async (
+  sessionId: string,
+  body: TRequestCreateRepairSessionBody,
+) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}/repair-sessions`;
+  const response = await fetch(url, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  return parseJson<TResponseCreateRepairSession>(response);
 };
 
 export const fetchPendingAskUserQuestions = async (sessionId: string) => {
@@ -145,4 +163,38 @@ export const submitVerifyEditAnswer = async (
   });
 
   return parseJson<{ ok: true; verifyId: string }>(response);
+};
+
+export const stopSession = async (sessionId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}/stop`;
+  const response = await fetch(url, { method: 'POST' });
+
+  return parseJson<TResponseStopSession>(response);
+};
+
+export const pauseSession = async (sessionId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}/pause`;
+  const response = await fetch(url, { method: 'POST' });
+
+  return parseJson<{ ok: true }>(response);
+};
+
+export const fetchPendingUserPauseCheckpoints = async (sessionId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    '/user-pause-checkpoints?status=pending';
+  const response = await fetch(url);
+
+  const json = await parseJson<{ data?: TResponseUserPauseCheckpoint[] } | TResponseUserPauseCheckpoint[]>(
+    response,
+  );
+
+  return Array.isArray(json) ? json : (json.data ?? []);
+};
+
+export const resumeUserPauseCheckpoint = async (sessionId: string, pauseId: string) => {
+  const url = `${base}/api/sessions/${encodeURIComponent(sessionId)}` +
+    `/user-pause-checkpoints/${encodeURIComponent(pauseId)}/resume`;
+  const response = await fetch(url, { method: 'POST' });
+
+  return parseJson<{ ok: true; pauseId: string }>(response);
 };

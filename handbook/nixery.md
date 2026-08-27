@@ -12,8 +12,8 @@ It is not a chat black box. Each ability (when installed) is a human-authored co
 | **Typed shell, fuzzy core** | Each ability is a human contract (`index.yml` / `run` / `validation`); the model only fills fuzzy work inside that shell. |
 | **One-shot isolation** | Each call is a disposable container with declared mounts — blast radius is per ability, not the whole host. Details: [security.md](security.md). |
 | **Discover, don’t hardcode** | Orchestrator and agents resolve against whatever is installed; catalogs/skills are live install snapshots. |
-| **Compose with stages** | Abilities plug in mid-stage (inline) or as orchestrator stages (`nixeryRun`); exhausted inline soft-fails so the stage can continue; exhausted `nixeryRun` hard-fails. |
-| **Artifacts travel with the plugin** | Optional skills / prompts / task-skills publish via link when installed and leave when uninstalled. |
+| **Compose with stages** | Same catalog via mid-stage `/nixery` or orchestrator `nixeryRun`; call site owns soft-fail vs hard-fail after retries. |
+| **Artifacts travel with the plugin** | Optional `SKILLS/` and `prompts/` materialize into `/opt/skills` and `/opt/yahl` at orchestrator start; uninstall removes them from the live catalog. |
 
 Root product framing: [README.md](../README.md).
 
@@ -24,54 +24,56 @@ The install unit is a folder under [`server/nixery/<pluginId>/`](../server/nixer
 ```text
 server/nixery/
   <pluginId>/
-    plugin.yml                 # required — install unit + skills/prompts/task_skills to link
+    plugin.yml                 # required — install unit + skills/prompts lists
     lib/                       # plugin-local helpers (optional compiled dist, etc.)
     <abilityId>/
       index.yml                # def contract; id must match folder name
       run.mjs                  # typical entry
       validation.mjs           # output gate
       …                        # optional prompts, tests
-    SKILLS/ | prompts/ | task-skills/   # optional; published by pnpm nixery:link
+    SKILLS/ | prompts/         # optional; copied into runtime/.agent-files/ at orchestrator start
 ```
 
 ### Install / uninstall
 
 | Action | Effect |
 |--------|--------|
-| **Install** | Add the plugin dir + `plugin.yml` (+ ability folders). Discovery picks it up ([`shared/nixery/list-defs.ts`](../shared/nixery/list-defs.ts)). Run `pnpm nixery:link` ([`shared/nixery/nixery-link.mjs`](../shared/nixery/nixery-link.mjs)) to publish skills / prompts / task-skills symlinks. |
-| **Uninstall** | Remove that plugin dir. Its ability ids vanish from `/nixery(…)`. Re-link remaining plugins; drop leftover symlinks that pointed only at the removed plugin. |
+| **Install** | Add the plugin dir + `plugin.yml` (+ ability folders). Discovery picks it up ([`shared/nixery/list-defs.ts`](../shared/nixery/list-defs.ts)). The orchestrator materializes plugin skills and prompts into [`runtime/.agent-files/`](../runtime/.agent-files/) at start (or run `pnpm nixery:link` locally to refresh without starting a session). |
+| **Uninstall** | Remove that plugin dir. Its ability ids vanish from `/nixery(…)`. Re-run orchestrator (or `pnpm nixery:link`) to refresh `.agent-files/`. |
 
 ### Empty catalog / live catalog
 
 - With **no plugins**, `/nixery(…)` has nothing to resolve — that is the platform default.
 - With plugins installed, agents use whatever skill or catalog those plugins publish (paths and basenames come from each plugin’s `plugin.yml`, not from a fixed platform skill).
 - **Ability ids are global** — call `/nixery(defId)` with no plugin prefix. Collisions across installed plugins fail discovery.
-- Reserved child names (not abilities): `lib`, `SKILLS`, `prompts`, `task-skills`, plus `_…` / `.…`.
+- Reserved child names (not abilities): `lib`, `SKILLS`, `prompts`, plus `_…` / `.…`.
 - Discovery and contracts: [`shared/nixery/`](../shared/nixery/). Runtime load / mount / run / validate: [`runtime/orchestrator/-nixery/`](../runtime/orchestrator/-nixery/).
 
 ### Optional plugins
 
-A plugin may ship abilities plus optional skills / prompts / task-skills linked on install. Domain behavior — curated stores, channel helpers, verify gates, research helpers, and so on — lives entirely in plugins the operator chooses to install, not in the empty platform. Mount and write-boundary detail: [security.md](security.md).
+A plugin may ship abilities plus optional shareable skills / prompts. Skills flatten to `/opt/skills/{name}/` via `.agent-files/` — not `~/task-skills/`. Domain behavior — curated stores, channel helpers, verify gates, research helpers, and so on — lives entirely in plugins the operator chooses to install, not in the empty platform. Example: research plugin ability `consult-script-candidate` advises the next knowledge-to-script op (prefer `js` + `yahl-browser`). Mount and write-boundary detail: [security.md](security.md).
 
 ## Invocation model
 
 ```mermaid
 flowchart TB
-  StageAgent["Stage agent"] -->|"inlineTool true"| Inline["/nixery inline"]
+  StageAgent["Stage agent"] -->|"/nixery"| Inline["Inline mid-stage"]
   Orch["Orchestrator"] -->|"nixeryRun"| Run["nixeryRun stage"]
   Inline --> Container["One-shot container"]
   Run --> Container
   Container --> Session["~/nixery/defId/artifacts"]
 ```
 
-| Mode | Who | When |
-|------|-----|------|
-| **Inline** (`nixery` tool) | Stage agent mid-logic | Def has `output.inlineTool: true` |
-| **`nixeryRun` stage** | Orchestrator | Non-inline defs; following stages read session artifacts under `~/nixery/{defId}/` |
+Same ability catalog either way — call site only changes who invokes and how failure is handled (`output.inlineTool` retired).
+
+| Call site | Who | Retry / failure |
+|-----------|-----|-----------------|
+| `/nixery(...)` (agent tool) | Stage agent mid-logic | Default 1 attempt (`output.retry` overrides); exhausted → soft-fail, stage continues |
+| `nixeryRun` stage | Orchestrator (no agent) | Default 10 attempts; exhausted → hard-fail; following stages read `~/nixery/{defId}/` |
 
 Calls resolve only if the owning plugin is still installed. Otherwise fix args, pick another path from the current install’s skill/catalog, or skip.
 
-Each `runNixeryDef` retries up to `output.retry` attempts (default **10**). On validation or gate failure, the orchestrator rewrites `input.json` with `nixeryRetry.feedback` for in-container LLM agents. Pure Node defs ignore feedback safely.
+On validation or gate failure, the orchestrator rewrites `input.json` with `nixeryRetry.feedback` for in-container LLM agents. Pure Node defs ignore feedback safely.
 
 Mount tokens in `index.yml` (`session`, `def`, `plugin`, `data/…`, …) resolve in the orchestrator. Containers always see `/opt/nixery/def` (ability) and `/opt/nixery/plugin` (owning plugin, read-only).
 

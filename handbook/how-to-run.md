@@ -8,8 +8,9 @@
 |------|----------------|
 | `runtime/` | `@project-yahl/runtime` — YAHL runtime + orchestrator |
 | `server/` | `@project-yahl/server` — Express + Mongoose session/tasks API |
-| `web/` | Vite + shadcn — Sessions, Tasks, platform approvals, cron jobs |
-| `worker/` | Cron ticks (via server API), platform approvals |
+| `web/` | Vite + shadcn — Sessions, Tasks, platform approvals, cron jobs, channels |
+| `worker/` | Cron ticks (via server API), platform approvals, WhatsApp/SMTP |
+| `llm-proxy/` | `@project-yahl/llm-proxy` — OpenAI-compatible LLM hub (retries, usage postback, quota) |
 
 Install and build framework packages from the **Omniflex repo root**:
 
@@ -35,9 +36,9 @@ Copy `server/.env.example` to `server/.env` if you run the server standalone.
 | [`docker-compose.yml`](docker-compose.yml) | Infra and optional built server/web |
 | [`docker-compose.agent.yml`](docker-compose.agent.yml) | Per-session agent container (orchestrator only) |
 
-**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, wiki, **worker**.
+**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, **code-server**, **worker**, **llm-proxy**.
 
-**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173). Does not start worker — use `compose:up` for worker, or start it manually from the same compose file.
+**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173), **code-server** (`127.0.0.1:${CODE_SERVER_PORT:-8080}`), **worker**, **llm-proxy**.
 
 Image build context is the **Omniflex monorepo root** (`..` from project-yahl). App paths use `OMNIFLEX_APP_DIR` (default `project-yahl`). `COMPOSE_PROJECT_NAME` is independent (Docker naming only).
 
@@ -56,7 +57,7 @@ Docker only reads `.dockerignore` from the **build context root**, so put it at 
 
 The agent compose file sets `SESSION_API_BASE_URL` (default `http://server:4000`) for platform skills.
 
-**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind data dir, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides).
+**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind data dir, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides). Create **`data/knowledge_export`** before the first observation or upsert (`mkdir -p data/knowledge_export`) if upgrading from Wiki.js.
 
 **Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (built on the host when orchestrator runs).
 
@@ -72,7 +73,8 @@ Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/s
 | **Server** | Host (`pnpm run dev:server`) or `server` container (prod) | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic; control plane only |
 | **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to server (`platform` tool) / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
-| **Wiki** | `wiki` container (`127.0.0.1:${WIKI_PORT}` on host) | Wiki.js Postgres + Local FS export at `data/knowledge_export` | Agent access — human browse at `WIKI_PUBLIC_URL` only |
+| **Knowledge corpus** | `data/knowledge_export` on host; nixery read defs mount **ro**, write defs **rw** | Markdown under `en/topics/`, `whatsapp/`, `greets/` | Agent access — humans browse/edit via code-server |
+| **Code-server** | `code-server` container (`127.0.0.1:${CODE_SERVER_PORT:-8080}` on host; `/code/` via gateway in prod) | Flat under `/home/coder/yahl/`: `knowledge_export` (**rw**), `sessions` (ro), `workspace_tasks`, `SKILLS`, `YAHL`, `tasks`, `nixery` | `docker.sock`, vault keys — gateway auth only |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive, SMTP outbound | Does not spawn orchestrator or agent containers; WhatsApp/email I/O is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
@@ -84,10 +86,10 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 
 **How the agent container is restricted:**
 
-- **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-onecli.ts`](runtime/orchestrator/-docker/compose-onecli.ts), project `agent-{sessionId}`), then tears it down.
-- **Minimal mounts** — only [`data/workspace/`](data/workspace/) (writable) and [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) (`:ro` at `/opt/skills`). No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
+- **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-agent.ts`](runtime/orchestrator/-docker/compose-agent.ts), project `agent-{sessionId}`), then tears it down.
+- **Minimal mounts** — only [`data/workspace/`](data/workspace/) (writable) and [`runtime/.agent-files/`](runtime/.agent-files/) (`SKILLS` → `/opt/skills`, `YAHL` → `/opt/yahl`, both `:ro`). Orchestrator refreshes `.agent-files/` at start from built-ins + installed nixery plugins. No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
 - **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge reads via `nixeryRun` → `~/nixery/get-knowledge/`; study dialogue under `~/nixery/study/` — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see [security.md](security.md)).
-- **Structured tools only** — `run_bash`, `browser`, `set_context`, `extend_context`, `ask_user`, `platform`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
+- **Structured tools only** — `run_bash`, `browser`, `set_context`, `extend_context`, `ask_user`, `platform`, `nixery`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See OneCLI setup below for vault rules.
 - **Platform tool → server** — agent calls `SESSION_API_BASE_URL` with named skills (dispatch, notifications, knowledge transfers, KM instruction). Outbound notifications/settings are **proposals** until someone approves at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN`.
@@ -128,8 +130,8 @@ Individual commands:
 
 | Command | What it does |
 |---------|--------------|
-| `pnpm run compose:up` | Infra only (mongo, redis, onecli, wiki, worker) |
-| `pnpm run compose:up:all` | Full Docker stack (infra + built server + web) |
+| `pnpm run compose:up` | Infra only (mongo, redis, onecli, code-server, worker, llm-proxy) |
+| `pnpm run compose:up:all` | Full Docker stack (infra + built server + web + code-server + worker + llm-proxy) |
 | `pnpm run dev` | Server + runtime on the host |
 | `pnpm run dev:server` | API server only |
 | `pnpm run dev:web` | Web UI only |
@@ -175,15 +177,20 @@ From [`.env.example`](../.env.example):
 | `SYSTEM_ADMIN_EMAIL` | Alert target when WhatsApp is unavailable mid-send |
 | `EMAIL_WHITELIST` | Comma-separated emails; matching propose recipients are pre-approved |
 | `PLATFORM_APPROVAL_TOKEN` | Required for human approve at `/platform/approvals` (`X-Approval-Token`); empty disables approve |
-| `SANITIZE_CHANNEL_MESSAGE` | Optional host path mounted into worker as `/sanitize/sanitize-channel-message.mjs` |
+| `WORKER_INTERNAL_TOKEN` | Same value on **server** and **worker**; worker pushes WhatsApp QR/status to server for `/platform/channels` |
+| `CONTROL_PLANE_SERVICE_TOKEN` | Shared secret for control-plane → tenant quota/usage routes; empty rejects those internal calls |
+| `QUOTA_STATE_FILE` | Path to SaaS quota JSON (tenant). When set, **server** and **llm-proxy** enforce quota from that file |
+| `SANITIZE_CHANNEL_MESSAGE` | Optional host path mounted into worker as `/sanitize/sanitize-channel-message.mjs`
 
 Compose mounts host `data/whatsapp_auth` and `data/whatsapp_inbox` into the worker (outside the agent workspace). Worker health listens on `127.0.0.1:${WORKER_HEALTH_PORT}` inside the container (default **4091**; compose healthcheck only — not published to the host).
 
 **First login**
 
-1. Set `WHATSAPP_ENABLED=true` (and `PLATFORM_APPROVAL_TOKEN` / whitelists as needed) in `.env`.
-2. `pnpm run compose:up` (or restart the `worker` service).
-3. Scan the QR printed in the **worker** console once; session persists under `data/whatsapp_auth`.
+1. Set `WHATSAPP_ENABLED=true` and `WORKER_INTERNAL_TOKEN` (same secret on server + worker) in `.env`.
+2. `pnpm run compose:up` (or restart `server` and `worker` after changing `.env`).
+3. Open **`/platform/channels`** in the web UI and scan the QR when status is **pending** (terminal QR in worker logs is a fallback).
+
+If `/platform/channels` stays **disconnected**, check worker logs for `WORKER_INTERNAL_TOKEN is unset` or `channel state update failed HTTP 401` (token mismatch between worker and server).
 
 **Operator flow**
 
@@ -191,7 +198,7 @@ Compose mounts host `data/whatsapp_auth` and `data/whatsapp_inbox` into the work
 2. Create a cron for `whatsapp_wiki_stack` (e.g. every 4h) — see API examples below.
 3. Optional morning `traffic_monitor` cron with `runInput` (origin, destination, `notify_to`, …).
 
-Inbound text for onboarded chats lands in `data/whatsapp_inbox`; stack clears processed messages after wiki upsert. Media is logged and skipped.
+Inbound text and attachments for onboarded chats land in `data/whatsapp_inbox` (files under `{folder}/attachments/`). `whatsapp_wiki_stack` materializes image attachments, runs nixery `image-to-text`, merges into wiki, then clears messages and attachment files. Non-image types are stored and noted in digests but not parsed yet.
 
 ### Smoke tests
 
@@ -273,7 +280,7 @@ pnpm run orchestrate
 
 #### Example: Knowledge Manager overnight
 
-Schedule full-corpus review (global instruction; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers → within-topic dedup):
+Schedule full-corpus review (global instruction via cron `runInput`; every topic) by starting multi-stage `knowledge_manager` directly (list topics → per-topic research validation + apply → group → cross-topic propose → apply approved transfers → within-topic dedup):
 
 ```json
 {
@@ -281,11 +288,14 @@ Schedule full-corpus review (global instruction; every topic) by starting multi-
   "id": "knowledge-manager-overnight",
   "schedule": "0 2 * * *",
   "timezone": "Asia/Hong_Kong",
-  "taskPath": "knowledge_manager"
+  "taskPath": "knowledge_manager",
+  "runInput": {
+    "knowledge_manager_instruction": "Do:\n- Prefer evidence-backed PLACE notes\nDon't:\n- Invent facts\nFocus:\n- project-yahl\n- hk-weather"
+  }
 }
 ```
 
-Edit focus via `/platform/knowledge-policies` or task `knowledge_settings`. Manual / from another stage: `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: {})`.
+Edit Focus/Do/Don't by updating the cron job’s `runInput.knowledge_manager_instruction` (or pass it on a manual run). Optional this-run mission addon: `additional_instruction` — see [tricks.md](tricks.md). Manual / from another stage: `/platform(dispatch-task-run, taskId: knowledge_manager, runInput: { knowledge_manager_instruction: "…" })`.
 
 #### Example: traffic monitor cron
 
@@ -313,7 +323,7 @@ The task runs adaptive ETA polls for `monitor_minutes` (default 60; agent `run_b
 
 #### Example: WhatsApp wiki stack cron
 
-With `WHATSAPP_ENABLED=true`, scan the QR printed in the worker console once. Greet a phone/group via task `greets` (optionally `register_channel: true` to enable inbox capture), then create:
+With `WHATSAPP_ENABLED=true`, set `WORKER_INTERNAL_TOKEN` in `.env` (server + worker), then scan the QR at **`/platform/channels`** once. Greet a phone/group via task `greets` (optionally `register_channel: true` to enable inbox capture), then create:
 
 ```json
 {
@@ -324,7 +334,7 @@ With `WHATSAPP_ENABLED=true`, scan the QR printed in the worker console once. Gr
 }
 ```
 
-Pending inbox text (onboarded chats only) is stacked into wiki under `whatsapp/{folder}/` and then cleared. Media is logged and skipped.
+Pending inbox (onboarded chats only) is stacked into wiki under `whatsapp/{folder}/` and then cleared. Image attachments are converted via nixery `image-to-text`; other file types are noted but not parsed yet.
 
 Long poll stages (e.g. `traffic_monitor` monitor) set stage `agentOverrides.bashTimeoutMs` (e.g. `360000`) so a single `sleep 300` can finish. Shared agent default remains **60000** when unset — do not pin timeout in compose.
 

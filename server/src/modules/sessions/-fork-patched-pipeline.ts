@@ -123,6 +123,8 @@ const _resolveAnchorParsedStageIndex = (
   return _countUniqueParsedStageIndices(replayRows.slice(0, anchorIndex));
 };
 
+export const resolveAnchorParsedStageIndex = _resolveAnchorParsedStageIndex;
+
 export const deriveForkStorageSeed = (
   replayRows: TResponseStageReplayItem[],
   anchorIndex: number,

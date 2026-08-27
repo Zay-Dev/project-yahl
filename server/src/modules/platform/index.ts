@@ -2,8 +2,6 @@ import { exposedRoute } from '@/servers';
 
 import { getCronJob, listCronJobs } from './use-cases/cron-read';
 import { createCronJob, deleteCronJob, updateCronJob } from './use-cases/cron-write';
-import { getKnowledgeManagerInstruction } from './use-cases/knowledge-instruction-read';
-import { putKnowledgeManagerInstruction } from './use-cases/knowledge-instruction-write';
 import {
   approveProposal,
   createKnowledgeTransferProposal,
@@ -19,6 +17,8 @@ import {
   markNotificationDone,
   markSettingDone,
 } from './use-cases/work-read';
+import { getWhatsAppChannel } from './use-cases/channel-whatsapp-read';
+import { putWhatsAppChannel } from './use-cases/channel-whatsapp-write';
 
 exposedRoute('/api/platform/proposals/notifications')
   .post('/', createNotificationProposal);
@@ -54,6 +54,8 @@ exposedRoute('/api/platform/cron/jobs')
   .patch('/:id', updateCronJob)
   .delete('/:id', deleteCronJob);
 
-exposedRoute('/api/platform/knowledge-manager-instruction')
-  .get('/', getKnowledgeManagerInstruction)
-  .put('/', putKnowledgeManagerInstruction);
+exposedRoute('/api/platform/channels')
+  .get('/whatsapp', getWhatsAppChannel);
+
+exposedRoute('/api/platform/internal')
+  .put('/whatsapp', putWhatsAppChannel);

@@ -1,6 +1,9 @@
 import fs from 'fs/promises';
 
-import { parseRunInputKeysFromYahl } from '@project-yahl/shared/yahl/run-input-keys';
+import {
+  parseRunInputFieldsFromYahl,
+  runInputKeysOf,
+} from '@project-yahl/shared/yahl/run-input-keys';
 
 import { Middlewares } from '@omni-infra/express';
 
@@ -25,7 +28,8 @@ export const listTasks = [
         try {
           const yahl = await fs.readFile(taskYahlAbsolutePath(taskId), 'utf8');
           const { background, description, name } = parseTaskMetadata(yahl);
-          const runInputKeys = parseRunInputKeysFromYahl(yahl);
+          const runInputFields = parseRunInputFieldsFromYahl(yahl);
+          const runInputKeys = runInputKeysOf(runInputFields);
 
           items.push({
             background,
@@ -33,6 +37,7 @@ export const listTasks = [
             id: taskId,
             name,
             path: taskYahlRelativePath(taskId),
+            ...(runInputFields ? { runInputFields } : {}),
             ...(runInputKeys ? { runInputKeys } : {}),
             taskId,
           });

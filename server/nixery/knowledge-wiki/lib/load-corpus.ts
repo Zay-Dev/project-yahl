@@ -9,14 +9,13 @@ import { resolveCanonicalTopic } from './topic-registry.js';
 import {
   getWikiPageByPath,
   listWikiPagesUnderPrefix,
-  wikiConfigured,
 } from './wiki-client.js';
 import {
   resolveTopicWikiPrefix,
   WIKI_LOCALE,
 } from './wiki-paths.js';
 
-const formatGraphqlCorpus = (
+const formatCorpus = (
   pages: Array<{ content: string; path: string }>,
   maxBytes = 512_000,
 ): string => {
@@ -57,7 +56,7 @@ export const resolveTopicCanonical = async (topic?: string): Promise<string | un
 const loadPrefixCorpus = async (
   prefix: string,
   maxBytes: number,
-): Promise<{ corpus: string; source: 'export' | 'graphql' }> => {
+): Promise<{ corpus: string; source: 'export' }> => {
   const canonical = prefix.replace(/^topics\//, '').split('/')[0];
 
   if (canonical) {
@@ -71,30 +70,26 @@ const loadPrefixCorpus = async (
     }
   }
 
-  if (!wikiConfigured()) {
-    return { corpus: '', source: 'graphql' };
-  }
-
   const pages = await listWikiPagesUnderPrefix(prefix);
   const hydrated = await Promise.all(pages.map(async (page) => {
     const full = await getWikiPageByPath(page.path);
 
     return {
-      content: full?.content ?? '',
+      content: full?.content ?? page.content,
       path: page.path,
     };
   }));
 
   return {
-    corpus: formatGraphqlCorpus(hydrated, maxBytes),
-    source: 'graphql',
+    corpus: formatCorpus(hydrated, maxBytes),
+    source: 'export',
   };
 };
 
 export const loadTopicCorpus = async (
   canonical: string,
   options?: { maxBytes?: number },
-): Promise<{ corpus: string; source: 'export' | 'graphql' }> => {
+): Promise<{ corpus: string; source: 'export' }> => {
   const maxBytes = options?.maxBytes ?? 512_000;
   const prefix = resolveTopicWikiPrefix(canonical);
 
@@ -105,29 +100,23 @@ export const loadKnowledgeCorpusForNeed = async (
   topic: string | undefined,
   need: string,
   options?: { maxBytes?: number },
-): Promise<{ corpus: string; source: 'export' | 'graphql' }> => {
+): Promise<{ corpus: string; source: 'export' }> => {
   const maxBytes = options?.maxBytes ?? 512_000;
 
   if (!topic?.trim()) {
-    return { corpus: '', source: 'graphql' };
+    return { corpus: '', source: 'export' };
   }
 
   const canonical = await resolveTopicCanonical(topic);
 
   if (!canonical) {
-    return { corpus: '', source: 'graphql' };
+    return { corpus: '', source: 'export' };
   }
 
   const resolved = resolvePagesForNeed(need, canonical);
 
   if (resolved.broad) {
     return loadTopicCorpus(canonical, { maxBytes });
-  }
-
-  if (!wikiConfigured()) {
-    const broad = await loadTopicCorpus(canonical, { maxBytes });
-
-    return broad;
   }
 
   const hydrated: Array<{ content: string; path: string }> = [];
@@ -156,15 +145,15 @@ export const loadKnowledgeCorpusForNeed = async (
   }
 
   return {
-    corpus: formatGraphqlCorpus(hydrated, maxBytes),
-    source: 'graphql',
+    corpus: formatCorpus(hydrated, maxBytes),
+    source: 'export',
   };
 };
 
 export const listKnowledgeWikiPages = async (topic: string): Promise<Array<{
   page: string;
   pagePath: string;
-  source: 'export' | 'graphql';
+  source: 'export';
 }>> => {
   const canonical = await resolveTopicCanonical(topic);
 
@@ -174,7 +163,7 @@ export const listKnowledgeWikiPages = async (topic: string): Promise<Array<{
 
   const stats = await getExportTopicStats(canonical);
 
-  if (stats.fileCount > 0 && (shouldUseExportCorpus(stats) || !wikiConfigured())) {
+  if (stats.fileCount > 0) {
     const wikiPrefix = resolveTopicWikiPrefix(canonical);
 
     return (await listExportTopicFiles(canonical)).map((file) => {
@@ -191,16 +180,12 @@ export const listKnowledgeWikiPages = async (topic: string): Promise<Array<{
     });
   }
 
-  if (!wikiConfigured()) {
-    return [];
-  }
-
   const prefix = resolveTopicWikiPrefix(canonical);
   const pages = await listWikiPagesUnderPrefix(prefix);
 
   return pages.map((page) => ({
     page: page.path.replace(`${prefix}/`, ''),
     pagePath: page.path,
-    source: 'graphql' as const,
+    source: 'export' as const,
   }));
 };

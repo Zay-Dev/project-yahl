@@ -1,8 +1,8 @@
-import { writeSharedOneCliOverride } from '@/orchestrator/-docker/compose-onecli';
 import {
   agentNoProxy,
   loadOneCliSnapshot,
   readOneCliComposeOverride,
+  writeSharedOneCliOverride,
 } from '@/orchestrator/-docker/onecli-snapshot';
 
 const PLACEHOLDER_KEYS = new Set(['', 'placeholder', 'sk-no-auth-required']);

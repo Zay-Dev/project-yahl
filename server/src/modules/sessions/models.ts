@@ -5,6 +5,7 @@ import type {
   ISession,
   IStage,
   IToolCall,
+  IUserPauseCheckpoint,
   IVerifyCheckpoint,
 } from './-types';
 
@@ -24,6 +25,7 @@ export type TDbModelResponse = TSessionChildDb<IModelResponse>;
 export type TDbToolCall = TSessionChildDb<IToolCall>;
 export type TDbAskUserQuestion = TSessionChildDb<IAskUserQuestion>;
 export type TDbVerifyCheckpoint = TSessionChildDb<IVerifyCheckpoint>;
+export type TDbUserPauseCheckpoint = TSessionChildDb<IUserPauseCheckpoint>;
 
 const loopMetaSchema = new Schema({
   arraySnapshot: { type: [Schema.Types.Mixed] },
@@ -46,8 +48,9 @@ const forkedFromSchema = new Schema({
 }, { _id: false });
 
 const runCursorSchema = new Schema({
-  kind: { default: 'pipeline', enum: ['pipeline'], required: true, type: String },
+  kind: { default: 'pipeline', enum: ['pipeline', 'repair'], required: true, type: String },
   loopMeta: loopMetaSchema,
+  repairInstruction: model.d.optionalString(),
   stageIndex: model.d.requiredNumber(),
 }, { _id: false });
 
@@ -132,6 +135,7 @@ toolCallSchema.index({ requestId: 1, session: 1 });
 const forkSessionSchema = new Schema<IForkSession & Document>({
   anchorStageId: model.d.requiredString(),
   forkSessionId: model.d.requiredString(),
+  repairInstruction: model.d.optionalString(),
   setups: [forkSessionSetupSchema],
   sourceSessionId: model.d.requiredString(),
   targetSessionId: model.d.requiredString(),
@@ -204,6 +208,27 @@ verifyCheckpointSchema.index({ verifyId: 1 }, { unique: true });
 verifyCheckpointSchema.index({ requestId: 1, session: 1 });
 verifyCheckpointSchema.index({ session: 1, status: 1 });
 
+const userPauseCheckpointSchema = new Schema<TDbUserPauseCheckpoint>({
+  contextSnapshot: model.d.mixed(),
+  loopMeta: loopMetaSchema,
+  parsedStageSnapshot: model.d.mixed(),
+  pauseId: model.d.requiredString(),
+  repairInstruction: model.d.optionalString(),
+  requestId: model.d.requiredString(),
+  session: model.d.toRequiredObjectId(modelsName.Sessions),
+  stage: model.d.mixed(),
+  stageIndex: model.d.optionalNumber(),
+  status: model.d.requiredString(),
+  storageSnapshot: model.d.mixed(),
+}, {
+  collection: modelsName.SessionUserPauseCheckpoints,
+  timestamps: true,
+});
+
+userPauseCheckpointSchema.index({ pauseId: 1 }, { unique: true });
+userPauseCheckpointSchema.index({ requestId: 1, session: 1 });
+userPauseCheckpointSchema.index({ session: 1, status: 1 });
+
 export type TDbForkSession = IForkSession & Document;
 
 export const modelForkSession = createModel<TDbForkSession>(
@@ -224,4 +249,8 @@ export const modelAskUserQuestion = createModel<TDbAskUserQuestion>(
 export const modelVerifyCheckpoint = createModel<TDbVerifyCheckpoint>(
   modelsName.SessionVerifyCheckpoints,
   verifyCheckpointSchema,
+);
+export const modelUserPauseCheckpoint = createModel<TDbUserPauseCheckpoint>(
+  modelsName.SessionUserPauseCheckpoints,
+  userPauseCheckpointSchema,
 );

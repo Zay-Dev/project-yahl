@@ -15,7 +15,7 @@ export function GenericToolCall({ tool }: TGenericToolCallProps) {
   const rawPreview = summarizeRawArguments(raw);
 
   return (
-    <div className="rounded-md border bg-background p-2">
+    <div className="min-w-0 max-w-full rounded-md border bg-background p-2">
       <p className="font-mono text-xs font-medium">{tool.name}</p>
       {parsed !== null && parsed !== undefined ? (
         <SessionJsonFallback label="Arguments" value={parsed} />
@@ -25,7 +25,7 @@ export function GenericToolCall({ tool }: TGenericToolCallProps) {
             <p className="mt-1 text-xs text-destructive">Parse error: {parseError}</p>
           ) : null}
           <p className="mt-2 text-xs text-muted-foreground">Raw arguments</p>
-          <pre className="mt-1 max-h-64 overflow-auto rounded border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
+          <pre className="mt-1 max-h-64 overflow-auto rounded border bg-muted/30 p-2 text-xs break-all whitespace-pre-wrap">
             {rawPreview}
           </pre>
         </>

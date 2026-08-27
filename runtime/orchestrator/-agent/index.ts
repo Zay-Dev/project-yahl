@@ -17,6 +17,9 @@ import {
 
 import { resolveEffectiveStageTemperature } from '@/orchestrator/-utils/yahl/stage-parse';
 import { AskUserPausedError, handleAskUserToolCall } from '@/orchestrator/-ask-user';
+import { UserPausedError } from '@/orchestrator/-user-pause/errors';
+import { maybePauseForUserRequest } from '@/orchestrator/-control/maybe-pause';
+import { buildUserPauseCheckpointPayload } from '@/orchestrator/-user-pause/checkpoint-payload';
 import {
   buildGotoSystemAppend,
   clearStageGotoContext,
@@ -158,7 +161,7 @@ class YahlAgentRunner {
   ) {
     this.storage = useStorage();
     const runInputContextKeys = yahl.trim()
-      ? parseYahlDocument(yahl).runInput
+      ? parseYahlDocument(yahl).runInput?.map((field) => field.key)
       : undefined;
 
     seedRunInputContext(
@@ -703,6 +706,19 @@ class YahlAgentRunner {
 
     const heartbeat = startStageWaitHeartbeat({
       getElapsedMs: () => Date.now() - waitStartedAt,
+      onPoll: () => {
+        const pauseParams = this._userPauseCheckpointParams();
+
+        return maybePauseForUserRequest({
+          agentName: this.agentName,
+          loopMeta: pauseParams.loopMeta,
+          requestId: pauseParams.requestId,
+          sessionId: this.sessionId,
+          stage: pauseParams.stage,
+          stageIndex: pauseParams.stageIndex,
+          storage: this.storage,
+        });
+      },
       requestId: this.requestId,
       sessionId: this.sessionId,
       stageId: this.activeStage?.spec?.id,
@@ -746,6 +762,10 @@ class YahlAgentRunner {
       };
 
       if (error instanceof AskUserPausedError) {
+        throw error;
+      }
+
+      if (error instanceof UserPausedError) {
         throw error;
       }
 
@@ -798,7 +818,38 @@ class YahlAgentRunner {
     await globalThis.sessionTracker?.flush?.();
   }
 
+  private _userPauseCheckpointParams() {
+    const payload = buildUserPauseCheckpointPayload({
+      activeStage: this.activeStage,
+      boundParsedStageIndex: this.boundParsedStageIndex,
+      loopMeta: this.options.loopMeta,
+      pipelineStageIndex: this.pipelineStageIndex,
+      recoveryStages: this.options.recoveryStages,
+      requestId: this.requestId,
+      resumeStage: this.resumeStage ?? this.options.resumeStage,
+    });
+
+    return {
+      loopMeta: payload.loopMeta,
+      requestId: payload.requestId,
+      stage: payload.stage,
+      stageIndex: payload.stageIndex,
+    };
+  }
+
   private async runOneStage(): Promise<number | undefined> {
+    const pauseParams = this._userPauseCheckpointParams();
+
+    await maybePauseForUserRequest({
+      agentName: this.agentName,
+      loopMeta: pauseParams.loopMeta,
+      requestId: pauseParams.requestId,
+      sessionId: this.sessionId,
+      stage: pauseParams.stage,
+      stageIndex: pauseParams.stageIndex,
+      storage: this.storage,
+    });
+
     const nixeryRun = this.activeStage.spec.nixeryRun;
 
     if (nixeryRun) {
@@ -859,6 +910,19 @@ class YahlAgentRunner {
 
         await globalThis.sessionTracker?.flush?.();
         return gotoTransfer.targetStageIndex;
+      }
+
+      if (this.options.repairMode === true) {
+        if (!parsedStagesMatchSlot(this.activeStage, this.boundStage)) {
+          throw new Error(
+            `stage slot integrity: activeStage sourceStartLine=${this.activeStage.sourceStartLine} ` +
+            `does not match bound stage sourceStartLine=${this.boundSourceStartLine}`,
+          );
+        }
+
+        publisher.emitStageFinish({ requestId: this.requestId, contextAfter: finishContextAfter });
+        await globalThis.sessionTracker?.flush?.();
+        return undefined;
       }
 
       console.log(

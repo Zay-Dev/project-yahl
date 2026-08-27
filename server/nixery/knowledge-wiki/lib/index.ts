@@ -90,7 +90,6 @@ export {
   omitAliasManagerTopics,
   loadTopicExcerpts,
   observationValidationReasons,
-  readInstructionFile,
   resolveManagerDepth,
   resolvePlacePageForTopic,
   shouldUseHeuristicApplyPlan,
@@ -112,9 +111,18 @@ export {
   WIKI_TOPIC_PAGES,
 } from './content-model.js';
 export {
+  buildWikiAncestorPaths,
+  corpusConfigured,
+  createWikiPage,
+  deleteWikiPage,
+  ensureWikiPageAncestors,
   getWikiPageByPath,
+  listWikiPagesUnderPrefix,
+  searchWikiPages,
+  updateWikiPage,
   upsertWikiPage,
   wikiConfigured,
+  type TPageRecord,
   type TUpsertWikiMode,
 } from './wiki-client.js';
 export {

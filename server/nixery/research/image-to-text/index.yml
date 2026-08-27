@@ -1,0 +1,57 @@
+id: image-to-text
+description: Vision image-to-text — extract text and describe an image objectively
+
+packages: [nodejs]
+
+env:
+  OPENAI_BASE_URL: ""
+  LLM_PROXY_TOKEN: ""
+  OPENAI_PROVIDER_DOMAIN: api.deepseek.com
+  OPENAI_MODEL: deepseek-v4-flash-vision-exp
+  OPENAI_API_KEY: ""
+  LLM_CALL_RETRY_MAX: ""
+  OPENAI_TEMPERATURE: "0.2"
+  OPENAI_MAX_TOKENS: "8192"
+
+nixery:
+  default: "true"
+  tools: [shell, nodejs]
+  policies:
+    - tools: [shell, nodejs]
+      mode: "true"
+
+input:
+  source:
+    type: string
+    required: true
+  background:
+    type: string
+    required: true
+  userPrompt:
+    type: string
+    required: false
+  output:
+    type: string
+    required: false
+
+mount:
+  /opt/nixery/plugin:
+    host: plugin
+    mode: ro
+  /session:
+    host: session-root
+    mode: ro
+  /workspace:
+    host: session
+    mode: rw
+  /opt/nixery/def:
+    host: def
+    mode: ro
+
+run:
+  runtime: node
+  entry: run.mjs
+
+output:
+  default: result.json
+  validate: validation.mjs

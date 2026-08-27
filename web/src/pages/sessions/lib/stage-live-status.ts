@@ -56,7 +56,9 @@ export const resolveStageElapsed = (
     | "status"
   >,
   nowMs: number,
+  options?: { clockLive?: boolean },
 ) => {
+  const clockLive = options?.clockLive !== false;
   const completedMs = Math.max(0, stage.modelDurationMs);
   const createdMs = parseTime(stage.createdAt);
   const lastModelMs = parseTime(stage.lastModelResponseAt);
@@ -64,7 +66,8 @@ export const resolveStageElapsed = (
   const callStartMs = Number.isNaN(lastModelMs)
     ? (Number.isNaN(lastToolMs) ? createdMs : lastToolMs)
     : lastToolMs;
-  const inFlight = isOpenStatus(stage.status)
+  const inFlight = clockLive
+    && isOpenStatus(stage.status)
     && !Number.isNaN(callStartMs)
     && (Number.isNaN(lastModelMs) || callStartMs > lastModelMs);
 
