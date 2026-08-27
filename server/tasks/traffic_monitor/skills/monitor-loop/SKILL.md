@@ -23,9 +23,9 @@ Single sleep per wait (`bashTimeoutMs: 360000`). No chunking / background / alte
 
 ## Poll sequence
 
-1. Fetch routes (route-analysis) for resolved OD bind names. Prefer scripts under `~/data/scripts/` when present (`echo … | node …` with `yahl-browser` inside — agent-free). Before inventing or growing a script, follow a consult gate skill under `~/task-skills/` when present (once, early; not mid-fat browser transcript). Pass stage-logic summary + short plan + need; never one-word pain.
+1. Fetch routes (route-analysis) for resolved OD bind names. Prefer scripts under `~/data/scripts/` when present (`echo … | node …` with `yahl-browser` inside — agent-free). Before inventing or growing a script, follow a consult gate skill under `/opt/skills/` when present (once, early; not mid-fat browser transcript). Pass stage-logic summary + short plan + need; never one-word pain.
 2. Success: `extend_context` on `fetches` (never `set_context` + `operation: extend`) + bump `poll_success_count` + update `prev_routes` / `prev_incident_note` **before** day-page append. `fetched_at` = `now_iso`; `timezone` for day-page headings only. Keep `fetches` on stage `contextKeys` — while segments merge by replace; dropping it from Input wipes prior polls.
-3. Append section via `append-raw-knowledge-page` (`raw/fetches-YYYY-MM-DD`) with Path lines when present. Origin/Destination lines use `origin_display` / `destination_display` (fallback runInput).
+3. Append section via `append-raw-knowledge-page` (`raw/fetches-YYYY-MM-DD`) with Path lines when present. Origin/Destination lines use `origin_display` / `destination_display` (fallback runInput). Mirror the same markdown into `day_page_sections` via `*extend_context` (stage logic owns this).
 4. Notify checks (below), then novel-only ops observations.
 5. Sleep once; the orchestrator decides whether another poll runs.
 

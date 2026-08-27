@@ -9,7 +9,7 @@ import { validateNixeryPluginMeta } from './validate-def';
 
 import type { TNixeryAbilityLocation, TNixeryDef, TNixeryPluginMeta } from './types';
 
-const SKIP_ABILITY_NAMES = new Set(['lib', 'SKILLS', 'prompts', 'task-skills']);
+const SKIP_ABILITY_NAMES = new Set(['lib', 'SKILLS', 'prompts']);
 
 const isSkippedDir = (name: string) =>
   name.startsWith('_') || name.startsWith('.') || SKIP_ABILITY_NAMES.has(name);

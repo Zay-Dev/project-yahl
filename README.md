@@ -31,7 +31,7 @@ Pipeline detail: [`handbook/how-it-works.md`](handbook/how-it-works.md).
 - **knowledge-to-script** — default-on for AI stages (`knowledgeToScript`); narrow operation scripts under `~/data/scripts/`, with a Stagehand/`yahl-browser` bridge so agents can drive the browser from scripts. Opt out per stage with `false`.
 - **`cacheMaxAge`** — AI-stage grace window (minutes) for trusting durable cache files before live-probing again — fewer token burns on cold re-reads.
 - **Per-stage repair** — from Session Detail, inject a one-off instruction at an anchor stage (`kind: 'repair'`) without rewriting the whole task.
-- **Plug-in nixery** — typed one-shot containers; install plugins, run `pnpm nixery:link`, grow or shrink the `/nixery` surface.
+- **Plug-in nixery** — typed one-shot containers; install plugins; orchestrator materializes [`runtime/.agent-files/`](../runtime/.agent-files/) at start (or `pnpm nixery:link` locally) to grow or shrink the `/nixery` surface.
 - **LLM proxy** — OpenAI-compatible hub with retries (408/429/5xx), usage postback, Anthropic translation; optional SaaS **quota** gating via `QUOTA_STATE_FILE`.
 - **Platform skills** — cron jobs, notification proposals, task dispatch via `/platform(...)` on the server.
 - **Knowledge Manager** — overnight multi-stage corpus review (`knowledge_manager` cron); stage agents submit observations, not direct wiki edits.
@@ -47,7 +47,7 @@ whileSetup:
   doAtLeast: 2
 warmUp: |
   Read ~/task-skills/monitor-loop/SKILL.md.
-  Read ~/task-skills/worth-persisting-knowledge/SKILL.md.
+  Read /opt/skills/worth-persisting-knowledge/SKILL.md.
 ```
 
 Full schema: [`handbook/yahl-syntax.md`](handbook/yahl-syntax.md).
@@ -114,7 +114,7 @@ warmUp: |
   Read ~/task-skills/setup/SKILL.md.
 ```
 
-- `~/…` — session scratch; `~/task-skills/…` — task-local skills
+- `~/…` — session scratch; `~/task-skills/…` — task-local skills only; `/opt/skills/…` — shareable catalog (platform + installed nixery plugins)
 - `CONTEXT:` / `IF:` / `ELSE:` / `END:` / `EXTENDS:` — VM and stage control
 - **`loopSetup`** — for-loops; **`whileSetup`** — do-while + optional **`warmUp`**
 - **`goto`** — `/stage(id)` jump-and-continue between labeled stages

@@ -13,7 +13,7 @@ It is not a chat black box. Each ability (when installed) is a human-authored co
 | **One-shot isolation** | Each call is a disposable container with declared mounts — blast radius is per ability, not the whole host. Details: [security.md](security.md). |
 | **Discover, don’t hardcode** | Orchestrator and agents resolve against whatever is installed; catalogs/skills are live install snapshots. |
 | **Compose with stages** | Same catalog via mid-stage `/nixery` or orchestrator `nixeryRun`; call site owns soft-fail vs hard-fail after retries. |
-| **Artifacts travel with the plugin** | Optional skills / prompts / task-skills publish via link when installed and leave when uninstalled. |
+| **Artifacts travel with the plugin** | Optional `SKILLS/` and `prompts/` materialize into `/opt/skills` and `/opt/yahl` at orchestrator start; uninstall removes them from the live catalog. |
 
 Root product framing: [README.md](../README.md).
 
@@ -24,34 +24,34 @@ The install unit is a folder under [`server/nixery/<pluginId>/`](../server/nixer
 ```text
 server/nixery/
   <pluginId>/
-    plugin.yml                 # required — install unit + skills/prompts/task_skills to link
+    plugin.yml                 # required — install unit + skills/prompts lists
     lib/                       # plugin-local helpers (optional compiled dist, etc.)
     <abilityId>/
       index.yml                # def contract; id must match folder name
       run.mjs                  # typical entry
       validation.mjs           # output gate
       …                        # optional prompts, tests
-    SKILLS/ | prompts/ | task-skills/   # optional; published by pnpm nixery:link
+    SKILLS/ | prompts/         # optional; copied into runtime/.agent-files/ at orchestrator start
 ```
 
 ### Install / uninstall
 
 | Action | Effect |
 |--------|--------|
-| **Install** | Add the plugin dir + `plugin.yml` (+ ability folders). Discovery picks it up ([`shared/nixery/list-defs.ts`](../shared/nixery/list-defs.ts)). Run `pnpm nixery:link` ([`shared/nixery/nixery-link.mjs`](../shared/nixery/nixery-link.mjs)) to publish skills / prompts / task-skills symlinks. |
-| **Uninstall** | Remove that plugin dir. Its ability ids vanish from `/nixery(…)`. Re-link remaining plugins; drop leftover symlinks that pointed only at the removed plugin. |
+| **Install** | Add the plugin dir + `plugin.yml` (+ ability folders). Discovery picks it up ([`shared/nixery/list-defs.ts`](../shared/nixery/list-defs.ts)). The orchestrator materializes plugin skills and prompts into [`runtime/.agent-files/`](../runtime/.agent-files/) at start (or run `pnpm nixery:link` locally to refresh without starting a session). |
+| **Uninstall** | Remove that plugin dir. Its ability ids vanish from `/nixery(…)`. Re-run orchestrator (or `pnpm nixery:link`) to refresh `.agent-files/`. |
 
 ### Empty catalog / live catalog
 
 - With **no plugins**, `/nixery(…)` has nothing to resolve — that is the platform default.
 - With plugins installed, agents use whatever skill or catalog those plugins publish (paths and basenames come from each plugin’s `plugin.yml`, not from a fixed platform skill).
 - **Ability ids are global** — call `/nixery(defId)` with no plugin prefix. Collisions across installed plugins fail discovery.
-- Reserved child names (not abilities): `lib`, `SKILLS`, `prompts`, `task-skills`, plus `_…` / `.…`.
+- Reserved child names (not abilities): `lib`, `SKILLS`, `prompts`, plus `_…` / `.…`.
 - Discovery and contracts: [`shared/nixery/`](../shared/nixery/). Runtime load / mount / run / validate: [`runtime/orchestrator/-nixery/`](../runtime/orchestrator/-nixery/).
 
 ### Optional plugins
 
-A plugin may ship abilities plus optional skills / prompts / task-skills linked on install. Domain behavior — curated stores, channel helpers, verify gates, research helpers, and so on — lives entirely in plugins the operator chooses to install, not in the empty platform. Example: research plugin ability `consult-script-candidate` advises the next knowledge-to-script op (prefer `js` + `yahl-browser`). Mount and write-boundary detail: [security.md](security.md).
+A plugin may ship abilities plus optional shareable skills / prompts. Skills flatten to `/opt/skills/{name}/` via `.agent-files/` — not `~/task-skills/`. Domain behavior — curated stores, channel helpers, verify gates, research helpers, and so on — lives entirely in plugins the operator chooses to install, not in the empty platform. Example: research plugin ability `consult-script-candidate` advises the next knowledge-to-script op (prefer `js` + `yahl-browser`). Mount and write-boundary detail: [security.md](security.md).
 
 ## Invocation model
 

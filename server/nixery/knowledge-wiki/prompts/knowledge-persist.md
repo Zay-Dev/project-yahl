@@ -1,6 +1,6 @@
 # Knowledge persist (all tasks)
 
-When `~/task-skills/worth-persisting-knowledge/SKILL.md` exists, **Read it once per stage** — before inventing what to persist and before end-of-run knowledge decisions. Skip the Read when a warmup prefix already contains that file.
+When `/opt/skills/worth-persisting-knowledge/SKILL.md` exists, **Read it once per stage** — before inventing what to persist and before end-of-run knowledge decisions. Skip the Read when a warmup prefix already contains that file.
 
 - Novel **and** evidenced lessons → `/nixery(submit-knowledge-observation, …)` per that skill.
 - Soft optional `topic_hint` (content-based or omit). Wrong hint is OK — Knowledge Manager decides final topic and apply shape.
@@ -10,7 +10,7 @@ When `~/task-skills/worth-persisting-knowledge/SKILL.md` exists, **Read it once 
 
 **Any tool / kind error** this stage (`browser`, `nixery`, `platform`, `run_bash`, … — `ok:false`, rejected args, bind miss, unknown how-to, …):
 
-1. Read `~/task-skills/resolve-errors-with-knowledge/SKILL.md` when it exists, voice out if they are missing.
+1. Read `/opt/skills/resolve-errors-with-knowledge/SKILL.md` when it exists, voice out if they are missing.
 2. Call `/nixery(resolve-error-with-knowledge, …)` as the **first** action — before more debug or `run_bash` spelunking. It atomically records the failure and searches existing knowledge.
 3. Call the resolver **once** per error signature in a stage.
 4. Do **not** separately submit the same failure; `not_found` and `unavailable` already mean it was recorded.
@@ -19,11 +19,11 @@ When `~/task-skills/worth-persisting-knowledge/SKILL.md` exists, **Read it once 
 
 If a working path appears later (cited solution verified, or your own investigation succeeded): submit a **second**, separate HOWTO/TRICK observation via `/nixery(submit-knowledge-observation, …)` (top priority again). Do not merge failure and success into one note.
 
-Read those `~/task-skills/…/SKILL.md` files when present. Do **not** invent filesystem paths. Missing SKILL.md does **not** skip `/nixery(resolve-error-with-knowledge, …)` or a later `/nixery(submit-knowledge-observation, …)`.
+Read those `/opt/skills/…/SKILL.md` files when present. Do **not** invent filesystem paths. Missing SKILL.md does **not** skip `/nixery(resolve-error-with-knowledge, …)` or a later `/nixery(submit-knowledge-observation, …)`.
 
 ## The Librarian
 
-1. Read `~/task-skills/resolve-errors-with-knowledge/SKILL.md` when it exists, voice out if they are missing.
+1. Read `/opt/skills/resolve-errors-with-knowledge/SKILL.md` when it exists, voice out if they are missing.
 2. Call `/nixery(resolve-error-with-knowledge, …)` as the **first** action — before inventing a search.
 3. `/nixery(resolve-error-with-knowledge, …)` is the system's **Librarian**. Before consulting `resolve-errors-with-knowledge`, do **not** scan `/workspace/sessions/*`, `find /`, or other runs for a spec. It supports **not only error**, instead, it is alo able to provide useful info to operate, and it is your responsbility to contribute back if it failed to provide the info, so DO **NOT** feel hesitated to use it.
 
@@ -37,7 +37,7 @@ Map the brief onto resolver fields — `cue`, `claim`, `example`, `evidence`:
 - what the problem is
 - what I need
 
-Skill files are the catalog (`/opt/skills/…/SKILL.md`, `~/task-skills/…`). Other sessions' workspaces are not.
+Skill files are the catalog (`/opt/skills/…/SKILL.md` for shareable skills; `~/task-skills/…` for task-local only). Other sessions' workspaces are not.
 
 ### Plan / act / react
 

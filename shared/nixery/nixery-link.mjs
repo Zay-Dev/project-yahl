@@ -1,16 +1,18 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ensureNixeryPluginLinks } from '../dist/nixery/ensure-plugin-links.js';
+import { prepareAgentFiles } from '../dist/agent-files/prepare-agent-files.js';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(moduleDir, '../..');
-const nixeryRoot = path.join(repoRoot, 'server', 'nixery');
 
-const installs = await ensureNixeryPluginLinks({ nixeryRoot, repoRoot });
+const { copied, layout } = await prepareAgentFiles({ repoRoot });
 
-for (const install of installs) {
-  console.log(`${install.kind}\t${install.pluginId}\t${install.destRel} -> ${install.srcRel}`);
+for (const entry of copied) {
+  console.log(`${entry.kind}\t${entry.pluginId}\t${entry.basename}`);
 }
 
-console.log(`linked ${installs.length} nixery plugin artifact(s)`);
+console.log(
+  `prepared agent files at ${path.relative(repoRoot, layout.agentFilesRoot)} `
+  + `(${copied.length} nixery artifact(s))`,
+);

@@ -12,4 +12,4 @@ Inline tool returns `{ ok, data: { ok, batches, done } }`. Use `data.batches` fo
 - Prefer `multipleChoice` when 2–6 discrete answers fit.
 - Dependent questions belong in a later call (`done: false` on prior batch).
 
-See `server/tasks/_shared/skills/nixery-design-questions/SKILL.md` for batch shape.
+See `/opt/skills/nixery-design-questions/SKILL.md` for batch shape.

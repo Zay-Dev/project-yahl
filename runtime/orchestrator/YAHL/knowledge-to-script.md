@@ -8,7 +8,7 @@ This AI stage has **knowledgeToScript** enabled (default for AI stages). You sti
 - **Browser scriptables (agent-free)** — replayable Stagehand work belongs in `~/data/scripts/*.js` that drive the browser via **`yahl-browser`** (JSON stdin → same Stagehand session). Prefer `echo '{…}' | node ~/data/scripts/{op}.js` over stage-agent `browser` turns for each click. Stage-agent `browser` is for explore / one-shot recovery only; after a chain works, compile into scripts and replay via scripts next poll.
 - **`*func` that is scriptable** — format / parse / sleep-math / URL-bind / browser fetch: check and run `~/data/scripts/` first; do not default to a fresh bash one-liner or a long `browser` tool loop.
 - **Many scripts per stage** — keyed by **operation**, not by stage `id` (e.g. fill-origin, pick-suggestion, extract-routes).
-- **One small piece at a time** — before inventing or growing, if a consult gate skill is available under `~/task-skills/`, follow it once (stage-logic summary + short plan + need); otherwise grow one piece and do not invent a `/nixery` defId. Inventory reuse needs no consult.
+- **One small piece at a time** — before inventing or growing, if a consult gate skill is available under `/opt/skills/`, follow it once (stage-logic summary + short plan + need); otherwise grow one piece and do not invent a `/nixery` defId. Inventory reuse needs no consult.
 - **Never re-Read** `/opt/skills/knowledge-to-script/SKILL.md` when this fragment is already in the system prompt set.
 - **No session literals** — scripts bind args on stdin JSON; never bake one run’s place names into the file.
 - **First-try success** — run the script once; if output validates, continue. Skip re-reading HOWTO for that op this iteration.

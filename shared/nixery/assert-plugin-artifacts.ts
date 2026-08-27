@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import type { TNixeryPluginMeta } from './types';
 
-const KIND_KEYS = ['skills', 'prompts', 'task_skills'] as const;
+const KIND_KEYS = ['skills', 'prompts'] as const;
 
 export const assertNixeryPluginArtifacts = async (
   pluginDir: string,

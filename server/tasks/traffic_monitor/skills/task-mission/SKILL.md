@@ -1,6 +1,6 @@
 # task-mission
 
-Monitor private-car driving from `origin` → `destination` for about `monitor_minutes` (default 60). Resolve notify target, load city source-ops from durable files when fresh, explore/lock a live multi-route ETA source (**≤ 2** city-local attempts this explore; Maps is budget fallback only), poll top 2–3 routes, append day-page sections, propose notifications (see monitor-loop), submit novel+evidenced observations per `~/task-skills/worth-persisting-knowledge/SKILL.md`, then append a daily report raw page under topic `traffic-monitor`. The knowledge registry may canonicalize `traffic-monitor` to a merged slug (e.g. `traffic-notify`); that redirect is expected — not a validation failure. Defaults: Kowloon Tong → HKIA, city Hong_Kong, timezone Asia/Hong_Kong. Wall clocks use `timezone`.
+Monitor private-car driving from `origin` → `destination` for about `monitor_minutes` (default 60). Resolve notify target, load city source-ops from durable files when fresh, explore/lock a live multi-route ETA source (**≤ 2** city-local attempts this explore; Maps is budget fallback only), poll top 2–3 routes, append day-page sections, propose notifications (see monitor-loop), submit novel+evidenced observations per `/opt/skills/worth-persisting-knowledge/SKILL.md`, then append a daily report raw page under topic `traffic-monitor`. The knowledge registry may canonicalize `traffic-monitor` to a merged slug (e.g. `traffic-notify`); that redirect is expected — not a validation failure. Defaults: Kowloon Tong → HKIA, city Hong_Kong, timezone Asia/Hong_Kong. Wall clocks use `timezone`.
 
 ## `source_instruction` override
 
@@ -23,4 +23,4 @@ When Input `instruction_active` is true, **read and apply** free-text `source_in
 
 Attend via `*read(source_ops_md)` before site use; do not paste ops into `howto_md`. Submit novel source-ops / PLACE notes when worth persisting — never `upsert-knowledge-page`.
 
-Notify kinds / poll loop / path extract → monitor-loop + route-analysis. Before breaking sleep/window/thresholds/skills, `/nixery(consult-breaking-change)`. Before inventing or growing a script, follow a consult gate under `~/task-skills/` when present (once, early); not mid-browser transcript.
+Notify kinds / poll loop / path extract → monitor-loop + route-analysis. Before breaking sleep/window/thresholds/skills, `/nixery(consult-breaking-change)`. Before inventing or growing a script, follow a consult gate skill under `/opt/skills/` when present (once, early); not mid-browser transcript.

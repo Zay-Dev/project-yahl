@@ -67,7 +67,7 @@ export function SetContextToolCall({ tool }: TSetContextToolCallProps) {
           Show full value
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <pre className="mt-2 max-h-64 overflow-auto rounded border bg-muted/30 p-2 text-xs">
+          <pre className="mt-2 max-h-64 overflow-auto rounded border bg-muted/30 p-2 text-xs break-all whitespace-pre-wrap">
             {JSON.stringify(args.value, null, 2)}
           </pre>
         </CollapsibleContent>

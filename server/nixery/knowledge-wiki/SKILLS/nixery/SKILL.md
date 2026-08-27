@@ -36,7 +36,7 @@ Machine timelines under `topics/{topic}/raw/` only.
 
 ### `submit-knowledge-observation`
 
-Observation under `raw/observations/…`. Knowledge Manager owns final topic. When to submit → `~/task-skills/worth-persisting-knowledge/SKILL.md`. Payload shape → `~/task-skills/submit-knowledge-observation/SKILL.md`.
+Observation under `raw/observations/…`. Knowledge Manager owns final topic. When to submit → `/opt/skills/worth-persisting-knowledge/SKILL.md`. Payload shape → `/opt/skills/submit-knowledge-observation/SKILL.md`.
 
 | Key | Required |
 |-----|----------|
@@ -50,7 +50,7 @@ Never pass `source`, `file`, `path`, `mode`, or a wiki `##` body.
 
 ### `resolve-error-with-knowledge`
 
-Atomically persist a tool failure, then search knowledge. First action on `ok:false` / rejected args — before `find /`. Flow → `~/task-skills/resolve-errors-with-knowledge/SKILL.md`.
+Atomically persist a tool failure, then search knowledge. First action on `ok:false` / rejected args — before `find /`. Flow → `/opt/skills/resolve-errors-with-knowledge/SKILL.md`.
 
 | Key | Required |
 |-----|----------|

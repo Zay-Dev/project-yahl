@@ -1,7 +1,13 @@
 import "dotenv/config";
 
+import fs from "fs";
 import url from "url";
 import path from "path";
+
+import {
+  AGENT_SKILLS_CONTAINER_DIR,
+  AGENT_YAHL_CONTAINER_DIR,
+} from '@project-yahl/shared/agent-files/prepare-agent-files';
 
 import { normalizeProviderDomain, normalizeStagehandModel } from "./-utils/llm-transport";
 
@@ -63,7 +69,14 @@ const cliOptions = (() => {
   }, {} as Record<string, string>);
 
   const defaultAgentMdPath = path.resolve(__dirname, 'agent', "Agent.md");
-  const defaultYahlDirPath = path.resolve(__dirname, 'orchestrator', "YAHL");
+  const bundledSkillsDir = path.resolve(__dirname, '.agent-files', 'SKILLS');
+  const bundledYahlDir = path.resolve(__dirname, '.agent-files', 'YAHL');
+  const defaultSkillsDirPath = fs.existsSync(AGENT_SKILLS_CONTAINER_DIR)
+    ? AGENT_SKILLS_CONTAINER_DIR
+    : bundledSkillsDir;
+  const defaultYahlDirPath = fs.existsSync(AGENT_YAHL_CONTAINER_DIR)
+    ? AGENT_YAHL_CONTAINER_DIR
+    : bundledYahlDir;
 
   const sessionId = pairs["session-id"] || process.env.AGENT_SESSION_ID || "";
 
@@ -77,6 +90,7 @@ const cliOptions = (() => {
     agentMdPath: pairs["agent-md"] || process.env.AGENT_MD_PATH || defaultAgentMdPath,
     daemon: pairs["daemon"] === "true" || process.env.AGENT_DAEMON === "1",
     nonInteractive: pairs["non-interactive"] === "true" || process.env.AGENT_NON_INTERACTIVE === "1",
+    skillsDirPath: pairs["skills-dir"] || process.env.AGENT_SKILLS_DIR || defaultSkillsDirPath,
     yahlDirPath: pairs["yahl-dir"] || process.env.AGENT_YAHL_DIR || defaultYahlDirPath,
   };
 })();

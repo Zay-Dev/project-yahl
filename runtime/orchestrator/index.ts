@@ -6,6 +6,8 @@ import Redis from "ioredis";
 
 import { RedisPublisher } from '@/shared/transports/redis';
 
+import { prepareAgentFiles } from '@project-yahl/shared/agent-files/prepare-agent-files';
+
 import {
   buildAgent,
   composeUp,
@@ -14,6 +16,7 @@ import {
   writeAgentSessionOverride,
   writeSharedOneCliOverride,
 } from './-docker';
+import { repoRoot } from './-docker/paths';
 import { program, resolveOrchestratorRun, resolveSessionId, runCommand } from './-cli';
 
 import { loadNixeryDef, parseNixeryRunInputJson, runNixeryDef } from './-nixery';
@@ -96,6 +99,8 @@ const _composeUp = async (
   tracker: ReturnType<typeof createSessionEventTracker>,
 ) => {
   const liveView = isStagehandLiveview();
+
+  await prepareAgentFiles({ repoRoot });
 
   const sessionOverrideFilePath = await writeAgentSessionOverride({
     publishVnc: liveView,

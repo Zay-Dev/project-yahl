@@ -39,4 +39,4 @@ If you later find a working path after that failure, submit a **second**, separa
 
 Best-effort content slug, or omit (lands in `inbox`). Wrong hint is OK — Knowledge Manager re-homes by content.
 
-For failures, see `~/task-skills/resolve-errors-with-knowledge/SKILL.md`. For other observations and the second success note, see `~/task-skills/submit-knowledge-observation/SKILL.md` and `~/task-skills/knowledge-wiki-style/SKILL.md`.
+For failures, see `/opt/skills/resolve-errors-with-knowledge/SKILL.md`. For other observations and the second success note, see `/opt/skills/submit-knowledge-observation/SKILL.md` and `/opt/skills/knowledge-wiki-style/SKILL.md`.

@@ -2,6 +2,11 @@ import type { YahlStage } from "@/shared/yahl-stage";
 
 import path from "path";
 
+import {
+  AGENT_SKILLS_CONTAINER_DIR,
+  AGENT_YAHL_CONTAINER_DIR,
+} from '@project-yahl/shared/agent-files/prepare-agent-files';
+
 import config from "./config";
 
 import { listReadableUtf8Files, readFileUtf8 } from "./-utils/prompts";
@@ -81,9 +86,19 @@ export const startRedisDaemon = async () => {
     .filter(Boolean)
     .join("\n\n");
 
+  const catalogRootsNote = (
+    cli.skillsDirPath !== AGENT_SKILLS_CONTAINER_DIR
+    || cli.yahlDirPath !== AGENT_YAHL_CONTAINER_DIR
+  )
+    ? [
+      `Catalog roots: skills=${cli.skillsDirPath}, yahl=${cli.yahlDirPath}.`,
+      'When stage logic or tools reference /opt/skills or /opt/yahl, read from these roots instead.',
+    ].join(' ')
+    : '';
+
   const messages = [
     {
-      content: `${agentmd}\n\n${yahlPrompt}`.trim(),
+      content: [agentmd, catalogRootsNote, yahlPrompt].filter(Boolean).join("\n\n").trim(),
       role: "system" as const,
     },
   ];
@@ -92,7 +107,8 @@ export const startRedisDaemon = async () => {
   await startAgentDiagnosticsLog(config.cliOptions.sessionId);
   console.log(
     `[agent-daemon] yahl prompts sessionId=${cli.sessionId} `
-    + `dir=${cli.yahlDirPath} files=${yahlFiles.map((file) => path.basename(file)).join(",") || "-"}`,
+    + `dir=${cli.yahlDirPath} files=${yahlFiles.map((file) => path.basename(file)).join(",") || "-"} `
+    + `skillsDir=${cli.skillsDirPath}`,
   );
   console.log(`[agent-daemon] listening on ${config.redisUrl}\n`);
 

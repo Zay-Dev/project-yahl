@@ -83,7 +83,6 @@ export const nixeryPluginMetaSchema = z.object({
   name: z.string().trim().optional(),
   prompts: z.array(pluginRelativePathSchema).optional(),
   skills: z.array(pluginRelativePathSchema).optional(),
-  task_skills: z.array(pluginRelativePathSchema).optional(),
 });
 
 export const validateNixeryDef = (raw: unknown) => {

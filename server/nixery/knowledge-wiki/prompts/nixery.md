@@ -32,7 +32,7 @@ Pre-run failures only (invalid `/nixery` argv, unknown def, namespace gate) stil
 
 ## Policy pointers
 
-- Knowledge writes and tool-error recovery → sibling `knowledge-persist.md` and `~/task-skills/resolve-errors-with-knowledge` when present.
+- Knowledge writes and tool-error recovery → sibling `knowledge-persist.md` and `/opt/skills/resolve-errors-with-knowledge` when present.
 - Current call shapes and helper catalog → `/opt/skills/nixery/SKILL.md` (read that file; do not hunt host paths).
 
 ## Breaking changes

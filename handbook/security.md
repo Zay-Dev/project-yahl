@@ -16,7 +16,7 @@ sequenceDiagram
   Nix->>Corpus: write rw mount
 ```
 
-- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/orchestrator/SKILLS`](runtime/orchestrator/SKILLS) only; **no** export/knowledges ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Nixery **read** defs mount `data/knowledge_export` **ro**; nixery **write** defs mount it **rw**.
+- **Container mounts** — agent: [`data/workspace/`](data/workspace/) + read-only [`runtime/.agent-files/`](runtime/.agent-files/) (`SKILLS` → `/opt/skills`, `YAHL` → `/opt/yahl`); **no** export/knowledges ([`docker-compose.agent.yml`](docker-compose.agent.yml)). Nixery **read** defs mount `data/knowledge_export` **ro**; nixery **write** defs mount it **rw**.
 - **No direct corpus access** — agents must not read the export mirror or legacy `~/knowledges/`; canonical store is server/nixery-private only.
 - **Session-scoped reads** — `nixeryRun: get-knowledge` explores export mirror in-container, writes markdown to `~/nixery/get-knowledge/{output}`; agent reads full file content in following stages.
 - **Path injection blocked** — upsert rejects caller `source` / `file` / `path` args.

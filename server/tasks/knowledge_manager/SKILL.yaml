@@ -58,7 +58,7 @@ stages:
       const transfers_proposed_acc = 0;
       const instruction_followup = *analyze_additional_instruction(
         additional_instruction,
-        guideline: ~/task-skills/analyze-additional-instruction/SKILL.md,
+        guideline: /opt/skills/analyze-additional-instruction/SKILL.md,
       );
 
   - nixeryRun: list-manager-topics

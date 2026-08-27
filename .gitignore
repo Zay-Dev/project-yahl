@@ -405,6 +405,7 @@ next-env.d.ts
 
 .onecli/
 runtime/.agents/
+runtime/.agent-files/
 tsconfig.tsbuildinfo
 docs/
 

@@ -2,7 +2,7 @@
 
 Agent-facing write for general observations and verified success notes. Concrete tool failures go through `resolve-errors-with-knowledge`, which submits the failure before lookup. Do **not** call `upsert-knowledge-page` or `dedup-knowledge`.
 
-When to submit → `~/task-skills/worth-persisting-knowledge/SKILL.md`.
+When to submit → `/opt/skills/worth-persisting-knowledge/SKILL.md`.
 
 ## Contract
 

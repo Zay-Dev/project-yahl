@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+
+import { AGENT_YAHL_CONTAINER_DIR } from '@project-yahl/shared/nixery/ensure-plugin-links';
 
 import { writeAgentSessionOverride } from './compose-onecli';
 
@@ -18,7 +20,7 @@ describe('writeAgentSessionOverride', () => {
     }
   });
 
-  it('bind-mounts task workspace, YAHL, and plugin skill overlays', async () => {
+  it('bind-mounts task workspace and sets session env', async () => {
     previousHostRepoRoot = process.env.HOST_REPO_ROOT;
     const repoRoot = await mkdtemp(path.join(tmpdir(), 'yahl-compose-override-'));
     runtimeAgentsRoot = path.join(repoRoot, 'runtime', '.agents');
@@ -27,50 +29,11 @@ describe('writeAgentSessionOverride', () => {
 
     const sessionId = 'sess-mount';
     const taskId = 'hk_weather';
-    const skillSrc = path.join(repoRoot, 'server', 'nixery', 'fixture', 'SKILLS', 'nixery');
-    const promptSrc = path.join(repoRoot, 'server', 'nixery', 'fixture', 'prompts', 'nixery.md');
-    const persistSrc = path.join(
-      repoRoot,
-      'server',
-      'nixery',
-      'fixture',
-      'prompts',
-      'knowledge-persist.md',
-    );
+
+    await mkdir(path.join(repoRoot, 'data', 'workspace', 'tasks', taskId), { recursive: true });
+    await writeFile(path.join(repoRoot, 'data', 'workspace', 'tasks', taskId, '.keep'), '');
 
     const overridePath = await writeAgentSessionOverride({
-      pluginInstalls: [
-        {
-          basename: 'nixery',
-          containerDest: '/opt/skills/nixery',
-          destAbs: path.join(repoRoot, 'runtime', 'orchestrator', 'SKILLS', 'nixery'),
-          destRel: 'runtime/orchestrator/SKILLS/nixery',
-          kind: 'skills',
-          pluginId: 'fixture',
-          srcAbs: skillSrc,
-          srcRel: 'server/nixery/fixture/SKILLS/nixery',
-        },
-        {
-          basename: 'nixery.md',
-          containerDest: '/opt/yahl/nixery.md',
-          destAbs: path.join(repoRoot, 'runtime', 'orchestrator', 'YAHL', 'nixery.md'),
-          destRel: 'runtime/orchestrator/YAHL/nixery.md',
-          kind: 'prompts',
-          pluginId: 'fixture',
-          srcAbs: promptSrc,
-          srcRel: 'server/nixery/fixture/prompts/nixery.md',
-        },
-        {
-          basename: 'knowledge-persist.md',
-          containerDest: '/opt/yahl/knowledge-persist.md',
-          destAbs: path.join(repoRoot, 'runtime', 'orchestrator', 'YAHL', 'knowledge-persist.md'),
-          destRel: 'runtime/orchestrator/YAHL/knowledge-persist.md',
-          kind: 'prompts',
-          pluginId: 'fixture',
-          srcAbs: persistSrc,
-          srcRel: 'server/nixery/fixture/prompts/knowledge-persist.md',
-        },
-      ],
       sessionId,
       taskId,
     });
@@ -85,15 +48,7 @@ describe('writeAgentSessionOverride', () => {
         + ':/workspace/sessions/sess-mount/data:rw',
       ),
     );
-    assert.match(
-      content,
-      new RegExp(
-        `${path.join(repoRoot, 'runtime', 'orchestrator', 'YAHL').replaceAll('/', '[/\\\\]')}`
-        + ':/opt/yahl:ro',
-      ),
-    );
-    assert.match(content, /\/opt\/skills\/nixery:ro/);
-    assert.match(content, /\/opt\/yahl\/nixery\.md:ro/);
-    assert.match(content, /\/opt\/yahl\/knowledge-persist\.md:ro/);
+    assert.doesNotMatch(content, new RegExp(`${AGENT_YAHL_CONTAINER_DIR}:ro`));
+    assert.doesNotMatch(content, /\/opt\/skills/);
   });
 });

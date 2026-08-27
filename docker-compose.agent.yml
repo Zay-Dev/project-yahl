@@ -13,6 +13,8 @@ services:
       AGENT_CONTAINER_NAME: ${AGENT_CONTAINER_NAME:-agent}
       AGENT_REDIS_URL: redis://redis:6379
       AGENT_SESSION_ID: ${AGENT_SESSION_ID:-}
+      AGENT_SKILLS_DIR: /opt/skills
+      AGENT_YAHL_DIR: /opt/yahl
       DISPLAY: ${STAGEHAND_LIVEVIEW_DISPLAY:-:99}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://llm-proxy:4100/v1}
       LLM_PROVIDER_DOMAIN: ${LLM_PROVIDER_DOMAIN:-api.deepseek.com}
@@ -30,7 +32,8 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${HOST_REPO_ROOT:-.}/data/workspace:/workspace
-      - ${HOST_REPO_ROOT:-.}/runtime/orchestrator/SKILLS:/opt/skills:ro
+      - ${HOST_REPO_ROOT:-.}/runtime/.agent-files/SKILLS:/opt/skills:ro
+      - ${HOST_REPO_ROOT:-.}/runtime/.agent-files/YAHL:/opt/yahl:ro
     command: ["pnpm", "--silent", "--filter", "@project-yahl/runtime", "run", "agent", "--", "--daemon"]
     container_name: ${AGENT_CONTAINER_NAME:-agent}
     networks:

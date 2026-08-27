@@ -7,7 +7,6 @@ import { StageRerunDialog } from "@/pages/sessions/components/stage-rerun-dialog
 import { StageLoopMeta } from "@/pages/sessions/components/stage-loop-meta";
 import { StageModelResponseCard } from "@/pages/sessions/components/stage-model-response-card";
 import { StageSetupJsonSheet } from "@/pages/sessions/components/stage-setup-json-sheet";
-import { ToolCallList } from "@/pages/sessions/components/tool-calls/tool-call-list";
 
 import { groupModelResponsesByNixery } from "@/pages/sessions/lib/group-model-responses";
 
@@ -39,7 +38,7 @@ export function StageDetailPanel({
   const sections = groupModelResponsesByNixery(detail.modelResponses);
 
   return (
-    <div className="space-y-4 border-t bg-background/60 px-4 py-4 text-sm">
+    <div className="min-w-0 space-y-4 overflow-hidden border-t bg-background/60 px-4 py-4 text-sm">
       <div className="flex justify-end gap-2">
         <StageRepairButton detail={detail} />
         <StageRerunDialog
@@ -88,7 +87,6 @@ export function StageDetailPanel({
           })}
         </div>
       ) : null}
-      <ToolCallList toolCalls={detail.toolCalls} />
     </div>
   );
 }

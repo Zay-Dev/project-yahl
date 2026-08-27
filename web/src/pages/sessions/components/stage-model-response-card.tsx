@@ -19,7 +19,7 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
   const hasPreview = preview.text.length > 0;
 
   return (
-    <li className="rounded-md border bg-background p-2">
+    <li className="min-w-0 rounded-md border bg-background p-2">
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         {response.tags?.map((tag) => (
           <span
@@ -48,7 +48,7 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
           {preview.kind === "reasoning" ? (
             <p className="mt-2 text-xs text-muted-foreground">Reasoning</p>
           ) : null}
-          <pre className="mt-2 max-h-[min(70vh,40rem)] overflow-auto rounded border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
+          <pre className="mt-2 max-h-[min(70vh,40rem)] overflow-auto rounded border bg-muted/30 p-2 text-xs break-all whitespace-pre-wrap">
             {preview.text}
           </pre>
         </>
