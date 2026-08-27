@@ -9,8 +9,9 @@ export {
   composeUp,
   resolveAgentComposeOverrideFiles,
   writeAgentSessionOverride,
-  writeSharedOneCliOverride,
-} from './compose-onecli';
+} from './compose-agent';
+
+export { writeSharedOneCliOverride } from './onecli-snapshot';
 
 export { shutdownAgent } from './agent-lifecycle';
 

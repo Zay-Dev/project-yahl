@@ -86,7 +86,7 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 
 **How the agent container is restricted:**
 
-- **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-onecli.ts`](runtime/orchestrator/-docker/compose-onecli.ts), project `agent-{sessionId}`), then tears it down.
+- **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-agent.ts`](runtime/orchestrator/-docker/compose-agent.ts), project `agent-{sessionId}`), then tears it down.
 - **Minimal mounts** — only [`data/workspace/`](data/workspace/) (writable) and [`runtime/.agent-files/`](runtime/.agent-files/) (`SKILLS` → `/opt/skills`, `YAHL` → `/opt/yahl`, both `:ro`). Orchestrator refreshes `.agent-files/` at start from built-ins + installed nixery plugins. No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
 - **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge reads via `nixeryRun` → `~/nixery/get-knowledge/`; study dialogue under `~/nixery/study/` — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see [security.md](security.md)).
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `extend_context`, `ask_user`, `platform`, `nixery`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.

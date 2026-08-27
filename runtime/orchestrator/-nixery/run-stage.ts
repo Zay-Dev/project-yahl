@@ -3,7 +3,7 @@ import type { TNixeryDef } from '@project-yahl/shared/nixery/types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { writeSharedOneCliOverride } from '@/orchestrator/-docker/compose-onecli';
+import { writeSharedOneCliOverride } from '@/orchestrator/-docker/onecli-snapshot';
 import { workspaceRoot } from '@/orchestrator/-utils/workspace-paths';
 import {
   resolveNixeryOutputHint,

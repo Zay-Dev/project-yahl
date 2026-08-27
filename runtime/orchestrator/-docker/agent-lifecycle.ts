@@ -1,4 +1,4 @@
-import { composeDown, resolveAgentComposeOverrideFiles } from './compose-onecli';
+import { composeDown, resolveAgentComposeOverrideFiles } from './compose-agent';
 
 export const shutdownAgent = async (agentName: string, sessionId: string) => {
   const composeOverrideFilePaths = await resolveAgentComposeOverrideFiles(sessionId);
