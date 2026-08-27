@@ -102,6 +102,9 @@ export const resolvePreparedRun = async (
     cursor: {
       kind: 'pipeline',
       loopMeta: session.runCursor?.loopMeta as TLoopMeta | undefined,
+      ...(session.runCursor?.nestedIndex === undefined
+        ? {}
+        : { nestedIndex: session.runCursor.nestedIndex }),
       stageIndex,
     },
     parsedStages: session.parsedStages,

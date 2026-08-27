@@ -52,7 +52,7 @@ export type TYahlFragment = {
 export type TYahlLogic = string | TYahlFragment | TYahlLogicRef;
 
 export type TStageAgentMeta = {
-  isSubAgent: boolean;
+  isMainThread: boolean;
   nestedIndex?: number;
   nestedPath?: string;
   parallelGroupId?: string;
@@ -72,6 +72,7 @@ export type TYahlStage = {
   knowledgeToScript?: boolean;
   logic: TYahlLogic;
   loopSetup?: string;
+  mainThread?: boolean;
   maxBashCalls?: number;
   warmUp?: string;
   whileSetup?: TYahlWhileSetup;
@@ -83,7 +84,6 @@ export type TYahlStage = {
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   stagehand?: TYahlStagehandConfig;
-  subAgent?: boolean;
   temperature?: number;
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
@@ -122,6 +122,7 @@ export type TParsedStage = {
 export type TSessionRunCursor = {
   kind: 'pipeline' | 'repair';
   loopMeta?: TStageLoopMeta;
+  nestedIndex?: number;
   repairInstruction?: string;
   stageIndex: number;
 };

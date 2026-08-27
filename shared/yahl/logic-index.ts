@@ -10,7 +10,7 @@ export {
   isYahlFragment,
   isYahlLogicRef,
   logicPreviewText,
-  resolveSubAgentFlag,
+  resolveMainThreadFlag,
 } from './logic';
 
 export {

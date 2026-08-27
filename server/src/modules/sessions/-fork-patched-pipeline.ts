@@ -1,18 +1,15 @@
 import type { TForkSessionStageSetup, TParsedStage, TStageLoopMeta } from './-types';
 import type { TResponseStageReplayItem } from './-api-types';
 
-import path from 'path';
-
 import {
   resetAskUserStageForRerun,
   stripAskUserAnswersFromContext,
 } from '@project-yahl/shared/yahl/ask-user-rerun';
-import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
 import { compileForkRunStage } from '@project-yahl/shared/yahl/stage-compile';
 import { dedupeReplayRowsByStageSlot } from '@project-yahl/shared/yahl/replay-dedupe';
 import { mergeContextPayloadIntoRecord } from '@project-yahl/shared/yahl/storage-merge';
 
-import { taskYahlAbsolutePath } from '../tasks/-tasks-root';
+import { parseSessionYahlTask } from './-parse-session-yahl';
 
 const _countUniqueParsedStageIndices = (rows: { parsedStageIndex?: number }[]) => {
   const seen = new Set<number>();
@@ -28,8 +25,20 @@ const _countUniqueParsedStageIndices = (rows: { parsedStageIndex?: number }[]) =
 
 export class ForkPatchedPipelineError extends Error {}
 
-const _resolveLoopStageIndex = (parsedStages: TParsedStage[]) =>
-  parsedStages.findIndex((stage) => stage.type === 'loop');
+const _resolveLoopStageIndex = (
+  parsedStages: TParsedStage[],
+  anchorParsedStageIndex?: number,
+) => {
+  if (anchorParsedStageIndex != null) {
+    const atAnchor = parsedStages[anchorParsedStageIndex];
+
+    if (atAnchor?.type === 'loop' || atAnchor?.type === 'while') {
+      return anchorParsedStageIndex;
+    }
+  }
+
+  return parsedStages.findIndex((stage) => stage.type === 'loop' || stage.type === 'while');
+};
 
 const _resolveSetupSourceStartLine = (
   parsedStages: TParsedStage[],
@@ -135,11 +144,13 @@ export const deriveForkStorageSeed = (
   anchorSetup: TForkSessionStageSetup,
 ) => {
   const prefixRows = dedupeReplayRowsByStageSlot(replayRows.slice(0, anchorIndex));
-  const lastPrefix = prefixRows.at(-1);
 
-  let storageSeed: Record<string, unknown> = lastPrefix?.contextAfter
-    ? { ...lastPrefix.contextAfter }
-    : { context: {}, types: {} };
+  let storageSeed: Record<string, unknown> = { context: {}, types: {} };
+
+  for (const row of prefixRows) {
+    storageSeed = mergeContextPayloadIntoRecord(storageSeed, row.contextAfter)
+      ?? storageSeed;
+  }
 
   if (anchorSetup.context) {
     storageSeed = mergeContextPayloadIntoRecord(
@@ -158,12 +169,21 @@ export const buildForkPatchedParsedStages = (params: {
   setups: TForkSessionStageSetup[];
   taskId?: string;
   taskYahl: string;
+  taskYahlRefs?: Record<string, string>;
 }) => {
-  const { anchorIndex, anchorStageId, replayRows, setups, taskId, taskYahl } = params;
-  const taskRoot = taskId
-    ? path.dirname(taskYahlAbsolutePath(taskId))
-    : undefined;
-  const baselineStages = parseYahlTask(taskYahl, taskRoot ? { taskRoot } : {}).stages;
+  const {
+    anchorIndex,
+    anchorStageId,
+    replayRows,
+    setups,
+    taskId,
+    taskYahl,
+    taskYahlRefs,
+  } = params;
+  const baselineStages = parseSessionYahlTask(taskYahl, {
+    taskId,
+    taskYahlRefs,
+  }).stages;
   const nextStages = [...baselineStages];
   const anchorSetup = setups[0];
 
@@ -184,16 +204,51 @@ export const buildForkPatchedParsedStages = (params: {
     );
   }
 
-  const loopStageIndex = _resolveLoopStageIndex(baselineStages);
+  const loopStageIndex = _resolveLoopStageIndex(baselineStages, anchorParsedStageIndex);
   const loopStage = loopStageIndex >= 0 ? baselineStages[loopStageIndex] : undefined;
+  const anchorRow = replayRows.find((row) => row.stageId === anchorStageId)
+    ?? replayRows[anchorIndex];
+  const parentAtAnchor = baselineStages[anchorParsedStageIndex]!;
+  const nestedIndexFromMeta = anchorRow?.agentMeta?.nestedIndex;
+  const isNestedAnchor = (nestedIndexFromMeta != null
+    || Boolean(anchorRow?.agentMeta?.nestedPath?.trim()))
+    && Boolean(parentAtAnchor.nestedStages?.length);
 
-  nextStages[anchorParsedStageIndex] = _compileForkSetupParsedStage(
-    anchorSetup,
-    baselineStages,
-    anchorParsedStageIndex,
-    loopStageIndex,
-    loopStage,
-  );
+  let nestedIndex: number | undefined;
+
+  if (isNestedAnchor) {
+    const nestedStages = [...(parentAtAnchor.nestedStages ?? [])];
+    const resolvedNestedIndex = nestedIndexFromMeta
+      ?? nestedStages.findIndex((stage) => stage.spec.id === anchorSetup.stage.id);
+
+    if (resolvedNestedIndex < 0 || resolvedNestedIndex >= nestedStages.length) {
+      throw new ForkPatchedPipelineError(
+        `fork: nestedIndex ${resolvedNestedIndex} is out of range `
+        + `(nestedStages=${nestedStages.length})`,
+      );
+    }
+
+    nestedStages[resolvedNestedIndex] = _compileForkSetupParsedStage(
+      _withoutLoopMeta(anchorSetup),
+      nestedStages,
+      resolvedNestedIndex,
+      -1,
+      undefined,
+    );
+    nextStages[anchorParsedStageIndex] = {
+      ...parentAtAnchor,
+      nestedStages,
+    };
+    nestedIndex = resolvedNestedIndex;
+  } else {
+    nextStages[anchorParsedStageIndex] = _compileForkSetupParsedStage(
+      anchorSetup,
+      baselineStages,
+      anchorParsedStageIndex,
+      loopStageIndex,
+      loopStage,
+    );
+  }
 
   const seenLater = new Set<number>();
 
@@ -229,6 +284,7 @@ export const buildForkPatchedParsedStages = (params: {
 
   return {
     anchorParsedStageIndex,
+    ...(nestedIndex === undefined ? {} : { nestedIndex }),
     parsedStages: nextStages,
   };
 };

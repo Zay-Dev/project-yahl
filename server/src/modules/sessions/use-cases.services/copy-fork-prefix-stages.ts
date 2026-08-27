@@ -14,6 +14,7 @@ export const copyPrefixStagesToSession = async (
 
   await modelStage.insertMany(
     prefixRows.map((row) => ({
+      ...(row.agentMeta ? { agentMeta: row.agentMeta } : {}),
       context: row.context ?? {},
       contextAfter: row.contextAfter,
       finishedAt,

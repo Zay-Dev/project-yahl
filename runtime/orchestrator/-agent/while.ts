@@ -29,6 +29,8 @@ export type TWhileRunnerExtras = {
   loadPrefixMessages?: (requestId?: string) => Promise<ChatApiMessage[] | undefined>;
   prefixMessages?: ChatApiMessage[];
   skipWarmUp?: boolean;
+  startIteration?: number;
+  startNestedIndex?: number;
   systemAppend?: string;
   warmupRequestId?: string;
 };
@@ -201,8 +203,12 @@ export const handleWhile = async (
   const warmUp = stage.spec.warmUp?.trim();
   const loadPrefix = extras?.loadPrefixMessages ?? loadWarmupPrefixMessages;
   let warmupPrefix = extras?.prefixMessages;
+  const startIteration = extras?.startIteration ?? 0;
+  const startNestedIndex = extras?.startNestedIndex;
+  const isResumeEntry = extras?.startIteration != null || startNestedIndex != null;
+  const skipWarmUp = extras?.skipWarmUp === true || isResumeEntry;
 
-  const runBody = (iteration: number) => {
+  const runBody = (iteration: number, nestedStart?: number) => {
     const loopMeta: TLoopMeta = {
       arraySnapshot: [],
       index: iteration,
@@ -223,6 +229,7 @@ export const handleWhile = async (
         recoveryStages,
         {
           loopMeta,
+          ...(nestedStart === undefined ? {} : { startNestedIndex: nestedStart }),
           ...(warmupPrefix ? { prefixMessages: warmupPrefix } : {}),
           ...(extras?.systemAppend ? { systemAppend: extras.systemAppend } : {}),
         },
@@ -247,7 +254,7 @@ export const handleWhile = async (
   };
 
   if (warmUp) {
-    if (extras?.skipWarmUp === true) {
+    if (skipWarmUp) {
       warmupPrefix = warmupPrefix
         ?? await loadWarmupPrefixForParsedStage(pipelineStageIndex)
         ?? await loadPrefix(extras?.warmupRequestId);
@@ -292,7 +299,7 @@ export const handleWhile = async (
     }
   }
 
-  let iteration = 0;
+  let iteration = startIteration;
   let lastRequestId: string | undefined;
 
   while (remainingTurns >= 1) {
@@ -314,14 +321,19 @@ export const handleWhile = async (
     });
 
     if (iteration >= doAtLeast) {
-      const shouldContinue = await runPredicateScript(condition, storage);
+      if (!(isResumeEntry && iteration === startIteration)) {
+        const shouldContinue = await runPredicateScript(condition, storage);
 
-      if (!shouldContinue) {
-        break;
+        if (!shouldContinue) {
+          break;
+        }
       }
     }
 
-    const result = await runBody(iteration);
+    const nestedStart = iteration === startIteration
+      ? startNestedIndex
+      : undefined;
+    const result = await runBody(iteration, nestedStart);
     lastRequestId = result.requestId;
     const outcome = applySegmentOutcome(storage, remainingTurns, remainingBashCalls, result);
 

@@ -1,25 +1,75 @@
 stages:
-  - id: poll
+  - id: submit_wait
+    maxTurns: 14
+    maxBashCalls: 12
+    contextKeys:
+      [
+        url_bound_od,
+        origin_ok,
+        dest_ok,
+        page_ready,
+        traffic_source,
+        source_ops_md,
+        routes_ready,
+      ]
+    updateContextKeys: [routes_ready]
     logic: |
-      IF: verify_feedback;
-        day_page_sections = [];
-        *set_context(day_page_sections);
+      IF: url_bound_od;
+        Wait until ≤3 private-car route cards are visible (observe/act; do not pass url on act/extract).
+        routes_ready = true;
+        *set_context(routes_ready);
+      ELSE:
+        Prefer scripted search/submit when present.
+        Else Stagehand: submit directions search; wait for route cards (no page reload via url).
+        routes_ready = true when cards visible;
+        *set_context(routes_ready);
       END:
-      const bind_origin = origin_resolved || origin;
-      const bind_destination = destination_resolved || destination;
-      const label_origin = origin_display || origin;
-      const label_destination = destination_display || destination;
-      const fetch = *fetch_driving_routes(
-        origin: bind_origin,
-        destination: bind_destination,
-        mode: private_car_driving,
-        max_routes: 3,
-        source: traffic_source,
+
+  - id: extract
+    maxTurns: 20
+    maxBashCalls: 16
+    contextKeys:
+      [
+        routes_ready,
+        bind_origin,
+        bind_destination,
+        label_origin,
+        label_destination,
+        bound_url,
+        traffic_source,
+        source_ops_md,
+        prev_routes,
+        miss_count,
+        day_page,
+        day_page_sections,
+        started_at,
+        monitor_minutes,
+        timezone,
+        TTrafficFetch,
+      ]
+    updateContextKeys:
+      [
+        last_fetch,
+        poll_miss,
+        miss_count,
+        day_page_sections,
+        source_ops_md,
+        sleep_sec,
+      ]
+    logic: |
+      Prefer ~/data/scripts/extract-routes-normalize.js when present; else Stagehand extract ≤3 routes + incident_note.
+      const fetch = *normalize_traffic_fetch(
+        extracted_routes,
+        fetched_at: now_iso,
+        source_url: bound_url,
         as: TTrafficFetch,
       );
+      OD chips must match bind names — mismatch or empty routes → miss.
       IF: *fetch_failed(fetch);
+        poll_miss = true;
+        last_fetch = fetch;
         miss_count = miss_count + 1;
-        *set_context(miss_count);
+        *set_context(poll_miss, last_fetch, miss_count);
         const miss_section = *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone);
         *extend_context(day_page_sections, value: miss_section);
         /nixery(
@@ -30,14 +80,53 @@ stages:
           content: miss_section,
         );
         *submit_novel_ops(miss: true, fetch: fetch, source: traffic_source, source_ops_md);
-        const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
+        sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
+        *set_context(sleep_sec);
       ELSE:
-        const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, ~/task-skills/route-analysis/SKILL.md);
-        const fetch_with_status = { ...fetch, ...analysis.patch };
+        poll_miss = false;
+        last_fetch = fetch;
+        *set_context(poll_miss, last_fetch);
+      END:
+
+  - id: analyze
+    maxTurns: 30
+    maxBashCalls: 20
+    contextKeys:
+      [
+        poll_miss,
+        last_fetch,
+        label_origin,
+        label_destination,
+        prev_routes,
+        prev_incident_note,
+        poll_success_count,
+        fetches,
+        day_page,
+        day_page_sections,
+        timezone,
+        TTrafficFetch,
+        TRouteSample,
+      ]
+    updateContextKeys:
+      [
+        last_analysis,
+        fetches,
+        prev_routes,
+        poll_success_count,
+        day_page_sections,
+        prev_incident_note,
+        last_fetch,
+      ]
+    logic: |
+      IF: !poll_miss;
+        const analysis = *analyze_routes(last_fetch, prev_routes, prev_incident_note, ~/task-skills/route-analysis/SKILL.md);
+        const fetch_with_status = { ...last_fetch, ...analysis.patch };
+        last_analysis = analysis;
+        last_fetch = fetch_with_status;
         *extend_context(fetches, value: fetch_with_status);
         prev_routes = fetch_with_status.routes;
         poll_success_count = poll_success_count + 1;
-        *set_context(prev_routes, poll_success_count);
+        *set_context(last_analysis, last_fetch, prev_routes, poll_success_count);
         const section_md = *format_fetch_section(fetch_with_status, analysis, origin: label_origin, destination: label_destination, timezone: timezone);
         *extend_context(day_page_sections, value: section_md);
         /nixery(
@@ -47,23 +136,54 @@ stages:
           mode: append,
           content: section_md,
         );
+        prev_incident_note = analysis.incident_note || '';
+        *set_context(prev_incident_note);
+      END:
+
+  - id: notify_and_sleep
+    maxTurns: 24
+    maxBashCalls: 16
+    contextKeys:
+      [
+        poll_miss,
+        last_fetch,
+        last_analysis,
+        poll_success_count,
+        summary_notified,
+        notifications,
+        notifyChannel,
+        notifyTo,
+        notifyPreference,
+        notifyName,
+        started_at,
+        last_heartbeat_at,
+        label_origin,
+        label_destination,
+        sleep_sec,
+        monitor_minutes,
+        traffic_source,
+        source_ops_md,
+      ]
+    updateContextKeys:
+      [summary_notified, notifications, last_heartbeat_at, sleep_sec, source_ops_md]
+    logic: |
+      IF: !poll_miss;
         IF: poll_success_count <== 2 && !summary_notified;
-          *propose_kind_a_summary(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
+          *propose_kind_a_summary(last_fetch, last_analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
           summary_notified = poll_success_count >== 2;
           *set_context(summary_notified, notifications);
         END:
         IF: *heartbeat_due(notifyPreference, started_at, last_heartbeat_at);
-          *propose_kind_b_heartbeat(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
+          *propose_kind_b_heartbeat(last_fetch, last_analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
           last_heartbeat_at = new Date().toISOString();
           *set_context(last_heartbeat_at, notifications);
         END:
-        IF: poll_success_count >= 2 && analysis.should_notify_abnormal;
-          *propose_kind_c_abnormal(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
+        IF: poll_success_count >= 2 && last_analysis.should_notify_abnormal;
+          *propose_kind_c_abnormal(last_fetch, last_analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
           *set_context(notifications);
         END:
-        prev_incident_note = analysis.incident_note || '';
-        *set_context(prev_incident_note);
-        *submit_novel_ops(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis, source_ops_md);
-        const sleep_sec = *adaptive_sleep_sec(fetch_with_status, prev_primary_eta: analysis.prev_primary_eta, started_at, monitor_minutes);
+        *submit_novel_ops(miss: false, fetch: last_fetch, source: traffic_source, analysis: last_analysis, source_ops_md);
+        sleep_sec = *adaptive_sleep_sec(last_fetch, prev_primary_eta: last_analysis.prev_primary_eta, started_at, monitor_minutes);
+        *set_context(sleep_sec);
       END:
       *run_bash(sleep ${sleep_sec});

@@ -93,7 +93,7 @@ const yahlStageSchemaLazy: Joi.ObjectSchema<TYahlStage> = Joi.object<TYahlStage>
   produceContextKeys: stringArraySchema.optional(),
   produceTypeKeys: stringArraySchema.optional(),
   stagehand: stagehandConfigSchema.optional(),
-  subAgent: Joi.boolean().optional(),
+  mainThread: Joi.boolean().optional(),
   temperature: Joi.number().min(0).max(2).optional(),
   updateContextKeys: stringArraySchema.optional(),
   verify: verifySpecSchema.optional(),
@@ -189,7 +189,7 @@ const yahlStageSchemaLazy: Joi.ObjectSchema<TYahlStage> = Joi.object<TYahlStage>
 export const yahlStageSchema = yahlStageSchemaLazy;
 
 export const agentMetaSchema = Joi.object({
-  isSubAgent: Joi.boolean().required(),
+  isMainThread: Joi.boolean().required(),
   nestedIndex: Joi.number().integer().min(0).optional(),
   nestedPath: Joi.string().trim().optional(),
   parallelGroupId: Joi.string().trim().optional(),

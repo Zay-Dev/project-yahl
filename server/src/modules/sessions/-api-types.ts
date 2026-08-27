@@ -112,6 +112,7 @@ export type TResponseStageReplayVerifyResult = {
 };
 
 export type TResponseStageReplayItem = {
+  agentMeta?: TStageAgentMeta;
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
   finishedAt?: string;

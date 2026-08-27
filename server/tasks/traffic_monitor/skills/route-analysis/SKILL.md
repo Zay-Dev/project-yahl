@@ -10,7 +10,7 @@ Resolve brands/abbrevs/malls before probe. Prefer `origin_resolved` / `destinati
 
 Browser against goto rebuilt every poll from resolved OD + `traffic_source.howto_md` + `source_ops_md` (already in Input when allowlisted). Core `howto_md` stays OD-generic. Maps fallback → `/opt/skills/google-maps-directions/SKILL.md`.
 
-**Scripts:** prefer reuse of `~/data/scripts/` ops when present. Browser fetch should be **agent-free**: `echo '{…}' | node ~/data/scripts/….js` that calls `yahl-browser` — not a long stage-agent `browser` click loop. Before inventing a new script or growing a fat one: if a consult gate skill is available under `/opt/skills/`, follow it once (stage-logic summary + short plan + need) — implement **only** the advised `scriptId` (or skip). Prefer small companions (`fill-origin-input.js`, `extract-routes-normalize.js`, …) over whole-fetch monoliths. After one-shot `browser` recovery, rewrite the failing script **this poll**.
+Prefer `~/data/scripts/` (see monitor-loop). After one-shot `browser` recovery, rewrite the failing script **this poll**. Prefer small companions (`fill-origin-input.js`, `extract-routes-normalize.js`, …) over whole-fetch monoliths.
 
 Directions URL: placeholder templates only; bind with deterministic `encodeURIComponent` (node one-liner). Prefer English names in URL when needed; local-script for labels/notify. No SPA `data=!…` URLs. OD chip mismatch → fetch miss. **≤ 2** browser attempts per poll/probe.
 

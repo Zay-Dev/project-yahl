@@ -48,17 +48,19 @@ export function StageDetailPanel({
         />
       </div>
       {detail.loopMeta ? <StageLoopMeta loopMeta={detail.loopMeta} /> : null}
-      {detail.agentMeta ? (
+      {detail.agentMeta?.isMainThread === true || detail.agentMeta?.nestedPath ? (
         <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-          {detail.agentMeta.isSubAgent
-            ? "Sub-agent (isolated chat history)"
-            : "Main thread (chat merges into parent)"}
-          {detail.agentMeta.nestedPath
-            ? ` · ${detail.agentMeta.nestedPath}`
-            : null}
-          {detail.agentMeta.parentRequestId
-            ? ` · parent ${detail.agentMeta.parentRequestId}`
-            : null}
+          {[
+            detail.agentMeta.isMainThread === true
+              ? "Main thread (chat merges into nested pipeline)"
+              : null,
+            detail.agentMeta.nestedPath,
+            detail.agentMeta.parentRequestId
+              ? `parent ${detail.agentMeta.parentRequestId}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </div>
       ) : null}
       <StageContextCompare

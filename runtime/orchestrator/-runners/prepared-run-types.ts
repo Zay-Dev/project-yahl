@@ -6,6 +6,7 @@ export type TRunStartCursor = {
   completedRequestId?: string;
   loopContinueOnly?: boolean;
   loopMeta?: TLoopMeta;
+  nestedIndex?: number;
   produceKeysResumeAttempt?: boolean;
   repairInstruction?: string;
   resumeStage?: {

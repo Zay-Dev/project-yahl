@@ -24,7 +24,7 @@ import { validateForkSourceBundle, ForkSourceBundleError } from '../-fork-source
 import { resolveSessionStagesReplay } from './stage-read';
 import { spawnOrchestrate } from './spawn-orchestrate';
 import { copyPrefixStagesToSession } from '../use-cases.services/copy-fork-prefix-stages';
-import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
+import { parseSessionYahlTask } from '../-parse-session-yahl';
 
 export type TRequestCreateForkSessionParams = {
   sessionId: string;
@@ -183,22 +183,28 @@ export const createForkSession = [
         throw errors.badRequest('Source session missing taskYahl snapshot');
       }
 
-      const { runInputContextKeys } = parseYahlTask(taskYahl);
+      const parseOpts = {
+        taskId: sourceSession.taskId ?? sourceTaskId,
+        taskYahlRefs: sourceSession.taskYahlRefs,
+      };
+      const { runInputContextKeys } = parseSessionYahlTask(taskYahl, parseOpts);
       const runInputKeys = runInputContextKeys ?? [];
 
       const anchorSetup = setups[0]!;
 
       let anchorParsedStageIndex: number;
+      let nestedIndex: number | undefined;
       let parsedStages: TParsedStage[];
 
       try {
-        ({ anchorParsedStageIndex, parsedStages } = buildForkPatchedParsedStages({
+        ({ anchorParsedStageIndex, nestedIndex, parsedStages } = buildForkPatchedParsedStages({
           anchorIndex,
           anchorStageId: body.anchorStageId,
           replayRows,
           setups,
-          taskId: sourceSession.taskId,
+          taskId: parseOpts.taskId,
           taskYahl,
+          taskYahlRefs: parseOpts.taskYahlRefs,
         }));
       } catch (error) {
         if (error instanceof ForkPatchedPipelineError) {
@@ -241,6 +247,8 @@ export const createForkSession = [
             parsedStages,
             runCursor: {
               kind: 'pipeline',
+              ...(anchorSetup.loopMeta ? { loopMeta: anchorSetup.loopMeta } : {}),
+              ...(nestedIndex === undefined ? {} : { nestedIndex }),
               stageIndex: anchorParsedStageIndex,
             },
             runInput: patchedRunInput,
@@ -248,6 +256,9 @@ export const createForkSession = [
             taskId: sourceTaskId,
             taskSkills: sourceSession.taskSkills,
             taskYahl: sourceSession.taskYahl,
+            ...(sourceSession.taskYahlRefs
+              ? { taskYahlRefs: sourceSession.taskYahlRefs }
+              : {}),
             updatedAt: now,
             ...(sourceSession.resultContextKey
               ? { resultContextKey: sourceSession.resultContextKey }

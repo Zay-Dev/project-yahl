@@ -40,6 +40,7 @@ export type TResponsePatchSession = {
 const runCursorSchema = Joi.object<TSessionRunCursor>({
   kind: Joi.string().valid('pipeline', 'repair').required(),
   loopMeta: Joi.any().optional(),
+  nestedIndex: Joi.number().integer().min(0).optional(),
   repairInstruction: Joi.string().trim().optional(),
   stageIndex: Joi.number().integer().min(0).required(),
 });

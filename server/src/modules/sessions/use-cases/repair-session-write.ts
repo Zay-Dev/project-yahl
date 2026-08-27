@@ -22,7 +22,7 @@ import { validateForkSourceBundle, ForkSourceBundleError } from '../-fork-source
 import { resolveSessionStagesReplay } from './stage-read';
 import { spawnOrchestrate } from './spawn-orchestrate';
 import { copyPrefixStagesToSession } from '../use-cases.services/copy-fork-prefix-stages';
-import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
+import { parseSessionYahlTask } from '../-parse-session-yahl';
 import { patchRunInputFromStorageSeed } from './fork-session-write';
 
 export type TRequestCreateRepairSessionParams = {
@@ -116,7 +116,12 @@ export const createRepairSession = [
         throw errors.badRequest('Source session missing taskYahl snapshot');
       }
 
-      const parsedStages = sourceSession.parsedStages ?? parseYahlTask(taskYahl).stages;
+      const parseOpts = {
+        taskId: sourceSession.taskId ?? sourceTaskId,
+        taskYahlRefs: sourceSession.taskYahlRefs,
+      };
+      const parsedStages = sourceSession.parsedStages
+        ?? parseSessionYahlTask(taskYahl, parseOpts).stages;
 
       if (!parsedStages.length) {
         throw errors.badRequest('Source session missing parsedStages');
@@ -141,7 +146,7 @@ export const createRepairSession = [
         stageId: anchorRow.stageId,
       };
 
-      const { runInputContextKeys } = parseYahlTask(taskYahl);
+      const { runInputContextKeys } = parseSessionYahlTask(taskYahl, parseOpts);
       const runInputKeys = runInputContextKeys ?? [];
       const storageSeed = deriveForkStorageSeed(replayRows, anchorIndex, anchorSetup);
       const prefixRows = prefixRowsForForkCopy(replayRows, anchorIndex);
@@ -187,6 +192,9 @@ export const createRepairSession = [
             taskId: sourceTaskId,
             taskSkills: sourceSession.taskSkills,
             taskYahl: sourceSession.taskYahl,
+            ...(sourceSession.taskYahlRefs
+              ? { taskYahlRefs: sourceSession.taskYahlRefs }
+              : {}),
             updatedAt: now,
             ...(sourceSession.resultContextKey
               ? { resultContextKey: sourceSession.resultContextKey }

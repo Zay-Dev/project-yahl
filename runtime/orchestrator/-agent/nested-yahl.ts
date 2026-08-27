@@ -6,13 +6,14 @@ import type { TRunYahl } from './-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 
 import type { TStageAgentMeta } from '@project-yahl/shared/yahl/types';
-import { resolveSubAgentFlag } from '@project-yahl/shared/yahl/logic';
+import { resolveMainThreadFlag } from '@project-yahl/shared/yahl/logic';
 import { asLogicScript } from '@project-yahl/shared/yahl/logic';
 
 import {
   filterStageBucket,
   pickContextUpdates,
   seedDefaultContext,
+  PLATFORM_CONTEXT_KEYS,
 } from '@/orchestrator/-context';
 import { toLoopIterationStage } from '@/orchestrator/-utils/yahl';
 import { seedKnowledgeToScriptNotes } from '@project-yahl/shared/yahl/knowledge-to-script';
@@ -27,6 +28,7 @@ export type TNestedYahlExtras = {
   loopMeta?: TLoopMeta;
   parentRequestId?: string;
   prefixMessages?: ChatApiMessage[];
+  startNestedIndex?: number;
   systemAppend?: string;
 };
 
@@ -43,10 +45,11 @@ const mergeStageUpdates = (
     ...(stage.produceContextKeys ?? []),
   ];
 
-  const updates = pickContextUpdates(
-    Object.fromEntries(nestedContext),
-    keys.length ? keys : undefined,
-  );
+  if (!keys.length) {
+    return;
+  }
+
+  const updates = pickContextUpdates(Object.fromEntries(nestedContext), keys);
 
   for (const key of Object.keys(updates)) {
     storage.context.set(
@@ -69,6 +72,13 @@ const nestedPathFor = (
   return `${parentId}/${childId}`;
 };
 
+const childContextKeys = (child: ParsedStage): string[] =>
+  child.contextKeys?.length
+    ? child.contextKeys
+    : child.spec.contextKeys?.length
+      ? child.spec.contextKeys
+      : [...PLATFORM_CONTEXT_KEYS];
+
 const toBudgetedNestedStage = (
   parent: ParsedStage,
   child: ParsedStage,
@@ -76,32 +86,36 @@ const toBudgetedNestedStage = (
   remainingBashCalls: number,
 ): ParsedStage => {
   const logic = asLogicScript(child.spec.logic);
+  const turnsCap = child.spec.maxTurns != null
+    ? Math.min(child.spec.maxTurns, remainingTurns)
+    : remainingTurns;
+  const bashCap = child.spec.maxBashCalls != null
+    ? Math.min(child.spec.maxBashCalls, remainingBashCalls)
+    : remainingBashCalls;
+  const contextKeys = childContextKeys(child);
+  const updateContextKeys = child.updateContextKeys
+    ?? child.spec.updateContextKeys;
+  const produceContextKeys = child.produceContextKeys
+    ?? child.spec.produceContextKeys;
+
   const spec = {
     ...child.spec,
     logic,
-    maxBashCalls: remainingBashCalls,
-    maxTurns: remainingTurns,
+    maxBashCalls: bashCap,
+    maxTurns: turnsCap,
     verify: undefined,
-    ...(child.spec.goto?.length ? {} : parent.spec.goto?.length ? { goto: parent.spec.goto } : {}),
+    contextKeys,
+    ...(updateContextKeys?.length ? { updateContextKeys } : {}),
+    ...(produceContextKeys?.length ? { produceContextKeys } : {}),
+    ...(child.spec.goto?.length
+      ? {}
+      : parent.spec.goto?.length
+        ? { goto: parent.spec.goto }
+        : {}),
     ...(child.spec.agentOverrides
       ? {}
       : parent.spec.agentOverrides
         ? { agentOverrides: parent.spec.agentOverrides }
-        : {}),
-    ...(child.contextKeys?.length
-      ? {}
-      : parent.contextKeys?.length
-        ? { contextKeys: parent.contextKeys }
-        : {}),
-    ...(child.updateContextKeys?.length
-      ? {}
-      : parent.updateContextKeys?.length
-        ? { updateContextKeys: parent.updateContextKeys }
-        : {}),
-    ...(child.produceContextKeys?.length
-      ? {}
-      : parent.produceContextKeys?.length
-        ? { produceContextKeys: parent.produceContextKeys }
         : {}),
   };
 
@@ -110,9 +124,9 @@ const toBudgetedNestedStage = (
       ...child,
       nestedStages: undefined,
       spec,
-      ...(spec.contextKeys ? { contextKeys: spec.contextKeys } : {}),
-      ...(spec.updateContextKeys ? { updateContextKeys: spec.updateContextKeys } : {}),
-      ...(spec.produceContextKeys ? { produceContextKeys: spec.produceContextKeys } : {}),
+      contextKeys,
+      ...(updateContextKeys?.length ? { updateContextKeys } : {}),
+      ...(produceContextKeys?.length ? { produceContextKeys } : {}),
     },
     logic,
   );
@@ -133,16 +147,20 @@ export const runNestedYahl = async (
     throw new Error('runNestedYahl: parent has no nestedStages');
   }
 
-  const isSubAgent = resolveSubAgentFlag(parent.spec) !== false;
   const parentRequestId = extras?.parentRequestId ?? randomUUID();
+  const warmupPrefix = extras?.prefixMessages;
+  let mainThreadPrefix = warmupPrefix;
   let remainingTurns = parent.spec.maxTurns ?? DEFAULT_MAX_TURNS;
   let remainingBashCalls = parent.spec.maxBashCalls ?? DEFAULT_MAX_BASH_CALLS;
-  let prefixMessages = extras?.prefixMessages;
   let lastRequestId: string | undefined;
   let totalTurns = 0;
   let totalBashCalls = 0;
 
   for (let index = 0; index < nestedStages.length; index += 1) {
+    if (index < (extras?.startNestedIndex ?? 0)) {
+      continue;
+    }
+
     const child = nestedStages[index]!;
 
     if (remainingTurns < 1) {
@@ -152,20 +170,31 @@ export const runNestedYahl = async (
     seedDefaultContext(storage);
     seedKnowledgeToScriptNotes(storage);
 
+    const onMainThread = resolveMainThreadFlag(child.spec);
     const logic = asLogicScript(child.spec.logic);
+    const contextKeys = childContextKeys(child);
+    const updateContextKeys = child.updateContextKeys
+      ?? child.spec.updateContextKeys;
+    const produceContextKeys = child.produceContextKeys
+      ?? child.spec.produceContextKeys;
+
     const stageInput = filterStageBucket(
       logic,
       Object.fromEntries(storage.context),
       {
         ...child,
-        contextKeys: child.contextKeys ?? parent.contextKeys,
-        updateContextKeys: child.updateContextKeys ?? parent.updateContextKeys,
-        produceContextKeys: child.produceContextKeys ?? parent.produceContextKeys,
+        contextKeys,
+        ...(updateContextKeys?.length ? { updateContextKeys } : {}),
+        ...(produceContextKeys?.length ? { produceContextKeys } : {}),
       },
     );
 
+    const childPrefix = onMainThread
+      ? mainThreadPrefix
+      : warmupPrefix;
+
     const agentMeta: TStageAgentMeta = {
-      isSubAgent,
+      isMainThread: onMainThread,
       nestedIndex: index,
       nestedPath: nestedPathFor(parent, child, index),
       parentRequestId,
@@ -184,7 +213,7 @@ export const runNestedYahl = async (
         ...(pipelineStageIndex === undefined ? {} : { pipelineStageIndex }),
         ...(pipelineStageIndex === undefined ? {} : { parsedStageIndex: pipelineStageIndex }),
         ...(recoveryStages === undefined ? {} : { recoveryStages }),
-        ...(prefixMessages && !isSubAgent ? { prefixMessages } : {}),
+        ...(childPrefix?.length ? { prefixMessages: childPrefix } : {}),
         ...(extras?.systemAppend ? { systemAppend: extras.systemAppend } : {}),
         useStorage: () => ({
           context: new Map(Object.entries(stageInput)),
@@ -196,8 +225,8 @@ export const runNestedYahl = async (
     mergeStageUpdates(
       {
         ...child,
-        updateContextKeys: child.updateContextKeys ?? parent.updateContextKeys,
-        produceContextKeys: child.produceContextKeys ?? parent.produceContextKeys,
+        ...(updateContextKeys?.length ? { updateContextKeys } : { updateContextKeys: [] }),
+        ...(produceContextKeys?.length ? { produceContextKeys } : { produceContextKeys: [] }),
       },
       storage,
       result.storage.context,
@@ -229,8 +258,9 @@ export const runNestedYahl = async (
       };
     }
 
-    if (!isSubAgent && result.requestId) {
-      prefixMessages = await loadWarmupPrefixMessages(result.requestId) ?? prefixMessages;
+    if (onMainThread && result.requestId) {
+      mainThreadPrefix = await loadWarmupPrefixMessages(result.requestId)
+        ?? mainThreadPrefix;
     }
   }
 

@@ -1,71 +1,54 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import { parseYahlTask } from './parse-task.js';
-import { assertSafeYahlRefPath, isNestedLogic, isYahlLogicRef } from './logic.js';
-import { validateYahlStage } from './validate-stage.js';
+import { validateYahlStage } from './validate-stage';
+import { resolveMainThreadFlag } from './logic';
 
-describe('polymorphic logic', () => {
-  it('validates string logic unchanged', () => {
-    const stage = validateYahlStage({ logic: 'const x = 1;' });
-
-    assert.equal(stage.logic, 'const x = 1;');
-    assert.equal(stage.subAgent, undefined);
-  });
-
-  it('defaults subAgent true for inline fragment', () => {
+describe('mainThread', () => {
+  it('defaults nested stages to isolated (mainThread false)', () => {
     const stage = validateYahlStage({
-      logic: {
-        stages: [{ logic: 'const a = 1;' }],
-      },
-    });
+      id: 'fetch',
+      logic: 'x = 1;',
+    }, 0, { nested: true });
 
-    assert.equal(stage.subAgent, true);
-    assert.ok(isNestedLogic(stage.logic));
+    assert.equal(stage.mainThread, undefined);
+    assert.equal(resolveMainThreadFlag(stage), false);
   });
 
-  it('honors subAgent false for $ref', () => {
+  it('honors mainThread true on nested stages', () => {
     const stage = validateYahlStage({
-      logic: { $ref: 'stages/monitor.yahl' },
-      subAgent: false,
-    });
+      id: 'step',
+      logic: 'x = 1;',
+      mainThread: true,
+    }, 0, { nested: true });
 
-    assert.equal(stage.subAgent, false);
-    assert.ok(isYahlLogicRef(stage.logic));
+    assert.equal(stage.mainThread, true);
+    assert.equal(resolveMainThreadFlag(stage), true);
   });
 
-  it('rejects unsafe $ref paths', () => {
-    assert.throws(() => assertSafeYahlRefPath('../x.yahl', 'logic'));
-    assert.throws(() => assertSafeYahlRefPath('/abs/x.yahl', 'logic'));
-  });
-
-  it('resolves $ref at parse time with taskRoot', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'yahl-ref-'));
-    mkdirSync(path.join(root, 'stages'));
-    writeFileSync(
-      path.join(root, 'stages', 'body.yahl'),
-      'stages:\n  - id: inner\n    logic: |\n      const ok = 1;\n',
-      'utf8',
+  it('rejects mainThread on fragment/$ref shells', () => {
+    assert.throws(
+      () => validateYahlStage({
+        logic: { stages: [{ logic: 'a = 1;' }] },
+        mainThread: true,
+      }),
+      /mainThread/,
     );
-    const skillText = [
-      'name: ref_task',
-      'description: test',
-      'stages:',
-      '  - id: shell',
-      '    logic:',
-      '      $ref: stages/body.yahl',
-    ].join('\n');
-    writeFileSync(path.join(root, 'SKILL.yaml'), skillText, 'utf8');
+  });
 
-    const { stages, yahlRefs } = parseYahlTask(skillText, { taskRoot: root });
+  it('rejects removed subAgent field', () => {
+    assert.throws(
+      () => validateYahlStage({
+        logic: 'a = 1;',
+        subAgent: true,
+      }),
+      /subAgent/,
+    );
+  });
 
-    assert.equal(stages.length, 1);
-    assert.ok(stages[0]?.nestedStages?.length);
-    assert.equal(stages[0]?.nestedStages?.[0]?.spec.id, 'inner');
-    assert.ok(yahlRefs?.['stages/body.yahl']);
-    assert.equal(readFileSync(path.join(root, 'SKILL.yaml'), 'utf8'), skillText);
+  it('defaults string shell without mainThread', () => {
+    const stage = validateYahlStage({ logic: 'a = 1;' });
+
+    assert.equal(stage.mainThread, undefined);
   });
 });

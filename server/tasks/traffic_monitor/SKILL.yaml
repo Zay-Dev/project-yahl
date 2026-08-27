@@ -384,10 +384,17 @@ stages:
       END:
 
   - contextMode: true
-    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count]
-    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count]
+    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display]
+    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, bind_origin, bind_destination, label_origin, label_destination]
     logic: |
       (() => {
+        const origin = String(context.context.origin || '');
+        const destination = String(context.context.destination || '');
+        const bind_origin = String(context.context.origin_resolved || '') || origin;
+        const bind_destination = String(context.context.destination_resolved || '') || destination;
+        const label_origin = String(context.context.origin_display || '') || origin;
+        const label_destination = String(context.context.destination_display || '') || destination;
+        const od = { bind_origin, bind_destination, label_origin, label_destination };
         const existing = context.context.started_at;
         if (existing && String(existing).trim()) {
           return {
@@ -402,6 +409,7 @@ stages:
             last_heartbeat_at: String(context.context.last_heartbeat_at || ''),
             prev_incident_note: String(context.context.prev_incident_note || ''),
             poll_success_count: Number(context.context.poll_success_count) || 0,
+            ...od,
           };
         }
         const started_at = new Date().toISOString();
@@ -420,6 +428,7 @@ stages:
           last_heartbeat_at: '',
           prev_incident_note: '',
           poll_success_count: 0,
+          ...od,
         };
       });
 
@@ -427,8 +436,8 @@ stages:
     goto:
       - command: '/stage(explorer)'
         description: 'when the cached/locked traffic source is no longer available or usable'
-    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, city_slug, source_instruction, instruction_active, verify_feedback, TTrafficFetch, TRouteSample, TMonitorResult]
-    updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count, day_page_sections]
+    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, city_slug, source_instruction, instruction_active, verify_feedback, TTrafficFetch, TRouteSample, TMonitorResult, poll_miss, last_fetch, last_analysis, sleep_sec, bind_origin, bind_destination, label_origin, label_destination, bound_url, url_bound_od, page_ready, origin_ok, dest_ok, routes_ready]
+    updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count, day_page_sections, poll_miss, last_fetch, last_analysis, sleep_sec, bind_origin, bind_destination, bound_url, url_bound_od, page_ready, origin_ok, dest_ok, routes_ready]
     agentOverrides:
       bashTimeoutMs: 360000
     maxBashCalls: 120
@@ -444,18 +453,47 @@ stages:
         *read(source_instruction);
       END:
       *read(source_ops_md);
-      const bind_origin = origin_resolved || origin;
-      const bind_destination = destination_resolved || destination;
-      const label_origin = origin_display || origin;
-      const label_destination = destination_display || destination;
+      IF: verify_feedback;
+        day_page_sections = [];
+        *set_context(day_page_sections);
+      END:
+      const src_url = String(traffic_source.url || '');
+      url_bound_od = src_url.includes('{origin}') && src_url.includes('{destination}');
+      IF: url_bound_od;
+        bound_url = *run_bash(node -e "const u=process.argv[1],o=process.argv[2],d=process.argv[3];process.stdout.write(u.replaceAll('{origin}',encodeURIComponent(o)).replaceAll('{destination}',encodeURIComponent(d)))" -- "${src_url}" "${bind_origin}" "${bind_destination}");
+      ELSE:
+        bound_url = src_url;
+      END:
+      *set_context(bound_url, url_bound_od);
+      Prefer ~/data/scripts/ when present (yahl-browser goto). Else Stagehand goto bound_url.
+      Open bound_url; confirm private-car / driving mode (not transit/walk/bike).
+      page_ready = true;
+      *set_context(page_ready);
+      IF: url_bound_od;
+        origin_ok = true;
+        *set_context(origin_ok);
+      ELSE:
+        Prefer ~/data/scripts/fill-origin-input.js / pick-origin companions when present.
+        Else Stagehand act/observe: type bind_origin; pick autocomplete matching district+landmark (reject hub drift).
+        origin_ok = true when chip/field matches bind_origin;
+        *set_context(origin_ok);
+      END:
+      IF: url_bound_od;
+        dest_ok = true;
+        *set_context(dest_ok);
+      ELSE:
+        Prefer ~/data/scripts/fill-destination companions when present.
+        Else Stagehand act/observe: type bind_destination; pick matching suggestion.
+        dest_ok = true when chip/field matches bind_destination;
+        *set_context(dest_ok);
+      END:
       Do not fetch, notify, append day-page, or sleep.
-    subAgent: true
     logic:
       $ref: stages/monitor.yahl
     verify:
       defId: stage-verify
       autoRetry: true
-      skipWarmUp: true
+      skipWarmUp: false
       minScore: 0.75
       rubric: |
         Pass when started_at is set and unchanged,

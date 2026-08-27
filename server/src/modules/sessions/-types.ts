@@ -83,7 +83,7 @@ export type TYahlStage = {
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   stagehand?: TYahlStagehandConfig;
-  subAgent?: boolean;
+  mainThread?: boolean;
   temperature?: number;
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
@@ -93,7 +93,7 @@ export type TYahlStage = {
 };
 
 export type TStageAgentMeta = {
-  isSubAgent: boolean;
+  isMainThread: boolean;
   nestedIndex?: number;
   nestedPath?: string;
   parallelGroupId?: string;
@@ -123,6 +123,7 @@ export type TSessionForkedFrom = {
 export type TSessionRunCursor = {
   kind: 'pipeline' | 'repair';
   loopMeta?: TStageLoopMeta;
+  nestedIndex?: number;
   repairInstruction?: string;
   stageIndex: number;
 };

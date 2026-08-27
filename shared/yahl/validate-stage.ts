@@ -636,12 +636,28 @@ const assertStageFields = (
     }
   }
 
-  if (stage.subAgent !== undefined && typeof stage.subAgent !== 'boolean') {
-    throw new Error(`${label}.subAgent: must be a boolean when present`);
+  if ('subAgent' in stage) {
+    throw new Error(`${label}.subAgent: removed; use nested-stage mainThread instead`);
   }
 
-  const subAgent = logicIsNested
-    ? stage.subAgent !== false
+  if (stage.mainThread !== undefined && typeof stage.mainThread !== 'boolean') {
+    throw new Error(`${label}.mainThread: must be a boolean when present`);
+  }
+
+  if (logicIsNested && stage.mainThread !== undefined) {
+    throw new Error(
+      `${label}.mainThread: only valid on nested fragment stages, not on fragment/$ref shells`,
+    );
+  }
+
+  if (!options.nested && stage.mainThread !== undefined) {
+    throw new Error(
+      `${label}.mainThread: only valid on nested fragment stages`,
+    );
+  }
+
+  const mainThread = options.nested === true && stage.mainThread === true
+    ? true
     : undefined;
 
   return {
@@ -672,7 +688,7 @@ const assertStageFields = (
     ...(knowledgeToScript === false ? { knowledgeToScript: false } : {}),
     ...(knowledgeToScript === true ? { knowledgeToScript: true } : {}),
     ...(cacheMaxAge !== undefined ? { cacheMaxAge } : {}),
-    ...(subAgent !== undefined ? { subAgent } : {}),
+    ...(mainThread ? { mainThread: true } : {}),
     ...(parallelGroup ? { parallelGroup } : {}),
     ...(parallelAfter ? { parallelAfter } : {}),
   };

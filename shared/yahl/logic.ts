@@ -60,13 +60,9 @@ export const logicPreviewText = (logic: TYahlLogic | undefined): string => {
   return `stages[${logic.stages.length}]`;
 };
 
-export const resolveSubAgentFlag = (stage: Pick<TYahlStage, 'logic' | 'subAgent'>): boolean | undefined => {
-  if (!isNestedLogic(stage.logic)) {
-    return undefined;
-  }
-
-  return stage.subAgent !== false;
-};
+export const resolveMainThreadFlag = (
+  stage: Pick<TYahlStage, 'mainThread'>,
+): boolean => stage.mainThread === true;
 
 export const assertSafeYahlRefPath = (raw: string, label: string): string => {
   const path = raw.trim();

@@ -255,6 +255,9 @@ export const resolveSessionStagesReplay = async (sessionId: string) => {
     );
 
     return {
+      ...(stage.agentMeta && Object.keys(stage.agentMeta).length
+        ? { agentMeta: stage.agentMeta }
+        : {}),
       context: (stage.context ?? {}) as Record<string, unknown>,
       contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
       finishedAt: toIso(stage.finishedAt),

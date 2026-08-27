@@ -50,6 +50,7 @@ const forkedFromSchema = new Schema({
 const runCursorSchema = new Schema({
   kind: { default: 'pipeline', enum: ['pipeline', 'repair'], required: true, type: String },
   loopMeta: loopMetaSchema,
+  nestedIndex: model.d.optionalNumber(),
   repairInstruction: model.d.optionalString(),
   stageIndex: model.d.requiredNumber(),
 }, { _id: false });

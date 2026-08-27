@@ -6,7 +6,7 @@ import type { YahlStage } from '@/shared/yahl-stage';
 
 type TPushRequestEnvelope = {
   agentMeta?: {
-    isSubAgent: boolean;
+    isMainThread: boolean;
     nestedIndex?: number;
     nestedPath?: string;
     parallelGroupId?: string;

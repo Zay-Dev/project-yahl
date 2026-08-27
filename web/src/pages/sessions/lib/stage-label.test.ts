@@ -92,6 +92,24 @@ describe('buildStageLabels', () => {
 
     assert.deepEqual(labels, ['#1.0', '#1.1']);
   });
+
+  it('appends nested leaf under while labels', () => {
+    const labels = buildStageLabels([
+      stage({
+        agentMeta: {
+          isMainThread: false,
+          nestedPath: 'monitor/goto',
+          parentRequestId: 'p',
+        },
+        logicPreview: 'goto',
+        loopIndex: 0,
+        loopKind: 'while',
+        parsedStageIndex: 10,
+      }),
+    ]);
+
+    assert.deepEqual(labels, ['#1.0 › goto']);
+  });
 });
 
 describe('loopSetupHint', () => {
