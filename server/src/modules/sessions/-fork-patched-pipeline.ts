@@ -1,6 +1,8 @@
 import type { TForkSessionStageSetup, TParsedStage, TStageLoopMeta } from './-types';
 import type { TResponseStageReplayItem } from './-api-types';
 
+import path from 'path';
+
 import {
   resetAskUserStageForRerun,
   stripAskUserAnswersFromContext,
@@ -9,6 +11,8 @@ import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
 import { compileForkRunStage } from '@project-yahl/shared/yahl/stage-compile';
 import { dedupeReplayRowsByStageSlot } from '@project-yahl/shared/yahl/replay-dedupe';
 import { mergeContextPayloadIntoRecord } from '@project-yahl/shared/yahl/storage-merge';
+
+import { taskYahlAbsolutePath } from '../tasks/-tasks-root';
 
 const _countUniqueParsedStageIndices = (rows: { parsedStageIndex?: number }[]) => {
   const seen = new Set<number>();
@@ -152,10 +156,14 @@ export const buildForkPatchedParsedStages = (params: {
   anchorStageId: string;
   replayRows: TResponseStageReplayItem[];
   setups: TForkSessionStageSetup[];
+  taskId?: string;
   taskYahl: string;
 }) => {
-  const { anchorIndex, anchorStageId, replayRows, setups, taskYahl } = params;
-  const baselineStages = parseYahlTask(taskYahl).stages;
+  const { anchorIndex, anchorStageId, replayRows, setups, taskId, taskYahl } = params;
+  const taskRoot = taskId
+    ? path.dirname(taskYahlAbsolutePath(taskId))
+    : undefined;
+  const baselineStages = parseYahlTask(taskYahl, taskRoot ? { taskRoot } : {}).stages;
   const nextStages = [...baselineStages];
   const anchorSetup = setups[0];
 

@@ -64,6 +64,22 @@
       "development": "./yahl/types.ts",
       "import": "./dist/yahl/types.js"
     },
+    "./yahl/logic": {
+      "development": "./yahl/logic.ts",
+      "import": "./dist/yahl/logic.js"
+    },
+    "./yahl/validate-stage": {
+      "development": "./yahl/validate-stage.ts",
+      "import": "./dist/yahl/validate-stage.js"
+    },
+    "./yahl/validate-fragment": {
+      "development": "./yahl/validate-fragment.ts",
+      "import": "./dist/yahl/validate-fragment.js"
+    },
+    "./yahl/resolve-yahl-ref": {
+      "development": "./yahl/resolve-yahl-ref.ts",
+      "import": "./dist/yahl/resolve-yahl-ref.js"
+    },
     "./yahl/while-setup": {
       "development": "./yahl/while-setup.ts",
       "import": "./dist/yahl/while-setup.js"

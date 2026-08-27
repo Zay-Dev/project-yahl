@@ -51,8 +51,11 @@ Per-stage fields:
 
 | Field | Purpose |
 |-------|---------|
-| `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
+| `logic` | Stage body: **string** (`logic: \|` multiline pseudo-code), **inline fragment** (`logic: { stages: [...] }`), or **`$ref`** (`logic: { $ref: stages/foo.yahl }`). Non-text forms run as nested YAHL — see Inline / `$ref` below. |
 | `id` | Optional authoring id (`^[a-zA-Z][a-zA-Z0-9_-]*$`); unique within the document when set |
+| `subAgent` | Optional boolean. Meaningful only when `logic` is a fragment or `$ref`. Default **`true`**: nested AI stages keep isolated chat (own `requestId`). Set `false` to thread chat across nested stages in one iteration via `prefixMessages`. Ignored for plain string `logic`. |
+| `parallelGroup` | Optional string. **Reserved / NOT IMPLEMENTED** — future concurrent stage groups. Validated and persisted only. |
+| `parallelAfter` | Optional non-empty string array of stage ids. **Reserved / NOT IMPLEMENTED** — future join barriers. |
 | `goto` | Optional AI-stage transfer list: `{ command: '/stage(<id>)', description: '…' }[]` — agent may call `goto_stage` for a declared target |
 | `contextMode` | VM-only stage; read prior keys via `context.context.{key}`; return `(() => ({ ... }))` to write `produceContextKeys` |
 | `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` (same `context.context.{key}` reads as `contextMode`) |
@@ -72,6 +75,51 @@ Per-stage fields:
 | `produceTypeKeys` | Allowlist for VM / `set_context` / `extend_context` writes to the types bucket |
 | `nixeryRun` | Orchestrator-direct nixery def id (e.g. `get-knowledge`, `plan`, `plan-study`); read `~/nixery/{defId}/{output}` in a following AI stage |
 | `verify` | Object gate after stage finish — see below. Shorthand `verify: true` → `{ defId: stage-verify }` |
+
+### Inline YAHL / `$ref` (polymorphic `logic`)
+
+`logic` may be a nested mini-pipeline instead of a pseudo-script string:
+
+```yaml
+# External fragment (OpenAPI-style $ref; path relative to server/tasks/{taskId}/)
+- id: monitor
+  whileSetup: ...
+  warmUp: |
+    Read ~/task-skills/monitor-loop/SKILL.md.
+  subAgent: true
+  logic:
+    $ref: stages/monitor.yahl
+
+# Inline fragment
+- id: batch
+  subAgent: false
+  logic:
+    stages:
+      - id: step_a
+        logic: |
+          ...
+      - id: step_b
+        logic: |
+          ...
+```
+
+Fragment file shape (`stages/monitor.yahl`):
+
+```yaml
+stages:
+  - id: poll
+    logic: |
+      ...
+```
+
+Rules (v1):
+
+- `$ref` is ref-only (`{ $ref }` alone); no sibling overrides; no remote URLs; no `..`; extensions `.yahl` / `.yaml` / `.yml`.
+- Fragment must not set top-level `name` / `description`.
+- Nested fragment stages use **string** `logic` only (no recursive `$ref` / fragment inside nested stages). Max `$ref` depth 3.
+- `whileSetup` / `loopSetup` / `warmUp` stay on the **shell** stage (not inside fragments).
+- Shell `contextKeys` / `updateContextKeys` / `goto` / `verify` apply to the nested run; nested rows get `agentMeta` (`isSubAgent`, `nestedPath`, `parentRequestId`) for the session UI.
+- `parallelGroup` / `parallelAfter` are schema placeholders only — orchestrator does not schedule concurrent stages yet.
 
 ### Stage `id` + `goto`
 

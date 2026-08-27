@@ -1,4 +1,11 @@
-import type { TYahlStage, TParsedStage, TStageLoopMeta } from './types';
+import type { TYahlStage, TParsedStage, TStageLoopMeta, TYahlFragment } from './types';
+import {
+  NESTED_LOGIC_PLACEHOLDER,
+  asLogicScript,
+  isNestedLogic,
+  isYahlFragment,
+} from './logic';
+import { resolveLogicToFragment, type TResolveYahlRefOptions } from './resolve-yahl-ref';
 
 const logicNeedsBraceWrap = (logic: string) => {
   const trimmed = logic.trim();
@@ -15,7 +22,11 @@ const wrapPlainLogic = (logic: string) => {
 };
 
 export const compileStageLines = (stage: TYahlStage): string => {
-  const logic = stage.logic;
+  if (isNestedLogic(stage.logic)) {
+    return NESTED_LOGIC_PLACEHOLDER;
+  }
+
+  const logic = asLogicScript(stage.logic);
 
   if (stage.conditionMode) {
     return logic;
@@ -54,20 +65,59 @@ const loopBodyLinesFromCompiledStage = (lines: string) => {
   return mode ? `${mode} ${body}` : body;
 };
 
+const compileNestedStages = (
+  fragment: TYahlFragment,
+  sourceStartLine: number,
+): TParsedStage[] => {
+  const nested: TParsedStage[] = [];
+
+  if (fragment.types) {
+    nested.push(compileStage({ logic: fragment.types }, sourceStartLine));
+  }
+
+  fragment.stages.forEach((child) => {
+    nested.push(compileStage(child, sourceStartLine));
+  });
+
+  return nested;
+};
+
 export const compileStage = (
   stage: TYahlStage,
   sourceStartLine: number,
-): TParsedStage => ({
-  lines: compileStageLines(stage),
-  sourceStartLine,
-  spec: stage,
-  type: stage.whileSetup ? 'while' : stage.loopSetup ? 'loop' : 'plain',
-  ...(stage.temperature === undefined ? {} : { temperature: stage.temperature }),
-  ...(stage.contextKeys?.length ? { contextKeys: stage.contextKeys } : {}),
-  ...(stage.updateContextKeys?.length ? { updateContextKeys: stage.updateContextKeys } : {}),
-  ...(stage.produceContextKeys?.length ? { produceContextKeys: stage.produceContextKeys } : {}),
-  ...(stage.produceTypeKeys?.length ? { produceTypeKeys: stage.produceTypeKeys } : {}),
-});
+  resolveOptions?: TResolveYahlRefOptions,
+): TParsedStage => {
+  let nestedStages: TParsedStage[] | undefined;
+
+  if (isNestedLogic(stage.logic)) {
+    const fragment = isYahlFragment(stage.logic)
+      ? stage.logic
+      : resolveOptions
+        ? resolveLogicToFragment(stage.logic, resolveOptions)
+        : undefined;
+
+    if (!fragment) {
+      throw new Error(
+        `stage at line ${sourceStartLine}: $ref logic requires taskRoot to resolve`,
+      );
+    }
+
+    nestedStages = compileNestedStages(fragment, sourceStartLine);
+  }
+
+  return {
+    lines: compileStageLines(stage),
+    sourceStartLine,
+    spec: stage,
+    type: stage.whileSetup ? 'while' : stage.loopSetup ? 'loop' : 'plain',
+    ...(nestedStages ? { nestedStages } : {}),
+    ...(stage.temperature === undefined ? {} : { temperature: stage.temperature }),
+    ...(stage.contextKeys?.length ? { contextKeys: stage.contextKeys } : {}),
+    ...(stage.updateContextKeys?.length ? { updateContextKeys: stage.updateContextKeys } : {}),
+    ...(stage.produceContextKeys?.length ? { produceContextKeys: stage.produceContextKeys } : {}),
+    ...(stage.produceTypeKeys?.length ? { produceTypeKeys: stage.produceTypeKeys } : {}),
+  };
+};
 
 export const compileForkRunStage = (
   stage: TYahlStage,

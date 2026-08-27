@@ -5,6 +5,12 @@ import type { TYahlDocument } from './document-schema';
 import { validateYahlDocument } from './document-schema';
 import { compileStage } from './stage-compile';
 import type { TYahlStage } from './types';
+import type { TResolveYahlRefOptions } from './resolve-yahl-ref';
+
+export type TParseYahlTaskOptions = {
+  readFile?: (absolutePath: string) => string;
+  taskRoot?: string;
+};
 
 const findLogicSourceLine = (fileText: string, stageIndex: number) => {
   const lines = fileText.split(/\r?\n/);
@@ -53,7 +59,11 @@ const wrapPlainLogic = (logic: string) => {
   return `{\n${logic}\n}`;
 };
 
-const buildStagesFromDocument = (document: TYahlDocument, text: string): TParsedStage[] => {
+const buildStagesFromDocument = (
+  document: TYahlDocument,
+  text: string,
+  resolveOptions?: TResolveYahlRefOptions,
+): TParsedStage[] => {
   const stages: TParsedStage[] = [];
 
   if (document.types) {
@@ -68,7 +78,7 @@ const buildStagesFromDocument = (document: TYahlDocument, text: string): TParsed
   }
 
   document.stages.forEach((stage, index) => {
-    stages.push(compileStage(stage, findLogicSourceLine(text, index)));
+    stages.push(compileStage(stage, findLogicSourceLine(text, index), resolveOptions));
   });
 
   return stages;
@@ -80,15 +90,27 @@ export const parseYahlDocument = (text: string): TYahlDocument => {
   return validateYahlDocument(parsed);
 };
 
-export const parseYahlTask = (text: string) => {
+export const parseYahlTask = (text: string, options: TParseYahlTaskOptions = {}) => {
   const document = parseYahlDocument(text);
+  const yahlRefs: Record<string, string> = {};
+  const resolveOptions = options.taskRoot
+    ? {
+      readFile: options.readFile,
+      refsOut: yahlRefs,
+      taskRoot: options.taskRoot,
+    } satisfies TResolveYahlRefOptions
+    : undefined;
 
   return {
     resultContextKey: document.resultContextKey,
     runInputContextKeys: document.runInput?.map((field) => field.key),
-    stages: buildStagesFromDocument(document, text),
+    stages: buildStagesFromDocument(document, text, resolveOptions),
+    ...(Object.keys(yahlRefs).length ? { yahlRefs } : {}),
   };
 };
 
-export const parseYahlFile = (text: string): TParsedStage[] =>
-  buildStagesFromDocument(parseYahlDocument(text), text);
+export const parseYahlFile = (
+  text: string,
+  options: TParseYahlTaskOptions = {},
+): TParsedStage[] =>
+  parseYahlTask(text, options).stages;

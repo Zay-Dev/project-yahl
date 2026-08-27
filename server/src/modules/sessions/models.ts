@@ -77,6 +77,7 @@ const sessionSchema = new Schema<TDbSession>({
   taskId: model.d.optionalString(),
   taskSkills: [model.d.mixed()],
   taskYahl: model.d.optionalString(),
+  taskYahlRefs: model.d.mixed(),
 }, {
   collection: modelsName.Sessions,
   timestamps: true,
@@ -86,6 +87,7 @@ sessionSchema.index({ sessionId: 1 }, { unique: true });
 sessionSchema.index({ 'forkedFrom.sourceSessionId': 1 });
 
 const stageSchema = new Schema<TDbStage>({
+  agentMeta: model.d.mixed(),
   context: model.d.mixed(),
   contextAfter: model.d.mixed(),
   parsedStageIndex: model.d.optionalNumber(),

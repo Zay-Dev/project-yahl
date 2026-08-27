@@ -8,6 +8,7 @@ import type {
   TParsedStage,
   TSessionForkedFrom,
   TSessionRunCursor,
+  TStageAgentMeta,
   TStageLoopMeta,
   TTokenTotals,
   TYahlStage,
@@ -76,6 +77,7 @@ export type TResponseSessionListItem = {
 export type TResponseStageStatus = 'finished' | 'running' | 'verifying';
 
 export type TResponseStageListItem = {
+  agentMeta?: TStageAgentMeta;
   createdAt: string;
   finishedAt?: string;
   isTypesPreamble?: boolean;
@@ -259,6 +261,7 @@ export type TSessionLiveEvent =
   | { type: 'verify.resumed'; requestId: string; verifyId: string };
 
 export type TStageListSource = {
+  agentMeta?: TStageAgentMeta;
   contextAfter?: Record<string, unknown>;
   context?: Record<string, unknown>;
   createdAt: Date | string;

@@ -8,6 +8,8 @@ import {
   loopIndexNameFromLines,
   pickContextUpdates,
 } from '@/orchestrator/-context';
+import { asLogicScript } from '@project-yahl/shared/yahl/logic';
+
 import { toLoopIterationStage } from '@/orchestrator/-utils/yahl';
 import { maybePauseForUserRequest } from '@/orchestrator/-control/maybe-pause';
 
@@ -139,10 +141,12 @@ export const runLoopIteration = async (
   const isExtends = (key: string) =>
     stage.lines.match(new RegExp(`\\s*EXTENDS:\\s*${key}\\s*=`));
 
+  const bodyLogic = asLogicScript(stage.spec.logic);
+
   const stageInput = Object
     .entries({
       ...filterLoopBucket(
-        stage.spec.logic,
+        bodyLogic,
         Object.fromEntries(storage.context),
         stage,
         resolvedLoopMeta.indexName,
@@ -166,7 +170,7 @@ export const runLoopIteration = async (
         temperature: resolvedLoopMeta.temperature,
         value: resolvedLoopMeta.value,
       },
-      stages: [toLoopIterationStage(stage, stage.spec.logic)],
+      stages: [toLoopIterationStage(stage, bodyLogic)],
       temperature,
       ...(pipelineStageIndex === undefined ? {} : { pipelineStageIndex }),
       ...(parsedStageIndex === undefined ? {} : { parsedStageIndex }),

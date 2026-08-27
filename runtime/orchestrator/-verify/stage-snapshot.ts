@@ -2,10 +2,12 @@ import type { TVerifyStageSnapshot } from '@/shared/platform-client';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
+import { logicPreviewText } from '@project-yahl/shared/yahl/logic';
+
 export const toVerifyStageSnapshot = (spec: YahlStage): TVerifyStageSnapshot => ({
   ...(spec.askUser?.length ? { askUser: spec.askUser as Record<string, unknown>[] } : {}),
   ...(spec.contextKeys?.length ? { contextKeys: spec.contextKeys } : {}),
-  logic: spec.logic,
+  logic: logicPreviewText(spec.logic),
   ...(spec.produceContextKeys?.length ? { produceContextKeys: spec.produceContextKeys } : {}),
 });
 

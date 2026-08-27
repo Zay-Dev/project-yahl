@@ -237,8 +237,9 @@ describe("parseYahlTask", () => {
     assert.equal(resultContextKey, "result");
     assert.equal(stages.length, 9);
     assert.equal(stages[2]?.type, "loop");
-    assert.equal(stages[7]?.type, "while");
-    assert.equal(stages[7]?.spec.whileSetup, "context.context.c < 20");
+    const whileStage = stages.find((stage) => stage.type === "while");
+    assert.ok(whileStage);
+    assert.equal(whileStage?.spec.whileSetup, "context.context.c < 20");
   });
 
   it("returns runInputContextKeys from task metadata", () => {
@@ -264,12 +265,14 @@ describe("parseYahlFile", () => {
     assert.equal(stages[2]?.temperature, 0.2);
     assert.equal(stages[0]?.produceContextKeys?.join(","), "a,b,c");
     assert.match(stages[3]?.lines ?? "", /^IF:/);
-    assert.equal(stages[7]?.type, "while");
-    assert.equal(stages[7]?.spec.warmUp?.trim(), "c += 1;");
+    const whileStage = stages.find((stage) => stage.type === "while");
+    assert.ok(whileStage);
+    assert.equal(whileStage?.spec.warmUp?.trim(), "c += 1;");
   });
 
   it("compiles traffic_monitor monitor as while with following assemble", () => {
-    const stages = parseYahlFile(readFileSync(trafficMonitorPath, "utf-8"));
+    const taskRoot = path.dirname(trafficMonitorPath);
+    const stages = parseYahlFile(readFileSync(trafficMonitorPath, "utf-8"), { taskRoot });
     const monitorIndex = stages.findIndex((stage) => stage.spec.id === "monitor");
     const monitor = stages[monitorIndex];
     const assemble = stages[monitorIndex + 1];
@@ -291,7 +294,10 @@ describe("parseYahlFile", () => {
     assert.match(monitor?.spec.warmUp ?? "", /monitor-loop\/SKILL\.md/);
     assert.match(monitor?.spec.warmUp ?? "", /origin_display/);
     assert.equal(monitor?.spec.cacheMaxAge, undefined);
-    assert.ok(!(monitor?.contextKeys ?? []).includes("fetches"));
+    assert.equal(monitor?.spec.subAgent, true);
+    assert.ok(monitor?.nestedStages?.length);
+    assert.equal(monitor?.nestedStages?.[0]?.spec.id, "poll");
+    assert.ok((monitor?.contextKeys ?? []).includes("fetches"));
     assert.ok((monitor?.contextKeys ?? []).includes("poll_success_count"));
     assert.ok((monitor?.contextKeys ?? []).includes("origin_display"));
     assert.ok(monitor?.spec.verify);

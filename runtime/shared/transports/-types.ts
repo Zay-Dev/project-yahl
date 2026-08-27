@@ -96,6 +96,7 @@ interface IPublisherEventMap {
   toolCallResult: [envelope: { requestId: string; result: string; toolCallId: string }];
   modelResponse: [envelope: { requestId: string, response: TModelResponse }];
   pushRequest: [envelope: {
+    agentMeta?: import('@project-yahl/shared/yahl/types').TStageAgentMeta;
     context: TNormalizedStorage;
     executionMeta?: StageExecutionMeta;
     loopMeta?: TLoopMeta;
@@ -135,6 +136,7 @@ export interface IPublisher extends IBase {
     stage: YahlStage,
     requestId: string,
     options?: {
+      agentMeta?: import('@project-yahl/shared/yahl/types').TStageAgentMeta,
       contextAfter?: TStorage | undefined,
       executionMeta?: StageExecutionMeta,
       loopMeta?: TLoopMeta | undefined,

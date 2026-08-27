@@ -4,12 +4,16 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
+import { logicPreviewText } from '@project-yahl/shared/yahl/logic';
 import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
 
 import type { TResponseStageReplayItem } from './-api-types';
 import type { TYahlStage } from './-types';
 
 import { buildForkPatchedParsedStages, prefixRowsForForkCopy } from './-fork-patched-pipeline';
+
+const logicText = (logic: TYahlStage['logic'] | undefined) =>
+  logicPreviewText(logic);
 
 const testTaskYahl = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../../../tasks/test/SKILL.yaml'),
@@ -89,7 +93,7 @@ describe('buildForkPatchedParsedStages', () => {
     });
 
     assert.equal(anchorParsedStageIndex, gotoIndex);
-    assert.match(parsedStages[gotoIndex]?.spec.logic ?? '', /c < 10/);
+    assert.match(logicText(parsedStages[gotoIndex]?.spec.logic), /c < 10/);
     assert.equal(parsedStages[gotoIndex + 1]?.spec.conditionMode, true);
     assert.equal(parsedStages[gotoIndex + 1]?.spec.logic, baseline[gotoIndex + 1]?.spec.logic);
     assert.equal(parsedStages[stepLoopIndex]?.spec.id, 'step_loop');
@@ -157,7 +161,7 @@ describe('buildForkPatchedParsedStages', () => {
       taskYahl: testTaskYahl,
     });
 
-    assert.match(parsedStages[resultIndex]?.spec.logic ?? '', /edited: true/);
+    assert.match(logicText(parsedStages[resultIndex]?.spec.logic), /edited: true/);
     assert.equal(parsedStages[resultIndex + 1]?.spec.logic, baseline[resultIndex + 1]?.spec.logic);
   });
 
@@ -200,9 +204,9 @@ describe('buildForkPatchedParsedStages', () => {
       taskYahl,
     });
 
-    assert.match(parsedStages[0]?.spec.logic ?? '', /c \+= i-edited/);
+    assert.match(logicText(parsedStages[0]?.spec.logic), /c \+= i-edited/);
     assert.equal(parsedStages[0]?.type, 'plain');
-    assert.match(parsedStages[1]?.spec.logic ?? '', /const result = \{ c \}/);
+    assert.match(logicText(parsedStages[1]?.spec.logic), /const result = \{ c \}/);
     assert.equal(parsedStages[1]?.type, 'plain');
   });
 

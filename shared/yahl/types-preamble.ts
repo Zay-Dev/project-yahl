@@ -17,7 +17,8 @@ export const isTypesPreambleStage = (stage: TParsedStage, stageIndex: number) =>
     return false;
   }
 
-  return /^\s*type\s+\w+/m.test(stage.spec.logic);
+  return typeof stage.spec.logic === 'string'
+    && /^\s*type\s+\w+/m.test(stage.spec.logic);
 };
 
 export const parseTypesFromPreamble = (logic: string) => {

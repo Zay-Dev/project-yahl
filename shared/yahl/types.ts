@@ -40,6 +40,26 @@ export type TYahlWhileSetupSpec = {
 
 export type TYahlWhileSetup = string | TYahlWhileSetupSpec;
 
+export type TYahlLogicRef = {
+  $ref: string;
+};
+
+export type TYahlFragment = {
+  stages: TYahlStage[];
+  types?: string;
+};
+
+export type TYahlLogic = string | TYahlFragment | TYahlLogicRef;
+
+export type TStageAgentMeta = {
+  isSubAgent: boolean;
+  nestedIndex?: number;
+  nestedPath?: string;
+  parallelGroupId?: string;
+  parallelSlot?: number;
+  parentRequestId?: string;
+};
+
 export type TYahlStage = {
   agentOverrides?: TYahlAgentOverrides;
   askUser?: TYahlAskUserEntry[];
@@ -50,7 +70,7 @@ export type TYahlStage = {
   goto?: TYahlGotoEntry[];
   id?: string;
   knowledgeToScript?: boolean;
-  logic: string;
+  logic: TYahlLogic;
   loopSetup?: string;
   maxBashCalls?: number;
   warmUp?: string;
@@ -58,9 +78,12 @@ export type TYahlStage = {
   maxTurns?: number;
   nixeryInput?: TNixeryStageInput;
   nixeryRun?: string;
+  parallelAfter?: string[];
+  parallelGroup?: string;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   stagehand?: TYahlStagehandConfig;
+  subAgent?: boolean;
   temperature?: number;
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
@@ -86,6 +109,7 @@ export type TStageLoopMeta = {
 export type TParsedStage = {
   contextKeys?: string[];
   lines: string;
+  nestedStages?: TParsedStage[];
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   sourceStartLine: number;

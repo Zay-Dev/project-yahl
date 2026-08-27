@@ -59,6 +59,7 @@ import {
   teardownNixeryContainer,
 } from '@/orchestrator/-nixery';
 import { isTypesPreambleStage, seedTypesPreamble } from '@project-yahl/shared/yahl/types-preamble';
+import { asLogicScript } from '@project-yahl/shared/yahl/logic';
 import {
   buildProduceKeysSystemAppend,
   missingProduceKeys,
@@ -76,6 +77,7 @@ import {
 } from './knowledge-to-script-notes-retry';
 import { handleLoop } from './loop';
 import { handleWhile } from './while';
+import { runNestedYahl } from './nested-yahl';
 import {
   isPostLoopWhileResume,
   runWhileWithParentVerify,
@@ -262,9 +264,40 @@ class YahlAgentRunner {
       }
 
       if (!isResumingThisStage && isTypesPreambleStage(stage, stageIndex)) {
-        seedTypesPreamble(this.storage.types, stage.spec.logic);
+        seedTypesPreamble(this.storage.types, asLogicScript(stage.spec.logic));
         this.resetStageContext(stage, stageIndex, false);
         await this.finishOrchestratorDirectStage();
+        stageIndex += 1;
+        continue;
+      }
+
+      if (
+        stage.type === 'plain'
+        && stage.nestedStages?.length
+        && !this.options.contextAfter
+        && !isResumingThisStage
+      ) {
+        this.enteredViaGoto = false;
+        const nestedResult = await runNestedYahl(
+          stage,
+          this.storage,
+          runYahl,
+          this.temperature,
+          this.pipelineStageIndex,
+          this.options.recoveryStages ?? this.stages,
+          {
+            ...(this.options.systemAppend
+              ? { systemAppend: this.options.systemAppend }
+              : {}),
+          },
+        );
+
+        if (nestedResult.gotoTargetStageIndex !== undefined) {
+          this.enteredViaGoto = true;
+          stageIndex = nestedResult.gotoTargetStageIndex;
+          continue;
+        }
+
         stageIndex += 1;
         continue;
       }
@@ -495,6 +528,7 @@ class YahlAgentRunner {
       toAgentStage(stageSpec),
       this.requestId,
       {
+        ...(this.options.agentMeta ? { agentMeta: this.options.agentMeta } : {}),
         contextAfter: this.options.contextAfter,
         loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
         parsedStageIndex: this.boundParsedStageIndex,

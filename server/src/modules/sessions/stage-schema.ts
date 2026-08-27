@@ -55,7 +55,11 @@ const whileSetupSchema = Joi.alternatives().try(
   }),
 );
 
-export const yahlStageSchema = Joi.object<TYahlStage>({
+const logicRefSchema = Joi.object({
+  $ref: Joi.string().trim().min(1).required(),
+}).unknown(false);
+
+const yahlStageSchemaLazy: Joi.ObjectSchema<TYahlStage> = Joi.object<TYahlStage>().keys({
   agentOverrides: agentOverridesSchema.optional(),
   askUser: Joi.array().items(askUserEntrySchema).min(1).optional(),
   cacheMaxAge: Joi.number().integer().min(1).optional(),
@@ -65,19 +69,31 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   goto: Joi.array().items(gotoEntrySchema).min(1).optional(),
   id: Joi.string().trim().pattern(STAGE_ID_PATTERN).optional(),
   knowledgeToScript: Joi.boolean().optional(),
-  logic: Joi.string().trim().when('nixeryRun', {
-    is: Joi.exist(),
-    otherwise: Joi.required(),
-    then: Joi.optional(),
-  }),
+  logic: Joi.alternatives()
+    .try(
+      Joi.string().trim().min(1),
+      logicRefSchema,
+      Joi.object({
+        stages: Joi.array().items(Joi.link('#yahlStage')).min(1).required(),
+        types: Joi.string().optional(),
+      }).unknown(false),
+    )
+    .when('nixeryRun', {
+      is: Joi.exist(),
+      otherwise: Joi.required(),
+      then: Joi.optional(),
+    }),
   loopSetup: Joi.string().trim().pattern(LOOP_SETUP_PATTERN).optional(),
   maxBashCalls: Joi.number().integer().min(1).optional(),
   maxTurns: Joi.number().integer().min(1).optional(),
   nixeryInput: Joi.object().min(1).optional(),
   nixeryRun: Joi.string().trim().optional(),
+  parallelAfter: stringArraySchema.min(1).optional(),
+  parallelGroup: Joi.string().trim().min(1).optional(),
   produceContextKeys: stringArraySchema.optional(),
   produceTypeKeys: stringArraySchema.optional(),
   stagehand: stagehandConfigSchema.optional(),
+  subAgent: Joi.boolean().optional(),
   temperature: Joi.number().min(0).max(2).optional(),
   updateContextKeys: stringArraySchema.optional(),
   verify: verifySpecSchema.optional(),
@@ -85,6 +101,7 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
   warmUp: Joi.string().trim().optional(),
   whileSetup: whileSetupSchema.optional(),
 })
+  .id('yahlStage')
   .custom((value, helpers) => {
     if (value.contextMode === true && value.conditionMode === true) {
       return helpers.error('any.invalid', { message: 'contextMode and conditionMode are mutually exclusive' });
@@ -106,7 +123,7 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
       return helpers.error('any.invalid', { message: 'warmUp requires loopSetup or whileSetup' });
     }
 
-    if (value.conditionMode === true && !String(value.logic).includes('IF:')) {
+    if (value.conditionMode === true && typeof value.logic === 'string' && !value.logic.includes('IF:')) {
       return helpers.error('any.invalid', { message: 'conditionMode logic must contain IF:' });
     }
 
@@ -169,6 +186,17 @@ export const yahlStageSchema = Joi.object<TYahlStage>({
     return value;
   });
 
+export const yahlStageSchema = yahlStageSchemaLazy;
+
+export const agentMetaSchema = Joi.object({
+  isSubAgent: Joi.boolean().required(),
+  nestedIndex: Joi.number().integer().min(0).optional(),
+  nestedPath: Joi.string().trim().optional(),
+  parallelGroupId: Joi.string().trim().optional(),
+  parallelSlot: Joi.number().integer().min(0).optional(),
+  parentRequestId: Joi.string().trim().optional(),
+}).unknown(false);
+
 export const parsedStageSnapshotSchema = Joi.object<TParsedStageSnapshot>({
   lines: Joi.string().required(),
   sourceStartLine: Joi.number().integer().min(1).required(),
@@ -178,6 +206,7 @@ export const parsedStageSnapshotSchema = Joi.object<TParsedStageSnapshot>({
 export const parsedStageSchema = Joi.object<TParsedStage>({
   contextKeys: stringArraySchema.optional(),
   lines: Joi.string().required(),
+  nestedStages: Joi.array().items(Joi.link('#parsedStage')).optional(),
   produceContextKeys: stringArraySchema.optional(),
   produceTypeKeys: stringArraySchema.optional(),
   sourceStartLine: Joi.number().integer().min(1).required(),
@@ -185,4 +214,4 @@ export const parsedStageSchema = Joi.object<TParsedStage>({
   temperature: Joi.number().min(0).max(2).optional(),
   type: Joi.string().valid('loop', 'plain', 'while').required(),
   updateContextKeys: stringArraySchema.optional(),
-});
+}).id('parsedStage');

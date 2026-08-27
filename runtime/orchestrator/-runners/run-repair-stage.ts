@@ -1,6 +1,8 @@
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TPreparedRunInput, TPreparedRunResult } from './prepared-run-types';
 
+import { asLogicScript } from '@project-yahl/shared/yahl/logic';
+
 import { toLoopIterationStage } from '@/orchestrator/-utils/yahl';
 
 import type { TRunYahl } from '@/orchestrator/-agent/-types';
@@ -10,7 +12,7 @@ type TRunStage = TRunYahl;
 export const toRepairExecutionStage = (stage: ParsedStage): ParsedStage =>
   stage.type === 'plain'
     ? stage
-    : toLoopIterationStage(stage, stage.spec.logic);
+    : toLoopIterationStage(stage, asLogicScript(stage.spec.logic));
 
 export const runRepairStage = async (
   prepared: TPreparedRunInput,

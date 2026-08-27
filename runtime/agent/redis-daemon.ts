@@ -6,6 +6,7 @@ import {
   AGENT_SKILLS_CONTAINER_DIR,
   AGENT_YAHL_CONTAINER_DIR,
 } from '@project-yahl/shared/agent-files/prepare-agent-files';
+import { asLogicScript } from '@project-yahl/shared/yahl/logic';
 
 import config from "./config";
 
@@ -168,7 +169,7 @@ export const startRedisDaemon = async () => {
 
         if (stageSpec.contextMode) {
           const contextOutput = await runScript(
-            wrapVmLogic(stageSpec.logic),
+            wrapVmLogic(asLogicScript(stageSpec.logic)),
             context,
           );
 
@@ -177,7 +178,10 @@ export const startRedisDaemon = async () => {
         }
 
         if (stageSpec.conditionMode) {
-          const winningCondition = await runConditionScript(stageSpec.logic, context);
+          const winningCondition = await runConditionScript(
+            asLogicScript(stageSpec.logic),
+            context,
+          );
 
           if (!winningCondition) {
             return await end();

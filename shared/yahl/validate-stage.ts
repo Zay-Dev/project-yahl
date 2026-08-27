@@ -1,7 +1,10 @@
 import type {
   TYahlAgentOverrides,
   TYahlAskUserEntry,
+  TYahlFragment,
   TYahlGotoEntry,
+  TYahlLogic,
+  TYahlLogicRef,
   TYahlStage,
   TYahlStagehandConfig,
   TYahlVerifySpec,
@@ -14,8 +17,20 @@ import {
 } from './stage-goto';
 import { validateCacheMaxAgeField } from './cache-max-age';
 import { validateKnowledgeToScriptField } from './knowledge-to-script';
+import {
+  assertSafeYahlRefPath,
+  isNestedLogic,
+  isYahlFragment,
+  isYahlLogicRef,
+} from './logic';
 
 const LOOP_SETUP_PATTERN = /^\s*for each\s+\w+\s+of\s+\[.*\]\s*$/i;
+
+export type TValidateYahlStageOptions = {
+  allowNestedLogic?: boolean;
+  labelPrefix?: string;
+  nested?: boolean;
+};
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -310,26 +325,143 @@ const normalizeVerifySpec = (
     throw new Error(`${label}.verify.resume: must be a boolean when present`);
   }
 
+  if (entry.skipWarmUp !== undefined && typeof entry.skipWarmUp !== 'boolean') {
+    throw new Error(`${label}.verify.skipWarmUp: must be a boolean when present`);
+  }
+
   return {
     defId,
     ...(entry.autoRetry === true ? { autoRetry: true } : {}),
     ...(entry.minScore !== undefined ? { minScore: Number(entry.minScore) } : {}),
     ...(entry.resume === false ? { resume: false } : {}),
+    ...(entry.skipWarmUp === false ? { skipWarmUp: false } : {}),
     ...(typeof entry.rubric === 'string' && entry.rubric.trim()
       ? { rubric: entry.rubric.trim() }
       : {}),
   };
 };
 
-const assertStageFields = (stage: Record<string, unknown>, label: string): TYahlStage => {
+const validateParallelFields = (stage: Record<string, unknown>, label: string) => {
+  let parallelGroup: string | undefined;
+  let parallelAfter: string[] | undefined;
+
+  if (stage.parallelGroup !== undefined) {
+    if (typeof stage.parallelGroup !== 'string' || !stage.parallelGroup.trim()) {
+      throw new Error(`${label}.parallelGroup: must be a non-empty string when present`);
+    }
+
+    parallelGroup = stage.parallelGroup.trim();
+  }
+
+  if (stage.parallelAfter !== undefined) {
+    if (!isStringArray(stage.parallelAfter) || stage.parallelAfter.length === 0) {
+      throw new Error(`${label}.parallelAfter: must be a non-empty string array when present`);
+    }
+
+    parallelAfter = stage.parallelAfter.map((id) => id.trim()).filter(Boolean);
+
+    if (parallelAfter.length === 0) {
+      throw new Error(`${label}.parallelAfter: must be a non-empty string array when present`);
+    }
+  }
+
+  return { parallelAfter, parallelGroup };
+};
+
+const validateLogicValue = (
+  raw: unknown,
+  label: string,
+  options: TValidateYahlStageOptions,
+): TYahlLogic => {
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+
+    if (!trimmed) {
+      throw new Error(`${label}.logic: required non-empty string`);
+    }
+
+    return trimmed;
+  }
+
+  if (options.nested && !options.allowNestedLogic) {
+    throw new Error(`${label}.logic: nested fragment stages must use string logic (v1)`);
+  }
+
+  if (isYahlLogicRef(raw)) {
+    assertSafeYahlRefPath(raw.$ref, `${label}.logic`);
+
+    return { $ref: raw.$ref.trim() } satisfies TYahlLogicRef;
+  }
+
+  if (isYahlFragment(raw)) {
+    const doc = raw as TYahlFragment & { description?: unknown; name?: unknown };
+
+    if (doc.name !== undefined || doc.description !== undefined) {
+      throw new Error(`${label}.logic: fragment must not set name or description`);
+    }
+
+    if (!Array.isArray(raw.stages) || raw.stages.length === 0) {
+      throw new Error(`${label}.logic.stages: required non-empty array`);
+    }
+
+    if (raw.types !== undefined && typeof raw.types !== 'string') {
+      throw new Error(`${label}.logic.types: must be a string when present`);
+    }
+
+    const stages = raw.stages.map((child, index) =>
+      validateYahlStage(child, index, {
+        allowNestedLogic: false,
+        labelPrefix: `${label}.logic.stages`,
+        nested: true,
+      }));
+
+    return {
+      stages,
+      ...(typeof raw.types === 'string' && raw.types.trim()
+        ? { types: raw.types.trim() }
+        : {}),
+    } satisfies TYahlFragment;
+  }
+
+  throw new Error(
+    `${label}.logic: must be a string, { $ref }, or { stages: [...] }`,
+  );
+};
+
+const assertStageFields = (
+  stage: Record<string, unknown>,
+  label: string,
+  options: TValidateYahlStageOptions = {},
+): TYahlStage => {
   const nixeryRun = typeof stage.nixeryRun === 'string' && stage.nixeryRun.trim()
     ? stage.nixeryRun.trim()
     : undefined;
 
-  const logicRaw = typeof stage.logic === 'string' ? stage.logic.trim() : '';
+  let logic: TYahlLogic | undefined;
 
-  if (!nixeryRun && !logicRaw) {
-    throw new Error(`${label}.logic: required non-empty string`);
+  if (stage.logic !== undefined) {
+    logic = validateLogicValue(stage.logic, label, options);
+  }
+
+  const logicScript = typeof logic === 'string' ? logic : '';
+  const logicIsNested = isNestedLogic(logic);
+
+  if (!nixeryRun && !logic) {
+    throw new Error(`${label}.logic: required (string, { $ref }, or { stages })`);
+  }
+
+  if (nixeryRun && logicIsNested) {
+    throw new Error(`${label}: nixeryRun cannot combine with nested logic`);
+  }
+
+  if (options.nested) {
+    if (stage.whileSetup !== undefined || stage.loopSetup !== undefined) {
+      throw new Error(`${label}: whileSetup/loopSetup not allowed inside nested YAHL (v1)`);
+    }
+
+    if (stage.warmUp !== undefined) {
+      throw new Error(`${label}: warmUp not allowed inside nested YAHL (v1)`);
+    }
   }
 
   if (nixeryRun) {
@@ -439,8 +571,16 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     }
   }
 
-  if (stage.conditionMode === true && !nixeryRun && !logicRaw.includes('IF:')) {
+  if (stage.conditionMode === true && !nixeryRun && !logicScript.includes('IF:')) {
     throw new Error(`${label}: conditionMode logic must contain IF:`);
+  }
+
+  if (stage.conditionMode === true && logicIsNested) {
+    throw new Error(`${label}: conditionMode cannot use nested logic`);
+  }
+
+  if (stage.contextMode === true && logicIsNested) {
+    throw new Error(`${label}: contextMode cannot use nested logic`);
   }
 
   let stageId: string | undefined;
@@ -486,6 +626,7 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     nixeryRun,
   });
   const cacheMaxAge = validateCacheMaxAgeField(stage.cacheMaxAge, label);
+  const { parallelAfter, parallelGroup } = validateParallelFields(stage, label);
 
   if (cacheMaxAge !== undefined) {
     if (stage.contextMode === true || stage.conditionMode === true || nixeryRun) {
@@ -495,8 +636,16 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     }
   }
 
+  if (stage.subAgent !== undefined && typeof stage.subAgent !== 'boolean') {
+    throw new Error(`${label}.subAgent: must be a boolean when present`);
+  }
+
+  const subAgent = logicIsNested
+    ? stage.subAgent !== false
+    : undefined;
+
   return {
-    logic: logicRaw || '(nixery)',
+    logic: logic ?? '(nixery)',
     ...(nixeryRun ? { nixeryRun } : {}),
     ...(isNixeryStageInput(stage.nixeryInput)
       ? { nixeryInput: normalizeNixeryStageInput(stage.nixeryInput) }
@@ -523,16 +672,25 @@ const assertStageFields = (stage: Record<string, unknown>, label: string): TYahl
     ...(knowledgeToScript === false ? { knowledgeToScript: false } : {}),
     ...(knowledgeToScript === true ? { knowledgeToScript: true } : {}),
     ...(cacheMaxAge !== undefined ? { cacheMaxAge } : {}),
+    ...(subAgent !== undefined ? { subAgent } : {}),
+    ...(parallelGroup ? { parallelGroup } : {}),
+    ...(parallelAfter ? { parallelAfter } : {}),
   };
 };
 
-export const validateYahlStage = (raw: unknown, index?: number): TYahlStage => {
+export const validateYahlStage = (
+  raw: unknown,
+  index?: number,
+  options: TValidateYahlStageOptions = {},
+): TYahlStage => {
+  const prefix = options.labelPrefix ?? 'stages';
+  const label = index === undefined
+    ? 'stage'
+    : `${prefix}[${index}]`;
+
   if (!raw || typeof raw !== 'object') {
-    throw new Error(index === undefined ? 'stage: expected an object' : `stages[${index}]: expected an object`);
+    throw new Error(`${label}: expected an object`);
   }
 
-  return assertStageFields(
-    raw as Record<string, unknown>,
-    index === undefined ? 'stage' : `stages[${index}]`,
-  );
+  return assertStageFields(raw as Record<string, unknown>, label, options);
 };

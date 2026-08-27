@@ -5,6 +5,7 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import { STAGE_GOTO_REASON_KEY } from '@project-yahl/shared/yahl/stage-goto';
 import { parseYahlWhileSetup } from '@project-yahl/shared/yahl/while-setup';
 import { seedKnowledgeToScriptNotes } from '@project-yahl/shared/yahl/knowledge-to-script';
+import { asLogicScript } from '@project-yahl/shared/yahl/logic';
 
 import { runPredicateScript } from '@/agent/-utils/vm-client';
 import {
@@ -19,6 +20,7 @@ import {
   loadWarmupPrefixForParsedStage,
   loadWarmupPrefixMessages,
 } from './warmup-prefix';
+import { runNestedYahl } from './nested-yahl';
 
 const DEFAULT_MAX_TURNS = 60;
 const DEFAULT_MAX_BASH_CALLS = 24;
@@ -201,19 +203,37 @@ export const handleWhile = async (
   let warmupPrefix = extras?.prefixMessages;
 
   const runBody = (iteration: number) => {
+    const loopMeta: TLoopMeta = {
+      arraySnapshot: [],
+      index: iteration,
+      kind: 'while',
+      remainingBashCalls,
+      remainingTurns,
+      temperature,
+      value: iteration,
+    };
+
+    if (stage.nestedStages?.length) {
+      return runNestedYahl(
+        stage,
+        storage,
+        runner,
+        temperature,
+        pipelineStageIndex,
+        recoveryStages,
+        {
+          loopMeta,
+          ...(warmupPrefix ? { prefixMessages: warmupPrefix } : {}),
+          ...(extras?.systemAppend ? { systemAppend: extras.systemAppend } : {}),
+        },
+      );
+    }
+
     return runWhileSegment(
       stage,
       storage,
-      stage.spec.logic,
-      {
-        arraySnapshot: [],
-        index: iteration,
-        kind: 'while',
-        remainingBashCalls,
-        remainingTurns,
-        temperature,
-        value: iteration,
-      },
+      asLogicScript(stage.spec.logic),
+      loopMeta,
       runner,
       temperature,
       pipelineStageIndex,
@@ -349,19 +369,37 @@ export const resumeWhileFromCheckpoint = async (
   );
 
   const runBody = (iteration: number) => {
+    const loopMeta: TLoopMeta = {
+      arraySnapshot: [],
+      index: iteration,
+      kind: 'while',
+      remainingBashCalls,
+      remainingTurns,
+      temperature: temperature ?? completedLoopMeta.temperature,
+      value: iteration,
+    };
+
+    if (stage.nestedStages?.length) {
+      return runNestedYahl(
+        stage,
+        storage,
+        runner,
+        temperature,
+        pipelineStageIndex,
+        recoveryStages,
+        {
+          loopMeta,
+          ...(warmupPrefix ? { prefixMessages: warmupPrefix } : {}),
+          ...(extras?.systemAppend ? { systemAppend: extras.systemAppend } : {}),
+        },
+      );
+    }
+
     return runWhileSegment(
       stage,
       storage,
-      stage.spec.logic,
-      {
-        arraySnapshot: [],
-        index: iteration,
-        kind: 'while',
-        remainingBashCalls,
-        remainingTurns,
-        temperature: temperature ?? completedLoopMeta.temperature,
-        value: iteration,
-      },
+      asLogicScript(stage.spec.logic),
+      loopMeta,
       runner,
       temperature,
       pipelineStageIndex,

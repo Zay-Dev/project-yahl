@@ -5,9 +5,9 @@ import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { emitSessionEvent } from '../-session-events';
-import type { TStageLoopMeta, TYahlStage } from '../-types';
+import type { TStageAgentMeta, TStageLoopMeta, TYahlStage } from '../-types';
 import { modelSession, modelStage } from '../models';
-import { yahlStageSchema } from '../stage-schema';
+import { agentMetaSchema, yahlStageSchema } from '../stage-schema';
 
 export type TRequestSessionParams = {
   sessionId: string;
@@ -18,6 +18,7 @@ export type TRequestStageParams = TRequestSessionParams & {
 };
 
 export type TRequestCreateStageBody = {
+  agentMeta?: TStageAgentMeta;
   context: Record<string, unknown>;
   loopMeta?: TStageLoopMeta;
   parsedStageIndex?: number;
@@ -55,6 +56,7 @@ const loopMetaSchema = Joi.object({
 }).unknown(true);
 
 const createStageBodySchema = Joi.object<TRequestCreateStageBody>({
+  agentMeta: agentMetaSchema.optional(),
   context: Joi.object().required(),
   loopMeta: loopMetaSchema.optional(),
   parsedStageIndex: Joi.number().integer().min(0).optional(),
@@ -103,6 +105,7 @@ export const createStage = [
         { requestId: body.requestId, session: sessionRef },
         {
           $set: {
+            ...(body.agentMeta === undefined ? {} : { agentMeta: body.agentMeta }),
             context: body.context,
             loopMeta: body.loopMeta,
             ...(body.parsedStageIndex === undefined ? {} : { parsedStageIndex: body.parsedStageIndex }),

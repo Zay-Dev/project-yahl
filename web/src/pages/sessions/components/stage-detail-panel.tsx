@@ -48,6 +48,19 @@ export function StageDetailPanel({
         />
       </div>
       {detail.loopMeta ? <StageLoopMeta loopMeta={detail.loopMeta} /> : null}
+      {detail.agentMeta ? (
+        <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+          {detail.agentMeta.isSubAgent
+            ? "Sub-agent (isolated chat history)"
+            : "Main thread (chat merges into parent)"}
+          {detail.agentMeta.nestedPath
+            ? ` · ${detail.agentMeta.nestedPath}`
+            : null}
+          {detail.agentMeta.parentRequestId
+            ? ` · parent ${detail.agentMeta.parentRequestId}`
+            : null}
+        </div>
+      ) : null}
       <StageContextCompare
         after={detail.contextAfter}
         baselineAfter={baselineAfter}
@@ -62,7 +75,9 @@ export function StageDetailPanel({
           <StageSetupJsonSheet stage={detail.stage} />
         </div>
         <pre className="mt-1 max-h-96 overflow-auto rounded-md border bg-background p-2 text-xs whitespace-pre-wrap">
-          {detail.stage.logic}
+          {typeof detail.stage.logic === "string"
+            ? detail.stage.logic
+            : JSON.stringify(detail.stage.logic, null, 2)}
         </pre>
       </div>
       {sections.length > 0 ? (

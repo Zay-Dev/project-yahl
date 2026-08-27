@@ -72,15 +72,18 @@ export type TYahlStage = {
   goto?: TYahlGotoEntry[];
   id?: string;
   knowledgeToScript?: boolean;
-  logic: string;
+  logic: string | { $ref: string } | { stages: TYahlStage[]; types?: string };
   loopSetup?: string;
   maxBashCalls?: number;
   maxTurns?: number;
   nixeryInput?: TNixeryStageInput;
   nixeryRun?: string;
+  parallelAfter?: string[];
+  parallelGroup?: string;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   stagehand?: TYahlStagehandConfig;
+  subAgent?: boolean;
   temperature?: number;
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
@@ -89,9 +92,19 @@ export type TYahlStage = {
   whileSetup?: TYahlWhileSetup;
 };
 
+export type TStageAgentMeta = {
+  isSubAgent: boolean;
+  nestedIndex?: number;
+  nestedPath?: string;
+  parallelGroupId?: string;
+  parallelSlot?: number;
+  parentRequestId?: string;
+};
+
 export type TParsedStage = {
   contextKeys?: string[];
   lines: string;
+  nestedStages?: TParsedStage[];
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   sourceStartLine: number;
@@ -147,12 +160,14 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   taskId?: string;
   taskSkills?: TTaskSkillFile[];
   taskYahl?: string;
+  taskYahlRefs?: Record<string, string>;
 }
 
 export interface IStage extends TWithTimestamps {
   _id: string;
   session: string;
   requestId: string;
+  agentMeta?: TStageAgentMeta;
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
   finishedAt?: Date;

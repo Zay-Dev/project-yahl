@@ -5,6 +5,14 @@ import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { YahlStage } from '@/shared/yahl-stage';
 
 type TPushRequestEnvelope = {
+  agentMeta?: {
+    isSubAgent: boolean;
+    nestedIndex?: number;
+    nestedPath?: string;
+    parallelGroupId?: string;
+    parallelSlot?: number;
+    parentRequestId?: string;
+  };
   context: Record<string, unknown>;
   loopMeta?: {
     arraySnapshot?: unknown[];
@@ -182,6 +190,7 @@ export const createSessionEventTracker = () => {
       const temperature = envelope.temperature ?? envelope.stage.temperature;
 
       await _post(url, {
+        ...(envelope.agentMeta ? { agentMeta: envelope.agentMeta } : {}),
         context: envelope.context,
         loopMeta: envelope.loopMeta,
         parsedStageIndex: envelope.parsedStageIndex,

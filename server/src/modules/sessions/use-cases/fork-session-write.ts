@@ -197,6 +197,7 @@ export const createForkSession = [
           anchorStageId: body.anchorStageId,
           replayRows,
           setups,
+          taskId: sourceSession.taskId,
           taskYahl,
         }));
       } catch (error) {

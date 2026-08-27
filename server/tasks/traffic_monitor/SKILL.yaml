@@ -449,73 +449,9 @@ stages:
       const label_origin = origin_display || origin;
       const label_destination = destination_display || destination;
       Do not fetch, notify, append day-page, or sleep.
-    logic: |
-      IF: verify_feedback;
-        day_page_sections = [];
-        *set_context(day_page_sections);
-      END:
-      const bind_origin = origin_resolved || origin;
-      const bind_destination = destination_resolved || destination;
-      const label_origin = origin_display || origin;
-      const label_destination = destination_display || destination;
-      const fetch = *fetch_driving_routes(
-        origin: bind_origin,
-        destination: bind_destination,
-        mode: private_car_driving,
-        max_routes: 3,
-        source: traffic_source,
-        as: TTrafficFetch,
-      );
-      IF: *fetch_failed(fetch);
-        miss_count = miss_count + 1;
-        *set_context(miss_count);
-        const miss_section = *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone);
-        *extend_context(day_page_sections, value: miss_section);
-        /nixery(
-          append-raw-knowledge-page,
-          topic: traffic-monitor,
-          page: day_page,
-          mode: append,
-          content: miss_section,
-        );
-        *submit_novel_ops(miss: true, fetch: fetch, source: traffic_source, source_ops_md);
-        const sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
-      ELSE:
-        const analysis = *analyze_routes(fetch, prev_routes, prev_incident_note, ~/task-skills/route-analysis/SKILL.md);
-        const fetch_with_status = { ...fetch, ...analysis.patch };
-        *extend_context(fetches, value: fetch_with_status);
-        prev_routes = fetch_with_status.routes;
-        poll_success_count = poll_success_count + 1;
-        *set_context(prev_routes, poll_success_count);
-        const section_md = *format_fetch_section(fetch_with_status, analysis, origin: label_origin, destination: label_destination, timezone: timezone);
-        *extend_context(day_page_sections, value: section_md);
-        /nixery(
-          append-raw-knowledge-page,
-          topic: traffic-monitor,
-          page: day_page,
-          mode: append,
-          content: section_md,
-        );
-        IF: poll_success_count <== 2 && !summary_notified;
-          *propose_kind_a_summary(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
-          summary_notified = poll_success_count >== 2;
-          *set_context(summary_notified, notifications);
-        END:
-        IF: *heartbeat_due(notifyPreference, started_at, last_heartbeat_at);
-          *propose_kind_b_heartbeat(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
-          last_heartbeat_at = new Date().toISOString();
-          *set_context(last_heartbeat_at, notifications);
-        END:
-        IF: poll_success_count >= 2 && analysis.should_notify_abnormal;
-          *propose_kind_c_abnormal(fetch_with_status, analysis, notifyChannel, notifyTo, notifyPreference, notifyName, notifications, origin: label_origin, destination: label_destination);
-          *set_context(notifications);
-        END:
-        prev_incident_note = analysis.incident_note || '';
-        *set_context(prev_incident_note);
-        *submit_novel_ops(miss: false, fetch: fetch_with_status, source: traffic_source, analysis: analysis, source_ops_md);
-        const sleep_sec = *adaptive_sleep_sec(fetch_with_status, prev_primary_eta: analysis.prev_primary_eta, started_at, monitor_minutes);
-      END:
-      *run_bash(sleep ${sleep_sec});
+    subAgent: true
+    logic:
+      $ref: stages/monitor.yahl
     verify:
       defId: stage-verify
       autoRetry: true

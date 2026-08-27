@@ -1,8 +1,12 @@
+import type { TYahlLogic } from './types';
+
+import { logicPreviewText } from './logic';
+
 export type TReplayRowSlotInput = {
   loopMeta?: { index?: number };
   parsedStageIndex?: number;
   sourceStartLine?: number;
-  stage?: { logic?: string };
+  stage?: { logic?: TYahlLogic };
 };
 
 export const replayRowSlotKey = (row: TReplayRowSlotInput) => {
@@ -16,7 +20,7 @@ export const replayRowSlotKey = (row: TReplayRowSlotInput) => {
     return `${row.sourceStartLine}:${loopIndex}`;
   }
 
-  return `${row.stage?.logic ?? ''}:${loopIndex}`;
+  return `${logicPreviewText(row.stage?.logic)}:${loopIndex}`;
 };
 
 export const dedupeReplayRowsByStageSlot = <T extends TReplayRowSlotInput>(rows: T[]) => {

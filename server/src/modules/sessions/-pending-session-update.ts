@@ -13,6 +13,7 @@ export type TCreatePendingSessionInput = {
   taskId: string;
   taskSkills?: TTaskSkillFile[];
   taskYahl: string;
+  taskYahlRefs?: Record<string, string>;
 };
 
 export const pendingSessionUpdateDoc = (
@@ -29,6 +30,7 @@ export const pendingSessionUpdateDoc = (
     taskId: input.taskId,
     taskSkills: input.taskSkills ?? [],
     taskYahl: input.taskYahl,
+    ...(input.taskYahlRefs ? { taskYahlRefs: input.taskYahlRefs } : {}),
     updatedAt: now,
   },
   $setOnInsert: {

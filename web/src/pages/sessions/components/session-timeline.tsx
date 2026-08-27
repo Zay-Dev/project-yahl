@@ -115,7 +115,7 @@ const StageRow = ({
 
   return (
   <Collapsible
-    className="rounded-lg border bg-background"
+    className={`rounded-lg border bg-background ${item.agentMeta?.isSubAgent ? "ml-3 border-dashed opacity-95" : ""}`}
     onOpenChange={onOpenChange}
     open={open}
   >
@@ -130,6 +130,11 @@ const StageRow = ({
           >
             {item.status}
           </span>
+          {item.agentMeta?.isSubAgent ? (
+            <span className="rounded border border-dashed px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              Sub-agent
+            </span>
+          ) : null}
           {badge ? (
             <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
               {badge}
