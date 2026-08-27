@@ -44,6 +44,11 @@ export type TYahlLogicRef = {
   $ref: string;
 };
 
+export type TYahlStageRefShell = {
+  $ref: string;
+  id?: string;
+};
+
 export type TYahlFragment = {
   stages: TYahlStage[];
   types?: string;
@@ -74,6 +79,7 @@ export type TYahlStage = {
   loopSetup?: string;
   mainThread?: boolean;
   maxBashCalls?: number;
+  prefixOverride?: string;
   warmUp?: string;
   whileSetup?: TYahlWhileSetup;
   maxTurns?: number;

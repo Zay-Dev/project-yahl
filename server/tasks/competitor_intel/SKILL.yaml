@@ -1,6 +1,7 @@
 name: competitor-intel
 description: Competitor intelligence brief
 resultContextKey: result
+browser: true
 
 types: |
   type TIntelItem = {

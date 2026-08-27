@@ -201,12 +201,18 @@ export const handleWhile = async (
 
   let { remainingBashCalls, remainingTurns } = resolveBudget(stage);
   const warmUp = stage.spec.warmUp?.trim();
+  const prefixOverride = stage.spec.prefixOverride?.trim();
   const loadPrefix = extras?.loadPrefixMessages ?? loadWarmupPrefixMessages;
   let warmupPrefix = extras?.prefixMessages;
   const startIteration = extras?.startIteration ?? 0;
   const startNestedIndex = extras?.startNestedIndex;
   const isResumeEntry = extras?.startIteration != null || startNestedIndex != null;
   const skipWarmUp = extras?.skipWarmUp === true || isResumeEntry;
+
+  const overridePrefix = (): ChatApiMessage[] | undefined =>
+    prefixOverride
+      ? [{ content: prefixOverride, role: 'user' }]
+      : undefined;
 
   const runBody = (iteration: number, nestedStart?: number) => {
     const loopMeta: TLoopMeta = {
@@ -255,9 +261,12 @@ export const handleWhile = async (
 
   if (warmUp) {
     if (skipWarmUp) {
-      warmupPrefix = warmupPrefix
-        ?? await loadWarmupPrefixForParsedStage(pipelineStageIndex)
-        ?? await loadPrefix(extras?.warmupRequestId);
+      warmupPrefix = warmupPrefix ?? (
+        prefixOverride
+          ? overridePrefix()
+          : await loadWarmupPrefixForParsedStage(pipelineStageIndex)
+            ?? await loadPrefix(extras?.warmupRequestId)
+      );
     } else {
       if (remainingTurns < 1) {
         return {};
@@ -295,8 +304,14 @@ export const handleWhile = async (
       }
 
       ({ remainingBashCalls, remainingTurns } = outcome.budget);
-      warmupPrefix = warmupPrefix ?? await loadPrefix(result.requestId);
+      warmupPrefix = warmupPrefix ?? (
+        prefixOverride
+          ? overridePrefix()
+          : await loadPrefix(result.requestId)
+      );
     }
+  } else if (prefixOverride && !warmupPrefix) {
+    warmupPrefix = overridePrefix();
   }
 
   let iteration = startIteration;
@@ -374,10 +389,13 @@ export const resumeWhileFromCheckpoint = async (
   ));
 
   const loadPrefix = extras?.loadPrefixMessages ?? loadWarmupPrefixMessages;
+  const prefixOverride = stage.spec.prefixOverride?.trim();
   const warmupPrefix = extras?.prefixMessages ?? (
-    extras?.warmupRequestId
-      ? await loadPrefix(extras.warmupRequestId)
-      : await loadWarmupPrefixForParsedStage(parsedStageIndex)
+    prefixOverride
+      ? [{ content: prefixOverride, role: 'user' as const }]
+      : extras?.warmupRequestId
+        ? await loadPrefix(extras.warmupRequestId)
+        : await loadWarmupPrefixForParsedStage(parsedStageIndex)
   );
 
   const runBody = (iteration: number) => {

@@ -35,6 +35,9 @@ export type TResponseNixeryUsageGroup = TResponseModelUsageSummary & {
 
 export type TResponseGetSession = {
   _id: string;
+  browser?: boolean;
+  browserAbandonedAt?: string;
+  browserAbandonedReason?: 'stop' | 'terminal' | 'ttl';
   createdAt: string;
   deletedAt?: string;
   forkedFrom?: TSessionForkedFrom;
@@ -181,7 +184,7 @@ export type TResponseAskUserQuestionListItem = {
   questionCount?: number;
   questionId: string;
   requestId: string;
-  status: 'answered' | 'pending';
+  status: 'answered' | 'pending' | 'superseded';
   title?: string;
 };
 
@@ -195,7 +198,7 @@ export type TResponseAskUserQuestionDetail = {
   batchId?: string;
   questionId: string;
   requestId: string;
-  status: 'answered' | 'pending';
+  status: 'answered' | 'pending' | 'superseded';
 };
 
 export type TVerifyResumeAction = 'edit_answer' | 'follow_up' | 'reask' | 'rerun';
@@ -235,7 +238,7 @@ export type TResponseUserPauseCheckpoint = {
   requestId: string;
   stage: TYahlStage;
   stageIndex?: number;
-  status: 'pending' | 'resumed';
+  status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
 };
 

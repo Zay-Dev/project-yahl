@@ -14,6 +14,7 @@ stages:
 
     assert.deepEqual(metadata, {
       background: false,
+      browser: false,
       description: 'Does a thing',
       name: 'Demo task',
     });
@@ -29,5 +30,17 @@ stages:
       (() => ({}))`);
 
     assert.equal(metadata.background, true);
+  });
+
+  it('reads browser true from yahl front matter', () => {
+    const metadata = parseTaskMetadata(`name: Browser smoke
+description: Needs sidecar
+browser: true
+
+stages:
+  - logic: |
+      (() => ({}))`);
+
+    assert.equal(metadata.browser, true);
   });
 });

@@ -57,6 +57,7 @@ export const createRun = [
       });
 
       await Repository.resolve('createPendingSession')({
+        browser: task.browser === true,
         isBackground: task.background === true,
         parsedStages: stages,
         resultContextKey,

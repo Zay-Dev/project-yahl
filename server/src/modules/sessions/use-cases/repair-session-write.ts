@@ -179,6 +179,7 @@ export const createRepairSession = [
               forkSessionId,
               sourceSessionId: params.sessionId,
             },
+            browser: sourceSession.browser === true,
             isBackground: sourceSession.isBackground === true,
             parsedStages,
             runCursor: {

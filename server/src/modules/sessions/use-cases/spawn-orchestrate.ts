@@ -258,6 +258,7 @@ export const spawnOrchestrate = async (
 
   await assertSessionRunAllowed({
     _id: String(session._id),
+    browserAbandonedAt: session.browserAbandonedAt,
     liveViewVncPort: session.liveViewVncPort,
     sessionId: session.sessionId,
   });

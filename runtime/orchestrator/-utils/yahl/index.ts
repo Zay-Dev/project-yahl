@@ -9,7 +9,9 @@ export {
   isYahlDocument,
   loopBodyLinesFromCompiledStage,
   parseYahlDocument,
+  parseYahlDocumentName,
   parseYahlFile,
+  parseYahlRunInputKeys,
   parseYahlTask,
   toLoopIterationStage,
 } from './parse';

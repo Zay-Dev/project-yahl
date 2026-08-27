@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { validateYahlStage } from './validate-stage';
-import { resolveMainThreadFlag } from './logic';
+import {
+  assertYahlStageRefShell,
+  resolveMainThreadFlag,
+} from './logic';
+import { loadYahlStageFromRef } from './resolve-yahl-ref';
 
 describe('mainThread', () => {
   it('defaults nested stages to isolated (mainThread false)', () => {
@@ -50,5 +54,102 @@ describe('mainThread', () => {
     const stage = validateYahlStage({ logic: 'a = 1;' });
 
     assert.equal(stage.mainThread, undefined);
+  });
+});
+
+describe('prefixOverride', () => {
+  it('accepts prefixOverride on whileSetup stages', () => {
+    const stage = validateYahlStage({
+      logic: 'c += 1;',
+      prefixOverride: 'Warm-up already ran.',
+      whileSetup: 'context.context.c < 2',
+      warmUp: 'c += 0;',
+    });
+
+    assert.equal(stage.prefixOverride, 'Warm-up already ran.');
+  });
+
+  it('rejects empty prefixOverride', () => {
+    assert.throws(
+      () => validateYahlStage({
+        logic: 'c += 1;',
+        prefixOverride: '   ',
+        whileSetup: 'true',
+      }),
+      /prefixOverride/,
+    );
+  });
+
+  it('rejects prefixOverride without loop/while', () => {
+    assert.throws(
+      () => validateYahlStage({
+        logic: 'c += 1;',
+        prefixOverride: 'hi',
+      }),
+      /prefixOverride requires/,
+    );
+  });
+});
+
+describe('stage $ref shell', () => {
+  it('allows id + $ref only', () => {
+    const shell = assertYahlStageRefShell({
+      $ref: 'stages/monitor.yahl',
+      id: 'monitor',
+    }, 'stages[0]');
+
+    assert.equal(shell.$ref, 'stages/monitor.yahl');
+    assert.equal(shell.id, 'monitor');
+  });
+
+  it('rejects extra shell keys', () => {
+    assert.throws(
+      () => assertYahlStageRefShell({
+        $ref: 'stages/monitor.yahl',
+        id: 'monitor',
+        warmUp: 'x',
+      }, 'stages[0]'),
+      /may only set id and \$ref/,
+    );
+  });
+
+  it('loads a full stage document and applies shell id', () => {
+    const stage = loadYahlStageFromRef(
+      { $ref: 'stage.yahl', id: 'monitor' },
+      {
+        taskRoot: '/task',
+        readFile: () => `
+whileSetup: "context.context.c < 2"
+warmUp: |
+  c += 0;
+prefixOverride: |
+  continue
+logic: |
+  c += 1;
+`,
+      },
+    );
+
+    assert.equal(stage.id, 'monitor');
+    assert.equal(stage.warmUp, 'c += 0;');
+    assert.equal(stage.prefixOverride, 'continue');
+    assert.equal(stage.logic, 'c += 1;');
+  });
+
+  it('rejects file id mismatch', () => {
+    assert.throws(
+      () => loadYahlStageFromRef(
+        { $ref: 'stage.yahl', id: 'monitor' },
+        {
+          taskRoot: '/task',
+          readFile: () => `
+id: other
+logic: "x = 1;"
+whileSetup: "true"
+`,
+        },
+      ),
+      /must match shell id/,
+    );
   });
 });

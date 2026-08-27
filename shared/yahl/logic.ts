@@ -3,6 +3,7 @@ import type {
   TYahlLogic,
   TYahlLogicRef,
   TYahlStage,
+  TYahlStageRefShell,
 } from './types';
 
 export const NESTED_LOGIC_PLACEHOLDER = '{ /* nested yahl */ }';
@@ -19,6 +20,49 @@ export const isYahlLogicRef = (value: unknown): value is TYahlLogicRef => {
   const keys = Object.keys(value);
 
   return keys.length === 1 && keys[0] === '$ref' && typeof (value as TYahlLogicRef).$ref === 'string';
+};
+
+export const isYahlStageRefShell = (value: unknown): value is TYahlStageRefShell => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return typeof record.$ref === 'string';
+};
+
+export const assertYahlStageRefShell = (
+  value: unknown,
+  label: string,
+): TYahlStageRefShell => {
+  if (!isYahlStageRefShell(value)) {
+    throw new Error(`${label}: expected stage $ref shell`);
+  }
+
+  const keys = Object.keys(value as object);
+
+  for (const key of keys) {
+    if (key !== '$ref' && key !== 'id') {
+      throw new Error(`${label}: stage $ref shell may only set id and $ref`);
+    }
+  }
+
+  const relative = assertSafeYahlRefPath(value.$ref, label);
+  let id: string | undefined;
+
+  if (value.id !== undefined) {
+    if (typeof value.id !== 'string' || !value.id.trim()) {
+      throw new Error(`${label}.id: must be a non-empty string when present`);
+    }
+
+    id = value.id.trim();
+  }
+
+  return {
+    $ref: relative,
+    ...(id ? { id } : {}),
+  };
 };
 
 export const isYahlFragment = (value: unknown): value is TYahlFragment => {

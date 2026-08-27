@@ -1,4 +1,9 @@
-import type { TYahlLogic, TYahlLogicRef, TYahlFragment } from './types';
+import type {
+  TYahlFragment,
+  TYahlLogic,
+  TYahlLogicRef,
+  TYahlStageRefShell,
+} from './types';
 
 export {
   MAX_YAHL_REF_DEPTH,
@@ -6,19 +11,28 @@ export {
   YAHL_REF_EXTENSIONS,
   asLogicScript,
   assertSafeYahlRefPath,
+  assertYahlStageRefShell,
   isNestedLogic,
   isYahlFragment,
   isYahlLogicRef,
+  isYahlStageRefShell,
   logicPreviewText,
   resolveMainThreadFlag,
 } from './logic';
 
 export {
   loadYahlFragmentFromRef,
+  loadYahlStageFromRef,
+  resolveDocumentStageEntries,
   resolveLogicToFragment,
   resolveYahlRefPath,
 } from './resolve-yahl-ref';
 
 export type { TResolveYahlRefOptions } from './resolve-yahl-ref';
 
-export type { TYahlLogic, TYahlLogicRef, TYahlFragment };
+export type {
+  TYahlFragment,
+  TYahlLogic,
+  TYahlLogicRef,
+  TYahlStageRefShell,
+};

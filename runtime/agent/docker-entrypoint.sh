@@ -23,7 +23,9 @@ if [ -n "${AGENT_SESSION_HOME:-}" ]; then
   export HOME="$AGENT_SESSION_HOME"
 fi
 
-if [ "${STAGEHAND_LIVEVIEW:-0}" = "1" ] || [ "${STAGEHAND_LIVEVIEW:-}" = "true" ]; then
+if [ -n "${YAHL_BROWSER_CDP_URL:-}" ]; then
+  echo "[stagehand] CDP sidecar mode — skip agent Xvfb/VNC (YAHL_BROWSER_CDP_URL set)"
+elif [ "${STAGEHAND_LIVEVIEW:-0}" = "1" ] || [ "${STAGEHAND_LIVEVIEW:-}" = "true" ]; then
   export DISPLAY="${STAGEHAND_LIVEVIEW_DISPLAY:-:99}"
   Xvfb "$DISPLAY" -screen 0 1280x720x24 &
   sleep 1

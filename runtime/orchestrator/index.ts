@@ -9,8 +9,12 @@ import { RedisPublisher } from '@/shared/transports/redis';
 import { prepareAgentFiles } from '@project-yahl/shared/agent-files/prepare-agent-files';
 
 import {
+  abandonBrowserSession,
   buildAgent,
+  buildBrowser,
   composeUp,
+  ensureBrowser,
+  pruneIdleBrowsersAndAbandon,
   resolvePublishedVncPort,
   shutdownAgent,
   writeAgentSessionOverride,
@@ -97,13 +101,24 @@ const _composeUp = async (
   sessionId: string,
   taskId: string,
   tracker: ReturnType<typeof createSessionEventTracker>,
+  browser: boolean,
 ) => {
-  const liveView = isStagehandLiveview();
+  const liveView = browser && isStagehandLiveview();
 
   await prepareAgentFiles({ repoRoot });
 
+  let browserCdpUrl: string | undefined;
+  let browserContainerName: string | undefined;
+
+  if (browser) {
+    const ensured = await ensureBrowser(sessionId);
+    browserCdpUrl = ensured.cdpUrl;
+    browserContainerName = ensured.containerName;
+  }
+
   const sessionOverrideFilePath = await writeAgentSessionOverride({
-    publishVnc: liveView,
+    ...(browserCdpUrl ? { browserCdpUrl } : {}),
+    publishVnc: false,
     sessionId,
     taskId,
   });
@@ -120,10 +135,10 @@ const _composeUp = async (
     composeProjectName: agentName,
   });
 
-  if (liveView) {
-    const vncHostPort = await resolvePublishedVncPort(agentName);
+  if (liveView && browserContainerName) {
+    const vncHostPort = await resolvePublishedVncPort(browserContainerName);
 
-    console.log(`[stagehand] live view enabled — VNC → localhost:${vncHostPort}`);
+    console.log(`[stagehand] live view enabled — VNC → localhost:${vncHostPort} (browser sidecar)`);
     await tracker.patchLiveViewVncPort(sessionId, vncHostPort);
     await tracker.flush();
   }
@@ -173,16 +188,32 @@ runCommand.action(async options => {
   acquireOrchestratorRunLock(sessionId);
 
   try {
-    buildAgent();
-
-    await _shutdownAgent(agentName, sessionId);
+    await pruneIdleBrowsersAndAbandon().catch((error) => {
+      console.error('[browser] pruneIdleBrowsers failed:', error);
+    });
 
     const run = resolveOrchestratorRun(options);
 
     console.log(`[orchestrator] mode=${run.mode} sessionId=${sessionId}`);
 
     const { session } = await prepareTaskWorkspace(sessionId);
-    await _composeUp(agentName, sessionId, session.taskId, tracker);
+    const needsBrowser = session.browser === true;
+
+    if (session.browserAbandonedAt) {
+      throw new Error(
+        `Session browser was abandoned (${session.browserAbandonedReason || 'unknown'}); cannot resume`,
+      );
+    }
+
+    if (needsBrowser) {
+      buildBrowser();
+    }
+
+    buildAgent();
+
+    await _shutdownAgent(agentName, sessionId);
+
+    await _composeUp(agentName, sessionId, session.taskId, tracker, needsBrowser);
     await _setupPublisher(tracker, sessionId);
 
     const prepared = await resolvePreparedRun(sessionId, run);
@@ -277,6 +308,12 @@ runCommand.action(async options => {
         console.error('[orchestrator] shutdownAgent failed:', shutdownError);
       }
 
+      try {
+        await abandonBrowserSession(sessionId, 'terminal');
+        console.log(`[yahl-diag] finally abandonBrowserSession done pid=${process.pid} sessionId=${sessionId}`);
+      } catch (abandonError) {
+        console.error('[orchestrator] abandonBrowserSession failed:', abandonError);
+      }
     } else {
       console.log(
         `[yahl-diag] finally skip shutdownAgent pid=${process.pid} sessionId=${sessionId}`,

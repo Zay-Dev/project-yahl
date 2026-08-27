@@ -9,7 +9,9 @@ import {
 } from "@project-yahl/shared/yahl/stage-compile";
 import {
   parseYahlDocument as parseYahlDocumentShared,
+  parseYahlDocumentName as parseYahlDocumentNameShared,
   parseYahlFile as parseYahlFileShared,
+  parseYahlRunInputKeys as parseYahlRunInputKeysShared,
   parseYahlTask as parseYahlTaskShared,
   type TParseYahlTaskOptions,
 } from "@project-yahl/shared/yahl/parse-task";
@@ -79,6 +81,12 @@ export const parseYahlDocument = (text: string): YahlDocument => {
     return validateYahlDocument(parsed);
   }
 };
+
+export const parseYahlRunInputKeys = (text: string): string[] | undefined =>
+  parseYahlRunInputKeysShared(text);
+
+export const parseYahlDocumentName = (text: string): string | undefined =>
+  parseYahlDocumentNameShared(text);
 
 export const parseYahlFile = (
   text: string,

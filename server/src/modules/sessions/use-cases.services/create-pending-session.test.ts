@@ -14,6 +14,7 @@ describe('pendingSessionUpdateDoc', () => {
 
     assert.deepEqual(update, {
       $set: {
+        browser: false,
         isBackground: false,
         runInput: {},
         taskId: 'verify_test',
@@ -50,5 +51,16 @@ describe('pendingSessionUpdateDoc', () => {
     });
 
     assert.equal(update.$set.isBackground, true);
+  });
+
+  it('sets browser when task needs browser sidecar', () => {
+    const update = pendingSessionUpdateDoc({
+      browser: true,
+      sessionId: 'sess-br',
+      taskId: 'browser_smoke',
+      taskYahl: 'name: smoke\nstages: []',
+    });
+
+    assert.equal(update.$set.browser, true);
   });
 });

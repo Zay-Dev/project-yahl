@@ -3,6 +3,7 @@ import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
 import type { TParsedStage, TSessionRunCursor } from './-types';
 
 export type TCreatePendingSessionInput = {
+  browser?: boolean;
   isBackground?: boolean;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
@@ -21,6 +22,7 @@ export const pendingSessionUpdateDoc = (
   now = new Date(),
 ) => ({
   $set: {
+    browser: input.browser === true,
     isBackground: input.isBackground === true,
     ...(input.parsedStages ? { parsedStages: input.parsedStages } : {}),
     runInput: input.runInput ?? {},

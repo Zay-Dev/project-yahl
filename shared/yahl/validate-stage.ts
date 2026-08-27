@@ -462,6 +462,10 @@ const assertStageFields = (
     if (stage.warmUp !== undefined) {
       throw new Error(`${label}: warmUp not allowed inside nested YAHL (v1)`);
     }
+
+    if (stage.prefixOverride !== undefined) {
+      throw new Error(`${label}: prefixOverride not allowed inside nested YAHL (v1)`);
+    }
   }
 
   if (nixeryRun) {
@@ -485,6 +489,10 @@ const assertStageFields = (
       throw new Error(`${label}: nixeryRun cannot combine with warmUp`);
     }
 
+    if (stage.prefixOverride !== undefined) {
+      throw new Error(`${label}: nixeryRun cannot combine with prefixOverride`);
+    }
+
     if (stage.produceContextKeys !== undefined) {
       throw new Error(`${label}: nixeryRun stages must not set produceContextKeys`);
     }
@@ -501,6 +509,9 @@ const assertStageFields = (
   const loopSetup = typeof stage.loopSetup === 'string' ? stage.loopSetup.trim() : undefined;
   const whileSetup = persistYahlWhileSetup(stage.whileSetup, label);
   const warmUp = typeof stage.warmUp === 'string' ? stage.warmUp.trim() : undefined;
+  const prefixOverride = typeof stage.prefixOverride === 'string'
+    ? stage.prefixOverride.trim()
+    : undefined;
 
   if (stage.loopSetup !== undefined) {
     if (!loopSetup || !LOOP_SETUP_PATTERN.test(loopSetup)) {
@@ -510,6 +521,10 @@ const assertStageFields = (
 
   if (stage.warmUp !== undefined && !warmUp) {
     throw new Error(`${label}.warmUp: required non-empty string when present`);
+  }
+
+  if (stage.prefixOverride !== undefined && !prefixOverride) {
+    throw new Error(`${label}.prefixOverride: required non-empty string when present`);
   }
 
   if (loopSetup && whileSetup) {
@@ -526,6 +541,10 @@ const assertStageFields = (
 
   if (warmUp && !loopSetup && !whileSetup) {
     throw new Error(`${label}: warmUp requires loopSetup or whileSetup`);
+  }
+
+  if (prefixOverride && !loopSetup && !whileSetup) {
+    throw new Error(`${label}: prefixOverride requires loopSetup or whileSetup`);
   }
 
   if (stage.temperature !== undefined) {
@@ -676,6 +695,7 @@ const assertStageFields = (
     ...(loopSetup ? { loopSetup } : {}),
     ...(whileSetup ? { whileSetup } : {}),
     ...(warmUp ? { warmUp } : {}),
+    ...(prefixOverride ? { prefixOverride } : {}),
     ...(stage.temperature !== undefined ? { temperature: Number(stage.temperature) } : {}),
     ...(stage.maxBashCalls !== undefined ? { maxBashCalls: Number(stage.maxBashCalls) } : {}),
     ...(stage.maxTurns !== undefined ? { maxTurns: Number(stage.maxTurns) } : {}),
@@ -701,7 +721,7 @@ export const validateYahlStage = (
 ): TYahlStage => {
   const prefix = options.labelPrefix ?? 'stages';
   const label = index === undefined
-    ? 'stage'
+    ? (options.labelPrefix ?? 'stage')
     : `${prefix}[${index}]`;
 
   if (!raw || typeof raw !== 'object') {

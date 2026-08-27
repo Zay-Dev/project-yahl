@@ -5,6 +5,7 @@ description: >
   daily report vs city public holidays.
 resultContextKey: result
 background: true
+browser: true
 runInput:
   - key: monitor_minutes
     type: text
@@ -433,87 +434,7 @@ stages:
       });
 
   - id: monitor
-    goto:
-      - command: '/stage(explorer)'
-        description: 'when the cached/locked traffic source is no longer available or usable'
-    contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, city_slug, source_instruction, instruction_active, verify_feedback, TTrafficFetch, TRouteSample, TMonitorResult, poll_miss, last_fetch, last_analysis, sleep_sec, bind_origin, bind_destination, label_origin, label_destination, bound_url, url_bound_od, page_ready, origin_ok, dest_ok, routes_ready]
-    updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count, day_page_sections, poll_miss, last_fetch, last_analysis, sleep_sec, bind_origin, bind_destination, bound_url, url_bound_od, page_ready, origin_ok, dest_ok, routes_ready]
-    agentOverrides:
-      bashTimeoutMs: 360000
-    maxBashCalls: 120
-    maxTurns: 200
-    whileSetup:
-      condition: "(Date.now() - Date.parse(String(context.context.started_at))) < Number(context.context.monitor_minutes) * 60 * 1000"
-      doAtLeast: 2
-    warmUp: |
-      Read ~/task-skills/monitor-loop/SKILL.md.
-      Read ~/task-skills/route-analysis/SKILL.md.
-      Read /opt/skills/worth-persisting-knowledge/SKILL.md.
-      IF: instruction_active;
-        *read(source_instruction);
-      END:
-      *read(source_ops_md);
-      IF: verify_feedback;
-        day_page_sections = [];
-        *set_context(day_page_sections);
-      END:
-      const src_url = String(traffic_source.url || '');
-      url_bound_od = src_url.includes('{origin}') && src_url.includes('{destination}');
-      IF: url_bound_od;
-        bound_url = *run_bash(node -e "const u=process.argv[1],o=process.argv[2],d=process.argv[3];process.stdout.write(u.replaceAll('{origin}',encodeURIComponent(o)).replaceAll('{destination}',encodeURIComponent(d)))" -- "${src_url}" "${bind_origin}" "${bind_destination}");
-      ELSE:
-        bound_url = src_url;
-      END:
-      *set_context(bound_url, url_bound_od);
-      Prefer ~/data/scripts/ when present (yahl-browser goto). Else Stagehand goto bound_url.
-      Open bound_url; confirm private-car / driving mode (not transit/walk/bike).
-      page_ready = true;
-      *set_context(page_ready);
-      IF: url_bound_od;
-        origin_ok = true;
-        *set_context(origin_ok);
-      ELSE:
-        Prefer ~/data/scripts/fill-origin-input.js / pick-origin companions when present.
-        Else Stagehand act/observe: type bind_origin; pick autocomplete matching district+landmark (reject hub drift).
-        origin_ok = true when chip/field matches bind_origin;
-        *set_context(origin_ok);
-      END:
-      IF: url_bound_od;
-        dest_ok = true;
-        *set_context(dest_ok);
-      ELSE:
-        Prefer ~/data/scripts/fill-destination companions when present.
-        Else Stagehand act/observe: type bind_destination; pick matching suggestion.
-        dest_ok = true when chip/field matches bind_destination;
-        *set_context(dest_ok);
-      END:
-      Do not fetch, notify, append day-page, or sleep.
-    logic:
-      $ref: stages/monitor.yahl
-    verify:
-      defId: stage-verify
-      autoRetry: true
-      skipWarmUp: false
-      minScore: 0.75
-      rubric: |
-        Pass when started_at is set and unchanged,
-        clock elapsed vs started_at is >= monitor_minutes OR elapsed already past window on retry,
-        day_page non-empty, fetches is an array of real polls (no invented polls),
-        miss_count is a number, notifications subset of real propose-notification outcomes.
-        Count distinct polls by deduping fetches on fetched_at (±60s) plus primary-route eta_min;
-        identical duplicate entries from retried context writes do not increase distinct poll count
-        and must not fail the stage by themselves.
-        Do not fail solely because raw fetches.length exceeds distinct poll count.
-        For fetched_at vs Clock: do not treat timestamps as invented when they fall within
-        [started_at, now_iso + 9h] (timezone mislabel tolerance) or when day_page_sections times corroborate;
-        only fail future timestamps with no corroborating section or iteration evidence.
-        When window allowed >=2 polls, require distinct_poll_count + miss_count >= 2 with miss sections covering gaps.
-        Use read_context_key('day_page_sections'), fetches, origin_display, destination_display, origin, destination, miss_count.
-        day_page_sections is a string array of append markdown for this run; do not read knowledge files or day_page path on disk.
-        Dedupe sections by ## HH:MM header line; retried batches may duplicate entries — count distinct sections only.
-        Each distinct section must contain Origin and Destination lines matching origin_display/destination_display (else runInput origin/destination).
-        Distinct section count >= distinct_poll_count + miss_count - 1. Fail when any distinct section lacks Origin or Destination.
-        On fail, set resumeAction: rerun.
+    $ref: stages/monitor.yahl
 
   - contextMode: true
     contextKeys: [started_at, fetches, miss_count, notifications, day_page, day_page_sections, monitor_minutes]

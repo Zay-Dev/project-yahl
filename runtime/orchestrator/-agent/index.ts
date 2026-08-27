@@ -8,7 +8,7 @@ import { toAgentStage } from '@/shared/yahl-stage';
 import { resolveVerifySkipWarmUp } from '@project-yahl/shared/yahl/verify';
 import { parseNixeryToolArguments } from '@/shared/stage-tools';
 
-import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
+import { parseYahlFile, parseYahlRunInputKeys } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import {
   seedDefaultContext,
@@ -163,7 +163,7 @@ class YahlAgentRunner {
   ) {
     this.storage = useStorage();
     const runInputContextKeys = yahl.trim()
-      ? parseYahlDocument(yahl).runInput?.map((field) => field.key)
+      ? parseYahlRunInputKeys(yahl)
       : undefined;
 
     seedRunInputContext(

@@ -10,7 +10,9 @@ import {
   compileStage,
   compileStageLines,
   parseYahlDocument,
+  parseYahlDocumentName,
   parseYahlFile,
+  parseYahlRunInputKeys,
   parseYahlTask,
   toLoopIterationStage,
 } from "./parse";
@@ -256,6 +258,36 @@ stages:
   });
 });
 
+describe("parseYahlRunInputKeys", () => {
+  it("reads runInput without validating stage $ref shells", () => {
+    const keys = parseYahlRunInputKeys(`
+name: x
+description: y
+runInput:
+  - origin
+  - destination
+stages:
+  - id: monitor
+    $ref: stages/monitor.yahl
+`);
+
+    assert.deepEqual(keys, ["origin", "destination"]);
+  });
+
+  it("reads traffic_monitor runInput despite stage-level $ref", () => {
+    const text = readFileSync(trafficMonitorPath, "utf-8");
+
+    assert.throws(() => parseYahlDocument(text), /logic: required/);
+
+    const keys = parseYahlRunInputKeys(text);
+
+    assert.ok(keys?.includes("origin"));
+    assert.ok(keys?.includes("destination"));
+    assert.ok(keys?.includes("monitor_minutes"));
+    assert.equal(parseYahlDocumentName(text), "traffic-monitor");
+  });
+});
+
 describe("parseYahlFile", () => {
   it("compiles test stages with temperature and loop type", () => {
     const stages = parseYahlFile(readFileSync(testSkillPath, "utf-8"));
@@ -292,24 +324,21 @@ describe("parseYahlFile", () => {
     );
     assert.match(monitor?.spec.warmUp ?? "", /bind_origin/);
     assert.match(monitor?.spec.warmUp ?? "", /monitor-loop\/SKILL\.md/);
-    assert.match(monitor?.spec.warmUp ?? "", /origin_display/);
+    assert.match(monitor?.spec.prefixOverride ?? "", /Warm-up already ran/);
     assert.equal(monitor?.spec.cacheMaxAge, undefined);
     assert.equal(monitor?.spec.subAgent, undefined);
     assert.equal(monitor?.spec.mainThread, undefined);
     assert.ok(monitor?.nestedStages?.length);
-    assert.equal(monitor?.nestedStages?.[0]?.spec.id, "bind");
-    assert.equal(monitor?.nestedStages?.[1]?.spec.id, "goto");
-    assert.equal(monitor?.nestedStages?.[2]?.spec.id, "ensure_origin");
-    assert.equal(monitor?.nestedStages?.[3]?.spec.id, "ensure_dest");
-    assert.equal(monitor?.nestedStages?.[4]?.spec.id, "submit_wait");
-    assert.equal(monitor?.nestedStages?.[5]?.spec.id, "extract");
-    assert.equal(monitor?.nestedStages?.[6]?.spec.id, "analyze");
-    assert.equal(monitor?.nestedStages?.[7]?.spec.id, "notify");
-    assert.equal(monitor?.nestedStages?.[8]?.spec.id, "sleep");
+    assert.equal(monitor?.nestedStages?.[0]?.spec.id, "submit_wait");
+    assert.equal(monitor?.nestedStages?.[1]?.spec.id, "extract");
+    assert.equal(monitor?.nestedStages?.[2]?.spec.id, "analyze");
+    assert.equal(monitor?.nestedStages?.[3]?.spec.id, "notify_and_sleep");
+    assert.equal(monitor?.nestedStages?.length, 4);
     assert.ok((monitor?.contextKeys ?? []).includes("fetches"));
     assert.ok((monitor?.contextKeys ?? []).includes("poll_success_count"));
     assert.ok((monitor?.contextKeys ?? []).includes("origin_display"));
     assert.ok(monitor?.spec.verify);
+    assert.equal(monitor?.spec.verify?.skipWarmUp, undefined);
     assert.equal(assemble?.spec.contextMode, true);
     assert.equal(assemble?.spec.verify, undefined);
     assert.deepEqual(assemble?.produceContextKeys, ["monitor"]);
@@ -351,6 +380,7 @@ describe("toAgentStage", () => {
   it("omits whileSetup and warmUp for agent/redis payloads", () => {
     const agent = toAgentStage({
       logic: "c += 1;",
+      prefixOverride: "continue",
       warmUp: "c += 0;",
       whileSetup: "context.context.c < 10",
     });
@@ -358,6 +388,7 @@ describe("toAgentStage", () => {
     assert.equal(agent.logic, "c += 1;");
     assert.equal(agent.whileSetup, undefined);
     assert.equal(agent.warmUp, undefined);
+    assert.equal(agent.prefixOverride, undefined);
   });
 
   it("omits verify for agent/redis payloads", () => {

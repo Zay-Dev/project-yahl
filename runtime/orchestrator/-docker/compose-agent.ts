@@ -53,6 +53,7 @@ const runComposeCommand = async (
 const yamlQuote = (value: string) => JSON.stringify(value);
 
 export type TAgentSessionOverrideOptions = {
+  browserCdpUrl?: string;
   publishVnc?: boolean;
   sessionId: string;
   taskId: string;
@@ -73,9 +74,45 @@ export const writeAgentSessionOverride = async (opts: TAgentSessionOverrideOptio
     '    environment:',
     `      AGENT_SESSION_HOME: ${yamlQuote(sessionHome)}`,
     `      AGENT_YAHL_DIR: ${yamlQuote(AGENT_YAHL_CONTAINER_DIR)}`,
+  ];
+
+  if (opts.browserCdpUrl?.trim()) {
+    const browserCdpUrl = opts.browserCdpUrl.trim();
+    const browserHost = `browser-${opts.sessionId}`;
+    let cdpHost = '';
+
+    try {
+      cdpHost = new URL(browserCdpUrl).hostname;
+    } catch {
+      // ignore invalid URL — CDP env still set below
+    }
+
+    const noProxyHosts = [
+      'localhost',
+      '127.0.0.1',
+      '::1',
+      'redis',
+      'server',
+      'mongo',
+      'onecli',
+      'worker',
+      'llm-proxy',
+      'host.docker.internal',
+      browserHost,
+      ...(cdpHost && cdpHost !== browserHost ? [cdpHost] : []),
+    ];
+
+    const noProxy = noProxyHosts.join(',');
+
+    lines.push(`      YAHL_BROWSER_CDP_URL: ${yamlQuote(browserCdpUrl)}`);
+    lines.push(`      NO_PROXY: ${yamlQuote(noProxy)}`);
+    lines.push(`      no_proxy: ${yamlQuote(noProxy)}`);
+  }
+
+  lines.push(
     '    volumes:',
     `      - ${yamlQuote(`${hostTaskData}:${containerTaskData}:rw`)}`,
-  ];
+  );
 
   if (opts.publishVnc) {
     lines.push('    ports:');

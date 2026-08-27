@@ -1,0 +1,24 @@
+FROM node:22
+
+ARG OMNIFLEX_APP_DIR=project-yahl
+ARG PLAYWRIGHT_VERSION=1.60.0
+
+WORKDIR /browser
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends xvfb x11vnc socat \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+
+RUN npm install --omit=dev "playwright@${PLAYWRIGHT_VERSION}" \
+  && npx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
+  && npx playwright@${PLAYWRIGHT_VERSION} install chromium \
+  && node -e "process.stdout.write(require('playwright').chromium.executablePath())" > /opt/chrome-path
+
+COPY ${OMNIFLEX_APP_DIR}/runtime/browser-entrypoint.sh /browser-entrypoint.sh
+RUN chmod +x /browser-entrypoint.sh
+
+EXPOSE 9222 5900
+
+ENTRYPOINT ["/browser-entrypoint.sh"]

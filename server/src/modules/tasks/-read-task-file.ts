@@ -12,13 +12,14 @@ import { taskYahlAbsolutePath, taskYahlRelativePath } from './-tasks-root';
 export const readTaskFile = async (taskId: string) => {
   const yahlPath = taskYahlAbsolutePath(taskId);
   const yahl = await fs.readFile(yahlPath, 'utf8');
-  const { background, description, name } = parseTaskMetadata(yahl);
+  const { background, browser, description, name } = parseTaskMetadata(yahl);
   const runInputFields = parseRunInputFieldsFromYahl(yahl);
   const runInputKeys = runInputKeysOf(runInputFields);
   const taskSkills = await readTaskSkillsFromDisk(taskId);
 
   return {
     background,
+    browser,
     description,
     id: taskId,
     name,

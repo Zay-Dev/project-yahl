@@ -64,6 +64,9 @@ const forkSessionSetupSchema = new Schema({
 }, { _id: false });
 
 const sessionSchema = new Schema<TDbSession>({
+  browser: { default: false, type: Boolean },
+  browserAbandonedAt: model.d.optionalDate(),
+  browserAbandonedReason: model.d.optionalString(),
   deletedAt: model.d.deletedAt(),
   forkedFrom: forkedFromSchema,
   isBackground: { default: false, type: Boolean },

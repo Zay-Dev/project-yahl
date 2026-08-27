@@ -51,4 +51,45 @@ describe('writeAgentSessionOverride', () => {
     assert.doesNotMatch(content, new RegExp(`${AGENT_YAHL_CONTAINER_DIR}:ro`));
     assert.doesNotMatch(content, /\/opt\/skills/);
   });
+
+  it('injects YAHL_BROWSER_CDP_URL when browserCdpUrl is set', async () => {
+    previousHostRepoRoot = process.env.HOST_REPO_ROOT;
+    const repoRoot = await mkdtemp(path.join(tmpdir(), 'yahl-compose-cdp-'));
+    runtimeAgentsRoot = path.join(repoRoot, 'runtime', '.agents');
+    process.env.HOST_REPO_ROOT = repoRoot;
+    process.env.RUNTIME_REPO_ROOT = path.join(repoRoot, 'runtime');
+
+    await mkdir(path.join(repoRoot, 'data', 'workspace', 'tasks', 'hk_weather'), { recursive: true });
+
+    const overridePath = await writeAgentSessionOverride({
+      browserCdpUrl: 'http://browser-sess-cdp:9222',
+      sessionId: 'sess-cdp',
+      taskId: 'hk_weather',
+    });
+    const content = await readFile(overridePath, 'utf8');
+
+    assert.match(content, /YAHL_BROWSER_CDP_URL: "http:\/\/browser-sess-cdp:9222"/);
+    assert.match(content, /NO_PROXY: ".*browser-sess-cdp"/);
+  });
+
+  it('adds CDP IP to NO_PROXY so HTTP_PROXY does not intercept Stagehand', async () => {
+    previousHostRepoRoot = process.env.HOST_REPO_ROOT;
+    const repoRoot = await mkdtemp(path.join(tmpdir(), 'yahl-compose-cdp-ip-'));
+    runtimeAgentsRoot = path.join(repoRoot, 'runtime', '.agents');
+    process.env.HOST_REPO_ROOT = repoRoot;
+    process.env.RUNTIME_REPO_ROOT = path.join(repoRoot, 'runtime');
+
+    await mkdir(path.join(repoRoot, 'data', 'workspace', 'tasks', 'hk_weather'), { recursive: true });
+
+    const overridePath = await writeAgentSessionOverride({
+      browserCdpUrl: 'http://172.20.0.11:9222',
+      sessionId: 'sess-cdp-ip',
+      taskId: 'hk_weather',
+    });
+    const content = await readFile(overridePath, 'utf8');
+
+    assert.match(content, /YAHL_BROWSER_CDP_URL: "http:\/\/172\.20\.0\.11:9222"/);
+    assert.match(content, /NO_PROXY: ".*browser-sess-cdp-ip.*172\.20\.0\.11"/);
+    assert.match(content, /no_proxy: ".*172\.20\.0\.11"/);
+  });
 });

@@ -55,7 +55,7 @@ export const toUserPauseCheckpointResponse = (checkpoint: {
   requestId: string;
   stage: TYahlStage;
   stageIndex?: number;
-  status: 'pending' | 'resumed';
+  status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
 }): TResponseUserPauseCheckpoint => ({
   ...(checkpoint.loopMeta ? { loopMeta: checkpoint.loopMeta } : {}),
@@ -147,7 +147,7 @@ export const listUserPauseCheckpoints = [
     .validate(({ req }) => ({
       params: joi.getValidatedOrThrow(sessionParamsSchema, req.params),
       query: joi.getValidatedOrThrow(
-        Joi.object({ status: Joi.string().valid('pending', 'resumed').optional() }),
+        Joi.object({ status: Joi.string().valid('pending', 'resumed', 'superseded').optional() }),
         req.query,
       ),
     }))
@@ -199,6 +199,7 @@ export const resumeUserPauseCheckpoint = [
 
       await assertSessionResumeAllowed({
         _id: String(session._id),
+        browserAbandonedAt: session.browserAbandonedAt,
         liveViewVncPort: session.liveViewVncPort,
         sessionId: session.sessionId,
       });

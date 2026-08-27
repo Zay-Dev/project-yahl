@@ -99,6 +99,7 @@ const yahlStageSchemaLazy: Joi.ObjectSchema<TYahlStage> = Joi.object<TYahlStage>
   verify: verifySpecSchema.optional(),
   version: Joi.number().integer().min(1).optional(),
   warmUp: Joi.string().trim().optional(),
+  prefixOverride: Joi.string().trim().min(1).optional(),
   whileSetup: whileSetupSchema.optional(),
 })
   .id('yahlStage')
@@ -121,6 +122,10 @@ const yahlStageSchemaLazy: Joi.ObjectSchema<TYahlStage> = Joi.object<TYahlStage>
 
     if (value.warmUp !== undefined && value.loopSetup === undefined && value.whileSetup === undefined) {
       return helpers.error('any.invalid', { message: 'warmUp requires loopSetup or whileSetup' });
+    }
+
+    if (value.prefixOverride !== undefined && value.loopSetup === undefined && value.whileSetup === undefined) {
+      return helpers.error('any.invalid', { message: 'prefixOverride requires loopSetup or whileSetup' });
     }
 
     if (value.conditionMode === true && typeof value.logic === 'string' && !value.logic.includes('IF:')) {
@@ -164,6 +169,10 @@ const yahlStageSchemaLazy: Joi.ObjectSchema<TYahlStage> = Joi.object<TYahlStage>
 
       if (value.warmUp !== undefined) {
         return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with warmUp' });
+      }
+
+      if (value.prefixOverride !== undefined) {
+        return helpers.error('any.invalid', { message: 'nixeryRun cannot combine with prefixOverride' });
       }
 
       if (value.produceContextKeys !== undefined) {

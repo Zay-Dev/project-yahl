@@ -26,4 +26,26 @@ stages:
 
     assert.equal(update.$set.isBackground, true);
   });
+
+  it('maps task browser metadata to pending session browser', () => {
+    const yahl = `name: browser-smoke
+description: Needs sidecar
+browser: true
+
+stages:
+  - logic: |
+      (() => ({}))`;
+    const task = parseTaskMetadata(yahl);
+
+    assert.equal(task.browser, true);
+
+    const update = pendingSessionUpdateDoc({
+      browser: task.browser === true,
+      sessionId: 'sess-br',
+      taskId: 'browser_smoke',
+      taskYahl: yahl,
+    });
+
+    assert.equal(update.$set.browser, true);
+  });
 });

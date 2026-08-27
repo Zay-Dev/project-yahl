@@ -9,7 +9,5 @@ export const shutdownAgent = async (agentName: string, sessionId: string) => {
     sessionId,
   });
 
-  if (globalThis.sessionTracker?.patchLiveViewVncPort) {
-    await globalThis.sessionTracker.patchLiveViewVncPort(sessionId, null);
-  }
+  // Live view VNC is on the browser sidecar; keep liveViewVncPort across agent pause.
 };

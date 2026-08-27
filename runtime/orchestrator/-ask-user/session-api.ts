@@ -53,6 +53,9 @@ export type TSessionRunCursor = {
 };
 
 export type TSessionFetch = {
+  browser?: boolean;
+  browserAbandonedAt?: string;
+  browserAbandonedReason?: 'stop' | 'terminal' | 'ttl';
   forkedFrom?: {
     anchorStageId: string;
     forkSessionId: string;

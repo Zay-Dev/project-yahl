@@ -5,7 +5,12 @@ import type { TYahlDocument } from './document-schema';
 import { validateYahlDocument } from './document-schema';
 import { compileStage } from './stage-compile';
 import type { TYahlStage } from './types';
-import type { TResolveYahlRefOptions } from './resolve-yahl-ref';
+import {
+  resolveDocumentStageEntries,
+  type TResolveYahlRefOptions,
+} from './resolve-yahl-ref';
+import { isYahlStageRefShell } from './logic';
+import { parseRunInputFields } from './run-input-keys';
 
 export type TParseYahlTaskOptions = {
   readFile?: (absolutePath: string) => string;
@@ -84,15 +89,99 @@ const buildStagesFromDocument = (
   return stages;
 };
 
+const resolveRawDocumentStages = (
+  parsed: unknown,
+  options: TParseYahlTaskOptions,
+  yahlRefs: Record<string, string>,
+): unknown => {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  const doc = parsed as Record<string, unknown>;
+
+  if (!Array.isArray(doc.stages)) {
+    return parsed;
+  }
+
+  const hasStageRef = doc.stages.some((entry) => isYahlStageRefShell(entry));
+
+  if (!hasStageRef) {
+    return parsed;
+  }
+
+  if (!options.taskRoot) {
+    throw new Error('stages: stage $ref requires taskRoot to resolve');
+  }
+
+  return {
+    ...doc,
+    stages: resolveDocumentStageEntries(doc.stages, {
+      readFile: options.readFile,
+      refsOut: yahlRefs,
+      taskRoot: options.taskRoot,
+    }),
+  };
+};
+
 export const parseYahlDocument = (text: string): TYahlDocument => {
   const parsed = YAML.parse(text);
 
   return validateYahlDocument(parsed);
 };
 
+export const parseYahlRunInputKeys = (text: string): string[] | undefined => {
+  if (!text.trim()) {
+    return undefined;
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = YAML.parse(text);
+  } catch {
+    return undefined;
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return undefined;
+  }
+
+  const runInput = parseRunInputFields((parsed as Record<string, unknown>).runInput);
+
+  return runInput?.map((field) => field.key);
+};
+
+export const parseYahlDocumentName = (text: string): string | undefined => {
+  if (!text.trim()) {
+    return undefined;
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = YAML.parse(text);
+  } catch {
+    return undefined;
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return undefined;
+  }
+
+  const name = (parsed as Record<string, unknown>).name;
+
+  if (typeof name !== 'string' || !name.trim()) {
+    return undefined;
+  }
+
+  return name.trim();
+};
+
 export const parseYahlTask = (text: string, options: TParseYahlTaskOptions = {}) => {
-  const document = parseYahlDocument(text);
   const yahlRefs: Record<string, string> = {};
+  const parsed = resolveRawDocumentStages(YAML.parse(text), options, yahlRefs);
+  const document = validateYahlDocument(parsed);
   const resolveOptions = options.taskRoot
     ? {
       readFile: options.readFile,

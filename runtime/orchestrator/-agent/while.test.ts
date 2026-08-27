@@ -298,6 +298,50 @@ describe('handleWhile', () => {
     assert.deepEqual(prefixes[2], warmupPrefix);
   });
 
+  it('uses prefixOverride instead of warmUp transcript', async () => {
+    const prefixes: unknown[] = [];
+    let loaded = 0;
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      prefixes.push(options?.prefixMessages);
+      const nested = options?.useStorage?.() ?? storageFrom({});
+      nested.context.set('c', Number(nested.context.get('c') ?? 0) + 1);
+
+      return {
+        requestId: options?.loopMeta?.kind === 'warmup' ? 'warm-1' : `poll-${options?.loopMeta?.index}`,
+        storage: nested,
+        usage: { bashCalls: 0, turns: 1 },
+      };
+    };
+
+    await handleWhile(
+      whileStage({
+        prefixOverride: 'Warm-up already ran. Execute Input only.',
+        warmUp: 'c += 0;',
+        whileSetup: 'context.context.c < 3',
+      }),
+      storageFrom({ c: 0 }),
+      runner,
+      undefined,
+      undefined,
+      undefined,
+      {
+        loadPrefixMessages: async () => {
+          loaded += 1;
+          return warmupPrefix;
+        },
+      },
+    );
+
+    assert.equal(loaded, 0);
+    assert.equal(prefixes[0], undefined);
+    assert.deepEqual(prefixes[1], [{
+      content: 'Warm-up already ran. Execute Input only.',
+      role: 'user',
+    }]);
+    assert.deepEqual(prefixes[2], prefixes[1]);
+  });
+
   it('skips warmUp when skipWarmUp is true and loads prefix', async () => {
     const kinds: string[] = [];
     const prefixes: unknown[] = [];

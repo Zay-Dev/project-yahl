@@ -88,6 +88,7 @@ export type TYahlStage = {
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
   version?: number;
+  prefixOverride?: string;
   warmUp?: string;
   whileSetup?: TYahlWhileSetup;
 };
@@ -148,6 +149,9 @@ export interface IForkSession extends TWithTimestamps {
 
 export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
+  browser?: boolean;
+  browserAbandonedAt?: Date;
+  browserAbandonedReason?: 'stop' | 'terminal' | 'ttl';
   forkedFrom?: TSessionForkedFrom;
   isBackground?: boolean;
   liveViewVncPort?: number | null;
@@ -215,7 +219,7 @@ export interface IToolCall extends TWithTimestamps {
   toolCalls: Record<string, unknown>[];
 }
 
-export type TAskUserQuestionStatus = 'answered' | 'pending';
+export type TAskUserQuestionStatus = 'answered' | 'pending' | 'superseded';
 
 export type TParsedStageSnapshot = {
   lines: string;
@@ -279,7 +283,7 @@ export interface IVerifyCheckpoint extends TWithTimestamps {
   verifyId: string;
 }
 
-export type TUserPauseCheckpointStatus = 'pending' | 'resumed';
+export type TUserPauseCheckpointStatus = 'pending' | 'resumed' | 'superseded';
 
 export interface IUserPauseCheckpoint extends TWithTimestamps {
   _id: string;

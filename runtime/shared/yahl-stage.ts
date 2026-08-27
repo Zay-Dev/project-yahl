@@ -37,6 +37,7 @@ export { validateYahlStage };
 export const toAgentStage = (stage: YahlStage): YahlStage => {
   const {
     loopSetup: _loopSetup,
+    prefixOverride: _prefixOverride,
     verify: _verify,
     warmUp: _warmUp,
     whileSetup: _whileSetup,

@@ -29,9 +29,14 @@ export const clearStaleLiveViewVncPort = async (sessionRef: string) => {
 
 export const assertSessionRunAllowed = async (session: {
   _id: string;
+  browserAbandonedAt?: Date | string | null;
   liveViewVncPort?: number | null;
   sessionId: string;
 }) => {
+  if (session.browserAbandonedAt) {
+    throw errors.conflict('Session browser was abandoned; resume is no longer available');
+  }
+
   if (isAgentContainerRunning(session.sessionId)) {
     throw errors.conflict('Session already has an active agent run');
   }
