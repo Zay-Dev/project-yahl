@@ -185,6 +185,9 @@ export const createRepairSession = [
             runCursor: {
               kind: 'repair',
               ...(anchorRow.loopMeta ? { loopMeta: anchorRow.loopMeta } : {}),
+              ...(anchorRow.agentMeta?.nestedIndex != null
+                ? { nestedIndex: anchorRow.agentMeta.nestedIndex }
+                : {}),
               repairInstruction: instruction,
               stageIndex: anchorParsedStageIndex,
             },

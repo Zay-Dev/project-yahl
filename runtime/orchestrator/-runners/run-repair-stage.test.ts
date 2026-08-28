@@ -4,6 +4,10 @@ import { describe, it } from 'node:test';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
 import type { TPreparedRunInput } from '@/orchestrator/-runners/prepared-run-types';
 
+import {
+  REPAIR_MIN_MAX_BASH_CALLS,
+  REPAIR_MIN_MAX_TURNS,
+} from '@/orchestrator/-repair/repair-helpers';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import { runRepairStage, toRepairExecutionStage } from '@/orchestrator/-runners/run-repair-stage';
 
@@ -28,9 +32,41 @@ const whileStage: ParsedStage = {
   type: 'while',
 };
 
+const nestedSubmitWait: ParsedStage = {
+  lines: 'logic: submit',
+  sourceStartLine: 21,
+  spec: { id: 'submit_wait', logic: 'submit', maxBashCalls: 12, maxTurns: 14 },
+  type: 'plain',
+};
+
+const nestedWhileStage: ParsedStage = {
+  lines: 'whileSetup: cond { /* nested yahl */ }',
+  nestedStages: [
+    nestedSubmitWait,
+    {
+      lines: 'logic: extract',
+      sourceStartLine: 22,
+      spec: { id: 'extract', logic: 'extract' },
+      type: 'plain',
+    },
+  ],
+  sourceStartLine: 20,
+  spec: {
+    id: 'monitor',
+    logic: { stages: [{ logic: 'submit' }, { logic: 'extract' }] },
+    whileSetup: 'cond',
+  },
+  type: 'while',
+};
+
 describe('toRepairExecutionStage', () => {
-  it('returns plain stages unchanged', () => {
-    assert.equal(toRepairExecutionStage(plainStage), plainStage);
+  it('returns plain stages with repair budget floors', () => {
+    const stage = toRepairExecutionStage(plainStage);
+
+    assert.equal(stage.type, 'plain');
+    assert.equal(stage.spec.logic, 'echo');
+    assert.equal(stage.spec.maxTurns, REPAIR_MIN_MAX_TURNS);
+    assert.equal(stage.spec.maxBashCalls, REPAIR_MIN_MAX_BASH_CALLS);
   });
 
   it('compiles loop and while headers to plain execution stages', () => {
@@ -38,6 +74,29 @@ describe('toRepairExecutionStage', () => {
     assert.equal(toRepairExecutionStage(whileStage).type, 'plain');
     assert.equal(toRepairExecutionStage(loopStage).spec.logic, 'body');
     assert.equal(toRepairExecutionStage(whileStage).spec.logic, 'poll');
+  });
+
+  it('uses nestedStages[nestedIndex] for nested while shells and raises budgets', () => {
+    const stage = toRepairExecutionStage(nestedWhileStage, 0);
+
+    assert.equal(stage.spec.id, 'submit_wait');
+    assert.equal(stage.spec.logic, 'submit');
+    assert.equal(stage.spec.maxTurns, REPAIR_MIN_MAX_TURNS);
+    assert.equal(stage.spec.maxBashCalls, REPAIR_MIN_MAX_BASH_CALLS);
+  });
+
+  it('rejects nested while without nestedIndex', () => {
+    assert.throws(
+      () => toRepairExecutionStage(nestedWhileStage),
+      /nestedIndex/,
+    );
+  });
+
+  it('rejects out-of-range nestedIndex', () => {
+    assert.throws(
+      () => toRepairExecutionStage(nestedWhileStage, 9),
+      /out of range/,
+    );
   });
 });
 
@@ -64,7 +123,12 @@ describe('runRepairStage', () => {
       return { storage };
     });
 
-    assert.deepEqual(capturedOptions?.stages, [plainStage]);
+    const stages = capturedOptions?.stages as ParsedStage[];
+
+    assert.equal(stages.length, 1);
+    assert.equal(stages[0]?.spec.logic, 'echo');
+    assert.equal(stages[0]?.spec.maxTurns, REPAIR_MIN_MAX_TURNS);
+    assert.equal(stages[0]?.spec.maxBashCalls, REPAIR_MIN_MAX_BASH_CALLS);
     assert.equal(capturedOptions?.repairMode, true);
     assert.equal(capturedOptions?.startFromStageIndex, 0);
     assert.equal(capturedOptions?.systemAppend, 'repair append');
@@ -138,5 +202,46 @@ describe('runRepairStage', () => {
     assert.equal(stages[0]?.spec.logic, 'poll');
     assert.equal(capturedOptions?.repairMode, true);
     assert.equal(capturedOptions?.loopMeta, undefined);
+  });
+
+  it('invokes runYahl for nested while child via nestedIndex', async () => {
+    const storage = createStorage();
+    const loopMeta = {
+      arraySnapshot: [],
+      index: 0,
+      kind: 'while' as const,
+      value: 0,
+    };
+    const prepared: TPreparedRunInput = {
+      cursor: {
+        kind: 'repair',
+        loopMeta,
+        nestedIndex: 0,
+        stageIndex: 0,
+      },
+      parsedStages: [nestedWhileStage],
+      resultContextKey: 'result',
+      storage,
+      systemAppend: 'repair append',
+      taskYahl: '',
+    };
+
+    let capturedOptions: Record<string, unknown> | undefined;
+
+    await runRepairStage(prepared, async (_yahl, options) => {
+      capturedOptions = options as Record<string, unknown>;
+
+      return { storage };
+    });
+
+    const stages = capturedOptions?.stages as ParsedStage[];
+
+    assert.equal(stages.length, 1);
+    assert.equal(stages[0]?.spec.id, 'submit_wait');
+    assert.equal(stages[0]?.spec.logic, 'submit');
+    assert.equal(stages[0]?.spec.maxTurns, REPAIR_MIN_MAX_TURNS);
+    assert.equal(stages[0]?.spec.maxBashCalls, REPAIR_MIN_MAX_BASH_CALLS);
+    assert.equal(capturedOptions?.repairMode, true);
+    assert.deepEqual(capturedOptions?.loopMeta, loopMeta);
   });
 });

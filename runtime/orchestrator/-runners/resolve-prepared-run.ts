@@ -84,6 +84,9 @@ export const resolvePreparedRun = async (
       cursor: {
         kind: 'repair',
         loopMeta: session.runCursor.loopMeta as TLoopMeta | undefined,
+        ...(session.runCursor.nestedIndex === undefined
+          ? {}
+          : { nestedIndex: session.runCursor.nestedIndex }),
         repairInstruction,
         stageIndex,
       },
