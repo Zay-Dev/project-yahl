@@ -21,5 +21,6 @@ describe('assertSessionRunAllowed browser abandon', () => {
     assert.match(source, /status: 'superseded'/);
     assert.match(source, /\$unset: \{ runCursor/);
     assert.match(source, /clearSessionControl/);
+    assert.doesNotMatch(source, /lastError/);
   });
 });

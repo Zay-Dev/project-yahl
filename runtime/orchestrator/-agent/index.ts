@@ -794,6 +794,12 @@ class YahlAgentRunner {
         kind: 'pipeline',
         stageIndex: this.pipelineStageIndex,
       };
+      globalThis.orchestratorFailureInfo = {
+        requestId: this.requestId,
+        ...(this.activeStage?.spec?.id
+          ? { stageId: String(this.activeStage.spec.id) }
+          : {}),
+      };
 
       if (error instanceof AskUserPausedError) {
         throw error;

@@ -265,6 +265,14 @@ export const createSessionEventTracker = () => {
   const patchSession = (
     sessionId: string,
     body: {
+      lastError?: {
+        at: string;
+        code: 'budget_burnout' | 'stage_failed';
+        message: string;
+        requestId?: string;
+        stageId?: string;
+        stageIndex?: number;
+      };
       liveViewVncPort?: number | null;
       result?: unknown;
       runCursor?: {
@@ -284,6 +292,7 @@ export const createSessionEventTracker = () => {
         ...('result' in body ? { result: body.result } : {}),
         ...('liveViewVncPort' in body ? { liveViewVncPort: body.liveViewVncPort } : {}),
         ...('runCursor' in body ? { runCursor: body.runCursor } : {}),
+        ...('lastError' in body ? { lastError: body.lastError } : {}),
       });
     });
   };

@@ -451,7 +451,7 @@ stages:
       });
 
   - id: monitor
-    $ref: stages/monitor.yahl
+    $ref: stages/monitor.yaml
 
   - contextMode: true
     contextKeys: [started_at, fetches, miss_count, notifications, day_page, day_page_sections, monitor_minutes]

@@ -10,6 +10,7 @@ import { SessionTitle } from "@/pages/sessions/components/session-title";
 import { TokenStatsRow } from "@/pages/sessions/components/token-stats-row";
 import { SessionDeleteDialog } from "@/pages/sessions/components/session-delete-dialog";
 import { SessionLiveViewMenu } from "@/pages/sessions/components/session-live-view-menu";
+import { resolveSessionStatusLabel } from "@/pages/sessions/components/session-stuck-copy";
 import { SessionTransportControls } from "@/pages/sessions/components/session-transport-controls";
 
 type TSessionOverviewProps = {
@@ -138,13 +139,7 @@ export function SessionOverview({
         <div>
           <dt className="text-muted-foreground">Status</dt>
           <dd className="mt-0.5 font-medium">
-            {session.deletedAt
-              ? "Deleted"
-              : session.runState === "active"
-                ? "Running"
-                : session.runState === "stuck"
-                  ? "Stuck"
-                  : "Idle"}
+            {resolveSessionStatusLabel(session)}
           </dd>
         </div>
         <div>

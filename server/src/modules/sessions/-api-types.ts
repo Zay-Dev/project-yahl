@@ -7,6 +7,7 @@ import type {
   TModelResponseTag,
   TParsedStage,
   TSessionForkedFrom,
+  TSessionLastError,
   TSessionRunCursor,
   TStageAgentMeta,
   TStageLoopMeta,
@@ -42,6 +43,7 @@ export type TResponseGetSession = {
   deletedAt?: string;
   forkedFrom?: TSessionForkedFrom;
   isBackground?: boolean;
+  lastError?: TSessionLastError;
   liveViewVncPort?: number | null;
   parsedStages: TParsedStage[];
   result?: unknown;

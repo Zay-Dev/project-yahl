@@ -10,6 +10,7 @@ import { clearSessionControl } from '../-session-control-redis';
 import { resolveWorkspaceRoot, sessionWorkspaceRoot } from '../-workspace-paths';
 import { waitForOrchestratorIdle } from '../-orchestrator-run-lock';
 import { resolveSessionBySessionId } from '../-resolve-session';
+import { modelSession } from '../models';
 
 const CONTAINER_WORKSPACE = '/omniflex';
 const CONTAINER_RUNTIME = `/omniflex/${process.env.OMNIFLEX_APP_DIR?.trim() || 'project-yahl'}/runtime`;
@@ -264,6 +265,11 @@ export const spawnOrchestrate = async (
   });
 
   await waitForOrchestratorIdle(sessionId);
+
+  await modelSession.updateOne(
+    { sessionId },
+    { $unset: { lastError: '' } },
+  );
 
   const runtimeDir = _resolveRuntimeDir();
   const workspaceRoot = _resolveWorkspaceRoot();

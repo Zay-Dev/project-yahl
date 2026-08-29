@@ -58,6 +58,7 @@ const toResponse = (
   deletedAt: toIso(session.deletedAt),
   forkedFrom: session.forkedFrom,
   isBackground: session.isBackground === true,
+  ...(session.lastError ? { lastError: session.lastError } : {}),
   liveViewVncPort: session.liveViewVncPort ?? null,
   parsedStages: session.parsedStages ?? [],
   result: session.result,

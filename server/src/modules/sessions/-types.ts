@@ -129,6 +129,17 @@ export type TSessionRunCursor = {
   stageIndex: number;
 };
 
+export type TSessionLastErrorCode = 'budget_burnout' | 'stage_failed';
+
+export type TSessionLastError = {
+  at: string;
+  code: TSessionLastErrorCode;
+  message: string;
+  requestId?: string;
+  stageId?: string;
+  stageIndex?: number;
+};
+
 export type TForkSessionStageSetup = {
   context: Record<string, unknown>;
   loopMeta?: TStageLoopMeta;
@@ -154,6 +165,7 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   browserAbandonedReason?: 'stop' | 'terminal' | 'ttl';
   forkedFrom?: TSessionForkedFrom;
   isBackground?: boolean;
+  lastError?: TSessionLastError;
   liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;

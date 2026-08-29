@@ -36,4 +36,13 @@ describe('clearSessionControl on resume/spawn', () => {
     assert.ok(resolveIdx >= 0);
     assert.ok(clearIdx < resolveIdx);
   });
+
+  it('spawnOrchestrate clears lastError before starting a new run', () => {
+    const source = readFileSync(
+      path.join(root, 'use-cases/spawn-orchestrate.ts'),
+      'utf8',
+    );
+
+    assert.match(source, /\$unset: \{ lastError: '' \}/);
+  });
 });

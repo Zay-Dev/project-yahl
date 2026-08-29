@@ -55,6 +55,15 @@ const runCursorSchema = new Schema({
   stageIndex: model.d.requiredNumber(),
 }, { _id: false });
 
+const lastErrorSchema = new Schema({
+  at: model.d.requiredString(),
+  code: { enum: ['budget_burnout', 'stage_failed'], required: true, type: String },
+  message: model.d.requiredString(),
+  requestId: model.d.optionalString(),
+  stageId: model.d.optionalString(),
+  stageIndex: model.d.optionalNumber(),
+}, { _id: false });
+
 const forkSessionSetupSchema = new Schema({
   context: model.d.mixed(),
   loopMeta: loopMetaSchema,
@@ -70,6 +79,7 @@ const sessionSchema = new Schema<TDbSession>({
   deletedAt: model.d.deletedAt(),
   forkedFrom: forkedFromSchema,
   isBackground: { default: false, type: Boolean },
+  lastError: lastErrorSchema,
   liveViewVncPort: model.d.optionalNumber(),
   parsedStages: [model.d.mixed()],
   result: model.d.mixed(),

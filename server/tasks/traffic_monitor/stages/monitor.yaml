@@ -65,8 +65,6 @@ prefixOverride: |
 logic:
   stages:
     - id: submit_wait
-      maxTurns: 10
-      maxBashCalls: 6
       contextKeys:
         [
           url_bound_od,
@@ -101,8 +99,6 @@ logic:
         END:
 
     - id: extract
-      maxTurns: 12
-      maxBashCalls: 8
       contextKeys:
         [
           routes_ready,
@@ -172,8 +168,6 @@ logic:
         END:
 
     - id: analyze
-      maxTurns: 10
-      maxBashCalls: 8
       contextKeys:
         [
           poll_miss,
@@ -228,8 +222,6 @@ logic:
         END:
 
     - id: notify_and_sleep
-      maxTurns: 12
-      maxBashCalls: 8
       contextKeys:
         [
           poll_miss,

@@ -50,6 +50,11 @@ declare global {
   var sessionTracker: ReturnType<typeof createSessionEventTracker>;
 
   var orchestratorFailureCursor: { kind: 'pipeline'; stageIndex: number } | undefined;
+
+  var orchestratorFailureInfo: {
+    requestId?: string;
+    stageId?: string;
+  } | undefined;
 }
 
 const redis = new Redis(config.redisUrl, {
@@ -280,19 +285,30 @@ runCommand.action(async options => {
       );
 
       const failureCursor = globalThis.orchestratorFailureCursor;
+      const failureInfo = globalThis.orchestratorFailureInfo;
+      const lastError = {
+        at: new Date().toISOString(),
+        code: /maxTurns exhausted/i.test(errorMessage)
+          ? 'budget_burnout' as const
+          : 'stage_failed' as const,
+        message: errorMessage,
+        ...(failureInfo?.requestId ? { requestId: failureInfo.requestId } : {}),
+        ...(failureInfo?.stageId ? { stageId: failureInfo.stageId } : {}),
+        ...(failureCursor ? { stageIndex: failureCursor.stageIndex } : {}),
+      };
 
-      if (failureCursor) {
-        try {
-          globalThis.sessionTracker?.patchSession?.(sessionId, {
-            runCursor: failureCursor,
-          });
-          await tracker.flush();
-          console.log(
-            `[orchestrator] patched runCursor sessionId=${sessionId} stageIndex=${failureCursor.stageIndex}`,
-          );
-        } catch (patchError) {
-          console.error('[orchestrator] failed to patch runCursor:', patchError);
-        }
+      try {
+        globalThis.sessionTracker?.patchSession?.(sessionId, {
+          lastError,
+          ...(failureCursor ? { runCursor: failureCursor } : {}),
+        });
+        await tracker.flush();
+        console.log(
+          `[orchestrator] patched lastError sessionId=${sessionId} code=${lastError.code}`
+          + (failureCursor ? ` stageIndex=${failureCursor.stageIndex}` : ''),
+        );
+      } catch (patchError) {
+        console.error('[orchestrator] failed to patch lastError:', patchError);
       }
 
       exitCode = 1;
