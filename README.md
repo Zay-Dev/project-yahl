@@ -39,7 +39,7 @@ Pipeline detail: [`handbook/how-it-works.md`](handbook/how-it-works.md).
 
 ### Polling without prompt soup
 
-`whileSetup` is the answer to “keep checking until X” without one giant prompt or an agent-side `while(true)`. The orchestrator owns the clock and budget; the model only sees one iteration at a time. Parent **`verify`** runs once after the whole loop.
+`whileSetup` is the answer to “keep checking until X” without one giant prompt or an agent-side `while(true)`. The orchestrator owns the clock and a **per-poll** turn/bash budget (after warmUp, each iteration resets to parent max minus warmUp usage — not one pool for the whole window); the model only sees one iteration at a time. Parent **`verify`** runs once after the whole loop.
 
 ```yaml
 whileSetup:

@@ -63,14 +63,14 @@ set_context key=__knowledge-to-script__notes  value=<non-empty string>
 
 ```
 ~/data/scripts/
-  orchestrate.js                 # that one script to invoke the others for multiple steps
-  fill-origin-input.js           # node: stdin bind → yahl-browser act/observe
-  pick-origin-suggestion.js
-  fetch-driving-routes.js        # compose: goto + fills + search + extract via yahl-browser
-  extract-routes-normalize.js    # optional: coerce extract JSON → contract
-  format-fetch-section.js
+  {source_scripts_slug}/         # source-specific browser ops (JIT via *get_or_create)
+    goto-driving-search.js
+    fill-origin-input.js
+    …
+  format-fetch-section.js        # shared formatters at root
+  format-notification-body.js
   adaptive-sleep.js
-  ...
+  …
 ```
 
 | Concept | Rule |
@@ -78,6 +78,7 @@ set_context key=__knowledge-to-script__notes  value=<non-empty string>
 | `scriptId` | Operation slug `[a-zA-Z][a-zA-Z0-9_-]*` — verb-noun, describes the sub-task |
 | Who names it | You at compile time; reuse stable ids across polls |
 | Stage relationship | One stage may run 0..N scripts per iteration |
+| `*get_or_create(path, Instruction: …)` | If path missing, write from Instruction then run; if present, run without `cat` |
 
 ## Workflow per sub-op
 

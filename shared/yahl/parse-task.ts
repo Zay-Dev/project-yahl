@@ -5,6 +5,17 @@ import type { TYahlDocument } from './document-schema';
 import { validateYahlDocument } from './document-schema';
 import { compileStage } from './stage-compile';
 import type { TYahlStage } from './types';
+import {
+  resolveDocumentStageEntries,
+  type TResolveYahlRefOptions,
+} from './resolve-yahl-ref';
+import { isYahlStageRefShell } from './logic';
+import { parseRunInputFields } from './run-input-keys';
+
+export type TParseYahlTaskOptions = {
+  readFile?: (absolutePath: string) => string;
+  taskRoot?: string;
+};
 
 const findLogicSourceLine = (fileText: string, stageIndex: number) => {
   const lines = fileText.split(/\r?\n/);
@@ -53,7 +64,11 @@ const wrapPlainLogic = (logic: string) => {
   return `{\n${logic}\n}`;
 };
 
-const buildStagesFromDocument = (document: TYahlDocument, text: string): TParsedStage[] => {
+const buildStagesFromDocument = (
+  document: TYahlDocument,
+  text: string,
+  resolveOptions?: TResolveYahlRefOptions,
+): TParsedStage[] => {
   const stages: TParsedStage[] = [];
 
   if (document.types) {
@@ -68,10 +83,45 @@ const buildStagesFromDocument = (document: TYahlDocument, text: string): TParsed
   }
 
   document.stages.forEach((stage, index) => {
-    stages.push(compileStage(stage, findLogicSourceLine(text, index)));
+    stages.push(compileStage(stage, findLogicSourceLine(text, index), resolveOptions));
   });
 
   return stages;
+};
+
+const resolveRawDocumentStages = (
+  parsed: unknown,
+  options: TParseYahlTaskOptions,
+  yahlRefs: Record<string, string>,
+): unknown => {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  const doc = parsed as Record<string, unknown>;
+
+  if (!Array.isArray(doc.stages)) {
+    return parsed;
+  }
+
+  const hasStageRef = doc.stages.some((entry) => isYahlStageRefShell(entry));
+
+  if (!hasStageRef) {
+    return parsed;
+  }
+
+  if (!options.taskRoot) {
+    throw new Error('stages: stage $ref requires taskRoot to resolve');
+  }
+
+  return {
+    ...doc,
+    stages: resolveDocumentStageEntries(doc.stages, {
+      readFile: options.readFile,
+      refsOut: yahlRefs,
+      taskRoot: options.taskRoot,
+    }),
+  };
 };
 
 export const parseYahlDocument = (text: string): TYahlDocument => {
@@ -80,15 +130,76 @@ export const parseYahlDocument = (text: string): TYahlDocument => {
   return validateYahlDocument(parsed);
 };
 
-export const parseYahlTask = (text: string) => {
-  const document = parseYahlDocument(text);
+export const parseYahlRunInputKeys = (text: string): string[] | undefined => {
+  if (!text.trim()) {
+    return undefined;
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = YAML.parse(text);
+  } catch {
+    return undefined;
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return undefined;
+  }
+
+  const runInput = parseRunInputFields((parsed as Record<string, unknown>).runInput);
+
+  return runInput?.map((field) => field.key);
+};
+
+export const parseYahlDocumentName = (text: string): string | undefined => {
+  if (!text.trim()) {
+    return undefined;
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = YAML.parse(text);
+  } catch {
+    return undefined;
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return undefined;
+  }
+
+  const name = (parsed as Record<string, unknown>).name;
+
+  if (typeof name !== 'string' || !name.trim()) {
+    return undefined;
+  }
+
+  return name.trim();
+};
+
+export const parseYahlTask = (text: string, options: TParseYahlTaskOptions = {}) => {
+  const yahlRefs: Record<string, string> = {};
+  const parsed = resolveRawDocumentStages(YAML.parse(text), options, yahlRefs);
+  const document = validateYahlDocument(parsed);
+  const resolveOptions = options.taskRoot
+    ? {
+      readFile: options.readFile,
+      refsOut: yahlRefs,
+      taskRoot: options.taskRoot,
+    } satisfies TResolveYahlRefOptions
+    : undefined;
 
   return {
     resultContextKey: document.resultContextKey,
     runInputContextKeys: document.runInput?.map((field) => field.key),
-    stages: buildStagesFromDocument(document, text),
+    stages: buildStagesFromDocument(document, text, resolveOptions),
+    ...(Object.keys(yahlRefs).length ? { yahlRefs } : {}),
   };
 };
 
-export const parseYahlFile = (text: string): TParsedStage[] =>
-  buildStagesFromDocument(parseYahlDocument(text), text);
+export const parseYahlFile = (
+  text: string,
+  options: TParseYahlTaskOptions = {},
+): TParsedStage[] =>
+  parseYahlTask(text, options).stages;

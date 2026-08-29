@@ -22,6 +22,11 @@ import { fetchWithConcurrency } from "@/pages/sessions/lib/fetch-with-concurrenc
 import { fetchSessionStageDetail } from "@/pages/sessions/lib/sessions-api";
 import { buildStageLabels, loopSetupHint, resolveLoopKind } from "@/pages/sessions/lib/stage-label";
 import {
+  buildTimelineRows,
+  isNestedTimelineStage,
+  type TTimelineGroupRow,
+} from "@/pages/sessions/lib/timeline-rows";
+import {
   formatElapsedMs,
   resolveCurrentStage,
   resolveStageElapsed,
@@ -115,7 +120,7 @@ const StageRow = ({
 
   return (
   <Collapsible
-    className="rounded-lg border bg-background"
+    className={`rounded-lg border bg-background ${isNestedTimelineStage(item) ? "ml-3 border-dashed opacity-95" : ""}`}
     onOpenChange={onOpenChange}
     open={open}
   >
@@ -130,6 +135,11 @@ const StageRow = ({
           >
             {item.status}
           </span>
+          {item.agentMeta?.isMainThread === true ? (
+            <span className="rounded border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              Main Thread
+            </span>
+          ) : null}
           {badge ? (
             <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
               {badge}
@@ -181,6 +191,56 @@ const StageRow = ({
       ) : null}
     </CollapsibleContent>
   </Collapsible>
+  );
+};
+
+const NestedGroupCard = ({
+  label,
+  row,
+}: {
+  label: string;
+  row: TTimelineGroupRow;
+}) => {
+  const item = row.item;
+  const loopKind = resolveLoopKind(item);
+  const badge = loopKindBadge(loopKind);
+
+  return (
+    <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs font-medium">
+              {label}
+            </span>
+            <span
+              className={`rounded px-2 py-0.5 text-xs font-medium ${statusClass(item.status)}`}
+            >
+              {item.status}
+            </span>
+            {badge ? (
+              <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+                {badge}
+              </span>
+            ) : null}
+            <span className="rounded border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              Nested group
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+            {item.logicPreview || "—"}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span>{item.modelCallCount} model</span>
+            <span>{item.toolCallCount} tools</span>
+            <span>{row.childRequestIds.length} stages</span>
+          </div>
+          <TokenStatsRow byModel={item.byModel} domains={item.domains} totals={item.tokenTotals} />
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -336,6 +396,7 @@ export function SessionTimeline({
   };
 
   const stageLabels = useMemo(() => buildStageLabels(stages), [stages]);
+  const timelineRows = useMemo(() => buildTimelineRows(stages), [stages]);
   const clockLive = session.runState === "active";
   const hasLiveStage = stages.some((item) => item.status !== "finished");
   const tickLive = clockLive && hasLiveStage;
@@ -423,8 +484,21 @@ export function SessionTimeline({
         <p className="mt-3 text-sm text-muted-foreground">No stages recorded yet.</p>
       ) : null}
       <div className="mt-4 space-y-2">
-        {stages.map((item, index) => {
-          const prevRequestId = index > 0 ? stages[index - 1]?.requestId : undefined;
+        {timelineRows.map((row) => {
+          if (row.kind === "group") {
+            return (
+              <NestedGroupCard
+                key={row.item.requestId}
+                label={row.label}
+                row={row}
+              />
+            );
+          }
+
+          const { item, label, stageIndex } = row;
+          const prevRequestId = stageIndex > 0
+            ? stages[stageIndex - 1]?.requestId
+            : undefined;
 
           return (
           <StageRow
@@ -438,8 +512,8 @@ export function SessionTimeline({
             key={item.requestId}
             originalStages={originalStages}
             sessionId={sessionId}
-            setupHint={loopSetupHint(stages, index)}
-            stageLabel={stageLabels[index] ?? `#${index + 1}`}
+            setupHint={loopSetupHint(stages, stageIndex)}
+            stageLabel={label}
             onOpenChange={(next) => {
               setOpenIds((current) => {
                 const updated = new Set(current);

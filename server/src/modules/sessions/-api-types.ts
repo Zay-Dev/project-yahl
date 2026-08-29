@@ -7,7 +7,9 @@ import type {
   TModelResponseTag,
   TParsedStage,
   TSessionForkedFrom,
+  TSessionLastError,
   TSessionRunCursor,
+  TStageAgentMeta,
   TStageLoopMeta,
   TTokenTotals,
   TYahlStage,
@@ -34,10 +36,14 @@ export type TResponseNixeryUsageGroup = TResponseModelUsageSummary & {
 
 export type TResponseGetSession = {
   _id: string;
+  browser?: boolean;
+  browserAbandonedAt?: string;
+  browserAbandonedReason?: 'stop' | 'terminal' | 'ttl';
   createdAt: string;
   deletedAt?: string;
   forkedFrom?: TSessionForkedFrom;
   isBackground?: boolean;
+  lastError?: TSessionLastError;
   liveViewVncPort?: number | null;
   parsedStages: TParsedStage[];
   result?: unknown;
@@ -76,6 +82,7 @@ export type TResponseSessionListItem = {
 export type TResponseStageStatus = 'finished' | 'running' | 'verifying';
 
 export type TResponseStageListItem = {
+  agentMeta?: TStageAgentMeta;
   createdAt: string;
   finishedAt?: string;
   isTypesPreamble?: boolean;
@@ -110,6 +117,7 @@ export type TResponseStageReplayVerifyResult = {
 };
 
 export type TResponseStageReplayItem = {
+  agentMeta?: TStageAgentMeta;
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
   finishedAt?: string;
@@ -178,7 +186,7 @@ export type TResponseAskUserQuestionListItem = {
   questionCount?: number;
   questionId: string;
   requestId: string;
-  status: 'answered' | 'pending';
+  status: 'answered' | 'pending' | 'superseded';
   title?: string;
 };
 
@@ -192,7 +200,7 @@ export type TResponseAskUserQuestionDetail = {
   batchId?: string;
   questionId: string;
   requestId: string;
-  status: 'answered' | 'pending';
+  status: 'answered' | 'pending' | 'superseded';
 };
 
 export type TVerifyResumeAction = 'edit_answer' | 'follow_up' | 'reask' | 'rerun';
@@ -232,7 +240,7 @@ export type TResponseUserPauseCheckpoint = {
   requestId: string;
   stage: TYahlStage;
   stageIndex?: number;
-  status: 'pending' | 'resumed';
+  status: 'pending' | 'resumed' | 'superseded';
   storageSnapshot: Record<string, unknown>;
 };
 
@@ -259,6 +267,7 @@ export type TSessionLiveEvent =
   | { type: 'verify.resumed'; requestId: string; verifyId: string };
 
 export type TStageListSource = {
+  agentMeta?: TStageAgentMeta;
   contextAfter?: Record<string, unknown>;
   context?: Record<string, unknown>;
   createdAt: Date | string;

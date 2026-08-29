@@ -20,6 +20,10 @@ const _getRedis = () => {
 export const sessionControlKey = (sessionId: string) => `${CONTROL_KEY_PREFIX}${sessionId}`;
 
 export const readSessionPauseRequested = async (sessionId: string) => {
+  if (!sessionId) {
+    return false;
+  }
+
   const value = await _getRedis().get(sessionControlKey(sessionId));
 
   return value === PAUSE_REQUESTED;

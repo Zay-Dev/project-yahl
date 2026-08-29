@@ -5,6 +5,7 @@ export type { TRunInputField };
 
 export type TResponseTaskListItem = {
   background?: boolean;
+  browser?: boolean;
   description: string;
   id: string;
   name: string;

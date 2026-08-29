@@ -1,0 +1,28 @@
+services:
+  browser:
+    image: ${BROWSER_IMAGE:-project-yahl-browser:latest}
+    build:
+      context: ${OMNIFLEX_BUILD_CONTEXT:-..}
+      dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/runtime/Dockerfile.browser
+      args:
+        OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
+    shm_size: 2gb
+    environment:
+      TZ: ${TZ:-Asia/Hong_Kong}
+      BROWSER_DISPLAY: ${BROWSER_DISPLAY:-:99}
+      BROWSER_USER_DATA_DIR: /chrome-profile
+    volumes:
+      - ${HOST_REPO_ROOT:-.}/data/workspace/sessions/${BROWSER_SESSION_ID}/chrome-profile:/chrome-profile
+    ports:
+      - "${BROWSER_VNC_PUBLISH:-0:5900}"
+    labels:
+      yahl.browser: "1"
+      yahl.sessionId: ${BROWSER_SESSION_ID}
+    container_name: ${BROWSER_CONTAINER_NAME:-browser}
+    networks:
+      - shared
+
+networks:
+  shared:
+    external: true
+    name: ${SHARED_DOCKER_NETWORK:-yahl_shared}

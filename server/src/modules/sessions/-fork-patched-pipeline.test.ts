@@ -4,12 +4,17 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
+import { logicPreviewText } from '@project-yahl/shared/yahl/logic';
 import { parseYahlTask } from '@project-yahl/shared/yahl/parse-task';
 
 import type { TResponseStageReplayItem } from './-api-types';
 import type { TYahlStage } from './-types';
 
-import { buildForkPatchedParsedStages, prefixRowsForForkCopy } from './-fork-patched-pipeline';
+import { buildForkPatchedParsedStages, deriveForkStorageSeed, prefixRowsForForkCopy } from './-fork-patched-pipeline';
+import { parseSessionYahlTask } from './-parse-session-yahl';
+
+const logicText = (logic: TYahlStage['logic'] | undefined) =>
+  logicPreviewText(logic);
 
 const testTaskYahl = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../../../tasks/test/SKILL.yaml'),
@@ -31,6 +36,28 @@ const replayRow = (
 const loopBody = '(() => ({\n  c: context.context.c + context.context.i,\n}))';
 
 describe('buildForkPatchedParsedStages', () => {
+  it('parses traffic_monitor $ref taskYahl with taskId (fork path)', () => {
+    const trafficYahl = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../tasks/traffic_monitor/SKILL.yaml'),
+      'utf8',
+    );
+    const monitorRef = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../tasks/traffic_monitor/stages/monitor.yahl'),
+      'utf8',
+    );
+
+    const { stages } = parseSessionYahlTask(trafficYahl, {
+      taskId: 'traffic_monitor',
+      taskYahlRefs: { 'stages/monitor.yahl': monitorRef },
+    });
+    const monitor = stages.find((stage) => stage.spec.id === 'monitor');
+
+    assert.equal(monitor?.type, 'while');
+    assert.ok((monitor?.nestedStages?.length ?? 0) >= 4);
+    assert.equal(monitor?.nestedStages?.[0]?.spec.id, 'submit_wait');
+    assert.equal(monitor?.nestedStages?.[1]?.spec.id, 'extract');
+    assert.equal(monitor?.nestedStages?.[3]?.spec.id, 'notify_and_sleep');
+  });
   it('keeps original slots after a goto anchor when replay has extra loop rows', () => {
     const baseline = parseYahlTask(testTaskYahl).stages;
     const gotoIndex = baseline.findIndex((stage) => (stage.spec.goto?.length ?? 0) > 0);
@@ -89,7 +116,7 @@ describe('buildForkPatchedParsedStages', () => {
     });
 
     assert.equal(anchorParsedStageIndex, gotoIndex);
-    assert.match(parsedStages[gotoIndex]?.spec.logic ?? '', /c < 10/);
+    assert.match(logicText(parsedStages[gotoIndex]?.spec.logic), /c < 10/);
     assert.equal(parsedStages[gotoIndex + 1]?.spec.conditionMode, true);
     assert.equal(parsedStages[gotoIndex + 1]?.spec.logic, baseline[gotoIndex + 1]?.spec.logic);
     assert.equal(parsedStages[stepLoopIndex]?.spec.id, 'step_loop');
@@ -157,7 +184,7 @@ describe('buildForkPatchedParsedStages', () => {
       taskYahl: testTaskYahl,
     });
 
-    assert.match(parsedStages[resultIndex]?.spec.logic ?? '', /edited: true/);
+    assert.match(logicText(parsedStages[resultIndex]?.spec.logic), /edited: true/);
     assert.equal(parsedStages[resultIndex + 1]?.spec.logic, baseline[resultIndex + 1]?.spec.logic);
   });
 
@@ -200,9 +227,9 @@ describe('buildForkPatchedParsedStages', () => {
       taskYahl,
     });
 
-    assert.match(parsedStages[0]?.spec.logic ?? '', /c \+= i-edited/);
+    assert.match(logicText(parsedStages[0]?.spec.logic), /c \+= i-edited/);
     assert.equal(parsedStages[0]?.type, 'plain');
-    assert.match(parsedStages[1]?.spec.logic ?? '', /const result = \{ c \}/);
+    assert.match(logicText(parsedStages[1]?.spec.logic), /const result = \{ c \}/);
     assert.equal(parsedStages[1]?.type, 'plain');
   });
 
@@ -244,5 +271,145 @@ describe('buildForkPatchedParsedStages', () => {
     const prefix = prefixRowsForForkCopy(replayRows, 2);
 
     assert.deepEqual(prefix.map((row) => row.stageId), ['a', 'b']);
+  });
+
+  it('fold-merges nested prefix contextAfter so later filtered rows keep earlier keys', () => {
+    const fetches = [{ fetched_at: 't', routes: [] }];
+    const traffic_source = { name: 'maps', url: 'https://example' };
+    const replayRows = [
+      replayRow('pre', { logic: 'pre' }, {
+        contextAfter: { context: { fetches, traffic_source, day_page: 'raw/x' } },
+        parsedStageIndex: 9,
+      }),
+      replayRow('analyze', { logic: 'analyze', id: 'analyze' }, {
+        agentMeta: {
+          isMainThread: false,
+          nestedIndex: 6,
+          nestedPath: 'monitor/analyze',
+        },
+        contextAfter: {
+          context: { fetches, poll_success_count: 1, prev_routes: [{ eta_min: 12 }] },
+        },
+        loopMeta: { arraySnapshot: [], index: 1, kind: 'while', value: 1 },
+        parsedStageIndex: 10,
+      }),
+      replayRow('notify', { logic: 'notify', id: 'notify' }, {
+        agentMeta: {
+          isMainThread: false,
+          nestedIndex: 7,
+          nestedPath: 'monitor/notify',
+        },
+        contextAfter: { context: { notifications: [], summary_notified: true } },
+        loopMeta: { arraySnapshot: [], index: 1, kind: 'while', value: 1 },
+        parsedStageIndex: 10,
+      }),
+      replayRow('sleep', { logic: 'sleep', id: 'sleep' }, {
+        agentMeta: {
+          isMainThread: false,
+          nestedIndex: 8,
+          nestedPath: 'monitor/sleep',
+        },
+        loopMeta: { arraySnapshot: [], index: 1, kind: 'while', value: 1 },
+        parsedStageIndex: 10,
+      }),
+    ];
+
+    const seed = deriveForkStorageSeed(replayRows, 3, {
+      context: {},
+      stage: { logic: 'sleep', id: 'sleep' },
+      stageId: 'sleep',
+    });
+    const context = seed.context as Record<string, unknown>;
+
+    assert.deepEqual(context.fetches, fetches);
+    assert.deepEqual(context.traffic_source, traffic_source);
+    assert.equal(context.day_page, 'raw/x');
+    assert.equal(context.poll_success_count, 1);
+    assert.deepEqual(context.notifications, []);
+    assert.equal(context.summary_notified, true);
+  });
+
+  it('keeps while nestedStages when forking from a nested child', () => {
+    const trafficYahl = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../tasks/traffic_monitor/SKILL.yaml'),
+      'utf8',
+    );
+    const monitorRef = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../tasks/traffic_monitor/stages/monitor.yahl'),
+      'utf8',
+    );
+    const baseline = parseSessionYahlTask(trafficYahl, {
+      taskId: 'traffic_monitor',
+      taskYahlRefs: { 'stages/monitor.yahl': monitorRef },
+    }).stages;
+    const monitorIndex = baseline.findIndex((stage) => stage.spec.id === 'monitor');
+    const nested = baseline[monitorIndex]!.nestedStages ?? [];
+    const anchorChild = nested.find((stage) => stage.spec.id === 'notify_and_sleep');
+    const priorChild = nested.find((stage) => stage.spec.id === 'analyze');
+
+    assert.ok(anchorChild);
+    assert.ok(priorChild);
+
+    const replayRows: TResponseStageReplayItem[] = [
+      replayRow('pre', { logic: 'x = 1;' }, {
+        contextAfter: { context: { x: 1 } },
+        parsedStageIndex: monitorIndex - 1,
+      }),
+      replayRow('extract', { logic: 'extract', id: 'extract' }, {
+        agentMeta: {
+          isMainThread: false,
+          nestedIndex: 1,
+          nestedPath: 'monitor/extract',
+        },
+        contextAfter: { context: { last_fetch: { routes: [] } } },
+        loopMeta: { arraySnapshot: [], index: 1, kind: 'while', value: 1 },
+        parsedStageIndex: monitorIndex,
+      }),
+      replayRow('analyze', priorChild!.spec, {
+        agentMeta: {
+          isMainThread: false,
+          nestedIndex: 2,
+          nestedPath: 'monitor/analyze',
+        },
+        contextAfter: { context: { fetches: [], poll_success_count: 1 } },
+        loopMeta: { arraySnapshot: [], index: 1, kind: 'while', value: 1 },
+        parsedStageIndex: monitorIndex,
+      }),
+      replayRow('notify_and_sleep', anchorChild!.spec, {
+        agentMeta: {
+          isMainThread: false,
+          nestedIndex: 3,
+          nestedPath: 'monitor/notify_and_sleep',
+        },
+        loopMeta: { arraySnapshot: [], index: 1, kind: 'while', value: 1 },
+        parsedStageIndex: monitorIndex,
+      }),
+    ];
+
+    const { anchorParsedStageIndex, nestedIndex, parsedStages } = buildForkPatchedParsedStages({
+      anchorIndex: 3,
+      anchorStageId: 'notify_and_sleep',
+      replayRows,
+      setups: [{
+        context: {},
+        loopMeta: { arraySnapshot: [], index: 1, kind: 'while', value: 1 },
+        stage: anchorChild!.spec,
+        stageId: 'notify_and_sleep',
+      }],
+      taskId: 'traffic_monitor',
+      taskYahl: trafficYahl,
+      taskYahlRefs: { 'stages/monitor.yahl': monitorRef },
+    });
+
+    assert.equal(anchorParsedStageIndex, monitorIndex);
+    assert.equal(nestedIndex, 3);
+    assert.equal(parsedStages[monitorIndex]?.type, 'while');
+    assert.equal(parsedStages[monitorIndex]?.spec.id, 'monitor');
+    assert.ok((parsedStages[monitorIndex]?.nestedStages?.length ?? 0) >= 4);
+
+    const prefix = prefixRowsForForkCopy(replayRows, 3);
+
+    assert.deepEqual(prefix.map((row) => row.stageId), ['pre', 'extract', 'analyze']);
+    assert.ok(prefix.every((row) => row.stageId === 'pre' || row.agentMeta));
   });
 });

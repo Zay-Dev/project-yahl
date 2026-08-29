@@ -1,6 +1,7 @@
 name: browser-smoke
 description: Minimal Stagehand goto smoke test (live view + OneCLI debugging)
 resultContextKey: result
+browser: true
 
 types: |
   type TIntelItem = {

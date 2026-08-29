@@ -72,26 +72,40 @@ export type TYahlStage = {
   goto?: TYahlGotoEntry[];
   id?: string;
   knowledgeToScript?: boolean;
-  logic: string;
+  logic: string | { $ref: string } | { stages: TYahlStage[]; types?: string };
   loopSetup?: string;
   maxBashCalls?: number;
   maxTurns?: number;
   nixeryInput?: TNixeryStageInput;
   nixeryRun?: string;
+  parallelAfter?: string[];
+  parallelGroup?: string;
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   stagehand?: TYahlStagehandConfig;
+  mainThread?: boolean;
   temperature?: number;
   updateContextKeys?: string[];
   verify?: TYahlVerifySpec;
   version?: number;
+  prefixOverride?: string;
   warmUp?: string;
   whileSetup?: TYahlWhileSetup;
+};
+
+export type TStageAgentMeta = {
+  isMainThread: boolean;
+  nestedIndex?: number;
+  nestedPath?: string;
+  parallelGroupId?: string;
+  parallelSlot?: number;
+  parentRequestId?: string;
 };
 
 export type TParsedStage = {
   contextKeys?: string[];
   lines: string;
+  nestedStages?: TParsedStage[];
   produceContextKeys?: string[];
   produceTypeKeys?: string[];
   sourceStartLine: number;
@@ -110,8 +124,20 @@ export type TSessionForkedFrom = {
 export type TSessionRunCursor = {
   kind: 'pipeline' | 'repair';
   loopMeta?: TStageLoopMeta;
+  nestedIndex?: number;
   repairInstruction?: string;
   stageIndex: number;
+};
+
+export type TSessionLastErrorCode = 'budget_burnout' | 'stage_failed';
+
+export type TSessionLastError = {
+  at: string;
+  code: TSessionLastErrorCode;
+  message: string;
+  requestId?: string;
+  stageId?: string;
+  stageIndex?: number;
 };
 
 export type TForkSessionStageSetup = {
@@ -134,8 +160,12 @@ export interface IForkSession extends TWithTimestamps {
 
 export interface ISession extends TSoftDeletable, TWithTimestamps {
   _id: string;
+  browser?: boolean;
+  browserAbandonedAt?: Date;
+  browserAbandonedReason?: 'stop' | 'terminal' | 'ttl';
   forkedFrom?: TSessionForkedFrom;
   isBackground?: boolean;
+  lastError?: TSessionLastError;
   liveViewVncPort?: number | null;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
@@ -147,12 +177,14 @@ export interface ISession extends TSoftDeletable, TWithTimestamps {
   taskId?: string;
   taskSkills?: TTaskSkillFile[];
   taskYahl?: string;
+  taskYahlRefs?: Record<string, string>;
 }
 
 export interface IStage extends TWithTimestamps {
   _id: string;
   session: string;
   requestId: string;
+  agentMeta?: TStageAgentMeta;
   context: Record<string, unknown>;
   contextAfter?: Record<string, unknown>;
   finishedAt?: Date;
@@ -199,7 +231,7 @@ export interface IToolCall extends TWithTimestamps {
   toolCalls: Record<string, unknown>[];
 }
 
-export type TAskUserQuestionStatus = 'answered' | 'pending';
+export type TAskUserQuestionStatus = 'answered' | 'pending' | 'superseded';
 
 export type TParsedStageSnapshot = {
   lines: string;
@@ -263,7 +295,7 @@ export interface IVerifyCheckpoint extends TWithTimestamps {
   verifyId: string;
 }
 
-export type TUserPauseCheckpointStatus = 'pending' | 'resumed';
+export type TUserPauseCheckpointStatus = 'pending' | 'resumed' | 'superseded';
 
 export interface IUserPauseCheckpoint extends TWithTimestamps {
   _id: string;

@@ -11,6 +11,10 @@ export const TASK_ID_PATTERN = /^[a-zA-Z0-9_.-]+$/;
 
 export const SESSION_TASK_DATA_DIR = 'data';
 
+export const SESSION_CHROME_PROFILE_DIR = 'chrome-profile';
+
+export const SESSION_BROWSER_ACTIVE_MARKER = '.yahl-browser-active';
+
 export type TWorkspaceLogTag = 'orchestrator' | 'sessions';
 
 const _findProjectYahlRoot = (startDir: string) => {
@@ -167,8 +171,21 @@ export const copySessionWorkspace = async (
     filter: (src) => {
       const relative = path.relative(sourceRoot, src);
 
-      return relative !== SESSION_TASK_DATA_DIR
-        && !relative.startsWith(`${SESSION_TASK_DATA_DIR}${path.sep}`);
+      if (relative === SESSION_TASK_DATA_DIR
+        || relative.startsWith(`${SESSION_TASK_DATA_DIR}${path.sep}`)) {
+        return false;
+      }
+
+      if (relative === SESSION_CHROME_PROFILE_DIR
+        || relative.startsWith(`${SESSION_CHROME_PROFILE_DIR}${path.sep}`)) {
+        return false;
+      }
+
+      if (relative === SESSION_BROWSER_ACTIVE_MARKER) {
+        return false;
+      }
+
+      return true;
     },
   });
   console.log(

@@ -47,10 +47,18 @@ const toResponse = (
   runState: TResponseGetSession['runState'],
 ): TResponseGetSession => ({
   _id: String(session._id),
+  browser: session.browser === true,
+  ...(session.browserAbandonedAt
+    ? { browserAbandonedAt: toIso(session.browserAbandonedAt) }
+    : {}),
+  ...(session.browserAbandonedReason
+    ? { browserAbandonedReason: session.browserAbandonedReason }
+    : {}),
   createdAt: toIso(session.createdAt) ?? '',
   deletedAt: toIso(session.deletedAt),
   forkedFrom: session.forkedFrom,
   isBackground: session.isBackground === true,
+  ...(session.lastError ? { lastError: session.lastError } : {}),
   liveViewVncPort: session.liveViewVncPort ?? null,
   parsedStages: session.parsedStages ?? [],
   result: session.result,

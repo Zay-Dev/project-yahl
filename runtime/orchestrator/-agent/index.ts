@@ -8,7 +8,7 @@ import { toAgentStage } from '@/shared/yahl-stage';
 import { resolveVerifySkipWarmUp } from '@project-yahl/shared/yahl/verify';
 import { parseNixeryToolArguments } from '@/shared/stage-tools';
 
-import { parseYahlDocument, parseYahlFile } from '@/orchestrator/-utils/yahl';
+import { parseYahlFile, parseYahlRunInputKeys } from '@/orchestrator/-utils/yahl';
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import {
   seedDefaultContext,
@@ -59,6 +59,7 @@ import {
   teardownNixeryContainer,
 } from '@/orchestrator/-nixery';
 import { isTypesPreambleStage, seedTypesPreamble } from '@project-yahl/shared/yahl/types-preamble';
+import { asLogicScript } from '@project-yahl/shared/yahl/logic';
 import {
   buildProduceKeysSystemAppend,
   missingProduceKeys,
@@ -76,6 +77,7 @@ import {
 } from './knowledge-to-script-notes-retry';
 import { handleLoop } from './loop';
 import { handleWhile } from './while';
+import { runNestedYahl } from './nested-yahl';
 import {
   isPostLoopWhileResume,
   runWhileWithParentVerify,
@@ -161,7 +163,7 @@ class YahlAgentRunner {
   ) {
     this.storage = useStorage();
     const runInputContextKeys = yahl.trim()
-      ? parseYahlDocument(yahl).runInput?.map((field) => field.key)
+      ? parseYahlRunInputKeys(yahl)
       : undefined;
 
     seedRunInputContext(
@@ -262,9 +264,40 @@ class YahlAgentRunner {
       }
 
       if (!isResumingThisStage && isTypesPreambleStage(stage, stageIndex)) {
-        seedTypesPreamble(this.storage.types, stage.spec.logic);
+        seedTypesPreamble(this.storage.types, asLogicScript(stage.spec.logic));
         this.resetStageContext(stage, stageIndex, false);
         await this.finishOrchestratorDirectStage();
+        stageIndex += 1;
+        continue;
+      }
+
+      if (
+        stage.type === 'plain'
+        && stage.nestedStages?.length
+        && !this.options.contextAfter
+        && !isResumingThisStage
+      ) {
+        this.enteredViaGoto = false;
+        const nestedResult = await runNestedYahl(
+          stage,
+          this.storage,
+          runYahl,
+          this.temperature,
+          this.pipelineStageIndex,
+          this.options.recoveryStages ?? this.stages,
+          {
+            ...(this.options.systemAppend
+              ? { systemAppend: this.options.systemAppend }
+              : {}),
+          },
+        );
+
+        if (nestedResult.gotoTargetStageIndex !== undefined) {
+          this.enteredViaGoto = true;
+          stageIndex = nestedResult.gotoTargetStageIndex;
+          continue;
+        }
+
         stageIndex += 1;
         continue;
       }
@@ -495,6 +528,7 @@ class YahlAgentRunner {
       toAgentStage(stageSpec),
       this.requestId,
       {
+        ...(this.options.agentMeta ? { agentMeta: this.options.agentMeta } : {}),
         contextAfter: this.options.contextAfter,
         loopMeta: this.resumeStage?.loopMeta ?? this.options.loopMeta,
         parsedStageIndex: this.boundParsedStageIndex,
@@ -760,6 +794,12 @@ class YahlAgentRunner {
         kind: 'pipeline',
         stageIndex: this.pipelineStageIndex,
       };
+      globalThis.orchestratorFailureInfo = {
+        requestId: this.requestId,
+        ...(this.activeStage?.spec?.id
+          ? { stageId: String(this.activeStage.spec.id) }
+          : {}),
+      };
 
       if (error instanceof AskUserPausedError) {
         throw error;
@@ -988,6 +1028,11 @@ class YahlAgentRunner {
       });
 
       if (shouldRotateRequestIdForBoundStage(this.stageDocSourceStartLine, this.boundSourceStartLine)) {
+        publisher.emitStageFinish({
+          requestId: this.requestId,
+          contextAfter: finishContextAfter,
+        });
+        await globalThis.sessionTracker?.flush?.();
         this.requestId = randomUUID();
         this.stageDocSourceStartLine = undefined;
       }

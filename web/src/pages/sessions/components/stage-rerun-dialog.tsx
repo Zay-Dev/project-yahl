@@ -51,8 +51,16 @@ const bucketJsonFromDetail = (
   return JSON.stringify(bucketFromPayload(context, bucket), null, 2);
 };
 
-const laterLogicPreview = (logic: string | undefined) => {
-  const lines = (logic ?? '')
+const laterLogicPreview = (logic: TYahlStage['logic'] | undefined) => {
+  const text = typeof logic === 'string'
+    ? logic
+    : logic && typeof logic === 'object' && '$ref' in logic
+      ? `$ref: ${logic.$ref}`
+      : logic && typeof logic === 'object' && 'stages' in logic
+        ? `stages[${logic.stages.length}]`
+        : '';
+
+  const lines = text
     .split('\n')
     .map((part) => part.trim())
     .filter((part) => part.length > 0)

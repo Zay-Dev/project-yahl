@@ -30,6 +30,12 @@ export type TPipelinePosition =
     resumedStage: ParsedStage;
     resumeFrom?: TAskUserResumeFrom;
     stageIndex: number;
+  }
+  | {
+    kind: 'whileFromNested';
+    loopMeta: TLoopMeta;
+    nestedIndex: number;
+    stageIndex: number;
   };
 
 export type TPipelineSuffix =
@@ -253,6 +259,60 @@ export const runPipelineContinuation = async (ctx: TPipelineContinuation) => {
       position.loopStageIndex,
       position.warmupRequestId,
     );
+    await _runSuffix(ctx);
+
+    return ctx.storage;
+  }
+
+  if (position.kind === 'whileFromNested') {
+    const whileStage = ctx.yahlStages[position.stageIndex];
+
+    if (!whileStage || whileStage.type !== 'while') {
+      throw new Error(
+        `pipeline continuation: whileFromNested expects while stage at ${position.stageIndex}`,
+      );
+    }
+
+    await runWhileWithParentVerify({
+      agentName: `agent-${globalThis.sessionId}`,
+      firstPass: (systemAppend) => handleWhile(
+        whileStage,
+        ctx.storage,
+        runYahl,
+        position.loopMeta.temperature,
+        position.stageIndex,
+        ctx.yahlStages,
+        {
+          skipWarmUp: true,
+          startIteration: position.loopMeta.index,
+          startNestedIndex: position.nestedIndex,
+          systemAppend: systemAppend ?? ctx.systemAppend,
+          ...(typeof position.loopMeta.remainingBashCalls === 'number'
+            ? { remainingBashCalls: position.loopMeta.remainingBashCalls }
+            : {}),
+          ...(typeof position.loopMeta.remainingTurns === 'number'
+            ? { remainingTurns: position.loopMeta.remainingTurns }
+            : {}),
+        },
+      ),
+      pipelineStageIndex: position.stageIndex,
+      rerun: (systemAppend) => handleWhile(
+        whileStage,
+        ctx.storage,
+        runYahl,
+        position.loopMeta.temperature,
+        position.stageIndex,
+        ctx.yahlStages,
+        {
+          skipWarmUp: resolveVerifySkipWarmUp(whileStage.spec.verify),
+          systemAppend: systemAppend ?? ctx.systemAppend,
+        },
+      ),
+      sessionId: globalThis.sessionId,
+      stage: whileStage,
+      storage: ctx.storage,
+      temperature: position.loopMeta.temperature,
+    });
     await _runSuffix(ctx);
 
     return ctx.storage;

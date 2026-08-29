@@ -19,7 +19,7 @@ import {
 } from "@/shared/stage-tools";
 import { callPlatformSkill } from "@/shared/platform-client";
 
-import { closeStagehandSession, runBrowserCommand } from "./-browser/stagehand-session";
+import { runBrowserCommand } from "./-browser/stagehand-session";
 import { buildBrowserProxyBrief } from "./-browser/browser-proxy-brief";
 import { buildAskUserResumePrompt } from "./-utils/ask-user-resume-prompt";
 import { clipToolContent } from "./-utils/clip-tool-content";
@@ -189,6 +189,16 @@ const withUsage = (
   };
 };
 
+export class MaxTurnsExhaustedError extends Error {
+  readonly maxTurns: number;
+
+  constructor(maxTurns: number) {
+    super(`stage maxTurns exhausted (${maxTurns})`);
+    this.name = 'MaxTurnsExhaustedError';
+    this.maxTurns = maxTurns;
+  }
+}
+
 const toolErrorContent = (message: string) =>
   JSON.stringify({
     error: message,
@@ -253,11 +263,9 @@ export const runStageSession = async (
   ];
 
   let bashCalls = 0;
-  let browserCalls = 0;
   let turns = 0;
 
-  try {
-    while (turns < maxTurns) {
+  while (turns < maxTurns) {
       turns += 1;
 
       const chatOpts =
@@ -377,8 +385,6 @@ export const runStageSession = async (
 
             continue;
           }
-
-          browserCalls += 1;
 
           const urlPreview = browserArgs.url?.trim()
             ? (browserArgs.url.length > 200
@@ -507,13 +513,5 @@ export const runStageSession = async (
       + `requestId=${options.requestId ?? '-'} maxTurns=${maxTurns}`,
     );
 
-    return withUsage({
-      output: `执行失败 stage对话轮次超过限制 ${maxTurns}`,
-      type: "result",
-    }, turns, bashCalls);
-  } finally {
-    if (browserCalls > 0) {
-      await closeStagehandSession();
-    }
-  }
+    throw new MaxTurnsExhaustedError(maxTurns);
 };

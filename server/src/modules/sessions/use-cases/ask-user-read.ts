@@ -28,7 +28,7 @@ export type TResponseAskUserQuestion = {
   requestId: string;
   stage: Record<string, unknown>;
   stageIndex?: number;
-  status: 'answered' | 'pending';
+  status: 'answered' | 'pending' | 'superseded';
   storageSnapshot: Record<string, unknown>;
   toolCallId: string;
 };
@@ -39,7 +39,7 @@ export type TResponseAskUserQuestionListItem = {
   questionCount?: number;
   questionId: string;
   requestId: string;
-  status: 'answered' | 'pending';
+  status: 'answered' | 'pending' | 'superseded';
   title?: string;
 };
 
@@ -68,7 +68,7 @@ const _toCheckpoint = (question: {
   requestId: string;
   stage: Record<string, unknown>;
   stageIndex?: number;
-  status: 'answered' | 'pending';
+  status: 'answered' | 'pending' | 'superseded';
   storageSnapshot: Record<string, unknown>;
   toolCallId: string;
 }): TResponseAskUserQuestion => ({
@@ -93,7 +93,7 @@ export const listAskUserQuestions = [
     .validate(({ req }) => ({
       params: joi.getValidatedOrThrow(sessionParamsSchema, req.params),
       query: joi.getValidatedOrThrow(
-        Joi.object({ status: Joi.string().valid('pending', 'answered').optional() }),
+        Joi.object({ status: Joi.string().valid('pending', 'answered', 'superseded').optional() }),
         req.query,
       ),
     }))

@@ -1,0 +1,303 @@
+goto:
+  - command: '/stage(explorer)'
+    description: 'when the cached/locked traffic source is no longer available or usable'
+contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, city_slug, source_instruction, instruction_active, verify_feedback, TTrafficFetch, TRouteSample, TMonitorResult, poll_miss, last_fetch, last_analysis, sleep_sec, bind_origin, bind_destination, label_origin, label_destination, source_scripts_slug, source_scripts_dir, bound_url, url_bound_od, page_ready, origin_ok, dest_ok, routes_ready]
+updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count, day_page_sections, poll_miss, last_fetch, last_analysis, sleep_sec, bind_origin, bind_destination, bound_url, url_bound_od, page_ready, origin_ok, dest_ok, routes_ready]
+agentOverrides:
+  bashTimeoutMs: 360000
+maxBashCalls: 48
+maxTurns: 80
+whileSetup:
+  condition: "(Date.now() - Date.parse(String(context.context.started_at))) < Number(context.context.monitor_minutes) * 60 * 1000"
+  doAtLeast: 2
+warmUp: |
+  IF: instruction_active;
+    *read(source_instruction);
+  END:
+  IF: verify_feedback;
+    day_page_sections = [];
+    *set_context(day_page_sections);
+  END:
+  const src_url = String(traffic_source.url || '');
+  url_bound_od = src_url.includes('{origin}') && src_url.includes('{destination}');
+  IF: url_bound_od;
+    bound_url = *run_bash(node -e "const u=process.argv[1],o=process.argv[2],d=process.argv[3];process.stdout.write(u.replaceAll('{origin}',encodeURIComponent(o)).replaceAll('{destination}',encodeURIComponent(d)))" -- "${src_url}" "${bind_origin}" "${bind_destination}");
+  ELSE:
+    bound_url = src_url;
+  END:
+  *set_context(bound_url, url_bound_od);
+  *get_or_create(
+    ~/data/scripts/{source_scripts_slug}/goto-driving-search.js,
+    Instruction: Open stdin.url; confirm private-car/driving mode not transit/walk/bike; settle before return. Drive via yahl-browser only. Required stdin to yahl-browser for goto is JSON {mode:"goto",url,instruction} — instruction is required (e.g. "navigate"); never call goto with only url. For later act/extract/observe use {mode,instruction} and omit url (url on act reloads and wipes form state). Script stdin JSON {url}. stdout {ok,url}. No session POI literals.
+  );
+  *run(~/data/scripts/{source_scripts_slug}/goto-driving-search.js, {url: bound_url});
+  page_ready = true;
+  *set_context(page_ready);
+  IF: url_bound_od;
+    origin_ok = true;
+    dest_ok = true;
+    *set_context(origin_ok, dest_ok);
+  ELSE:
+    *get_or_create(
+      ~/data/scripts/{source_scripts_slug}/fill-origin-input.js,
+      Instruction: Bind From/origin field to stdin.originPoi (= bind_origin). Click matching autocomplete; reject hub/district drift. Never hardcode POIs. Drive via yahl-browser: act/extract use {mode,instruction} without url; goto (if needed) must include instruction. stdin {originPoi,verifyDistrict?}. stdout {ok,field,selected,boundValue}.
+    );
+    *run(~/data/scripts/{source_scripts_slug}/fill-origin-input.js, {originPoi: bind_origin});
+    *get_or_create(
+      ~/data/scripts/{source_scripts_slug}/fill-destination-input.js,
+      Instruction: Bind To/destination field to stdin.destPoi (= bind_destination). Click matching autocomplete. Never hardcode POIs. Drive via yahl-browser: act/extract use {mode,instruction} without url; goto (if needed) must include instruction. stdin {destPoi,verifyDistrict?}. stdout {ok,field,selected,boundValue}.
+    );
+    *run(~/data/scripts/{source_scripts_slug}/fill-destination-input.js, {destPoi: bind_destination});
+    *get_or_create(
+      ~/data/scripts/{source_scripts_slug}/verify-od-bound.js,
+      Instruction: Assert page From/To chips match stdin.origin and stdin.destination (bind names). stdout {ok,origin_ok,dest_ok,from_field,to_field}. Do not re-bind; report only. yahl-browser extract/observe with {mode,instruction} — omit url.
+    );
+    const verify = *run(~/data/scripts/{source_scripts_slug}/verify-od-bound.js, {origin: bind_origin, destination: bind_destination});
+    origin_ok = verify.origin_ok === true;
+    dest_ok = verify.dest_ok === true;
+    *set_context(origin_ok, dest_ok);
+  END:
+  WarmUp ensures O/D only (goto + chips / verify). Do not Search, wait for route cards, run search-driving-routes.js, fetch, notify, append day-page, or sleep. Search belongs in submit_wait.
+prefixOverride: |
+  Warm-up already ran. Browser page is open; OD already ensured — poll body starts at Search (submit_wait).
+  Scripts under ~/data/scripts/{source_scripts_slug}/ may already exist — run them; do not cat script bodies, re-read skills, goto, or re-bind OD.
+  Use Input context keys only. Execute this Input only.
+logic:
+  stages:
+    - id: submit_wait
+      contextKeys:
+        [
+          url_bound_od,
+          origin_ok,
+          dest_ok,
+          page_ready,
+          bound_url,
+          bind_origin,
+          bind_destination,
+          source_scripts_slug,
+          traffic_source,
+          routes_ready,
+        ]
+      updateContextKeys: [routes_ready]
+      logic: |
+        NEVER run fill-origin-input.js, fill-destination-input.js, bind-od-field.js, or goto that re-binds OD.
+        IF: url_bound_od;
+          Wait until ≤3 private-car route cards are visible (observe/act; do not pass url on act/extract).
+          routes_ready = true;
+          *set_context(routes_ready);
+        ELSE:
+          *get_or_create(
+            ~/data/scripts/{source_scripts_slug}/search-driving-routes.js,
+            Instruction: Submit directions search (e.g. Shortest Time); wait until route result cards/table visible. Do NOT fill or re-bind OD. stdin {}. stdout {ok}. yahl-browser only — act/observe use {mode,instruction} without url; if goto is needed use {mode:"goto",url,instruction}.
+          );
+          *run(~/data/scripts/{source_scripts_slug}/search-driving-routes.js, {});
+          IF: cards not visible;
+            Retry search once OR *run goto-driving-search.js with bound_url then search again — still no OD re-bind.
+          END:
+          routes_ready = true when cards visible;
+          *set_context(routes_ready);
+        END:
+
+    - id: extract
+      contextKeys:
+        [
+          routes_ready,
+          bind_origin,
+          bind_destination,
+          label_origin,
+          label_destination,
+          bound_url,
+          source_scripts_slug,
+          traffic_source,
+          prev_routes,
+          miss_count,
+          day_page,
+          day_page_sections,
+          started_at,
+          monitor_minutes,
+          timezone,
+          TTrafficFetch,
+        ]
+      updateContextKeys:
+        [
+          last_fetch,
+          poll_miss,
+          miss_count,
+          day_page_sections,
+          sleep_sec,
+        ]
+      logic: |
+        *get_or_create(
+          ~/data/scripts/{source_scripts_slug}/extract-routes-normalize.js,
+          Instruction: Extract ≤3 private-car routes from current page + normalize to TTrafficFetch.routes / TRouteSample. Each route MUST use eta_min (number minutes from page "N mins") — never emit time_min as the sole duration key; map page minutes → eta_min. Take origin/destination from stdin (bind names) for OD chip check and path cleanup — never bake POIs or geography literals. stdin {origin,destination}. stdout {routes:[{label,eta_min,path?,distance_km?,status?,recommended?}],incident_note?,from_field?,to_field?}. yahl-browser extract then coerce — extract uses {mode:"extract",instruction,schema?} without url.
+        );
+        const extracted = *run(~/data/scripts/{source_scripts_slug}/extract-routes-normalize.js, {origin: bind_origin, destination: bind_destination});
+        const fetch = *normalize_traffic_fetch(
+          extracted.routes || extracted,
+          fetched_at: now_iso,
+          source_url: bound_url,
+          as: TTrafficFetch,
+        );
+        OD chips must match bind_origin/bind_destination — mismatch or empty routes → miss.
+        IF: *fetch_failed(fetch);
+          poll_miss = true;
+          last_fetch = fetch;
+          miss_count = miss_count + 1;
+          *set_context(poll_miss, last_fetch, miss_count);
+          *get_or_create(
+            ~/data/scripts/format-fetch-section.js,
+            Instruction: Build day-page miss section markdown. stdin {fetch,miss:true,origin,destination,timezone,notes?}. stdout {section}. Origin line = origin arg; Destination line = destination arg — never swap.
+          );
+          const miss_section = *run(~/data/scripts/format-fetch-section.js, {fetch, miss: true, origin: label_origin, destination: label_destination, timezone}).section
+            || *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone);
+          *extend_context(day_page_sections, value: miss_section);
+          /nixery(
+            append-raw-knowledge-page,
+            topic: traffic-monitor,
+            page: day_page,
+            mode: append,
+            content: miss_section,
+          );
+          *submit_novel_ops(miss: true, fetch: fetch, source: traffic_source);
+          sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
+          *set_context(sleep_sec);
+        ELSE:
+          poll_miss = false;
+          last_fetch = fetch;
+          *set_context(poll_miss, last_fetch);
+        END:
+
+    - id: analyze
+      contextKeys:
+        [
+          poll_miss,
+          last_fetch,
+          label_origin,
+          label_destination,
+          prev_routes,
+          prev_incident_note,
+          poll_success_count,
+          fetches,
+          day_page,
+          day_page_sections,
+          timezone,
+          TTrafficFetch,
+          TRouteSample,
+        ]
+      updateContextKeys:
+        [
+          last_analysis,
+          fetches,
+          prev_routes,
+          poll_success_count,
+          day_page_sections,
+          prev_incident_note,
+          last_fetch,
+        ]
+      logic: |
+        IF: !poll_miss;
+          const analysis = *analyze_routes(last_fetch, prev_routes, prev_incident_note);
+          const fetch_with_status = { ...last_fetch, ...analysis.patch };
+          last_analysis = analysis;
+          last_fetch = fetch_with_status;
+          *extend_context(fetches, value: fetch_with_status);
+          prev_routes = fetch_with_status.routes;
+          poll_success_count = poll_success_count + 1;
+          *set_context(last_analysis, last_fetch, prev_routes, poll_success_count);
+          *get_or_create(
+            ~/data/scripts/format-fetch-section.js,
+            Instruction: Build day-page section markdown. stdin {fetch,analysis,origin,destination,timezone}. stdout {section}. Origin then Destination lines must use origin/destination args in that order — never swap.
+          );
+          const section_md = *run(~/data/scripts/format-fetch-section.js, {fetch: fetch_with_status, analysis, origin: label_origin, destination: label_destination, timezone}).section;
+          *extend_context(day_page_sections, value: section_md);
+          /nixery(
+            append-raw-knowledge-page,
+            topic: traffic-monitor,
+            page: day_page,
+            mode: append,
+            content: section_md,
+          );
+          prev_incident_note = analysis.incident_note || '';
+          *set_context(prev_incident_note);
+        END:
+
+    - id: notify_and_sleep
+      contextKeys:
+        [
+          poll_miss,
+          last_fetch,
+          last_analysis,
+          poll_success_count,
+          summary_notified,
+          notifications,
+          notifyChannel,
+          notifyTo,
+          notifyPreference,
+          notifyName,
+          started_at,
+          last_heartbeat_at,
+          label_origin,
+          label_destination,
+          sleep_sec,
+          monitor_minutes,
+          traffic_source,
+          prev_routes,
+        ]
+      updateContextKeys:
+        [summary_notified, notifications, last_heartbeat_at, sleep_sec]
+      logic: |
+        IF: !poll_miss;
+          *get_or_create(
+            ~/data/scripts/format-notification-body.js,
+            Instruction: Build propose-notification body text. stdin {kind,fetch,analysis,label_origin,label_destination,notifyPreference,notifyName}. stdout {body}. Route ETAs use eta_min (fallback time_min). First route line MUST list label_origin then label_destination in that order — fail closed (ok:false) if reversed. Put OD only inside body. No extra platform args.
+          );
+          IF: poll_success_count <== 2 && !summary_notified;
+            const body_a = *run(~/data/scripts/format-notification-body.js, {kind: 'kind_a_summary', fetch: last_fetch, analysis: last_analysis, label_origin, label_destination, notifyPreference, notifyName}).body;
+            /platform(propose-notification, channel: notifyChannel, to: notifyTo, direction: to_user, body: body_a);
+            summary_notified = poll_success_count >== 2;
+            *set_context(summary_notified, notifications);
+          END:
+          IF: *heartbeat_due(notifyPreference, started_at, last_heartbeat_at);
+            const body_b = *run(~/data/scripts/format-notification-body.js, {kind: 'kind_b_heartbeat', fetch: last_fetch, analysis: last_analysis, label_origin, label_destination, notifyPreference, notifyName}).body;
+            /platform(propose-notification, channel: notifyChannel, to: notifyTo, direction: to_user, body: body_b);
+            last_heartbeat_at = new Date().toISOString();
+            *set_context(last_heartbeat_at, notifications);
+          END:
+          IF: poll_success_count >= 2 && last_analysis.should_notify_abnormal;
+            const body_c = *run(~/data/scripts/format-notification-body.js, {kind: 'kind_c_abnormal', fetch: last_fetch, analysis: last_analysis, label_origin, label_destination, notifyPreference, notifyName}).body;
+            /platform(propose-notification, channel: notifyChannel, to: notifyTo, direction: to_user, body: body_c);
+            *set_context(notifications);
+          END:
+          *submit_novel_ops(miss: false, fetch: last_fetch, source: traffic_source, analysis: last_analysis);
+          sleep_sec = *adaptive_sleep_sec(last_fetch, prev_primary_eta: last_analysis.prev_primary_eta, started_at, monitor_minutes);
+        ELSE:
+          IF: !sleep_sec;
+            sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
+          END:
+        END:
+        *set_context(sleep_sec);
+        Before finish (required, last steps before sleep): set_context key=__knowledge-to-script__notes to a non-empty string (ad-hoc free-flow / stage-agent browser → script consideration, or "reviewed" only when free-flow checked and nothing further). Do not finish after notifications without sleep_sec and notes both set.
+        *run_bash(sleep ${sleep_sec});
+verify:
+  defId: stage-verify
+  autoRetry: true
+  minScore: 0.75
+  rubric: |
+    Pass when started_at is set and unchanged,
+    clock elapsed vs started_at is >= monitor_minutes OR elapsed already past window on retry,
+    day_page non-empty, fetches is an array of real polls (no invented polls),
+    miss_count is a number, notifications subset of real propose-notification outcomes.
+    Count distinct polls by deduping fetches on fetched_at (±60s) plus primary-route eta_min;
+    identical duplicate entries from retried context writes do not increase distinct poll count
+    and must not fail the stage by themselves.
+    Do not fail solely because raw fetches.length exceeds distinct poll count.
+    For fetched_at vs Clock: do not treat timestamps as invented when they fall within
+    [started_at, now_iso + 9h] (timezone mislabel tolerance) or when day_page_sections times corroborate;
+    only fail future timestamps with no corroborating section or iteration evidence.
+    When window allowed >=2 polls, require distinct_poll_count + miss_count >= 2 with miss sections covering gaps.
+    Use read_context_key('day_page_sections'), fetches, origin_display, destination_display, origin, destination, miss_count.
+    day_page_sections is a string array of append markdown for this run; do not read knowledge files or day_page path on disk.
+    Dedupe sections by ## HH:MM header line; retried batches may duplicate entries — count distinct sections only.
+    Each distinct section must contain Origin and Destination lines matching origin_display/destination_display (else runInput origin/destination).
+    Distinct section count >= distinct_poll_count + miss_count - 1. Fail when any distinct section lacks Origin or Destination.
+    On fail, set resumeAction: rerun.

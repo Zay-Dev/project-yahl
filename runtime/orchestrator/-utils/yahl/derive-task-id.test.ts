@@ -11,6 +11,11 @@ const testSkillPath = path.resolve(
   '../../../../server/tasks/test/SKILL.yaml',
 );
 
+const trafficMonitorPath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../../server/tasks/traffic_monitor/SKILL.yaml',
+);
+
 describe('deriveTaskNameFromYahl', () => {
   it('uses yahl name field when document is valid', () => {
     const yahl = readFileSync(testSkillPath, 'utf-8');
@@ -18,6 +23,15 @@ describe('deriveTaskNameFromYahl', () => {
     assert.equal(
       deriveTaskNameFromYahl(yahl, 'server/tasks/test/SKILL.yaml'),
       'test the syntax',
+    );
+  });
+
+  it('uses name from stage-$ref skills without full stage validate', () => {
+    const yahl = readFileSync(trafficMonitorPath, 'utf-8');
+
+    assert.equal(
+      deriveTaskNameFromYahl(yahl, 'server/tasks/traffic_monitor/SKILL.yaml'),
+      'traffic-monitor',
     );
   });
 

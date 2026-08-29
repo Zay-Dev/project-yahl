@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "test": "tsx --test \"src/pages/sessions/lib/**/*.test.ts\"",
+    "test": "tsx --test \"src/pages/sessions/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

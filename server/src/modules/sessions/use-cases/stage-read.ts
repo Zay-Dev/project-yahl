@@ -7,6 +7,7 @@ import { Queries } from '@omni-infra/mongoose';
 
 import { resolveSessionBySessionId } from '../-resolve-session';
 import { isTypesPreambleStage } from '../-types-preamble';
+import { logicPreviewText } from '@project-yahl/shared/yahl/logic';
 import { isStageFinished, isStageVerifying } from '../-stage-status';
 import type {
   TResponseStageDetail,
@@ -54,8 +55,12 @@ const toIso = (value: Date | string | undefined) => {
   return value instanceof Date ? value.toISOString() : String(value);
 };
 
-const logicPreviewFrom = (logic: string | undefined) => {
-  const lines = (logic ?? '')
+const logicPreviewFrom = (logic: unknown) => {
+  const text = typeof logic === 'string'
+    ? logic
+    : logicPreviewText(logic as Parameters<typeof logicPreviewText>[0]);
+
+  const lines = text
     .split('\n')
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
@@ -163,6 +168,7 @@ const toListItem = (
     modelDurationMs: number;
   },
 ): TResponseStageListItem => ({
+  ...(stage.agentMeta ? { agentMeta: stage.agentMeta } : {}),
   createdAt: toIso(stage.createdAt as Date) ?? '',
   finishedAt: toIso(stage.finishedAt),
   isTypesPreamble: isTypesPreambleStage({
@@ -249,6 +255,9 @@ export const resolveSessionStagesReplay = async (sessionId: string) => {
     );
 
     return {
+      ...(stage.agentMeta && Object.keys(stage.agentMeta).length
+        ? { agentMeta: stage.agentMeta }
+        : {}),
       context: (stage.context ?? {}) as Record<string, unknown>,
       contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
       finishedAt: toIso(stage.finishedAt),

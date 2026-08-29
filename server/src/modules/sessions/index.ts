@@ -2,6 +2,7 @@ import { exposedRoute } from '@/servers';
 
 import './-inject';
 
+import { abandonBrowserSession } from './use-cases/abandon-browser-write';
 import { getForkSession } from './use-cases/fork-session-read';
 import { createForkSession } from './use-cases/fork-session-write';
 import { createRepairSession } from './use-cases/repair-session-write';
@@ -58,6 +59,7 @@ exposedRoute('/api/sessions')
   .get('/:sessionId', getSession)
   .delete('/:sessionId', deleteSession)
   .post('/:sessionId/stop', stopSession)
+  .post('/:sessionId/abandon-browser', abandonBrowserSession)
   .post('/:sessionId/pause', requestSessionPauseRun)
   .get('/:sessionId/events/stream', getSessionEventsStream)
   .get('/:sessionId/stages/replay', getSessionStagesReplay)

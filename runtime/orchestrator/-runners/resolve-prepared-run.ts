@@ -4,7 +4,7 @@ import type { TOrchestratorRun } from '../-cli/resolve-orchestrator-run';
 
 import { createStorage } from '@/orchestrator/-tools/set_context';
 import { seedDefaultContext, seedRunInputContext } from '@/orchestrator/-context/default-context';
-import { parseYahlDocument } from '@/orchestrator/-utils/yahl';
+import { parseYahlRunInputKeys } from '@/orchestrator/-utils/yahl';
 import { fetchSession } from '@/orchestrator/-ask-user';
 
 import { deserializeCheckpointStorage } from './checkpoint-resume-load';
@@ -25,7 +25,7 @@ const _seedFreshTaskStorage = (
   taskYahl: string,
 ) => {
   const runInputContextKeys = taskYahl.trim()
-    ? parseYahlDocument(taskYahl).runInput?.map((field) => field.key)
+    ? parseYahlRunInputKeys(taskYahl)
     : undefined;
 
   seedRunInputContext(storage, runInput, runInputContextKeys);
@@ -84,6 +84,9 @@ export const resolvePreparedRun = async (
       cursor: {
         kind: 'repair',
         loopMeta: session.runCursor.loopMeta as TLoopMeta | undefined,
+        ...(session.runCursor.nestedIndex === undefined
+          ? {}
+          : { nestedIndex: session.runCursor.nestedIndex }),
         repairInstruction,
         stageIndex,
       },
@@ -102,6 +105,9 @@ export const resolvePreparedRun = async (
     cursor: {
       kind: 'pipeline',
       loopMeta: session.runCursor?.loopMeta as TLoopMeta | undefined,
+      ...(session.runCursor?.nestedIndex === undefined
+        ? {}
+        : { nestedIndex: session.runCursor.nestedIndex }),
       stageIndex,
     },
     parsedStages: session.parsedStages,

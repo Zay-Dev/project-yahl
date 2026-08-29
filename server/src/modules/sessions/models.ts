@@ -50,8 +50,18 @@ const forkedFromSchema = new Schema({
 const runCursorSchema = new Schema({
   kind: { default: 'pipeline', enum: ['pipeline', 'repair'], required: true, type: String },
   loopMeta: loopMetaSchema,
+  nestedIndex: model.d.optionalNumber(),
   repairInstruction: model.d.optionalString(),
   stageIndex: model.d.requiredNumber(),
+}, { _id: false });
+
+const lastErrorSchema = new Schema({
+  at: model.d.requiredString(),
+  code: { enum: ['budget_burnout', 'stage_failed'], required: true, type: String },
+  message: model.d.requiredString(),
+  requestId: model.d.optionalString(),
+  stageId: model.d.optionalString(),
+  stageIndex: model.d.optionalNumber(),
 }, { _id: false });
 
 const forkSessionSetupSchema = new Schema({
@@ -63,9 +73,13 @@ const forkSessionSetupSchema = new Schema({
 }, { _id: false });
 
 const sessionSchema = new Schema<TDbSession>({
+  browser: { default: false, type: Boolean },
+  browserAbandonedAt: model.d.optionalDate(),
+  browserAbandonedReason: model.d.optionalString(),
   deletedAt: model.d.deletedAt(),
   forkedFrom: forkedFromSchema,
   isBackground: { default: false, type: Boolean },
+  lastError: lastErrorSchema,
   liveViewVncPort: model.d.optionalNumber(),
   parsedStages: [model.d.mixed()],
   result: model.d.mixed(),
@@ -77,6 +91,7 @@ const sessionSchema = new Schema<TDbSession>({
   taskId: model.d.optionalString(),
   taskSkills: [model.d.mixed()],
   taskYahl: model.d.optionalString(),
+  taskYahlRefs: model.d.mixed(),
 }, {
   collection: modelsName.Sessions,
   timestamps: true,
@@ -86,6 +101,7 @@ sessionSchema.index({ sessionId: 1 }, { unique: true });
 sessionSchema.index({ 'forkedFrom.sourceSessionId': 1 });
 
 const stageSchema = new Schema<TDbStage>({
+  agentMeta: model.d.mixed(),
   context: model.d.mixed(),
   contextAfter: model.d.mixed(),
   parsedStageIndex: model.d.optionalNumber(),

@@ -8,6 +8,8 @@ import {
   copySessionWorkspace,
   ensureTaskWorkspace,
   removeSessionWorkspace,
+  SESSION_BROWSER_ACTIVE_MARKER,
+  SESSION_CHROME_PROFILE_DIR,
   SESSION_TASK_DATA_DIR,
   taskScriptsDir,
 } from './workspace-paths';
@@ -49,7 +51,7 @@ describe('copySessionWorkspace', () => {
     }
   });
 
-  it('skips shared task data directory when forking workspace', async () => {
+  it('skips shared task data and browser runtime state when forking workspace', async () => {
     previousWorkspaceRoot = process.env.WORKSPACE_ROOT;
     workspaceRoot = await mkdtemp(path.join(tmpdir(), 'yahl-copy-ws-'));
     process.env.WORKSPACE_ROOT = workspaceRoot;
@@ -64,8 +66,11 @@ describe('copySessionWorkspace', () => {
     const taskDataRoot = path.join(workspaceRoot, 'tasks', taskId);
 
     await mkdir(path.join(sourceRoot, SESSION_TASK_DATA_DIR), { recursive: true });
+    await mkdir(path.join(sourceRoot, SESSION_CHROME_PROFILE_DIR, 'Default'), { recursive: true });
     await writeFile(path.join(taskDataRoot, 'hk_observatory_api.md'), '# shared api', 'utf8');
     await writeFile(path.join(sourceRoot, SESSION_TASK_DATA_DIR, 'hk_observatory_api.md'), '# shared api', 'utf8');
+    await writeFile(path.join(sourceRoot, SESSION_CHROME_PROFILE_DIR, 'Default', 'Preferences'), '{}', 'utf8');
+    await writeFile(path.join(sourceRoot, SESSION_BROWSER_ACTIVE_MARKER), String(Date.now()), 'utf8');
     await writeFile(path.join(sourceRoot, 'scratch.txt'), 'session only', 'utf8');
 
     const result = await copySessionWorkspace(sourceSessionId, targetSessionId);
@@ -73,6 +78,8 @@ describe('copySessionWorkspace', () => {
     assert.equal(result.copied, true);
     await access(path.join(result.path, 'scratch.txt'));
     await assert.rejects(() => access(path.join(result.path, SESSION_TASK_DATA_DIR)));
+    await assert.rejects(() => access(path.join(result.path, SESSION_CHROME_PROFILE_DIR)));
+    await assert.rejects(() => access(path.join(result.path, SESSION_BROWSER_ACTIVE_MARKER)));
     await access(path.join(taskDataRoot, 'hk_observatory_api.md'));
     assert.equal(
       await readFile(path.join(taskDataRoot, 'hk_observatory_api.md'), 'utf8'),

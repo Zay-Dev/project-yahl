@@ -289,6 +289,7 @@ export const answerAskUserBatch = [
 
       await assertSessionRunAllowed({
         _id: String(sessionRef),
+        browserAbandonedAt: session.browserAbandonedAt,
         liveViewVncPort: session.liveViewVncPort,
         sessionId: session.sessionId,
       });

@@ -1,6 +1,7 @@
 name: news-monitor
 description: Monitor news from multiple sources
 resultContextKey: result
+browser: true
 
 types: |
   type TNews = {

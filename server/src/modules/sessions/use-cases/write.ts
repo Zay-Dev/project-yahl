@@ -6,7 +6,7 @@ import { Queries } from '@omni-infra/mongoose';
 import { Middlewares } from '@omni-infra/express';
 
 import { emitSessionEvent } from '../-session-events';
-import type { TParsedStage, TSessionRunCursor } from '../-types';
+import type { TParsedStage, TSessionLastError, TSessionRunCursor } from '../-types';
 import { modelSession } from '../models';
 import { parsedStageSchema } from '../stage-schema';
 
@@ -28,6 +28,7 @@ export type TResponseRegisterSession = {
 };
 
 export type TRequestPatchSessionBody = {
+  lastError?: TSessionLastError;
   liveViewVncPort?: number | null;
   result?: unknown;
   runCursor?: TSessionRunCursor;
@@ -40,11 +41,22 @@ export type TResponsePatchSession = {
 const runCursorSchema = Joi.object<TSessionRunCursor>({
   kind: Joi.string().valid('pipeline', 'repair').required(),
   loopMeta: Joi.any().optional(),
+  nestedIndex: Joi.number().integer().min(0).optional(),
   repairInstruction: Joi.string().trim().optional(),
   stageIndex: Joi.number().integer().min(0).required(),
 });
 
+const lastErrorSchema = Joi.object<TSessionLastError>({
+  at: Joi.string().isoDate().required(),
+  code: Joi.string().valid('budget_burnout', 'stage_failed').required(),
+  message: Joi.string().trim().min(1).required(),
+  requestId: Joi.string().trim().optional(),
+  stageId: Joi.string().trim().optional(),
+  stageIndex: Joi.number().integer().min(0).optional(),
+});
+
 const patchBodySchema = Joi.object<TRequestPatchSessionBody>({
+  lastError: lastErrorSchema.optional(),
   liveViewVncPort: Joi.number().integer().min(1).max(65535).allow(null).optional(),
   result: Joi.any().optional(),
   runCursor: runCursorSchema.optional(),
@@ -65,7 +77,10 @@ const bodySchema = Joi.object<TRequestRegisterSessionBody>({
 });
 
 const isLiveViewPortOnlyPatch = (body: TRequestPatchSessionBody) =>
-  'liveViewVncPort' in body && !('result' in body) && !('runCursor' in body);
+  'liveViewVncPort' in body
+  && !('result' in body)
+  && !('runCursor' in body)
+  && !('lastError' in body);
 
 
 const paramsSchema = Joi.object<TRequestRegisterSessionParams>({
@@ -141,6 +156,7 @@ export const patchSession = [
               ...('result' in body ? { result: body.result } : {}),
               ...('liveViewVncPort' in body ? { liveViewVncPort: body.liveViewVncPort } : {}),
               ...('runCursor' in body && body.runCursor ? { runCursor: body.runCursor } : {}),
+              ...('lastError' in body && body.lastError ? { lastError: body.lastError } : {}),
               updatedAt: now,
             },
           },

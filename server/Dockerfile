@@ -46,6 +46,7 @@ COPY ${OMNIFLEX_APP_DIR}/server/tsconfig.json ./${OMNIFLEX_APP_DIR}/server/tscon
 COPY ${OMNIFLEX_APP_DIR}/runtime ./${OMNIFLEX_APP_DIR}/runtime
 COPY ${OMNIFLEX_APP_DIR}/docker-compose.yml ./${OMNIFLEX_APP_DIR}/docker-compose.yml
 COPY ${OMNIFLEX_APP_DIR}/docker-compose.agent.yml ./${OMNIFLEX_APP_DIR}/docker-compose.agent.yml
+COPY ${OMNIFLEX_APP_DIR}/docker-compose.browser.yml ./${OMNIFLEX_APP_DIR}/docker-compose.browser.yml
 
 RUN pnpm --filter @project-yahl/shared run build \
   && pnpm --filter @project-yahl/server... run build \
@@ -64,6 +65,7 @@ COPY --from=build /omniflex/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=build /omniflex/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/package.json
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.agent.yml ./${OMNIFLEX_APP_DIR}/docker-compose.agent.yml
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.browser.yml ./${OMNIFLEX_APP_DIR}/docker-compose.browser.yml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.yml ./${OMNIFLEX_APP_DIR}/docker-compose.yml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server/package.json ./${OMNIFLEX_APP_DIR}/server/package.json
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server/dist ./${OMNIFLEX_APP_DIR}/server/dist
@@ -73,6 +75,8 @@ COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/dist ./${OMNIFLEX_APP_DI
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/node_modules ./${OMNIFLEX_APP_DIR}/runtime/node_modules
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/Dockerfile.agent ./${OMNIFLEX_APP_DIR}/runtime/
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/Dockerfile.browser ./${OMNIFLEX_APP_DIR}/runtime/
+COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/browser-entrypoint.sh ./${OMNIFLEX_APP_DIR}/runtime/
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/tsconfig.json ./${OMNIFLEX_APP_DIR}/runtime/tsconfig.json
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/agent ./${OMNIFLEX_APP_DIR}/runtime/agent
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/runtime/orchestrator ./${OMNIFLEX_APP_DIR}/runtime/orchestrator

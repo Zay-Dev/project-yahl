@@ -25,5 +25,6 @@ export const isTypesPreambleStage = (stage: {
     return false;
   }
 
-  return TYPES_LOGIC_PATTERN.test(spec.logic ?? '');
+  return typeof spec.logic === 'string'
+    && TYPES_LOGIC_PATTERN.test(spec.logic);
 };

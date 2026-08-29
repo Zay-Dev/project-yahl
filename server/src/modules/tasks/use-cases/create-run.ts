@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import path from 'path';
 
 import {
   applyRunInputDefaults,
@@ -16,6 +17,7 @@ import { Middlewares } from '@omni-infra/express';
 import type { TResponseCreateRun } from '../-api-types';
 import { readTaskFile, taskExists } from '../-read-task-file';
 import { readTaskSkillsFromDisk } from '../-read-task-skills';
+import { taskYahlAbsolutePath } from '../-tasks-root';
 
 export type TRequestCreateRunBody = {
   runInput?: Record<string, unknown>;
@@ -49,9 +51,13 @@ export const createRun = [
       }
 
       const taskSkills = await readTaskSkillsFromDisk(body.taskId);
-      const { resultContextKey, stages } = parseYahlTask(task.yahl);
+      const taskRoot = path.dirname(taskYahlAbsolutePath(body.taskId));
+      const { resultContextKey, stages, yahlRefs } = parseYahlTask(task.yahl, {
+        taskRoot,
+      });
 
       await Repository.resolve('createPendingSession')({
+        browser: task.browser === true,
         isBackground: task.background === true,
         parsedStages: stages,
         resultContextKey,
@@ -62,6 +68,7 @@ export const createRun = [
         taskId: body.taskId,
         taskSkills,
         taskYahl: task.yahl,
+        ...(yahlRefs ? { taskYahlRefs: yahlRefs } : {}),
       });
 
       await Repository.resolve('spawnOrchestrate')(sessionId, []);

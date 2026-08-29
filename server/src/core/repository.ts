@@ -9,6 +9,7 @@ import * as awilix from 'awilix';
 
 type TServices = {
   createPendingSession: (input: {
+    browser?: boolean;
     isBackground?: boolean;
     parsedStages?: TParsedStage[];
     resultContextKey?: string;

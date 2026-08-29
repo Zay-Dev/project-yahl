@@ -1,8 +1,9 @@
 import type { ChatApiMessage } from '@/shared/stage-tools';
 import type { TAskUserResumeFrom, TStorage, TLoopMeta } from '@/shared/transports/-types';
 import type { ParsedStage } from '@/orchestrator/-utils/yahl/types';
+import type { TStageAgentMeta } from '@project-yahl/shared/yahl/types';
 
-export { TStorage, TLoopMeta };
+export type { TStorage, TLoopMeta };
 
 export type TResumeStage = {
   loopMeta?: TLoopMeta;
@@ -24,6 +25,7 @@ export type TStageUsage = {
 export type TRunYahl = (
   yahl: string,
   options?: {
+    agentMeta?: TStageAgentMeta;
     contextAfter?: TStorage;
     contextAfterRecord?: Record<string, unknown>;
     forkSetupIndex?: number;

@@ -24,8 +24,9 @@ Syntax reference:
 - `~/task-skills/…` — task-local SKILL files echoed from the session snapshot (see Authoring tasks below).
 - `/opt/skills/…` — shareable catalog (platform built-ins + installed nixery plugin skills).
 - `for each i of [0..100]` and `for each x of [array]` — for-loops, with an optional step like `,+2` (`loopSetup`).
-- `whileSetup` — orchestrator-owned do-while. String form is a JS predicate (`context.context.{key}`) with an implicit floor of 1 body. Object form `{ condition, doAtLeast? }` runs `doAtLeast` bodies (default and min 1) then uses `condition` to gate further polls. WarmUp does not count toward `doAtLeast`.
-- `warmUp` — optional one-shot prefix on `loopSetup` or `whileSetup`; Redis stage run, then the loop. While iterations prepend the warmUp chat transcript (`prefixMessages`), not prior polls. On verify **autoRetry** rerun, warmUp logic is skipped by default (`verify.skipWarmUp`, default `true`); the first warmUp transcript is still reused.
+- `whileSetup` — orchestrator-owned do-while. String form is a JS predicate (`context.context.{key}`) with an implicit floor of 1 body. Object form `{ condition, doAtLeast? }` runs `doAtLeast` bodies (default and min 1) then uses `condition` to gate further polls. WarmUp does not count toward `doAtLeast`. After warmUp, each poll resets turn/bash to parent max minus warmUp usage.
+- `warmUp` — optional one-shot prefix on `whileSetup`; Redis stage run, then the loop. By default the warmUp chat transcript is prepended as `prefixMessages` for later while iterations **and** nested fragment children. Set `prefixOverride` to replace that transcript with a short task-owned continue prompt (no chat archaeology). Sibling nesting history only chains when nested `mainThread: true`. On verify **autoRetry** rerun, warmUp logic is skipped by default — see `verify.skipWarmUp`. (`loopSetup` does not execute warmUp today.)
+- `prefixOverride` — optional non-empty string on a `loopSetup` / `whileSetup` stage. When set, while bodies and isolated nested children receive this user message as `prefixMessages` instead of the warmUp transcript (and without the platform `WARMUP_CONTINUE_NOTE`). WarmUp still runs for side effects / context writes.
 - `CONTEXT: ...` — run deterministic context mutation in the VM before the next AI stage.
 - `IF:` / `ELSE IF:` / `ELSE:` / `END:` — stage branching; condition decides which block runs.
 - `REPLACE: ...` — system tag the runtime uses when a step needs a second pass after a tool call.
@@ -44,6 +45,8 @@ Syntax reference:
 Each task lives in `server/tasks/<id>/SKILL.yaml` (or `SKILL.yml`) as one YAML document:
 
 - `name`, `description` — task metadata
+- `background` (optional boolean, default `false`) — hide from the default sessions list when true
+- `browser` (optional boolean, default `false`) — spawn a per-session browser container when true
 - `types` (optional) — multiline type definitions (`|`), emitted as the first AI stage
 - `stages` — ordered list of stage objects
 
@@ -51,16 +54,21 @@ Per-stage fields:
 
 | Field | Purpose |
 |-------|---------|
-| `logic` | Stage body (use `logic: \|` for multiline pseudo-code) |
+| `logic` | Stage body: **string** (`logic: \|` multiline pseudo-code), **inline fragment** (`logic: { stages: [...] }`), or **`$ref`** (`logic: { $ref: stages/foo.yahl }`). Non-text forms run as nested YAHL — see Inline / `$ref` below. |
 | `id` | Optional authoring id (`^[a-zA-Z][a-zA-Z0-9_-]*$`); unique within the document when set |
+| `$ref` | **Stage-level** external stage file (path relative to `server/tasks/{taskId}/`). Shell may only set `id` + `$ref`. Loads a **full stage document** (whileSetup, warmUp, logic, verify, …); shell `id` wins. Distinct from `logic: { $ref }` (nested fragment only). Requires `taskRoot` at parse time. |
+| `mainThread` | Optional boolean on **nested fragment stages only**. Default **`false`**: isolated chat (own `requestId`; warmUp prefix only). Set `true` to join the fragment main thread (receive prior main-thread transcript and append after success). Invalid on fragment/`$ref` shells and top-level string stages. |
+| `parallelGroup` | Optional string. **Reserved / NOT IMPLEMENTED** — future concurrent stage groups. Validated and persisted only. |
+| `parallelAfter` | Optional non-empty string array of stage ids. **Reserved / NOT IMPLEMENTED** — future join barriers. |
 | `goto` | Optional AI-stage transfer list: `{ command: '/stage(<id>)', description: '…' }[]` — agent may call `goto_stage` for a declared target |
 | `contextMode` | VM-only stage; read prior keys via `context.context.{key}`; return `(() => ({ ... }))` to write `produceContextKeys` |
 | `conditionMode` | `IF:` / `ELSE IF:` / `ELSE:` / `END:` branching in `logic` (same `context.context.{key}` reads as `contextMode`) |
 | `loopSetup` | Orchestrator-only for-loop (e.g. `for each i of [1..5,+2]`); persisted on session stages, not sent to the agent |
-| `whileSetup` | Orchestrator-only do-while. String = predicate (floor 1). Object `{ condition, doAtLeast? }` runs at least `doAtLeast` bodies (default and min 1), then `condition` gates further iterations. Mutually exclusive with `loopSetup` / `conditionMode` / `nixeryRun`. Parent `verify` runs once after the loop. Each body segment gets a filtered `contextKeys` copy; `updateContextKeys` merge replaces parent keys — keep `extend_context` accumulators on `contextKeys` (see `updateContextKeys`). |
-| `warmUp` | Optional one-shot logic before the first `loopSetup` or `whileSetup` iteration (Redis run; stripped from the agent envelope). While polls reuse this transcript as `prefixMessages`. On verify `autoRetry` rerun, warmUp is skipped by default — see `verify.skipWarmUp`. |
-| `maxBashCalls` | Optional cap on `run_bash` calls for this AI stage (default 24) |
-| `maxTurns` | Optional cap on chat turns for this AI stage (default 60) |
+| `whileSetup` | Orchestrator-only do-while. String = predicate (floor 1). Object `{ condition, doAtLeast? }` runs at least `doAtLeast` bodies (default and min 1), then `condition` gates further iterations. Mutually exclusive with `loopSetup` / `conditionMode` / `nixeryRun`. Parent `verify` runs once after the loop. Each body segment gets a filtered `contextKeys` copy; `updateContextKeys` merge replaces parent keys — keep `extend_context` accumulators on `contextKeys` (see `updateContextKeys`). **Budget:** after `warmUp`, each body iteration resets to parent `maxTurns`/`maxBashCalls` minus warmUp usage (not one depleting pool across polls). Nested fragment children share that per-iteration pool. |
+| `warmUp` | Optional one-shot logic before the first `whileSetup` iteration (Redis run; stripped from the agent envelope). By default the warmUp chat transcript is prepended as `prefixMessages` for later while iterations **and** nested fragment children. See `prefixOverride`. Sibling nesting history still only chains when nested `mainThread: true`. On verify `autoRetry` rerun, warmUp logic is skipped by default — see `verify.skipWarmUp`. WarmUp does not count toward `doAtLeast` but **does** reduce the per-iteration turn/bash cap. (`loopSetup` does not run warmUp today.) |
+| `prefixOverride` | Optional non-empty string on `loopSetup` / `whileSetup` stages. When set, replaces the warmUp transcript prefix with this user message only (task-owned continue policy). WarmUp still executes for side effects. Stripped from the agent envelope with `warmUp` / loop headers. |
+| `maxBashCalls` | Optional cap on `run_bash` calls for this AI stage (default 24). On `whileSetup`, this is the **per-iteration** parent cap (minus warmUp usage). On `loopSetup`, each for-iteration gets the full parent cap. |
+| `maxTurns` | Optional cap on chat turns for this AI stage (default 60). On `whileSetup`, this is the **per-iteration** parent cap (minus warmUp usage) — e.g. `maxTurns: 80` with a 12-turn warmUp → each poll starts with 68. On `loopSetup`, each for-iteration gets the full parent cap. |
 | `agentOverrides` | Optional agent knobs for this stage. **Only** `bashTimeoutMs` (positive int ms) is accepted — unknown keys fail validation. Used by `run_bash` instead of the shared 60s default. |
 | `stagehand` | Optional Stagehand knobs for this AI stage: `model`, `apiBaseUrl` (both optional; default to agent `LLM_*` / `STAGEHAND_MODEL`), `preferScreenshot` (optional boolean, default `false` — excludes Stagehand `screenshot` tool on `browser` `mode: agent`). Unknown keys fail validation. |
 | `knowledgeToScript` | Optional boolean. **Default on** for AI stages (omit field). Set `false` to opt out. Enables narrow operation scripts under `~/data/scripts/` — many per stage, not one per stage id. Invalid on `contextMode`, `conditionMode`, and `nixeryRun` stages (explicit `true` fails validation). Phase 1: boolean only — no `knowledgeKeys`. |
@@ -72,6 +80,80 @@ Per-stage fields:
 | `produceTypeKeys` | Allowlist for VM / `set_context` / `extend_context` writes to the types bucket |
 | `nixeryRun` | Orchestrator-direct nixery def id (e.g. `get-knowledge`, `plan`, `plan-study`); read `~/nixery/{defId}/{output}` in a following AI stage |
 | `verify` | Object gate after stage finish — see below. Shorthand `verify: true` → `{ defId: stage-verify }` |
+
+### Inline YAHL / `$ref` (polymorphic `logic` + stage-level)
+
+**Stage-level `$ref`** — keep only `id` on the SKILL.yaml shell; the file owns the full stage:
+
+```yaml
+# SKILL.yaml
+- id: monitor
+  $ref: stages/monitor.yahl
+```
+
+```yaml
+# stages/monitor.yahl — full stage body (omit id, or id must match shell)
+whileSetup: ...
+warmUp: |
+  ...
+prefixOverride: |
+  Warm-up already ran. Execute this Input only.
+logic:
+  stages:
+    - id: submit_wait
+      logic: |
+        ...
+verify: ...
+```
+
+**`logic: { $ref }`** — nested mini-pipeline fragment only (`stages: […]`):
+
+```yaml
+# External nested fragment (OpenAPI-style $ref; path relative to server/tasks/{taskId}/)
+- id: monitor
+  whileSetup: ...
+  warmUp: |
+    Read ~/task-skills/monitor-loop/SKILL.md.
+  logic:
+    $ref: stages/monitor-body.yahl
+
+# Inline fragment — nested stages control threading
+- id: batch
+  logic:
+    stages:
+      - id: step_a
+        logic: |
+          ...
+      - id: step_b
+        mainThread: true
+        logic: |
+          ...
+```
+
+Nested fragment file shape (`logic: { $ref }` target):
+
+```yaml
+stages:
+  - id: submit_wait
+    contextKeys: [...]
+    logic: |
+      ...
+  - id: extract
+    updateContextKeys: [poll_miss, last_fetch, ...]
+    logic: |
+      ...
+```
+
+Rules (v1):
+
+- Stage-level `$ref`: shell may only set `id` + `$ref`; loaded file is a full stage (no `name` / `description` / nested `$ref` on the file root); shell `id` wins; if the file sets `id`, it must match.
+- `logic: { $ref }` is ref-only (`{ $ref }` alone); no sibling overrides on that object; no remote URLs; no `..`; extensions `.yahl` / `.yaml` / `.yml`.
+- Nested fragment must not set top-level `name` / `description`.
+- Nested fragment stages use **string** `logic` only (no recursive `$ref` / fragment inside nested stages). Max `$ref` depth 3.
+- `whileSetup` / `loopSetup` / `warmUp` / `prefixOverride` belong on the **resolved** stage (inline on the shell, or inside a stage-level `$ref` file — not inside nested fragment children).
+- Nested children declare their own `contextKeys` / `updateContextKeys` / `produceContextKeys` — they do **not** inherit the shell allowlists. Omit/empty `contextKeys` → platform keys only.
+- Nested `mainThread: true` joins the fragment main thread; default omit/`false` is isolated. WarmUp transcript is prefixed unless `prefixOverride` is set. Session UI uses `agentMeta` (`isMainThread`, `nestedPath`, `parentRequestId`).
+- `parallelGroup` / `parallelAfter` are schema placeholders only — orchestrator does not schedule concurrent stages yet.
 
 ### Stage `id` + `goto`
 
@@ -153,21 +235,22 @@ Rules:
 **While + warmUp + verify retry:**
 
 - First pass always runs `warmUp` when defined.
-- On verify **`autoRetry` rerun**, `skipWarmUp` defaults to **`true`**: warmUp logic is not re-executed, but the first warmUp chat transcript is still prepended to polls. Set `skipWarmUp: false` to re-run warmUp on retry (opt-in).
+- On verify **`autoRetry` rerun**, `skipWarmUp` defaults to **`true`**: warmUp logic is not re-executed. Prefix for polls is either `prefixOverride` (when set) or the first warmUp chat transcript. Set `skipWarmUp: false` to re-run warmUp on retry (opt-in).
+- **Turn/bash budget:** each body iteration resets to `(parent maxTurns|maxBashCalls − warmUp usage this entry)`. With `skipWarmUp`, warmUp usage is 0 so each poll starts at the full parent caps. Nested children share only that per-iteration pool. Exhaustion hard-fails — it does not exit the while. `loopSetup` already gives each for-iteration the full parent caps (no cross-iter pool).
 
 ```yaml
-# Reference: server/tasks/traffic_monitor/SKILL.yaml (monitor stage)
+# Reference: server/tasks/traffic_monitor/stages/monitor.yahl
 whileSetup:
   condition: "(Date.now() - Date.parse(String(context.context.started_at))) < …"
   doAtLeast: 2
 warmUp: |
   Read ~/task-skills/monitor-loop/SKILL.md.
-logic: |
-  …
-  *extend_context(fetches, value: fetch_with_status);
+prefixOverride: |
+  Warm-up already ran. Execute this Input only.
+logic:
+  stages: […]
 verify:
   autoRetry: true
-  skipWarmUp: true
 ```
 
 ### VM stages (`contextMode`, `conditionMode`)

@@ -191,6 +191,10 @@ flowchart LR
 
 - `goto`, `act`, `extract`, `observe`: ~120s
 
+## FAQ — unexpected browser tabs
+
+- When the page looks wrong (blank form, missing info, Search does nothing, SPA error): **check for unexpected extra tabs/pages**. Close extras if the tool/UI allows, or `goto` the intended entry URL on the primary page and re-ensure state.
+
 ## Notes
 
 - Chromium runs locally in the agent container (headless unless live view).

@@ -19,7 +19,21 @@ const loopGroupKey = (item: TResponseStageListItem) => {
     return `p:${item.parsedStageIndex}`;
   }
 
+  if (item.agentMeta?.parentRequestId) {
+    return `parent:${item.agentMeta.parentRequestId}`;
+  }
+
   return `l:${item.logicPreview}`;
+};
+
+const nestedLeaf = (item: TResponseStageListItem) => {
+  const path = item.agentMeta?.nestedPath?.trim();
+
+  if (!path) {
+    return undefined;
+  }
+
+  return path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path;
 };
 
 export const buildStageLabels = (stages: TResponseStageListItem[]): string[] => {
@@ -37,6 +51,8 @@ export const buildStageLabels = (stages: TResponseStageListItem[]): string[] => 
     const isWhileVerifyRow = !loopKind
       && Boolean(item.whileSetup)
       && typeof item.parsedStageIndex === "number";
+    const leaf = nestedLeaf(item);
+    const suffix = leaf ? ` › ${leaf}` : "";
 
     if (loopKind || isWhileVerifyRow) {
       const groupKey = loopGroupKey(item);
@@ -52,17 +68,17 @@ export const buildStageLabels = (stages: TResponseStageListItem[]): string[] => 
       }
 
       if (loopKind === "warmup") {
-        labels.push(`#${n}.warmUp`);
+        labels.push(`#${n}.warmUp${suffix}`);
         return;
       }
 
-      labels.push(`#${n}.${item.loopIndex ?? 0}`);
+      labels.push(`#${n}.${item.loopIndex ?? 0}${suffix}`);
       return;
     }
 
     n += 1;
     prevGroup = null;
-    labels.push(`#${n}`);
+    labels.push(`#${n}${suffix}`);
   });
 
   return labels;

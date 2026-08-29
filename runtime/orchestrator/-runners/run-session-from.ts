@@ -35,6 +35,18 @@ export const runSessionFrom = async (
         : {}),
     };
     fromStageIndex = cursor.stageIndex + 1;
+  } else if (
+    cursor.nestedIndex != null
+    && cursor.loopMeta
+    && parsedStages[cursor.stageIndex]?.type === 'while'
+  ) {
+    position = {
+      kind: 'whileFromNested',
+      loopMeta: cursor.loopMeta,
+      nestedIndex: cursor.nestedIndex,
+      stageIndex: cursor.stageIndex,
+    };
+    fromStageIndex = cursor.stageIndex + 1;
   } else if (cursor.resumeStage) {
     position = {
       kind: 'resumeStageThenContinue',

@@ -43,6 +43,63 @@ export type TRunBrowserCommandOptions = {
 let stagehand: Stagehand | null = null;
 let initPromise: Promise<Stagehand> | null = null;
 let consecutiveBrowserFailures = 0;
+let attachedViaCdp = false;
+
+export const resolveCdpHttpUrl = () => process.env.YAHL_BROWSER_CDP_URL?.trim() || '';
+
+export const rewriteCdpWebSocketHost = (webSocketDebuggerUrl: string, cdpHttpUrl: string) => {
+  const http = new URL(cdpHttpUrl);
+  const ws = new URL(webSocketDebuggerUrl);
+
+  ws.protocol = http.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws.hostname = http.hostname;
+  ws.port = http.port || '';
+
+  return ws.toString();
+};
+
+export const resolveCdpWebSocketUrl = async (cdpHttpOrWs: string) => {
+  const trimmed = cdpHttpOrWs.trim();
+
+  if (/^wss?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  const base = trimmed.replace(/\/+$/, '');
+  const response = await fetch(`${base}/json/version`);
+
+  if (!response.ok) {
+    throw new Error(`browser CDP /json/version failed status=${response.status}`);
+  }
+
+  const payload = await response.json() as { webSocketDebuggerUrl?: string };
+  const wsUrl = payload.webSocketDebuggerUrl?.trim();
+
+  if (!wsUrl) {
+    throw new Error('browser CDP /json/version missing webSocketDebuggerUrl');
+  }
+
+  return rewriteCdpWebSocketHost(wsUrl, base);
+};
+
+const touchBrowserActivityMarker = async () => {
+  const home = process.env.AGENT_SESSION_HOME?.trim() || process.env.HOME?.trim();
+
+  if (!home) {
+    return;
+  }
+
+  try {
+    const { promises: fs } = await import('node:fs');
+    const path = await import('node:path');
+    const marker = path.join(home, '.yahl-browser-active');
+    const now = new Date();
+    await fs.writeFile(marker, `${now.toISOString()}\n`, 'utf8');
+    await fs.utimes(marker, now, now);
+  } catch {
+    // best-effort idle clock
+  }
+};
 
 const chromiumArgs = () => {
   const args = [
@@ -69,26 +126,47 @@ const resolveStagehand = async (): Promise<Stagehand> => {
   }
 
   initPromise = (async () => {
-    const chromePath = resolveChromiumExecutablePath();
-    process.env.CHROME_PATH = chromePath;
-
+    const cdpHttpUrl = resolveCdpHttpUrl();
     const proxy = await ensureStagehandLlmProxy();
 
-    if (config.debug) {
-      console.log(`[stagehand] CHROME_PATH=${chromePath}\n`);
-      console.log(`[stagehand] llm proxy baseURL=${proxy.baseURL}\n`);
+    if (!cdpHttpUrl) {
+      const chromePath = resolveChromiumExecutablePath();
+      process.env.CHROME_PATH = chromePath;
+
+      if (config.debug) {
+        console.log(`[stagehand] CHROME_PATH=${chromePath}\n`);
+      }
     }
 
-    const instance = new Stagehand({
-      disablePino: true,
-      env: "LOCAL",
-      localBrowserLaunchOptions: {
+    const cdpWsUrl = cdpHttpUrl
+      ? await resolveCdpWebSocketUrl(cdpHttpUrl)
+      : '';
+
+    if (config.debug) {
+      console.log(`[stagehand] llm proxy baseURL=${proxy.baseURL}\n`);
+      if (cdpWsUrl) {
+        console.log(`[stagehand] cdpUrl=${cdpWsUrl}\n`);
+      }
+    }
+
+    const localBrowserLaunchOptions = cdpWsUrl
+      ? {
+        cdpUrl: cdpWsUrl,
+        connectTimeoutMs: 60_000,
+      }
+      : {
         args: chromiumArgs(),
         chromiumSandbox: false,
         connectTimeoutMs: 60_000,
         executablePath: resolveChromiumExecutablePath(),
         headless: !config.stagehandLiveview,
-      },
+      };
+
+    const instance = new Stagehand({
+      disablePino: true,
+      env: "LOCAL",
+      ...(cdpWsUrl ? { keepAlive: true } : {}),
+      localBrowserLaunchOptions,
       model: {
         apiKey: "stagehand-proxy",
         baseURL: proxy.baseURL,
@@ -100,6 +178,8 @@ const resolveStagehand = async (): Promise<Stagehand> => {
 
     await instance.init();
     stagehand = instance;
+    attachedViaCdp = Boolean(cdpWsUrl);
+    await touchBrowserActivityMarker();
 
     return instance;
   })();
@@ -109,6 +189,7 @@ const resolveStagehand = async (): Promise<Stagehand> => {
   } catch (error) {
     initPromise = null;
     stagehand = null;
+    attachedViaCdp = false;
     throw error;
   }
 };
@@ -154,17 +235,19 @@ const navigate = async (
 
 export const closeStagehandSession = async () => {
   const current = stagehand;
+  const wasCdp = attachedViaCdp;
 
   stagehand = null;
   initPromise = null;
   consecutiveBrowserFailures = 0;
+  attachedViaCdp = false;
 
   await stopStagehandLlmProxy();
-  // browser bridge stays up for the agent daemon lifetime (scripts may call again)
 
   if (!current) return;
 
   try {
+    // CDP + keepAlive: close disconnects the client; shared Chromium sidecar stays up.
     await withTimeout(
       current.close(),
       STAGEHAND_CLOSE_TIMEOUT_MS,
@@ -173,7 +256,9 @@ export const closeStagehandSession = async () => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    console.error(`[stagehand] close failed: ${message}\n`);
+    if (!wasCdp) {
+      console.error(`[stagehand] close failed: ${message}\n`);
+    }
   }
 };
 
@@ -285,6 +370,7 @@ export const runBrowserCommand = async (
 
     if (result.ok) {
       consecutiveBrowserFailures = 0;
+      await touchBrowserActivityMarker();
 
       return result;
     }
@@ -314,6 +400,7 @@ export const runBrowserCommand = async (
 
     if (result.ok) {
       consecutiveBrowserFailures = 0;
+      await touchBrowserActivityMarker();
     } else {
       consecutiveBrowserFailures += 1;
     }

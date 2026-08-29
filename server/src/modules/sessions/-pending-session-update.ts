@@ -3,6 +3,7 @@ import type { TTaskSkillFile } from '@project-yahl/shared/yahl/task-skills';
 import type { TParsedStage, TSessionRunCursor } from './-types';
 
 export type TCreatePendingSessionInput = {
+  browser?: boolean;
   isBackground?: boolean;
   parsedStages?: TParsedStage[];
   resultContextKey?: string;
@@ -13,6 +14,7 @@ export type TCreatePendingSessionInput = {
   taskId: string;
   taskSkills?: TTaskSkillFile[];
   taskYahl: string;
+  taskYahlRefs?: Record<string, string>;
 };
 
 export const pendingSessionUpdateDoc = (
@@ -20,6 +22,7 @@ export const pendingSessionUpdateDoc = (
   now = new Date(),
 ) => ({
   $set: {
+    browser: input.browser === true,
     isBackground: input.isBackground === true,
     ...(input.parsedStages ? { parsedStages: input.parsedStages } : {}),
     runInput: input.runInput ?? {},
@@ -29,6 +32,7 @@ export const pendingSessionUpdateDoc = (
     taskId: input.taskId,
     taskSkills: input.taskSkills ?? [],
     taskYahl: input.taskYahl,
+    ...(input.taskYahlRefs ? { taskYahlRefs: input.taskYahlRefs } : {}),
     updatedAt: now,
   },
   $setOnInsert: {

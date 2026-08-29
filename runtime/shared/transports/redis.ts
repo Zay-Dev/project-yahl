@@ -191,6 +191,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
 
   pushRequest: IPublisher['pushRequest'] =
     async (context, stage, requestId, {
+      agentMeta,
       contextAfter,
       executionMeta,
       loopMeta,
@@ -205,6 +206,7 @@ export class RedisPublisher extends RedisTransport implements IPublisher {
     } = {}) => {
       if (!skipStageCreate) {
         this.emit("pushRequest", {
+          ...(agentMeta ? { agentMeta } : {}),
           context: _serializeStorage(context)!,
           executionMeta,
           loopMeta,

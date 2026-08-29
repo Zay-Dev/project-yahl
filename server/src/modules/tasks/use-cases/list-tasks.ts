@@ -27,12 +27,13 @@ export const listTasks = [
 
         try {
           const yahl = await fs.readFile(taskYahlAbsolutePath(taskId), 'utf8');
-          const { background, description, name } = parseTaskMetadata(yahl);
+          const { background, browser, description, name } = parseTaskMetadata(yahl);
           const runInputFields = parseRunInputFieldsFromYahl(yahl);
           const runInputKeys = runInputKeysOf(runInputFields);
 
           items.push({
             background,
+            browser,
             description,
             id: taskId,
             name,

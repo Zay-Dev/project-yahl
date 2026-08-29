@@ -1,4 +1,4 @@
-import { isYahlDocument, parseYahlDocument } from './parse';
+import { isYahlDocument, parseYahlDocumentName } from './parse';
 
 export const deriveTaskIdFromYahlPath = (taskYahlPath: string) => {
   const normalized = taskYahlPath.replace(/\\/g, '/').trim();
@@ -19,10 +19,10 @@ export const deriveTaskIdFromYahlPath = (taskYahlPath: string) => {
 export const deriveTaskNameFromYahl = (yahlText: string, taskYahlPath: string) => {
   try {
     if (isYahlDocument(yahlText)) {
-      const doc = parseYahlDocument(yahlText);
+      const name = parseYahlDocumentName(yahlText);
 
-      if (doc.name.trim()) {
-        return doc.name.trim();
+      if (name) {
+        return name;
       }
     }
   } catch {

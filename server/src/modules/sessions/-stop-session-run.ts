@@ -5,9 +5,8 @@ import {
   clearStaleLiveViewVncPort,
   resolveAgentContainerName,
 } from './-agent-run-active';
+import { markSessionBrowserAbandoned, tearDownBrowserContainer } from './-abandon-browser-session';
 import { orchestratorRunLockPath } from './-orchestrator-run-lock';
-import { clearSessionControl } from './-session-control-redis';
-
 const _sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const _isProcessRunning = (pid: number) => {
@@ -80,6 +79,7 @@ export const tearDownAgentContainer = (sessionId: string) => {
 export const stopSessionRun = async (sessionRef: string, sessionId: string) => {
   await killOrchestratorProcess(sessionId);
   tearDownAgentContainer(sessionId);
+  tearDownBrowserContainer(sessionId);
+  await markSessionBrowserAbandoned(sessionRef, sessionId, 'stop');
   await clearStaleLiveViewVncPort(sessionRef);
-  await clearSessionControl(sessionId);
 };
