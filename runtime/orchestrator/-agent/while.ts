@@ -28,11 +28,18 @@ const DEFAULT_MAX_BASH_CALLS = 24;
 export type TWhileRunnerExtras = {
   loadPrefixMessages?: (requestId?: string) => Promise<ChatApiMessage[] | undefined>;
   prefixMessages?: ChatApiMessage[];
+  remainingBashCalls?: number;
+  remainingTurns?: number;
   skipWarmUp?: boolean;
   startIteration?: number;
   startNestedIndex?: number;
   systemAppend?: string;
   warmupRequestId?: string;
+};
+
+type TWhileBudget = {
+  remainingBashCalls: number;
+  remainingTurns: number;
 };
 
 const mergeStageUpdates = (
@@ -63,13 +70,38 @@ const mergeStageUpdates = (
   }
 };
 
-const resolveBudget = (stage: ParsedStage, loopMeta?: TLoopMeta) => ({
-  remainingBashCalls: loopMeta?.remainingBashCalls
-    ?? stage.spec.maxBashCalls
-    ?? DEFAULT_MAX_BASH_CALLS,
-  remainingTurns: loopMeta?.remainingTurns
-    ?? stage.spec.maxTurns
-    ?? DEFAULT_MAX_TURNS,
+const resolveParentCaps = (stage: ParsedStage): TWhileBudget => ({
+  remainingBashCalls: stage.spec.maxBashCalls ?? DEFAULT_MAX_BASH_CALLS,
+  remainingTurns: stage.spec.maxTurns ?? DEFAULT_MAX_TURNS,
+});
+
+const subtractUsage = (
+  remainingTurns: number,
+  remainingBashCalls: number,
+  usage?: { bashCalls?: number; turns?: number },
+): TWhileBudget => ({
+  remainingBashCalls: Math.max(0, remainingBashCalls - Math.max(0, usage?.bashCalls ?? 0)),
+  remainingTurns: Math.max(0, remainingTurns - Math.max(1, usage?.turns ?? 1)),
+});
+
+const resolveWhileIterationBudget = (
+  parentCaps: TWhileBudget,
+  warmUpUsage?: { bashCalls?: number; turns?: number },
+): TWhileBudget => {
+  if (!warmUpUsage) {
+    return { ...parentCaps };
+  }
+
+  return subtractUsage(
+    parentCaps.remainingTurns,
+    parentCaps.remainingBashCalls,
+    warmUpUsage,
+  );
+};
+
+const resetBodyBudget = (iterationBudget: TWhileBudget): TWhileBudget => ({
+  remainingBashCalls: iterationBudget.remainingBashCalls,
+  remainingTurns: iterationBudget.remainingTurns,
 });
 
 const toBudgetedStage = (
@@ -147,15 +179,6 @@ const runWhileSegment = async (
   return result;
 };
 
-const subtractUsage = (
-  remainingTurns: number,
-  remainingBashCalls: number,
-  usage?: { bashCalls?: number; turns?: number },
-) => ({
-  remainingBashCalls: Math.max(0, remainingBashCalls - Math.max(0, usage?.bashCalls ?? 0)),
-  remainingTurns: Math.max(0, remainingTurns - Math.max(1, usage?.turns ?? 1)),
-});
-
 const applySegmentOutcome = (
   storage: TStorage,
   remainingTurns: number,
@@ -199,7 +222,7 @@ export const handleWhile = async (
 ) => {
   const { condition, doAtLeast } = resolveWhileSpec(stage);
 
-  let { remainingBashCalls, remainingTurns } = resolveBudget(stage);
+  const parentCaps = resolveParentCaps(stage);
   const warmUp = stage.spec.warmUp?.trim();
   const prefixOverride = stage.spec.prefixOverride?.trim();
   const loadPrefix = extras?.loadPrefixMessages ?? loadWarmupPrefixMessages;
@@ -208,21 +231,84 @@ export const handleWhile = async (
   const startNestedIndex = extras?.startNestedIndex;
   const isResumeEntry = extras?.startIteration != null || startNestedIndex != null;
   const skipWarmUp = extras?.skipWarmUp === true || isResumeEntry;
+  let warmUpUsage: { bashCalls?: number; turns?: number } | undefined;
 
   const overridePrefix = (): ChatApiMessage[] | undefined =>
     prefixOverride
       ? [{ content: prefixOverride, role: 'user' }]
       : undefined;
 
-  const runBody = (iteration: number, nestedStart?: number) => {
+  if (warmUp) {
+    if (skipWarmUp) {
+      warmupPrefix = warmupPrefix ?? (
+        prefixOverride
+          ? overridePrefix()
+          : await loadWarmupPrefixForParsedStage(pipelineStageIndex)
+            ?? await loadPrefix(extras?.warmupRequestId)
+      );
+    } else {
+      const result = await runWhileSegment(
+        stage,
+        storage,
+        warmUp,
+        {
+          arraySnapshot: [],
+          index: 0,
+          kind: 'warmup',
+          remainingBashCalls: parentCaps.remainingBashCalls,
+          remainingTurns: parentCaps.remainingTurns,
+          temperature,
+          value: null,
+        },
+        runner,
+        temperature,
+        pipelineStageIndex,
+        pipelineStageIndex,
+        recoveryStages,
+        extras?.systemAppend ? { systemAppend: extras.systemAppend } : undefined,
+      );
+
+      const outcome = applySegmentOutcome(
+        storage,
+        parentCaps.remainingTurns,
+        parentCaps.remainingBashCalls,
+        result,
+      );
+
+      if ('gotoTargetStageIndex' in outcome) {
+        return { gotoTargetStageIndex: outcome.gotoTargetStageIndex };
+      }
+
+      if ('stop' in outcome) {
+        return {};
+      }
+
+      warmUpUsage = result.usage ?? { bashCalls: 0, turns: 1 };
+      warmupPrefix = warmupPrefix ?? (
+        prefixOverride
+          ? overridePrefix()
+          : await loadPrefix(result.requestId)
+      );
+    }
+  } else if (prefixOverride && !warmupPrefix) {
+    warmupPrefix = overridePrefix();
+  }
+
+  const iterationBudget = resolveWhileIterationBudget(parentCaps, warmUpUsage);
+  let iteration = startIteration;
+  let lastRequestId: string | undefined;
+  let usedMidResumeBudget = false;
+
+  const runBody = (iterationIndex: number, nestedStart?: number, bodyBudget?: TWhileBudget) => {
+    const budget = bodyBudget ?? resetBodyBudget(iterationBudget);
     const loopMeta: TLoopMeta = {
       arraySnapshot: [],
-      index: iteration,
+      index: iterationIndex,
       kind: 'while',
-      remainingBashCalls,
-      remainingTurns,
+      remainingBashCalls: budget.remainingBashCalls,
+      remainingTurns: budget.remainingTurns,
       temperature,
-      value: iteration,
+      value: iterationIndex,
     };
 
     if (stage.nestedStages?.length) {
@@ -259,69 +345,35 @@ export const handleWhile = async (
     );
   };
 
-  if (warmUp) {
-    if (skipWarmUp) {
-      warmupPrefix = warmupPrefix ?? (
-        prefixOverride
-          ? overridePrefix()
-          : await loadWarmupPrefixForParsedStage(pipelineStageIndex)
-            ?? await loadPrefix(extras?.warmupRequestId)
-      );
-    } else {
-      const result = await runWhileSegment(
-        stage,
-        storage,
-        warmUp,
-        {
-          arraySnapshot: [],
-          index: 0,
-          kind: 'warmup',
-          remainingBashCalls,
-          remainingTurns,
-          temperature,
-          value: null,
-        },
-        runner,
-        temperature,
-        pipelineStageIndex,
-        pipelineStageIndex,
-        recoveryStages,
-        extras?.systemAppend ? { systemAppend: extras.systemAppend } : undefined,
-      );
-
-      const outcome = applySegmentOutcome(storage, remainingTurns, remainingBashCalls, result);
-
-      if ('gotoTargetStageIndex' in outcome) {
-        return { gotoTargetStageIndex: outcome.gotoTargetStageIndex };
-      }
-
-      if ('stop' in outcome) {
-        return {};
-      }
-
-      ({ remainingBashCalls, remainingTurns } = outcome.budget);
-      warmupPrefix = warmupPrefix ?? (
-        prefixOverride
-          ? overridePrefix()
-          : await loadPrefix(result.requestId)
-      );
-    }
-  } else if (prefixOverride && !warmupPrefix) {
-    warmupPrefix = overridePrefix();
-  }
-
-  let iteration = startIteration;
-  let lastRequestId: string | undefined;
-
   while (true) {
+    const bodyBudget = !usedMidResumeBudget
+      && iteration === startIteration
+      && startNestedIndex != null
+      && (extras?.remainingTurns != null || extras?.remainingBashCalls != null)
+      ? {
+        remainingBashCalls: extras?.remainingBashCalls
+          ?? iterationBudget.remainingBashCalls,
+        remainingTurns: extras?.remainingTurns
+          ?? iterationBudget.remainingTurns,
+      }
+      : resetBodyBudget(iterationBudget);
+
+    if (
+      iteration === startIteration
+      && startNestedIndex != null
+      && (extras?.remainingTurns != null || extras?.remainingBashCalls != null)
+    ) {
+      usedMidResumeBudget = true;
+    }
+
     await maybePauseForUserRequest({
       agentName: `agent-${globalThis.sessionId}`,
       loopMeta: {
         arraySnapshot: [],
         index: iteration,
         kind: 'while',
-        remainingBashCalls,
-        remainingTurns,
+        remainingBashCalls: bodyBudget.remainingBashCalls,
+        remainingTurns: bodyBudget.remainingTurns,
         value: null,
       },
       requestId: lastRequestId ?? globalThis.sessionId,
@@ -344,9 +396,14 @@ export const handleWhile = async (
     const nestedStart = iteration === startIteration
       ? startNestedIndex
       : undefined;
-    const result = await runBody(iteration, nestedStart);
+    const result = await runBody(iteration, nestedStart, bodyBudget);
     lastRequestId = result.requestId;
-    const outcome = applySegmentOutcome(storage, remainingTurns, remainingBashCalls, result);
+    const outcome = applySegmentOutcome(
+      storage,
+      bodyBudget.remainingTurns,
+      bodyBudget.remainingBashCalls,
+      result,
+    );
 
     if ('gotoTargetStageIndex' in outcome) {
       return { gotoTargetStageIndex: outcome.gotoTargetStageIndex };
@@ -356,7 +413,6 @@ export const handleWhile = async (
       return {};
     }
 
-    ({ remainingBashCalls, remainingTurns } = outcome.budget);
     iteration += 1;
   }
 
@@ -376,13 +432,7 @@ export const resumeWhileFromCheckpoint = async (
 ) => {
   const { condition, doAtLeast } = resolveWhileSpec(stage);
 
-  let { remainingBashCalls, remainingTurns } = resolveBudget(stage, completedLoopMeta);
-
-  ({ remainingBashCalls, remainingTurns } = subtractUsage(
-    remainingTurns,
-    remainingBashCalls,
-    { bashCalls: 0, turns: 0 },
-  ));
+  const iterationBudget = resolveWhileIterationBudget(resolveParentCaps(stage));
 
   const loadPrefix = extras?.loadPrefixMessages ?? loadWarmupPrefixMessages;
   const prefixOverride = stage.spec.prefixOverride?.trim();
@@ -394,15 +444,16 @@ export const resumeWhileFromCheckpoint = async (
         : await loadWarmupPrefixForParsedStage(parsedStageIndex)
   );
 
-  const runBody = (iteration: number) => {
+  const runBody = (iterationIndex: number) => {
+    const budget = resetBodyBudget(iterationBudget);
     const loopMeta: TLoopMeta = {
       arraySnapshot: [],
-      index: iteration,
+      index: iterationIndex,
       kind: 'while',
-      remainingBashCalls,
-      remainingTurns,
+      remainingBashCalls: budget.remainingBashCalls,
+      remainingTurns: budget.remainingTurns,
       temperature: temperature ?? completedLoopMeta.temperature,
-      value: iteration,
+      value: iterationIndex,
     };
 
     if (stage.nestedStages?.length) {
@@ -451,8 +502,14 @@ export const resumeWhileFromCheckpoint = async (
       }
     }
 
+    const bodyBudget = resetBodyBudget(iterationBudget);
     const result = await runBody(iteration);
-    const outcome = applySegmentOutcome(storage, remainingTurns, remainingBashCalls, result);
+    const outcome = applySegmentOutcome(
+      storage,
+      bodyBudget.remainingTurns,
+      bodyBudget.remainingBashCalls,
+      result,
+    );
 
     if ('gotoTargetStageIndex' in outcome) {
       return { gotoTargetStageIndex: outcome.gotoTargetStageIndex };
@@ -462,7 +519,6 @@ export const resumeWhileFromCheckpoint = async (
       break;
     }
 
-    ({ remainingBashCalls, remainingTurns } = outcome.budget);
     iteration += 1;
   }
 

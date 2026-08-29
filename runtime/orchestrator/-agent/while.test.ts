@@ -456,6 +456,85 @@ describe('handleWhile', () => {
     assert.ok(seen.length >= 2);
     assert.ok(seen.every((value) => value !== 'stale' && /^\d{4}-\d{2}-\d{2}T/.test(value)));
   });
+
+  it('resets turn budget each body after warmUp (parent max minus warmUp usage)', async () => {
+    const bodyRemaining: number[] = [];
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      const kind = options?.loopMeta?.kind;
+      const nested = options?.useStorage?.() ?? storageFrom({});
+
+      if (kind === 'warmup') {
+        nested.context.set('c', 0);
+        return {
+          requestId: 'warm-1',
+          storage: nested,
+          usage: { bashCalls: 0, turns: 2 },
+        };
+      }
+
+      bodyRemaining.push(options?.loopMeta?.remainingTurns ?? -1);
+      nested.context.set('c', Number(nested.context.get('c') ?? 0) + 1);
+
+      return {
+        requestId: `poll-${options?.loopMeta?.index}`,
+        storage: nested,
+        usage: { bashCalls: 0, turns: 4 },
+      };
+    };
+
+    await handleWhile(
+      whileStage({
+        maxTurns: 10,
+        warmUp: 'c += 0;',
+        whileSetup: 'context.context.c < 3',
+      }),
+      storageFrom({ c: 0 }),
+      runner,
+      undefined,
+      undefined,
+      undefined,
+      {
+        loadPrefixMessages: async () => warmupPrefix,
+      },
+    );
+
+    assert.deepEqual(bodyRemaining, [8, 8, 8]);
+  });
+
+  it('starts each body at full parent maxTurns when warmUp is skipped', async () => {
+    const bodyRemaining: number[] = [];
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      bodyRemaining.push(options?.loopMeta?.remainingTurns ?? -1);
+      const nested = options?.useStorage?.() ?? storageFrom({});
+      nested.context.set('c', Number(nested.context.get('c') ?? 0) + 1);
+
+      return {
+        storage: nested,
+        usage: { bashCalls: 0, turns: 3 },
+      };
+    };
+
+    await handleWhile(
+      whileStage({
+        maxTurns: 10,
+        warmUp: 'c += 0;',
+        whileSetup: 'context.context.c < 2',
+      }),
+      storageFrom({ c: 0 }),
+      runner,
+      undefined,
+      undefined,
+      undefined,
+      {
+        loadPrefixMessages: async () => warmupPrefix,
+        skipWarmUp: true,
+      },
+    );
+
+    assert.deepEqual(bodyRemaining, [10, 10]);
+  });
 });
 
 describe('resumeWhileFromCheckpoint', () => {
@@ -611,5 +690,36 @@ describe('resumeWhileFromCheckpoint', () => {
 
     assert.deepEqual(prefixes[0], warmupPrefix);
     assert.deepEqual(prefixes[1], warmupPrefix);
+  });
+
+  it('resets each resumed poll to parent maxTurns (ignores depleted checkpoint remaining)', async () => {
+    const bodyRemaining: number[] = [];
+
+    const runner: TRunYahl = async (_yahl, options) => {
+      bodyRemaining.push(options?.loopMeta?.remainingTurns ?? -1);
+      const nested = options?.useStorage?.() ?? storageFrom({});
+      nested.context.set('c', Number(nested.context.get('c') ?? 0) + 1);
+
+      return {
+        storage: nested,
+        usage: { bashCalls: 0, turns: 4 },
+      };
+    };
+
+    await resumeWhileFromCheckpoint(
+      whileStage({ maxTurns: 10, whileSetup: 'context.context.c < 2' }),
+      storageFrom({ c: 0 }),
+      {
+        arraySnapshot: [],
+        index: 0,
+        kind: 'while',
+        remainingBashCalls: 24,
+        remainingTurns: 3,
+        value: 0,
+      },
+      runner,
+    );
+
+    assert.deepEqual(bodyRemaining, [10, 10]);
   });
 });

@@ -287,6 +287,12 @@ export const runPipelineContinuation = async (ctx: TPipelineContinuation) => {
           startIteration: position.loopMeta.index,
           startNestedIndex: position.nestedIndex,
           systemAppend: systemAppend ?? ctx.systemAppend,
+          ...(typeof position.loopMeta.remainingBashCalls === 'number'
+            ? { remainingBashCalls: position.loopMeta.remainingBashCalls }
+            : {}),
+          ...(typeof position.loopMeta.remainingTurns === 'number'
+            ? { remainingTurns: position.loopMeta.remainingTurns }
+            : {}),
         },
       ),
       pipelineStageIndex: position.stageIndex,
