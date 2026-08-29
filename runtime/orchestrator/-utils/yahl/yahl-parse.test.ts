@@ -323,16 +323,25 @@ describe("parseYahlFile", () => {
       2,
     );
     assert.match(monitor?.spec.warmUp ?? "", /bind_origin/);
-    assert.match(monitor?.spec.warmUp ?? "", /monitor-loop\/SKILL\.md/);
+    assert.match(monitor?.spec.warmUp ?? "", /get_or_create/);
+    assert.match(monitor?.spec.warmUp ?? "", /source_scripts_slug/);
+    assert.match(monitor?.spec.warmUp ?? "", /mode:"goto"/);
+    assert.match(monitor?.spec.warmUp ?? "", /instruction is required/);
     assert.match(monitor?.spec.prefixOverride ?? "", /Warm-up already ran/);
+    assert.ok((monitor?.contextKeys ?? []).includes("source_scripts_slug"));
     assert.equal(monitor?.spec.cacheMaxAge, undefined);
     assert.equal(monitor?.spec.subAgent, undefined);
     assert.equal(monitor?.spec.mainThread, undefined);
     assert.ok(monitor?.nestedStages?.length);
     assert.equal(monitor?.nestedStages?.[0]?.spec.id, "submit_wait");
+    assert.equal(monitor?.nestedStages?.[0]?.spec.maxTurns, 10);
     assert.equal(monitor?.nestedStages?.[1]?.spec.id, "extract");
+    assert.equal(monitor?.nestedStages?.[1]?.spec.maxTurns, 12);
+    assert.match(monitor?.nestedStages?.[1]?.spec.logic ?? "", /eta_min/);
     assert.equal(monitor?.nestedStages?.[2]?.spec.id, "analyze");
     assert.equal(monitor?.nestedStages?.[3]?.spec.id, "notify_and_sleep");
+    assert.equal(monitor?.nestedStages?.[3]?.spec.maxTurns, 12);
+    assert.match(monitor?.nestedStages?.[3]?.spec.logic ?? "", /__knowledge-to-script__notes/);
     assert.equal(monitor?.nestedStages?.length, 4);
     assert.ok((monitor?.contextKeys ?? []).includes("fetches"));
     assert.ok((monitor?.contextKeys ?? []).includes("poll_success_count"));

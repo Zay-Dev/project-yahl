@@ -8,11 +8,11 @@ Resolve brands/abbrevs/malls before probe. Prefer `origin_resolved` / `destinati
 
 ## Fetch
 
-Browser against goto rebuilt every poll from resolved OD + `traffic_source.howto_md` + `source_ops_md` (already in Input when allowlisted). Core `howto_md` stays OD-generic. Maps fallback → `/opt/skills/google-maps-directions/SKILL.md`.
+Browser against goto rebuilt every poll from resolved OD + `traffic_source.howto_md` (OD-generic). Maps fallback → `/opt/skills/google-maps-directions/SKILL.md`.
 
-Prefer `~/data/scripts/` (see monitor-loop). After one-shot `browser` recovery, rewrite the failing script **this poll**. Prefer small companions (`fill-origin-input.js`, `extract-routes-normalize.js`, …) over whole-fetch monoliths.
+Use `*get_or_create(~/data/scripts/{source_scripts_slug}/…)` for browser ops. After one-shot `browser` recovery, rewrite the failing script **this poll**. Prefer small companions over whole-fetch monoliths. Do not invent host-named script paths in stage logic.
 
-Directions URL: placeholder templates only; bind with deterministic `encodeURIComponent` (node one-liner). Prefer English names in URL when needed; local-script for labels/notify. No SPA `data=!…` URLs. OD chip mismatch → fetch miss. **≤ 2** browser attempts per poll/probe.
+Directions URL: placeholder templates only; bind with deterministic `encodeURIComponent`. Prefer English names in URL when needed; labels/notify from display fields. No SPA `data=!…` URLs. OD chip mismatch → fetch miss. **≤ 2** browser attempts per poll/probe.
 
 Capture up to **3** private-car routes. For each:
 
@@ -43,7 +43,7 @@ Match by `label` / `via`. Abnormal when ETA **> 120%** of prior, new incident, *
 - Notes: …
 ```
 
-Miss: same header + Origin/Destination + `Fetch missed` / `Using previous routes`. Pass display labels into format helpers. Times use `timezone` wall clock.
+Miss: same header + Origin/Destination + `Fetch missed` / `Using previous routes`. Pass display labels into format helpers. Times use `timezone` wall clock. Origin line before Destination — never swap.
 
 ## Daily report
 

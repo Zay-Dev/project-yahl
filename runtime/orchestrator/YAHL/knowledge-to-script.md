@@ -4,6 +4,7 @@ This AI stage has **knowledgeToScript** enabled (default for AI stages). You sti
 
 ## Rules
 
+- **`*get_or_create(path, Instruction: …)`** — stage sugar: if `path` exists under `~/data/scripts/`, **run** it (do not `cat` the body). If missing, compile a narrow script from the Instruction (stdin/stdout contract + yahl-browser when browser), write it, then run. Prefer `{source_scripts_slug}/` subdirs for source-specific browser ops; shared formatters may live at `~/data/scripts/` root. Never bake session POIs into the file.
 - **Scripts over ad-hoc bash** — list `~/data/scripts/` once per stage when a narrow op is needed. If a matching `.js` exists, **run it** (`echo '{…}' | node ~/data/scripts/…`). `cat` alone does not count unless you have the knowledge of where and how to find something. Do not reimplement the same op with `node -e`, inline python, hand-rolled formatters, or bare one-off shell when a script covers it.
 - **Browser scriptables (agent-free)** — replayable Stagehand work belongs in `~/data/scripts/*.js` that drive the browser via **`yahl-browser`** (JSON stdin → same Stagehand session). Prefer `echo '{…}' | node ~/data/scripts/{op}.js` over stage-agent `browser` turns for each click. Stage-agent `browser` is for explore / one-shot recovery only; after a chain works, compile into scripts and replay via scripts next poll.
 - **`*func` that is scriptable** — format / parse / sleep-math / URL-bind / browser fetch: check and run `~/data/scripts/` first; do not default to a fresh bash one-liner or a long `browser` tool loop.

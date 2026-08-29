@@ -4,7 +4,7 @@ One poll within a configurable window (`monitor_minutes`, default 60).
 
 ## Clock / sleep
 
-Never overwrite `started_at`. Set `fetched_at` to **`now_iso` (UTC ISO)** — never HKT/local wall clock with a `Z` suffix. Use `timezone` only for day-page `## HH:MM` headings. Verify retry after the window → emit `monitor` from real `fetches` only.
+Never overwrite `started_at`. Set `fetched_at` to **`now_iso` (UTC ISO)** — never local wall clock with a `Z` suffix. Use `timezone` only for day-page `## HH:MM` headings. Verify retry after the window → emit `monitor` from real `fetches` only.
 
 Always compute wait via `*adaptive_sleep_sec(fetch_or_null, prev_primary_eta, started_at, monitor_minutes)` — no fixed first-poll branch in stage logic.
 
@@ -23,25 +23,23 @@ Single sleep per wait (`bashTimeoutMs: 360000`). No chunking / background / alte
 
 ## Poll body
 
-Prefer scripts under `~/data/scripts/` when present (`echo … | node …` with `yahl-browser` inside — agent-free). Before inventing or growing a script, follow a consult gate skill under `/opt/skills/` when present (once, early; not mid-fat browser transcript). Pass stage-logic summary + short plan + need; never one-word pain.
+Use stage `*get_or_create(~/data/scripts/{source_scripts_slug}/…, Instruction: …)` then run — do not `cat` scripts or re-read skills on later polls. Shared formatters live under `~/data/scripts/` root.
 
 On success (`analyze`): `extend_context` on `fetches` (never `set_context` + `operation: extend`) + bump `poll_success_count` + update `prev_routes` / `prev_incident_note` **before** day-page append. `fetched_at` = `now_iso`; `timezone` for day-page headings only. Keep `fetches` on stage `contextKeys` — while segments merge by replace; dropping it from Input wipes prior polls.
 
 Append section via `append-raw-knowledge-page` (`raw/fetches-YYYY-MM-DD`) with Path lines when present. Origin/Destination lines use `origin_display` / `destination_display` (fallback runInput). Mirror the same markdown into `day_page_sections` via `*extend_context` (stage logic owns this).
 
-Notify checks (below), then novel-only ops observations. Sleep once; the orchestrator decides whether another poll runs.
+Notify checks (below), then novel-only ops observations. Always set `sleep_sec` then `__knowledge-to-script__notes`, then sleep once — never finish after notifications without both. The orchestrator decides whether another poll runs.
 
 ## Miss / dead source
 
-≤ 2 browser attempts. Then bump `miss_count`, miss section, sleep. Never invent ETAs. Sustained dead source → `goto_stage` explorer with reason.
+≤ 2 browser attempts. Then bump `miss_count`, miss section, sleep. Never invent ETAs. Sustained dead source → `goto_stage` explorer with reason. On empty search results: retry search or goto+search only — **never** re-run fill-origin/fill-destination (warmUp owns binds).
 
 ## Notifications
 
-`channel` / `to` from resolve-notification-target. Draft from `notifyPreference` / `notifyName`. Empty preference → neutral professional defaults.
+`channel` / `to` from resolve-notification-target. Build body via `~/data/scripts/format-notification-body.js` (get_or_create). Empty preference → neutral professional defaults.
 
-`/platform` propose-notification: only required platform fields (`channel`, `to`, `body`, and other schema-required keys). Put `origin_display` / `destination_display` (and route labels/paths) **inside `body` text only** — never as extra top-level platform args (`origin`, `destination`, `fetch`, `preference`, …) that cause reject/retry thrash.
-
-For each route in bodies: `label` + ETA + **`path` when non-empty**. Prefer official Chinese road/tunnel names when preference is zh; keep EN for browser bind. **Do not notify tunnel-only when `path` was extractable.** Place titles use `origin_display` / `destination_display` when set (else runInput `origin` / `destination`) — not bound POI proxies.
+`/platform` propose-notification: only required platform fields (`channel`, `to`, `direction`, `body`, and other schema-required keys). Put `label_origin` / `label_destination` (and route labels/paths) **inside `body` text only** — never as extra top-level platform args. Body must list origin then destination in that order.
 
 | Kind | When | Body |
 |------|------|------|

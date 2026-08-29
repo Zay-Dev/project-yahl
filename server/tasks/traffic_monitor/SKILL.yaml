@@ -49,6 +49,7 @@ types: |
     kind: 'browser' | 'api';
     city?: string;
     is_fallback: boolean;
+    scripts_slug?: string;
   };
 
   type TTriedSource = {
@@ -262,6 +263,8 @@ stages:
       const destination_display = *place_display(destination_resolved, preference: notifyPreference, fallback: destination);
       *set_context(origin_resolved, destination_resolved, origin_display, destination_display);
       *upsert_novel_place_ops(origin, origin_resolved, destination, destination_resolved);
+      source_ops_md = *strip_od_bleed(source_ops_md, origin, destination, origin_resolved, destination_resolved);
+      *set_context(source_ops_md);
 
       let candidate = null;
       IF: *exists(~/data/{traffic_source_file});
@@ -385,8 +388,8 @@ stages:
       END:
 
   - contextMode: true
-    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display]
-    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, bind_origin, bind_destination, label_origin, label_destination]
+    contextKeys: [timezone, started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, traffic_source]
+    produceContextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, bind_origin, bind_destination, label_origin, label_destination, source_scripts_slug, source_scripts_dir]
     logic: |
       (() => {
         const origin = String(context.context.origin || '');
@@ -395,7 +398,21 @@ stages:
         const bind_destination = String(context.context.destination_resolved || '') || destination;
         const label_origin = String(context.context.origin_display || '') || origin;
         const label_destination = String(context.context.destination_display || '') || destination;
-        const od = { bind_origin, bind_destination, label_origin, label_destination };
+        const src = context.context.traffic_source && typeof context.context.traffic_source === 'object'
+          ? context.context.traffic_source
+          : {};
+        const explicitSlug = String(src.scripts_slug || '').trim();
+        let source_scripts_slug = explicitSlug;
+        if (!source_scripts_slug) {
+          const rawUrl = String(src.url || '');
+          const hostMatch = rawUrl.match(/^https?:\/\/(?:www\.)?([^\/?#]+)/i);
+          const host = hostMatch ? hostMatch[1] : '';
+          const first = host.split('.')[0] || '';
+          source_scripts_slug = first.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+        }
+        if (!source_scripts_slug) source_scripts_slug = 'unknown-source';
+        const source_scripts_dir = `~/data/scripts/${source_scripts_slug}`;
+        const od = { bind_origin, bind_destination, label_origin, label_destination, source_scripts_slug, source_scripts_dir };
         const existing = context.context.started_at;
         if (existing && String(existing).trim()) {
           return {
