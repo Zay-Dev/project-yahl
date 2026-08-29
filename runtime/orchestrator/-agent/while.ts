@@ -268,10 +268,6 @@ export const handleWhile = async (
             ?? await loadPrefix(extras?.warmupRequestId)
       );
     } else {
-      if (remainingTurns < 1) {
-        return {};
-      }
-
       const result = await runWhileSegment(
         stage,
         storage,
@@ -317,7 +313,7 @@ export const handleWhile = async (
   let iteration = startIteration;
   let lastRequestId: string | undefined;
 
-  while (remainingTurns >= 1) {
+  while (true) {
     await maybePauseForUserRequest({
       agentName: `agent-${globalThis.sessionId}`,
       loopMeta: {
@@ -446,7 +442,7 @@ export const resumeWhileFromCheckpoint = async (
     ? completedLoopMeta.index + 1
     : 0;
 
-  while (remainingTurns >= 1) {
+  while (true) {
     if (iteration >= doAtLeast) {
       const shouldContinue = await runPredicateScript(condition, storage);
 

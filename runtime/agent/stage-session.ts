@@ -189,6 +189,16 @@ const withUsage = (
   };
 };
 
+export class MaxTurnsExhaustedError extends Error {
+  readonly maxTurns: number;
+
+  constructor(maxTurns: number) {
+    super(`stage maxTurns exhausted (${maxTurns})`);
+    this.name = 'MaxTurnsExhaustedError';
+    this.maxTurns = maxTurns;
+  }
+}
+
 const toolErrorContent = (message: string) =>
   JSON.stringify({
     error: message,
@@ -503,8 +513,5 @@ export const runStageSession = async (
       + `requestId=${options.requestId ?? '-'} maxTurns=${maxTurns}`,
     );
 
-    return withUsage({
-      output: `执行失败 stage对话轮次超过限制 ${maxTurns}`,
-      type: "result",
-    }, turns, bashCalls);
+    throw new MaxTurnsExhaustedError(maxTurns);
 };

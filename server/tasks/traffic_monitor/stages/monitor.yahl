@@ -57,9 +57,9 @@ warmUp: |
     dest_ok = verify.dest_ok === true;
     *set_context(origin_ok, dest_ok);
   END:
-  Do not fetch, notify, append day-page, or sleep.
+  WarmUp ensures O/D only (goto + chips / verify). Do not Search, wait for route cards, run search-driving-routes.js, fetch, notify, append day-page, or sleep. Search belongs in submit_wait.
 prefixOverride: |
-  Warm-up already ran. Browser page is open; OD fields are set.
+  Warm-up already ran. Browser page is open; OD already ensured — poll body starts at Search (submit_wait).
   Scripts under ~/data/scripts/{source_scripts_slug}/ may already exist — run them; do not cat script bodies, re-read skills, goto, or re-bind OD.
   Use Input context keys only. Execute this Input only.
 logic:

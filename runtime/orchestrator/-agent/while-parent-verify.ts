@@ -112,12 +112,12 @@ export const runWhileWithParentVerify = async (params: {
       throwOnFail: !autoRetry || attempt >= maxRetries,
     });
 
-    if (verifyResult.pass) {
-      const finishEnvelope = {
-        contextAfter: params.storage,
-        requestId,
-      };
+    const finishEnvelope = {
+      contextAfter: params.storage,
+      requestId,
+    };
 
+    if (verifyResult.pass) {
       if (params.hooks?.emitFinish) {
         params.hooks.emitFinish(finishEnvelope);
       } else {
@@ -131,6 +131,14 @@ export const runWhileWithParentVerify = async (params: {
     if (!autoRetry || attempt >= maxRetries || !isVerifyRubricFailure(verifyResult)) {
       return {};
     }
+
+    if (params.hooks?.emitFinish) {
+      params.hooks.emitFinish(finishEnvelope);
+    } else {
+      publisher.emitStageFinish(finishEnvelope);
+    }
+
+    await globalThis.sessionTracker?.flush?.();
 
     attempt += 1;
     const resumeAction = verifyResult.resumeAction ?? 'rerun';

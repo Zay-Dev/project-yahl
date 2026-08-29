@@ -21,6 +21,12 @@ Policy targets (cap downward when the remaining window is short):
 
 Single sleep per wait (`bashTimeoutMs: 360000`). No chunking / background / alternate waits without `consult-breaking-change` agree.
 
+## WarmUp vs poll body
+
+**warmUp** owns ensure-OD only: `goto-driving-search`, then `fill-origin-input` / `fill-destination-input` (+ `verify-od-bound`) when not `url_bound_od`. Never Search, wait for route cards, or run `search-driving-routes.js` in warmUp.
+
+**submit_wait** owns Search + cards visibility. After warmUp, poll body starts at Search — never re-run fill-* on empty search (retry search / goto+search only).
+
 ## Poll body
 
 Use stage `*get_or_create(~/data/scripts/{source_scripts_slug}/…, Instruction: …)` then run — do not `cat` scripts or re-read skills on later polls. Shared formatters live under `~/data/scripts/` root.

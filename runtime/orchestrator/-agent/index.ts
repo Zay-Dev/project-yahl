@@ -1022,6 +1022,11 @@ class YahlAgentRunner {
       });
 
       if (shouldRotateRequestIdForBoundStage(this.stageDocSourceStartLine, this.boundSourceStartLine)) {
+        publisher.emitStageFinish({
+          requestId: this.requestId,
+          contextAfter: finishContextAfter,
+        });
+        await globalThis.sessionTracker?.flush?.();
         this.requestId = randomUUID();
         this.stageDocSourceStartLine = undefined;
       }

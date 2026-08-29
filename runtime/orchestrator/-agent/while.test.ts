@@ -67,7 +67,7 @@ describe('handleWhile', () => {
     assert.equal(storage.context.get('c'), 3);
   });
 
-  it('stops when remaining turns are exhausted', async () => {
+  it('continues while the predicate is true regardless of remaining turns', async () => {
     let iterations = 0;
 
     const runner: TRunYahl = async (_yahl, options) => {
@@ -86,13 +86,32 @@ describe('handleWhile', () => {
     await handleWhile(
       whileStage({
         maxTurns: 3,
-        whileSetup: 'true',
+        whileSetup: 'context.context.c < 2',
       }),
       storage,
       runner,
     );
 
     assert.equal(iterations, 2);
+    assert.equal(storage.context.get('c'), 2);
+  });
+
+  it('propagates stage runner failures instead of treating budget as a loop exit', async () => {
+    const runner: TRunYahl = async () => {
+      throw new Error('stage maxTurns exhausted (0)');
+    };
+
+    await assert.rejects(
+      () => handleWhile(
+        whileStage({
+          maxTurns: 0,
+          whileSetup: 'true',
+        }),
+        storageFrom({ c: 0 }),
+        runner,
+      ),
+      /maxTurns exhausted/,
+    );
   });
 
   it('aborts remaining iterations on gotoTargetStageIndex', async () => {
@@ -455,7 +474,7 @@ describe('resumeWhileFromCheckpoint', () => {
     };
 
     await resumeWhileFromCheckpoint(
-      whileStage({ maxTurns: 5, whileSetup: 'true' }),
+      whileStage({ maxTurns: 5, whileSetup: 'context.context.c < 2' }),
       storageFrom({ c: 0 }),
       {
         arraySnapshot: [],
@@ -572,7 +591,7 @@ describe('resumeWhileFromCheckpoint', () => {
     };
 
     await resumeWhileFromCheckpoint(
-      whileStage({ maxTurns: 5, whileSetup: 'true' }),
+      whileStage({ maxTurns: 5, whileSetup: 'context.context.c < 2' }),
       storageFrom({ c: 0 }),
       {
         arraySnapshot: [],

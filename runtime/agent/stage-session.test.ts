@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type { ChatAssistantMessage } from "@/shared/stage-tools";
 
-import { parseStageSessionInput, runStageSession } from "./stage-session";
+import { parseStageSessionInput, runStageSession, MaxTurnsExhaustedError } from "./stage-session";
 
 const assistant = (content: string | null, toolCalls?: ChatAssistantMessage["tool_calls"]): ChatAssistantMessage => ({
   content,
@@ -202,5 +202,65 @@ describe("runStageSession", () => {
     );
 
     assert.deepEqual(firstMessages?.map((message) => message.role), ['system', 'user', 'user']);
+  });
+
+  it('throws MaxTurnsExhaustedError when the turn budget is spent', async () => {
+    await assert.rejects(
+      () => runStageSession(
+        {
+          context: emptyContext(),
+          stage: { logic: 'noop' },
+        },
+        [],
+        {
+          chatWithTools: async () => [assistant('still going', [{
+            function: { arguments: '{}', name: 'run_bash' },
+            id: 'call-1',
+            type: 'function',
+          }])],
+          runCommand: async () => 'ok',
+        },
+        { maxTurns: 1 },
+      ),
+      (error: unknown) => error instanceof MaxTurnsExhaustedError
+        && error.maxTurns === 1,
+    );
+  });
+
+  it('keeps maxBashCalls as a soft tool refusal', async () => {
+    let bashAttempts = 0;
+    let turns = 0;
+
+    const envelope = await runStageSession(
+      {
+        context: emptyContext(),
+        stage: { logic: 'noop' },
+      },
+      [],
+      {
+        chatWithTools: async () => {
+          turns += 1;
+
+          if (turns === 1) {
+            return [assistant('bash', [{
+              function: { arguments: JSON.stringify({ command: 'echo hi' }), name: 'run_bash' },
+              id: 'call-bash',
+              type: 'function',
+            }])];
+          }
+
+          return [assistant(JSON.stringify({ output: 'done', type: 'result' }))];
+        },
+        runCommand: async () => {
+          bashAttempts += 1;
+          return 'hi';
+        },
+      },
+      { maxBashCalls: 0, maxTurns: 4 },
+    );
+
+    assert.equal(bashAttempts, 0);
+    assert.equal(envelope.type, 'result');
+    assert.match(String(envelope.type === 'result' ? envelope.output : ''), /done/);
   });
 });

@@ -139,6 +139,7 @@ describe('runWhileWithParentVerify', () => {
     let first = 0;
     let rerun = 0;
     let gates = 0;
+    const finished: string[] = [];
 
     await runWhileWithParentVerify({
       agentName: 'agent-s',
@@ -147,7 +148,9 @@ describe('runWhileWithParentVerify', () => {
         return {};
       },
       hooks: {
-        emitFinish: () => {},
+        emitFinish: ({ requestId }) => {
+          finished.push(requestId);
+        },
         persistStage: () => {},
         runGate: async () => {
           gates += 1;
@@ -167,6 +170,8 @@ describe('runWhileWithParentVerify', () => {
     assert.equal(first, 1);
     assert.equal(rerun, 1);
     assert.equal(gates, 2);
+    assert.equal(finished.length, 2);
+    assert.notEqual(finished[0], finished[1]);
   });
 
   it('rerun skips warmUp by default after verify autoRetry', async () => {

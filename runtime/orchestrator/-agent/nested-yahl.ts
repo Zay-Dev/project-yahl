@@ -150,8 +150,12 @@ export const runNestedYahl = async (
   const parentRequestId = extras?.parentRequestId ?? randomUUID();
   const warmupPrefix = extras?.prefixMessages;
   let mainThreadPrefix = warmupPrefix;
-  let remainingTurns = parent.spec.maxTurns ?? DEFAULT_MAX_TURNS;
-  let remainingBashCalls = parent.spec.maxBashCalls ?? DEFAULT_MAX_BASH_CALLS;
+  let remainingTurns = extras?.loopMeta?.remainingTurns
+    ?? parent.spec.maxTurns
+    ?? DEFAULT_MAX_TURNS;
+  let remainingBashCalls = extras?.loopMeta?.remainingBashCalls
+    ?? parent.spec.maxBashCalls
+    ?? DEFAULT_MAX_BASH_CALLS;
   let lastRequestId: string | undefined;
   let totalTurns = 0;
   let totalBashCalls = 0;
@@ -162,10 +166,6 @@ export const runNestedYahl = async (
     }
 
     const child = nestedStages[index]!;
-
-    if (remainingTurns < 1) {
-      break;
-    }
 
     seedDefaultContext(storage);
     seedKnowledgeToScriptNotes(storage);
