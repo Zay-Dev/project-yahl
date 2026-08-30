@@ -46,8 +46,7 @@ whileSetup:
   condition: "(Date.now() - Date.parse(String(context.context.started_at))) < Number(context.context.monitor_minutes) * 60 * 1000"
   doAtLeast: 2
 warmUp: |
-  Read ~/task-skills/monitor-loop/SKILL.md.
-  Read /opt/skills/worth-persisting-knowledge/SKILL.md.
+  # OD ensure only — poll body is nested Input; do not re-read skills each iteration
 ```
 
 Full schema: [`handbook/yahl-syntax.md`](handbook/yahl-syntax.md).

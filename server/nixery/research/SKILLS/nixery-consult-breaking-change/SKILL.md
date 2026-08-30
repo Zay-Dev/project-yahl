@@ -10,7 +10,7 @@ Ask before breaking stage procedure. Deterministic — no LLM.
   "args": {
     "proposedChange": "chunk sleep 300 into six sleep 50 calls",
     "reason": "run_bash timed out at 60s",
-    "context": "monitor-loop adaptive sleep"
+    "context": "monitor adaptive sleep"
   }
 }
 ```

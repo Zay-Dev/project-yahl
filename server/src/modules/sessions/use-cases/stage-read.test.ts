@@ -130,18 +130,18 @@ describe('collectToolResultById', () => {
   it('keeps real stdout when a later stub row arrives', () => {
     const byId = collectToolResultById([
       { results: [{ content: 'OK', id: 'call-1' }] },
-      { results: [{ content: '# monitor-loop\n', id: 'call-1' }] },
+      { results: [{ content: '# route-analysis\n', id: 'call-1' }] },
     ]);
 
-    assert.equal(byId.get('call-1'), '# monitor-loop\n');
+    assert.equal(byId.get('call-1'), '# route-analysis\n');
   });
 
   it('does not replace real stdout with a later stub', () => {
     const byId = collectToolResultById([
-      { results: [{ content: '# monitor-loop\n', id: 'call-1' }] },
+      { results: [{ content: '# route-analysis\n', id: 'call-1' }] },
       { results: [{ content: 'OK', id: 'call-1' }] },
     ]);
 
-    assert.equal(byId.get('call-1'), '# monitor-loop\n');
+    assert.equal(byId.get('call-1'), '# route-analysis\n');
   });
 });

@@ -81,11 +81,11 @@ describe('buildWarmupPrefixMessages', () => {
           arguments: { command: 'cat SKILL.md' },
           id: 'call-1',
           name: 'run_bash',
-          result: '# monitor-loop\n\nOne poll.',
+          result: '# route-analysis\n\nJudgment.',
         }],
       }],
     });
 
-    assert.equal(messages[1] && 'content' in messages[1] ? messages[1].content : '', '# monitor-loop\n\nOne poll.');
+    assert.equal(messages[1] && 'content' in messages[1] ? messages[1].content : '', '# route-analysis\n\nJudgment.');
   });
 });

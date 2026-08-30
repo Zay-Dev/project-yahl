@@ -113,7 +113,7 @@ verify: ...
 - id: monitor
   whileSetup: ...
   warmUp: |
-    Read ~/task-skills/monitor-loop/SKILL.md.
+    # OD ensure only — nested Input owns the poll body
   logic:
     $ref: stages/monitor-body.yahl
 
@@ -244,9 +244,10 @@ whileSetup:
   condition: "(Date.now() - Date.parse(String(context.context.started_at))) < …"
   doAtLeast: 2
 warmUp: |
-  Read ~/task-skills/monitor-loop/SKILL.md.
+  # OD ensure only — nested Input owns the poll body
 prefixOverride: |
   Warm-up already ran. Execute this Input only.
+  Do not cat ~/task-skills/** or /opt/skills/** — run scripts from Input only.
 logic:
   stages: […]
 verify:

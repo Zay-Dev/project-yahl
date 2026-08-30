@@ -7,7 +7,7 @@ const DISAGREE_PATTERNS = [
   { id: 'chunked-sleep', re: /\b(chunk(ed)?\s+sleep|sleep\s+\d+\s*[x×]\s*\d+|sleep\s+5\d|sub-?60|loop\s+of\s+sleeps)\b/i },
   { id: 'background-sleep', re: /\b(sleep\s+\d+\s*&|background(ed)?\s+sleep|nohup\s+sleep)\b/i },
   { id: 'alternate-wait', re: /\b(busy-?wait|poll(?:ing)?\s+loop|\/usr\/bin\/timeout|timeout\s+\d+\s+sleep|reinvent\w*\s+wait)\b/i },
-  { id: 'edit-skill', re: /\b(edit|patch|rewrite|modify)\b.*\b(SKILL\.yaml|SKILL\.yml|task-skills?|monitor-loop|task-mission)\b/i },
+  { id: 'edit-skill', re: /\b(edit|patch|rewrite|modify)\b.*\b(SKILL\.yaml|SKILL\.yml|task-skills?|route-analysis|task-mission)\b/i },
   { id: 'change-window', re: /\b(chang(e|ing)|extend|shorten|reduc(e|ing))\b.*\b(90\s*min|window|threshold|adaptive\s+sleep)\b/i },
 ];
 
