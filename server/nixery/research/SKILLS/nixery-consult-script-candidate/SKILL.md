@@ -21,7 +21,7 @@ Pass real stage intent — never one-word pains like `monitor warmUp`. For KTS-n
     "stageBrief": "Monitor poll: no fetch-driving-routes.js yet; used stage-agent browser for OD bind + extract; observe recovery filled routes.",
     "plan": "1) Consult 2) grow advised js that calls yahl-browser 3) set_context notes from notesHint 4) sleep",
     "stageHint": "monitor-kts-notes",
-    "guidelinePath": "~/task-skills/monitor-loop/SKILL.md",
+    "guidelinePath": "~/task-skills/route-analysis/SKILL.md",
     "source": ""
   }
 }
@@ -37,7 +37,7 @@ Pass real stage intent — never one-word pains like `monitor warmUp`. For KTS-n
 | `plan` | Short ordered completion plan for the stage |
 | `pain` | Legacy alias; used only when `need` empty |
 | `stageHint` | Stage role label |
-| `guidelinePath` | Session path to a task skill (e.g. `~/task-skills/monitor-loop/SKILL.md`) |
+| `guidelinePath` | Session path to a task skill (e.g. `~/task-skills/route-analysis/SKILL.md`) |
 | `source` | Optional session path to howto / source-ops excerpt |
 
 ## Result

@@ -1,19 +1,15 @@
 # task-mission
 
-Monitor private-car driving from `origin` → `destination` for about `monitor_minutes` (default 60). Resolve notify target, load city source-ops from durable files when fresh, explore/lock a live multi-route ETA source, poll top 2–3 routes, append day-page sections, propose notifications, submit novel+evidenced observations per `/opt/skills/worth-persisting-knowledge/SKILL.md`, then append a daily report raw page under topic `traffic-monitor`. The knowledge registry may canonicalize `traffic-monitor` to a merged slug (e.g. `traffic-notify`); that redirect is expected — not a validation failure. Defaults: Kowloon Tong → HKIA, city Hong_Kong, timezone Asia/Hong_Kong. Wall clocks use `timezone`.
+Monitor private-car driving `origin` → `destination` for about `monitor_minutes`. Explore/lock a multi-route ETA source, poll, append day-page sections, propose notifications, append a daily report under topic `traffic-monitor` (registry may merge the slug — that is OK).
 
-Monitor browser ops use `*get_or_create(~/data/scripts/{source_scripts_slug}/…, Instruction: …)` — slug from locked `traffic_source` URL (never a host name hardcoded in stage YAML).
+Defaults when runInput blank: Kowloon Tong → HKIA, city Hong_Kong, timezone Asia/Hong_Kong.
 
-## `source_instruction` override
+Browser ops: `*get_or_create(~/data/scripts/{source_scripts_slug}/…)` from locked `traffic_source` — never hardcode a host in stage YAML.
 
-When Input `instruction_active` is true, **read and apply** free-text `source_instruction` over explore/monitor defaults (trust-skip, known-fail decline, extract richness, notify wording). Do **not** phrase-match hardcoded strings.
+## `source_instruction`
 
-- Default under active instruction: **do not** take blind `trusted durable cache; no re-probe` unless the instruction clearly allows trusting cache / skipping probe — live-probe the durable candidate (same as re-entry), then follow the rest of the instruction text.
-- Do not blind-skip known-failed sources unless the instruction clearly forbids probing them.
-- `*research_need_for_explore` must include raw `source_instruction` when active.
+When `instruction_active`: apply free-text `source_instruction` over explore/monitor defaults. Do not phrase-match hardcoded strings. Do not blind trust-cache or skip known-failed sources unless the instruction clearly allows it. Pass raw `source_instruction` into `*research_need_for_explore` when active.
 
 ## Ops
 
-Attend via `*read(source_ops_md)` before site use in explore; do not paste ops into `howto_md`. Strip PLACE OD examples via `*strip_od_bleed` — binds come from context keys only. Submit novel source-ops / PLACE notes when worth persisting — never `upsert-knowledge-page`.
-
-Notify kinds / poll loop / path extract → `~/task-skills/monitor-loop/SKILL.md` + `~/task-skills/route-analysis/SKILL.md`.
+`*read(source_ops_md)` before site use in explore. Strip PLACE OD examples via `*strip_od_bleed`. Novel ops via worth-persisting — never `upsert-knowledge-page`.

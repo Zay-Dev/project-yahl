@@ -31,7 +31,8 @@ describe('readTaskSkillsFromDisk', () => {
     const paths = files.map((file) => file.path);
 
     assert.ok(paths.includes('task-mission/SKILL.md'));
-    assert.ok(paths.includes('monitor-loop/SKILL.md'));
+    assert.ok(paths.includes('route-analysis/SKILL.md'));
+    assert.ok(!paths.includes('monitor-loop/SKILL.md'));
     assert.ok(!paths.includes('worth-persisting-knowledge/SKILL.md'));
     assert.ok(!paths.includes('resolve-errors-with-knowledge/SKILL.md'));
   });

@@ -1,6 +1,6 @@
 goto:
   - command: '/stage(explorer)'
-    description: 'when the cached/locked traffic source is no longer available or usable'
+    description: 'only when the locked traffic_source itself is unusable after sustained failures across iterations — not one failed Search, empty cards, schema blip, or wiped form (those are poll miss → next warmUp)'
 contextKeys: [started_at, fetches, prev_routes, summary_notified, notifications, miss_count, day_page, day_page_sections, last_heartbeat_at, prev_incident_note, poll_success_count, traffic_source, source_ops_md, notifyPreference, notifyName, notifyChannel, notifyTo, notifyIsUser, origin, destination, origin_resolved, destination_resolved, origin_display, destination_display, monitor_minutes, timezone, city_slug, source_instruction, instruction_active, verify_feedback, TTrafficFetch, TRouteSample, TMonitorResult, poll_miss, last_fetch, last_analysis, sleep_sec, bind_origin, bind_destination, label_origin, label_destination, source_scripts_slug, source_scripts_dir, bound_url, url_bound_od, page_ready, origin_ok, dest_ok, routes_ready]
 updateContextKeys: [fetches, prev_routes, summary_notified, notifications, miss_count, last_heartbeat_at, prev_incident_note, source_ops_md, poll_success_count, day_page_sections, poll_miss, last_fetch, last_analysis, sleep_sec, bind_origin, bind_destination, bound_url, url_bound_od, page_ready, origin_ok, dest_ok, routes_ready]
 agentOverrides:
@@ -15,8 +15,13 @@ warmUp: |
     *read(source_instruction);
   END:
   IF: verify_feedback;
+    *get_or_create(
+      ~/data/scripts/format-fetch-section.js,
+      Instruction: Build day-page section markdown. stdin {fetch,analysis?,miss?,origin,destination,timezone,notes?}. stdout {section}. Origin line MUST equal origin arg; Destination line MUST equal destination arg — never swap, never invent other OD strings.
+    );
     day_page_sections = [];
     *set_context(day_page_sections);
+    Rebuild day_page_sections from every entry in fetches: for each f, section = *run(~/data/scripts/format-fetch-section.js, {fetch: f, origin: label_origin, destination: label_destination, timezone}).section; *extend_context(day_page_sections, value: section). Do not leave sections empty when fetches is non-empty.
   END:
   const src_url = String(traffic_source.url || '');
   url_bound_od = src_url.includes('{origin}') && src_url.includes('{destination}');
@@ -60,8 +65,9 @@ warmUp: |
   WarmUp ensures O/D only (goto + chips / verify). Do not Search, wait for route cards, run search-driving-routes.js, fetch, notify, append day-page, or sleep. Search belongs in submit_wait.
 prefixOverride: |
   Warm-up already ran. Browser page is open; OD already ensured — poll body starts at Search (submit_wait).
-  Scripts under ~/data/scripts/{source_scripts_slug}/ may already exist — run them; do not cat script bodies, re-read skills, goto, or re-bind OD.
-  Use Input context keys only. Execute this Input only.
+  Scripts under ~/data/scripts/{source_scripts_slug}/ and ~/data/scripts/ may already exist — run them; do not cat script bodies.
+  Do not cat ~/task-skills/** or /opt/skills/**. Do not re-read skills, goto-driving-search, or re-bind OD.
+  Use Input context keys only. Execute this Input only. Paths are ~/data/... never /workspace/sessions/...
 logic:
   stages:
     - id: submit_wait
@@ -80,23 +86,25 @@ logic:
         ]
       updateContextKeys: [routes_ready]
       logic: |
-        NEVER run fill-origin-input.js, fill-destination-input.js, bind-od-field.js, or goto that re-binds OD.
+        NEVER run fill-origin-input.js, fill-destination-input.js, bind-od-field.js, goto-driving-search.js, or any navigation that reloads the page (wipes OD).
+        NEVER /stage(explorer) from this nested stage — empty cards → routes_ready false → extract miss → next warmUp.
         IF: url_bound_od;
           Wait until ≤3 private-car route cards are visible (observe/act; do not pass url on act/extract).
-          routes_ready = true;
+          routes_ready = cards visible;
           *set_context(routes_ready);
         ELSE:
           *get_or_create(
             ~/data/scripts/{source_scripts_slug}/search-driving-routes.js,
-            Instruction: Submit directions search (e.g. Shortest Time); wait until route result cards/table visible. Do NOT fill or re-bind OD. stdin {}. stdout {ok}. yahl-browser only — act/observe use {mode,instruction} without url; if goto is needed use {mode:"goto",url,instruction}.
+            Instruction: Submit directions search (e.g. Shortest Time); wait until route result cards/table visible. Do NOT fill, re-bind OD, or navigate/goto. stdin {}. stdout {ok,cardsVisible?}. yahl-browser only — act/observe use {mode,instruction} without url.
           );
           *run(~/data/scripts/{source_scripts_slug}/search-driving-routes.js, {});
           IF: cards not visible;
-            Retry search once OR *run goto-driving-search.js with bound_url then search again — still no OD re-bind.
+            Retry search once only — still no goto-driving-search, no OD re-bind, no explorer.
           END:
-          routes_ready = true when cards visible;
+          routes_ready = cards visible;
           *set_context(routes_ready);
         END:
+        Finish this nested stage. If !routes_ready, extract will miss.
 
     - id: extract
       contextKeys:
@@ -127,28 +135,16 @@ logic:
           sleep_sec,
         ]
       logic: |
-        *get_or_create(
-          ~/data/scripts/{source_scripts_slug}/extract-routes-normalize.js,
-          Instruction: Extract ≤3 private-car routes from current page + normalize to TTrafficFetch.routes / TRouteSample. Each route MUST use eta_min (number minutes from page "N mins") — never emit time_min as the sole duration key; map page minutes → eta_min. Take origin/destination from stdin (bind names) for OD chip check and path cleanup — never bake POIs or geography literals. stdin {origin,destination}. stdout {routes:[{label,eta_min,path?,distance_km?,status?,recommended?}],incident_note?,from_field?,to_field?}. yahl-browser extract then coerce — extract uses {mode:"extract",instruction,schema?} without url.
-        );
-        const extracted = *run(~/data/scripts/{source_scripts_slug}/extract-routes-normalize.js, {origin: bind_origin, destination: bind_destination});
-        const fetch = *normalize_traffic_fetch(
-          extracted.routes || extracted,
-          fetched_at: now_iso,
-          source_url: bound_url,
-          as: TTrafficFetch,
-        );
-        OD chips must match bind_origin/bind_destination — mismatch or empty routes → miss.
-        IF: *fetch_failed(fetch);
+        IF: !routes_ready;
           poll_miss = true;
-          last_fetch = fetch;
+          last_fetch = null;
           miss_count = miss_count + 1;
           *set_context(poll_miss, last_fetch, miss_count);
           *get_or_create(
             ~/data/scripts/format-fetch-section.js,
-            Instruction: Build day-page miss section markdown. stdin {fetch,miss:true,origin,destination,timezone,notes?}. stdout {section}. Origin line = origin arg; Destination line = destination arg — never swap.
+            Instruction: Build day-page miss section markdown. stdin {fetch,miss:true,origin,destination,timezone,notes?}. stdout {section}. Origin line MUST equal origin arg; Destination line MUST equal destination arg — never swap.
           );
-          const miss_section = *run(~/data/scripts/format-fetch-section.js, {fetch, miss: true, origin: label_origin, destination: label_destination, timezone}).section
+          const miss_section = *run(~/data/scripts/format-fetch-section.js, {fetch: null, miss: true, origin: label_origin, destination: label_destination, timezone, notes: 'cards not ready'}).section
             || *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone);
           *extend_context(day_page_sections, value: miss_section);
           /nixery(
@@ -158,13 +154,49 @@ logic:
             mode: append,
             content: miss_section,
           );
-          *submit_novel_ops(miss: true, fetch: fetch, source: traffic_source);
+          *submit_novel_ops(miss: true, fetch: null, source: traffic_source);
           sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
           *set_context(sleep_sec);
         ELSE:
-          poll_miss = false;
-          last_fetch = fetch;
-          *set_context(poll_miss, last_fetch);
+          *get_or_create(
+            ~/data/scripts/{source_scripts_slug}/extract-routes-normalize.js,
+            Instruction: Extract ≤3 private-car routes from current page + normalize to TTrafficFetch.routes / TRouteSample. Each route MUST use eta_min (number minutes from page "N mins") — never emit time_min as the sole duration key; map page minutes → eta_min. Take origin/destination from stdin (bind names) for OD chip check and path cleanup — never bake POIs or geography literals. stdin {origin,destination}. stdout {routes:[{label,eta_min,path?,distance_km?,status?,recommended?}],incident_note?,from_field?,to_field?}. yahl-browser extract then coerce — extract uses {mode:"extract",instruction,schema?} without url.
+          );
+          const extracted = *run(~/data/scripts/{source_scripts_slug}/extract-routes-normalize.js, {origin: bind_origin, destination: bind_destination});
+          const fetch = *normalize_traffic_fetch(
+            extracted.routes || extracted,
+            fetched_at: now_iso,
+            source_url: bound_url,
+            as: TTrafficFetch,
+          );
+          OD chips must match bind_origin/bind_destination — mismatch or empty routes → miss.
+          IF: *fetch_failed(fetch);
+            poll_miss = true;
+            last_fetch = fetch;
+            miss_count = miss_count + 1;
+            *set_context(poll_miss, last_fetch, miss_count);
+            *get_or_create(
+              ~/data/scripts/format-fetch-section.js,
+              Instruction: Build day-page miss section markdown. stdin {fetch,miss:true,origin,destination,timezone,notes?}. stdout {section}. Origin line MUST equal origin arg; Destination line MUST equal destination arg — never swap.
+            );
+            const miss_section = *run(~/data/scripts/format-fetch-section.js, {fetch, miss: true, origin: label_origin, destination: label_destination, timezone}).section
+              || *format_miss_section(prev_routes, origin: label_origin, destination: label_destination, timezone: timezone);
+            *extend_context(day_page_sections, value: miss_section);
+            /nixery(
+              append-raw-knowledge-page,
+              topic: traffic-monitor,
+              page: day_page,
+              mode: append,
+              content: miss_section,
+            );
+            *submit_novel_ops(miss: true, fetch: fetch, source: traffic_source);
+            sleep_sec = *adaptive_sleep_sec(null, prev_primary_eta: *primary_eta(prev_routes) || 180, started_at, monitor_minutes);
+            *set_context(sleep_sec);
+          ELSE:
+            poll_miss = false;
+            last_fetch = fetch;
+            *set_context(poll_miss, last_fetch);
+          END:
         END:
 
     - id: analyze
@@ -206,7 +238,7 @@ logic:
           *set_context(last_analysis, last_fetch, prev_routes, poll_success_count);
           *get_or_create(
             ~/data/scripts/format-fetch-section.js,
-            Instruction: Build day-page section markdown. stdin {fetch,analysis,origin,destination,timezone}. stdout {section}. Origin then Destination lines must use origin/destination args in that order — never swap.
+            Instruction: Build day-page section markdown. stdin {fetch,analysis,origin,destination,timezone}. stdout {section}. Origin line MUST equal origin arg; Destination line MUST equal destination arg — never swap, never invent other OD strings.
           );
           const section_md = *run(~/data/scripts/format-fetch-section.js, {fetch: fetch_with_status, analysis, origin: label_origin, destination: label_destination, timezone}).section;
           *extend_context(day_page_sections, value: section_md);
@@ -281,6 +313,7 @@ logic:
 verify:
   defId: stage-verify
   autoRetry: true
+  skipWarmUp: false
   minScore: 0.75
   rubric: |
     Pass when started_at is set and unchanged,
