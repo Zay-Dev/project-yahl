@@ -81,5 +81,5 @@ export const stopSessionRun = async (sessionRef: string, sessionId: string) => {
   tearDownAgentContainer(sessionId);
   tearDownBrowserContainer(sessionId);
   await markSessionBrowserAbandoned(sessionRef, sessionId, 'stop');
-  await clearStaleLiveViewVncPort(sessionRef);
+  await clearStaleLiveViewVncPort(sessionId);
 };

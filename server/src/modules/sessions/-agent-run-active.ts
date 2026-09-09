@@ -1,7 +1,5 @@
 import { execSync } from 'child_process';
 
-import { Types } from 'mongoose';
-
 import { resolveAgentContainerName } from './-agent-container-name';
 import { modelSession } from './models';
 
@@ -22,9 +20,9 @@ export const isAgentContainerRunning = (sessionId: string): boolean => {
   }
 };
 
-export const clearStaleLiveViewVncPort = async (sessionRef: string) => {
+export const clearStaleLiveViewVncPort = async (sessionId: string) => {
   await modelSession.updateOne(
-    { _id: new Types.ObjectId(sessionRef) },
+    { sessionId },
     { $set: { liveViewVncPort: null } },
   );
 };
@@ -44,7 +42,7 @@ export const assertSessionRunAllowed = async (session: {
   }
 
   if (typeof session.liveViewVncPort === 'number' && session.liveViewVncPort > 0) {
-    await clearStaleLiveViewVncPort(session._id);
+    await clearStaleLiveViewVncPort(session.sessionId);
   }
 };
 

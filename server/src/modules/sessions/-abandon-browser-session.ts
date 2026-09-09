@@ -36,7 +36,7 @@ export const markSessionBrowserAbandoned = async (
   const sessionObjectId = new Types.ObjectId(sessionRef);
 
   await modelSession.updateOne(
-    { _id: sessionObjectId },
+    { sessionId },
     {
       $set: {
         browserAbandonedAt: now,
