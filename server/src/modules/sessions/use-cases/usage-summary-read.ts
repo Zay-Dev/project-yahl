@@ -4,9 +4,13 @@ import { Repository } from '@/core';
 
 import { Middlewares } from '@omni-infra/express';
 
+const normalizeControlPlaneToken = (value: string) => value.replace(/\s+/g, '');
+
 const assertControlPlaneServiceToken = (headerValue: string | string[] | undefined): void => {
-  const expected = process.env.CONTROL_PLANE_SERVICE_TOKEN?.trim() ?? '';
-  const provided = typeof headerValue === 'string' ? headerValue.trim() : '';
+  const expected = normalizeControlPlaneToken(process.env.CONTROL_PLANE_SERVICE_TOKEN ?? '');
+  const provided = typeof headerValue === 'string'
+    ? normalizeControlPlaneToken(headerValue)
+    : '';
 
   if (!expected || provided !== expected) {
     throw errors.custom('invalid control plane token', 401);

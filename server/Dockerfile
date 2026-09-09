@@ -25,14 +25,14 @@ FROM base AS deps
 
 ARG OMNIFLEX_APP_DIR=project-yahl
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.infras.json ./
+COPY package.json pnpm-workspace.yaml tsconfig.infras.json ./
 COPY infras ./infras
 COPY ${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/
 COPY ${OMNIFLEX_APP_DIR}/shared/package.json ./${OMNIFLEX_APP_DIR}/shared/
 COPY ${OMNIFLEX_APP_DIR}/server/package.json ./${OMNIFLEX_APP_DIR}/server/
 COPY ${OMNIFLEX_APP_DIR}/runtime/package.json ./${OMNIFLEX_APP_DIR}/runtime/
 
-RUN pnpm install --frozen-lockfile \
+RUN pnpm install \
   --filter @project-yahl/server... \
   --filter @project-yahl/runtime...
 
@@ -62,7 +62,6 @@ COPY --from=build /omniflex/node_modules ./node_modules
 COPY --from=build /omniflex/infras ./infras
 COPY --from=build /omniflex/package.json ./package.json
 COPY --from=build /omniflex/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=build /omniflex/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/package.json
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.agent.yml ./${OMNIFLEX_APP_DIR}/docker-compose.agent.yml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.browser.yml ./${OMNIFLEX_APP_DIR}/docker-compose.browser.yml
