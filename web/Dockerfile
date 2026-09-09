@@ -6,14 +6,14 @@ WORKDIR /omniflex
 
 RUN corepack enable
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.infras.json ./
+COPY package.json pnpm-workspace.yaml tsconfig.infras.json ./
 COPY infras ./infras
 COPY ${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/
 COPY ${OMNIFLEX_APP_DIR}/shared/package.json ./${OMNIFLEX_APP_DIR}/shared/
 COPY ${OMNIFLEX_APP_DIR}/server/package.json ./${OMNIFLEX_APP_DIR}/server/
 COPY ${OMNIFLEX_APP_DIR}/web/package.json ./${OMNIFLEX_APP_DIR}/web/
 
-RUN pnpm install --frozen-lockfile --filter @project-yahl/web...
+RUN pnpm install --filter @project-yahl/web...
 
 COPY ${OMNIFLEX_APP_DIR}/shared ./${OMNIFLEX_APP_DIR}/shared
 COPY ${OMNIFLEX_APP_DIR}/server/src ./${OMNIFLEX_APP_DIR}/server/src
