@@ -1,5 +1,7 @@
 import { execSync } from 'child_process';
 
+import { Types } from 'mongoose';
+
 import { clearSessionControl } from './-session-control-redis';
 import {
   modelAskUserQuestion,
@@ -31,9 +33,10 @@ export const markSessionBrowserAbandoned = async (
   reason: TBrowserAbandonedReason,
 ) => {
   const now = new Date();
+  const sessionObjectId = new Types.ObjectId(sessionRef);
 
   await modelSession.updateOne(
-    { _id: sessionRef },
+    { _id: sessionObjectId },
     {
       $set: {
         browserAbandonedAt: now,
@@ -46,15 +49,15 @@ export const markSessionBrowserAbandoned = async (
 
   await Promise.all([
     modelVerifyCheckpoint.updateMany(
-      { session: sessionRef, status: 'pending' },
+      { session: sessionObjectId, status: 'pending' },
       { $set: { status: 'superseded' } },
     ),
     modelAskUserQuestion.updateMany(
-      { session: sessionRef, status: 'pending' },
+      { session: sessionObjectId, status: 'pending' },
       { $set: { status: 'superseded' } },
     ),
     modelUserPauseCheckpoint.updateMany(
-      { session: sessionRef, status: 'pending' },
+      { session: sessionObjectId, status: 'pending' },
       { $set: { status: 'superseded' } },
     ),
   ]);

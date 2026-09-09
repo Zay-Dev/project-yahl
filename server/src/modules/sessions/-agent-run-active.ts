@@ -1,5 +1,7 @@
 import { execSync } from 'child_process';
 
+import { Types } from 'mongoose';
+
 import { resolveAgentContainerName } from './-agent-container-name';
 import { modelSession } from './models';
 
@@ -22,7 +24,7 @@ export const isAgentContainerRunning = (sessionId: string): boolean => {
 
 export const clearStaleLiveViewVncPort = async (sessionRef: string) => {
   await modelSession.updateOne(
-    { _id: sessionRef },
+    { _id: new Types.ObjectId(sessionRef) },
     { $set: { liveViewVncPort: null } },
   );
 };
