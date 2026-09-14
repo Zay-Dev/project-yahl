@@ -110,7 +110,7 @@ describe("stagehand-llm-proxy", () => {
         ],
         created: Math.floor(Date.now() / 1000),
         id: "chatcmpl-test",
-        model: "deepseek-v4-flash",
+        model: "deepseek-flash",
         object: "chat.completion",
       };
 
@@ -132,7 +132,7 @@ describe("stagehand-llm-proxy", () => {
     const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
       body: JSON.stringify({
         messages: [{ content: "observe available click targets", role: "user" }],
-        model: "openai/deepseek-v4-flash",
+        model: "openai/deepseek-flash",
         tools: [
           {
             function: {
@@ -157,7 +157,7 @@ describe("stagehand-llm-proxy", () => {
     assert.ok(nestedInput);
     assert.equal(nestedInput.tool_choice, "required");
     assert.ok(Array.isArray(nestedInput.tools));
-    assert.equal(nestedInput.model, "openai/deepseek-v4-flash");
+    assert.equal(nestedInput.model, "openai/deepseek-flash");
     assert.ok(
       nestedInput.messages.some(
         (message) =>
@@ -219,7 +219,7 @@ describe("stagehand-llm-proxy", () => {
     const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
       body: JSON.stringify({
         messages: [{ content: "hi", role: "user" }],
-        model: "openai/deepseek-v4-flash",
+        model: "openai/deepseek-flash",
       }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
@@ -252,7 +252,7 @@ describe("stagehand-llm-proxy", () => {
         ],
         created: Math.floor(Date.now() / 1000),
         id: "chatcmpl-usage",
-        model: "deepseek-v4-flash",
+        model: "deepseek-flash",
         object: "chat.completion",
         usage: {
           completion_tokens: 3,
@@ -274,7 +274,7 @@ describe("stagehand-llm-proxy", () => {
     const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
       body: JSON.stringify({
         messages: [{ content: "act", role: "user" }],
-        model: "openai/deepseek-v4-flash",
+        model: "openai/deepseek-flash",
       }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
@@ -298,13 +298,13 @@ describe("chatCompletionForStagehandProxy nesting", () => {
     } = await import("../-utils/llm-client/index.ts");
 
     assert.equal(
-      resolveNestedModelForStagehandProxy("openai/deepseek-v4-flash"),
-      "deepseek-v4-flash",
+      resolveNestedModelForStagehandProxy("openai/deepseek-flash"),
+      "deepseek-flash",
     );
 
     const params = buildStagehandProxyLlmCreateParams({
       messages: [{ content: "hi", role: "user" }],
-      model: "openai/deepseek-v4-flash",
+      model: "openai/deepseek-flash",
       tool_choice: "required",
       tools: [
         {
@@ -318,7 +318,7 @@ describe("chatCompletionForStagehandProxy nesting", () => {
     });
 
     assert.deepEqual(params.thinking, { type: "disabled" });
-    assert.equal(params.model, "deepseek-v4-flash");
+    assert.equal(params.model, "deepseek-flash");
     assert.equal(params.stream, false);
     assert.equal(params.tool_choice, "required");
   });
@@ -330,13 +330,13 @@ describe("chatCompletionForStagehandProxy nesting", () => {
     } = await import("../-utils/llm-client/index.ts");
 
     assert.equal(
-      resolveNestedModelForStagehandProxy("openai/deepseek-v4-flash", "openai/gpt-4o-mini"),
+      resolveNestedModelForStagehandProxy("openai/deepseek-flash", "openai/gpt-4o-mini"),
       "gpt-4o-mini",
     );
 
     const params = buildStagehandProxyLlmCreateParams({
       messages: [{ content: "hi", role: "user" }],
-      model: "openai/deepseek-v4-flash",
+      model: "openai/deepseek-flash",
       modelOverride: "custom-model",
     });
 

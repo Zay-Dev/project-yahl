@@ -4,7 +4,8 @@ ARG OMNIFLEX_APP_DIR=project-yahl
 
 WORKDIR /omniflex
 
-RUN corepack enable
+RUN corepack enable \
+  && corepack prepare pnpm@10.33.0 --activate
 
 COPY package.json pnpm-workspace.yaml ./
 COPY ${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/
@@ -16,4 +17,6 @@ COPY ${OMNIFLEX_APP_DIR}/llm-proxy ./${OMNIFLEX_APP_DIR}/llm-proxy
 
 WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/llm-proxy
 
-CMD ["pnpm", "run", "dev"]
+RUN pnpm run build
+
+CMD ["node", "dist/index.js"]

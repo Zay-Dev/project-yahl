@@ -49,7 +49,7 @@ const domainFallbackChains = {
 };
 
 const defaultModels = {
-  execute: 'deepseek-v4-flash',
+  execute: 'deepseek-flash',
   plan: 'deepseek-v4-pro',
   review: 'deepseek-v4-pro',
 };

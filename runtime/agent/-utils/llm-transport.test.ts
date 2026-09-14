@@ -9,7 +9,7 @@ import {
 
 describe("llm-transport", () => {
   it("prefixes bare model names for Stagehand", () => {
-    assert.equal(normalizeStagehandModel("deepseek-v4-flash"), "openai/deepseek-v4-flash");
+    assert.equal(normalizeStagehandModel("deepseek-flash"), "openai/deepseek-flash");
     assert.equal(normalizeStagehandModel("deepseek/deepseek-chat"), "deepseek/deepseek-chat");
   });
 

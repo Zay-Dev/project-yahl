@@ -13,8 +13,7 @@ RUN apt-get update \
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 
-RUN npx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
-  && npx playwright@${PLAYWRIGHT_VERSION} install chromium
+RUN npx playwright@${PLAYWRIGHT_VERSION} install-deps chromium
 
 COPY package.json pnpm-workspace.yaml ./
 COPY ${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DIR}/
@@ -34,7 +33,11 @@ COPY ${OMNIFLEX_APP_DIR}/runtime/orchestrator ./orchestrator
 COPY ${OMNIFLEX_APP_DIR}/runtime/shared ./shared
 COPY ${OMNIFLEX_APP_DIR}/runtime/tsconfig.json ./tsconfig.json
 
-RUN node ./agent/resolve-chrome-path.cjs > /opt/chrome-path
+RUN pnpm --filter @project-yahl/runtime exec playwright install chromium \
+  && CHROME="$(find /opt/ms-playwright -type f -name chrome | head -n1)" \
+  && test -n "$CHROME" \
+  && test -x "$CHROME" \
+  && printf '%s' "$CHROME" > /opt/chrome-path
 
 RUN chmod +x agent/docker-entrypoint.sh
 

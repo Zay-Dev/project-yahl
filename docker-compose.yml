@@ -64,7 +64,7 @@ services:
       HOST_REPO_ROOT: ${HOST_REPO_ROOT}
       MONGODB_URI: mongodb://mongo:27017/yahl
       OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
-      OMNIFLEX_BUILD_CONTEXT: /omniflex
+      OMNIFLEX_BUILD_CONTEXT: ${OMNIFLEX_BUILD_CONTEXT:-}
       ONECLI_DASHBOARD_URL: http://onecli:10254
       PLATFORM_APPROVAL_TOKEN: ${PLATFORM_APPROVAL_TOKEN:-}
       REDIS_URL: redis://redis:6379
@@ -90,6 +90,7 @@ services:
     volumes:
       - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
       - ./.env.nixery:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env.nixery:ro
+      - ${HOST_REPO_ROOT}/..:${HOST_REPO_ROOT}/..:ro
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
       - ./data/workspace:/workspace
       - ./data/mastermind:/data/mastermind
@@ -125,12 +126,9 @@ services:
       LLM_CALL_RETRY_MAX: ${LLM_CALL_RETRY_MAX:-3}
       LLM_PROXY_PORT: "4100"
       LLM_PROXY_TOKEN: ${LLM_PROXY_TOKEN:-}
-      NODE_EXTRA_CA_CERTS: /onecli/combined-ca.pem
       NODE_USE_ENV_PROXY: "1"
       NO_PROXY: localhost,127.0.0.1,::1,redis,server,mongo,onecli,worker,llm-proxy,host.docker.internal
       SESSION_API_BASE_URL: http://server:4000
-      SSL_CERT_FILE: /onecli/combined-ca.pem
-      DENO_CERT: /onecli/combined-ca.pem
       ONECLI_DASHBOARD_URL: http://onecli:10254
       no_proxy: localhost,127.0.0.1,::1,redis,server,mongo,onecli,worker,llm-proxy,host.docker.internal
     extra_hosts:
@@ -149,7 +147,6 @@ services:
       retries: 5
       start_period: 20s
     volumes:
-      - ./llm-proxy:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/llm-proxy
       - ./runtime/.onecli:/onecli:ro
 
   worker:
@@ -182,8 +179,6 @@ services:
       - ./data/workspace:/workspace
       - ./data/whatsapp_auth:/whatsapp/auth
       - ./data/whatsapp_inbox:/whatsapp/inbox
-      - ./worker:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker
-      - /omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/worker/node_modules
       - ${SANITIZE_CHANNEL_MESSAGE:-./worker/sanitize-channel-message.mjs}:/sanitize/sanitize-channel-message.mjs:ro
     depends_on:
       server:

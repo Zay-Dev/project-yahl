@@ -35,7 +35,7 @@ Optional per-AI-stage overrides (defaults apply when omitted):
 
 ```yaml
 stagehand:
-  model: deepseek-v4-flash              # optional — default STAGEHAND_MODEL / LLM_MODEL
+  model: deepseek-flash              # optional — default STAGEHAND_MODEL / LLM_MODEL
   apiBaseUrl: https://api.deepseek.com  # optional — default LLM_BASE_URL
 ```
 

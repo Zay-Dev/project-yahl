@@ -2,7 +2,7 @@
 
 Vision image-to-text via `/nixery(image-to-text, source: ~/path, background: …, userPrompt?: …)`.
 
-Uses DeepSeek vision (`deepseek-v4-flash-vision-exp`). Supports JPEG, PNG, GIF, WebP.
+Uses DeepSeek vision (`deepseek-flash`). Supports JPEG, PNG, GIF, WebP.
 
 ## Tool call
 

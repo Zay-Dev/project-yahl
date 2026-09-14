@@ -5,7 +5,8 @@ ARG PLAYWRIGHT_VERSION=1.60.0
 
 WORKDIR /omniflex
 
-RUN corepack enable
+RUN corepack enable \
+  && corepack prepare pnpm@10.33.0 --activate
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 
@@ -22,6 +23,9 @@ RUN pnpm install --filter @project-yahl/worker...
 COPY ${OMNIFLEX_APP_DIR}/shared ./${OMNIFLEX_APP_DIR}/shared
 COPY ${OMNIFLEX_APP_DIR}/worker ./${OMNIFLEX_APP_DIR}/worker
 
+RUN pnpm --filter @project-yahl/shared run build \
+  && pnpm --filter @project-yahl/worker run build
+
 WORKDIR /omniflex/${OMNIFLEX_APP_DIR}/worker
 
 RUN CHROME="$(find /opt/ms-playwright -type f -name chrome | head -n1)" \
@@ -33,4 +37,4 @@ RUN CHROME="$(find /opt/ms-playwright -type f -name chrome | head -n1)" \
 RUN chmod +x docker-entrypoint.sh
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["pnpm", "run", "dev"]
+CMD ["node", "dist/index.js"]

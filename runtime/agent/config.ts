@@ -103,14 +103,14 @@ export const config = {
 
   apiBaseUrl: normalizeBaseUrl(rawBaseUrl),
   apiKey: process.env.LLM_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.API_KEY || "",
-  model: process.env.LLM_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
+  model: process.env.LLM_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-flash",
   providerDomain: normalizeProviderDomain(rawProviderDomain),
   stagehandLiveview: isTruthyEnv(process.env.STAGEHAND_LIVEVIEW),
   stagehandModel: normalizeStagehandModel(
     process.env.STAGEHAND_MODEL?.trim()
       || process.env.LLM_MODEL
       || process.env.DEEPSEEK_MODEL
-      || "deepseek-v4-flash",
+      || "deepseek-flash",
   ),
   redisUrl: process.env.AGENT_REDIS_URL || "redis://127.0.0.1:6379",
   bashTimeoutMs: Math.max(

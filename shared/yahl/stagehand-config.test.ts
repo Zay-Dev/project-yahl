@@ -9,14 +9,14 @@ describe('validateYahlStage stagehand', () => {
       logic: 'const x = 1;',
       stagehand: {
         apiBaseUrl: 'https://api.example.com',
-        model: 'deepseek-v4-flash',
+        model: 'deepseek-flash',
         preferScreenshot: true,
       },
     });
 
     assert.deepEqual(stage.stagehand, {
       apiBaseUrl: 'https://api.example.com',
-      model: 'deepseek-v4-flash',
+      model: 'deepseek-flash',
       preferScreenshot: true,
     });
   });

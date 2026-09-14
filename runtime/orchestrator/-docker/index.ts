@@ -1,7 +1,7 @@
 import { execSync } from "child_process";
 import path from "path";
 
-import { composeFile, repoRoot } from "./paths";
+import { resolveDockerHostRepoRoot } from "./paths";
 
 export {
   buildComposeDownArgs,
@@ -29,15 +29,44 @@ export { resolvePublishedVncPort } from './resolve-published-vnc-port';
 
 export { abandonBrowserSession, pruneIdleBrowsersAndAbandon } from './abandon-browser-session';
 
-const BROWSER_COMPOSE_FILE = path.join(repoRoot, 'docker-compose.browser.yml');
+const resolveOmniflexBuildContext = () => {
+  const override = process.env.OMNIFLEX_BUILD_CONTEXT?.trim();
+
+  if (override) {
+    return path.resolve(override);
+  }
+
+  const hostRepoRoot = process.env.HOST_REPO_ROOT?.trim();
+
+  if (!hostRepoRoot) {
+    throw new Error(
+      'HOST_REPO_ROOT is required for agent/browser image builds (Omniflex context = dirname(HOST_REPO_ROOT))',
+    );
+  }
+
+  return path.resolve(hostRepoRoot, '..');
+};
+
+const composeBuildEnv = (buildContext: string, hostRepoRoot: string) => ({
+  ...process.env,
+  OMNIFLEX_BUILD_CONTEXT: buildContext,
+  HOST_REPO_ROOT: hostRepoRoot,
+});
 
 export const buildBrowser = () => {
   try {
     process.env.BROWSER_IMAGE = process.env.BROWSER_IMAGE || 'project-yahl-browser:latest';
 
+    const hostRepoRoot = resolveDockerHostRepoRoot();
+    const buildContext = resolveOmniflexBuildContext();
+    const hostComposeFile = path.join(hostRepoRoot, 'docker-compose.browser.yml');
+
+    console.log(`[orchestrator] browser build context=${buildContext}`);
+    console.log(`[orchestrator] browser compose file=${hostComposeFile}`);
     console.log('Running: docker compose build browser...');
-    execSync(`docker compose -f "${BROWSER_COMPOSE_FILE}" build browser`, {
-      cwd: repoRoot,
+    execSync(`docker compose -f "${hostComposeFile}" build browser`, {
+      cwd: hostRepoRoot,
+      env: composeBuildEnv(buildContext, hostRepoRoot),
       stdio: 'inherit',
     });
     console.log('Docker compose build completed for browser.');
@@ -51,9 +80,16 @@ export const buildAgent = () => {
   try {
     process.env.AGENT_IMAGE = process.env.AGENT_IMAGE || "project-yahl-agent:latest";
 
+    const hostRepoRoot = resolveDockerHostRepoRoot();
+    const buildContext = resolveOmniflexBuildContext();
+    const hostComposeFile = path.join(hostRepoRoot, 'docker-compose.agent.yml');
+
+    console.log(`[orchestrator] agent build context=${buildContext}`);
+    console.log(`[orchestrator] agent compose file=${hostComposeFile}`);
     console.log("Running: docker compose build agent...");
-    execSync(`docker compose -f "${composeFile}" build agent`, {
-      cwd: repoRoot,
+    execSync(`docker compose -f "${hostComposeFile}" build agent`, {
+      cwd: hostRepoRoot,
+      env: composeBuildEnv(buildContext, hostRepoRoot),
       stdio: "inherit",
     });
     console.log("Docker compose build completed for agent.");

@@ -8,14 +8,22 @@ if [ -z "${CHROME_PATH:-}" ] && [ -f /opt/chrome-path ]; then
   export CHROME_PATH="$(cat /opt/chrome-path)"
 fi
 
-if [ -z "${CHROME_PATH:-}" ]; then
+if [ -z "${CHROME_PATH:-}" ] || [ ! -x "${CHROME_PATH}" ]; then
   export CHROME_PATH="$(node ./agent/resolve-chrome-path.cjs)"
 fi
 
-if [ ! -x "${CHROME_PATH}" ]; then
-  echo "[stagehand] FATAL: CHROME_PATH not executable: ${CHROME_PATH}" >&2
-  echo "[stagehand] Hint: rebuild agent image after Dockerfile changes" >&2
-  exit 1
+if [ ! -x "${CHROME_PATH:-}" ]; then
+  if [ -n "${YAHL_BROWSER_CDP_URL:-}" ]; then
+    echo "[stagehand] CHROME_PATH not executable (${CHROME_PATH:-<empty>}); CDP sidecar mode — skipping local Chrome" >&2
+    unset CHROME_PATH
+  else
+    echo "[stagehand] FATAL: CHROME_PATH not executable: ${CHROME_PATH:-<empty>}" >&2
+    if [ -n "${CHROME_PATH:-}" ] && [ ! -f "${CHROME_PATH}" ]; then
+      echo "[stagehand] path missing on disk (likely Playwright revision skew vs cached browser install)" >&2
+    fi
+    echo "[stagehand] Hint: rebuild agent image after Dockerfile changes" >&2
+    exit 1
+  fi
 fi
 
 if [ -n "${AGENT_SESSION_HOME:-}" ]; then
