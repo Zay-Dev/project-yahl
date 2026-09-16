@@ -91,6 +91,7 @@ services:
       - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
       - ./.env.nixery:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env.nixery:ro
       - ${HOST_REPO_ROOT}/..:${HOST_REPO_ROOT}/..:ro
+      - ./data/workspace:${HOST_REPO_ROOT}/data/workspace
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
       - ./data/workspace:/workspace
       - ./data/mastermind:/data/mastermind
