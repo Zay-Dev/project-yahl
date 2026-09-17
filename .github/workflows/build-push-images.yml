@@ -1,0 +1,76 @@
+name: Build and push YAHL images
+
+on:
+  push:
+    branches:
+      - 'release/**'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: server
+            dockerfile: project-yahl/server/Dockerfile
+            image: yahl-server
+          - name: web
+            dockerfile: project-yahl/web/Dockerfile
+            image: yahl-web
+            build_args: VITE_API_BASE_URL=/api VITE_CODE_SERVER_PUBLIC_URL=/code
+          - name: worker
+            dockerfile: project-yahl/worker/Dockerfile
+            image: yahl-worker
+          - name: llm-proxy
+            dockerfile: project-yahl/llm-proxy/Dockerfile
+            image: yahl-llm-proxy
+    steps:
+      - name: Resolve image version tag
+        id: version
+        run: |
+          ref="${GITHUB_REF_NAME}"
+          if [[ "$ref" == release/* ]]; then
+            echo "tag=${ref#release/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${ref}" >> "$GITHUB_OUTPUT"
+          fi
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "registry=ghcr.io/${owner}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Omniflex
+        uses: actions/checkout@v4
+        with:
+          repository: Zay-Dev/Omniflex
+          path: omniflex
+
+      - name: Checkout project-yahl
+        uses: actions/checkout@v4
+        with:
+          path: omniflex/project-yahl
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: omniflex
+          file: omniflex/${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ steps.version.outputs.registry }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ steps.version.outputs.registry }}/${{ matrix.image }}:${{ steps.version.outputs.tag }}
+          build-args: |
+            OMNIFLEX_APP_DIR=project-yahl
+            ${{ matrix.build_args }}

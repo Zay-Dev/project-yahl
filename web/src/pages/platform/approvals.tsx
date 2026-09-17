@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
 
 type TProposal = {
   kind: 'notification' | 'setting' | 'knowledge_transfer';
