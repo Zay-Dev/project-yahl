@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-
-const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+import { API_BASE_URL } from '@/providers/constants';
 
 type TProposal = {
   kind: 'notification' | 'setting' | 'knowledge_transfer';
@@ -19,7 +18,7 @@ export function PlatformApprovalsPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${apiBase}/api/platform/proposals/pending`);
+      const res = await fetch(`${API_BASE_URL}/api/platform/proposals/pending`);
       const data = await res.json() as { data?: TProposal[] };
 
       setItems(Array.isArray(data) ? data as TProposal[] : data.data ?? []);
@@ -39,7 +38,7 @@ export function PlatformApprovalsPage() {
       return;
     }
 
-    const res = await fetch(`${apiBase}/api/platform/proposals/${proposalId}/approve`, {
+    const res = await fetch(`${API_BASE_URL}/api/platform/proposals/${proposalId}/approve`, {
       headers: { 'X-Approval-Token': token.trim() },
       method: 'POST',
     });
@@ -53,7 +52,7 @@ export function PlatformApprovalsPage() {
   };
 
   const reject = async (proposalId: string) => {
-    await fetch(`${apiBase}/api/platform/proposals/${proposalId}/reject`, { method: 'POST' });
+    await fetch(`${API_BASE_URL}/api/platform/proposals/${proposalId}/reject`, { method: 'POST' });
     await load();
   };
 
