@@ -154,13 +154,19 @@ Example: `pnpm run orchestrate -- --session-id my-debug-session`
 
 ### OneCLI setup
 
+See **[onecli-api.md](./onecli-api.md)** for ports, secrets, and the REST surface YAHL uses.
+
+**Local**
+
 1. Start infra: `pnpm run compose:up`
-2. Open OneCLI dashboard at `http://127.0.0.1:10254`
-3. Create an agent identity and copy its token
-4. Add provider credentials to OneCLI vault with correct host/path patterns
+2. Open OneCLI dashboard at `http://127.0.0.1:10254` (optional) or use **Platform → OneCLI secrets** once the server is up
+3. Create an agent identity and copy its token (or let tenant seed write `ONECLI_API_KEY`)
+4. Add / update provider credentials (Deepseek, KuaiPao, …) with correct host/path patterns
 5. Set `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` in `.env`
 6. Run one orchestrator session to bootstrap shared override files under `runtime/.onecli/`
 7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` as placeholders only. Browser automation uses Stagehand (local Chromium in the agent container; see [`runtime/orchestrator/SKILLS/stagehand/SKILL.md`](runtime/orchestrator/SKILLS/stagehand/SKILL.md)).
+
+**SaaS tenants:** OneCLI UI is not public. Bootstrap seeds placeholder secrets; operators set real keys in the YAHL web app at `/platform/onecli`.
 
 ### WhatsApp + outbound channels
 

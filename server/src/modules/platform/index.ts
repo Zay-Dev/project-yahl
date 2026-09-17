@@ -19,6 +19,11 @@ import {
 } from './use-cases/work-read';
 import { getWhatsAppChannel } from './use-cases/channel-whatsapp-read';
 import { putWhatsAppChannel } from './use-cases/channel-whatsapp-write';
+import {
+  createOneCliSecret,
+  listOneCliSecrets,
+  updateOneCliSecret,
+} from './use-cases/onecli-secrets';
 
 exposedRoute('/api/platform/proposals/notifications')
   .post('/', createNotificationProposal);
@@ -56,6 +61,11 @@ exposedRoute('/api/platform/cron/jobs')
 
 exposedRoute('/api/platform/channels')
   .get('/whatsapp', getWhatsAppChannel);
+
+exposedRoute('/api/platform/onecli/secrets')
+  .get('/', listOneCliSecrets)
+  .post('/', createOneCliSecret)
+  .patch('/:id', updateOneCliSecret);
 
 exposedRoute('/api/platform/internal')
   .put('/whatsapp', putWhatsAppChannel);

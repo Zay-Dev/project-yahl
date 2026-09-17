@@ -11,6 +11,7 @@ import { PlatformChannelsPage } from "@/pages/platform/channels";
 import { CronJobsPage } from "@/pages/platform/cron-jobs";
 import { CronJobCreatePage } from "@/pages/platform/cron-jobs/create";
 import { CronJobEditPage } from "@/pages/platform/cron-jobs/edit";
+import { PlatformOneCliPage } from "@/pages/platform/onecli";
 import { SessionDetailPage } from "@/pages/sessions/detail";
 import { PendingQuestionsPage } from "@/pages/sessions/pending-questions";
 import { SessionsPage } from "@/pages/sessions";
@@ -60,6 +61,7 @@ export function App() {
             <Route path="tasks/:taskId" element={<TaskDetailPage />} />
             <Route path="platform/approvals" element={<PlatformApprovalsPage />} />
             <Route path="platform/channels" element={<PlatformChannelsPage />} />
+            <Route path="platform/onecli" element={<PlatformOneCliPage />} />
             <Route path="platform/cron-jobs" element={<CronJobsPage />} />
             <Route path="platform/cron-jobs/new" element={<CronJobCreatePage />} />
             <Route path="platform/cron-jobs/:jobId" element={<CronJobEditPage />} />

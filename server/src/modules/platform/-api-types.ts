@@ -64,3 +64,34 @@ export type TRequestPutWhatsAppChannelBody = {
   qrDataUrl?: string;
   status: 'connecting' | 'authenticated' | 'pending' | 'ready' | 'disconnected';
 };
+
+export type TResponseOneCliSecret = {
+  createdAt?: string;
+  headerName?: string;
+  hostPattern: string;
+  id: string;
+  name: string;
+  pathPattern?: string;
+  preview?: string;
+  type: string;
+  valueFormat?: string;
+};
+
+export type TResponseOneCliSecrets = {
+  items: TResponseOneCliSecret[];
+};
+
+export type TRequestOneCliSecretParams = {
+  id: string;
+};
+
+export type TRequestUpdateOneCliSecretBody = {
+  value: string;
+};
+
+export type TRequestCreateOneCliSecretBody = {
+  hostPattern: string;
+  name: string;
+  pathPattern?: string;
+  value: string;
+};

@@ -1,15 +1,19 @@
 import type {
   TRequestCreateCronJobBody,
   TRequestUpdateCronJobBody,
+  TRequestUpdateOneCliSecretBody,
   TResponseCronJob,
   TResponseCronJobListItem,
   TResponseCronJobMutation,
   TResponseCronJobs,
+  TResponseOneCliSecret,
+  TResponseOneCliSecrets,
 } from "@project-yahl/server/modules/platform/-api-types";
 
 import { API_BASE_URL } from "@/providers/constants";
 
 const cronJobsBase = `${API_BASE_URL}/api/platform/cron/jobs`;
+const oneCliSecretsBase = `${API_BASE_URL}/api/platform/onecli/secrets`;
 
 const parsePayload = <T>(json: T & { data?: T }) => json.data ?? json;
 
@@ -93,6 +97,38 @@ export const deleteCronJob = async (id: string): Promise<TResponseCronJobMutatio
   }
 
   const json = await res.json() as TResponseCronJobMutation & { data?: TResponseCronJobMutation };
+
+  return parsePayload(json);
+};
+
+export const listOneCliSecrets = async (): Promise<TResponseOneCliSecret[]> => {
+  const res = await fetch(oneCliSecretsBase);
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, `Failed to list OneCLI secrets: ${res.status}`));
+  }
+
+  const json = await res.json() as TResponseOneCliSecrets & { data?: TResponseOneCliSecrets };
+  const payload = parsePayload(json);
+
+  return payload.items ?? [];
+};
+
+export const updateOneCliSecret = async (
+  id: string,
+  body: TRequestUpdateOneCliSecretBody,
+): Promise<TResponseOneCliSecret> => {
+  const res = await fetch(`${oneCliSecretsBase}/${encodeURIComponent(id)}`, {
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+    method: "PATCH",
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, `Failed to update secret: ${res.status}`));
+  }
+
+  const json = await res.json() as TResponseOneCliSecret & { data?: TResponseOneCliSecret };
 
   return parsePayload(json);
 };

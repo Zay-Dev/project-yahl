@@ -22,6 +22,7 @@ import {
   FolderOpenIcon,
   GalleryVerticalEndIcon,
   HeartPulseIcon,
+  KeyRoundIcon,
   LayoutDashboardIcon,
   ListIcon,
   ListTodoIcon,
@@ -115,6 +116,14 @@ export function AppSidebar({ sessions, ...props }: TAppSidebarProps) {
       url: "/platform/channels",
       icon: (
         <MessagesSquareIcon
+        />
+      ),
+    },
+    {
+      title: "OneCLI secrets",
+      url: "/platform/onecli",
+      icon: (
+        <KeyRoundIcon
         />
       ),
     },
