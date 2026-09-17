@@ -56,6 +56,13 @@ jobs:
         with:
           path: omniflex/project-yahl
 
+      - name: Ensure project-yahl in pnpm workspace
+        run: |
+          workspace="omniflex/pnpm-workspace.yaml"
+          if [[ -f "$workspace" ]] && ! grep -qE "project-yahl/\*\*" "$workspace"; then
+            printf "\n  - 'project-yahl/**'\n" >> "$workspace"
+          fi
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
