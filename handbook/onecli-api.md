@@ -49,8 +49,9 @@ Verified against Community ~1.19:
 | Method | Path | Use |
 |--------|------|-----|
 | `GET` | `/api/secrets` | List (platform UI + seed idempotency) |
-| `POST` | `/api/secrets` | Create generic secret (seed / optional create API) |
+| `POST` | `/api/secrets` | Create generic secret (seed / Platform custom add) |
 | `PATCH` | `/api/secrets/:id` | Update value (platform UI) |
+| `DELETE` | `/api/secrets/:id` | Delete custom secret only (seeded names blocked in YAHL) |
 | `GET`/`POST` | `/api/agents`, grants | Seed best-effort agent + grant |
 | `GET` | `/api/user/api-key` | Seed may discover a key |
 | `GET` | `/api/container-config` | Proxy env + CA (SDK / orchestrator) |
@@ -80,6 +81,8 @@ Agent / llm-proxy  →  HTTPS_PROXY  →  onecli:10255  →  provider APIs
 | Tenant seed | `yahl-saas/yahl-tenant-infra/compose/scripts/onecli-seed.sh` (from `start-stack.sh`) |
 
 Bootstrap seeds **Deepseek** (`api.deepseek.com`) and **KuaiPao AI** (`kuaipao.ai`, `/v1/*`) with value `placeholder`. Replace keys in **Platform → OneCLI secrets**.
+
+Those seeded names are **non-deletable** (`isProtected` on the list API). Operators can **add custom** secrets (name / host / optional path / value) and delete only those custom entries. Creating a secret named `Deepseek` or `KuaiPao AI` is rejected.
 
 ## Local vs SaaS
 

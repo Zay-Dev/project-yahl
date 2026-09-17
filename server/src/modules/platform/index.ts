@@ -21,6 +21,7 @@ import { getWhatsAppChannel } from './use-cases/channel-whatsapp-read';
 import { putWhatsAppChannel } from './use-cases/channel-whatsapp-write';
 import {
   createOneCliSecret,
+  deleteOneCliSecret,
   listOneCliSecrets,
   updateOneCliSecret,
 } from './use-cases/onecli-secrets';
@@ -65,7 +66,8 @@ exposedRoute('/api/platform/channels')
 exposedRoute('/api/platform/onecli/secrets')
   .get('/', listOneCliSecrets)
   .post('/', createOneCliSecret)
-  .patch('/:id', updateOneCliSecret);
+  .patch('/:id', updateOneCliSecret)
+  .delete('/:id', deleteOneCliSecret);
 
 exposedRoute('/api/platform/internal')
   .put('/whatsapp', putWhatsAppChannel);

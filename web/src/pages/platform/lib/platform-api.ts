@@ -1,5 +1,6 @@
 import type {
   TRequestCreateCronJobBody,
+  TRequestCreateOneCliSecretBody,
   TRequestUpdateCronJobBody,
   TRequestUpdateOneCliSecretBody,
   TResponseCronJob,
@@ -131,4 +132,32 @@ export const updateOneCliSecret = async (
   const json = await res.json() as TResponseOneCliSecret & { data?: TResponseOneCliSecret };
 
   return parsePayload(json);
+};
+
+export const createOneCliSecret = async (
+  body: TRequestCreateOneCliSecretBody,
+): Promise<TResponseOneCliSecret> => {
+  const res = await fetch(oneCliSecretsBase, {
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, `Failed to create secret: ${res.status}`));
+  }
+
+  const json = await res.json() as TResponseOneCliSecret & { data?: TResponseOneCliSecret };
+
+  return parsePayload(json);
+};
+
+export const deleteOneCliSecret = async (id: string): Promise<void> => {
+  const res = await fetch(`${oneCliSecretsBase}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, `Failed to delete secret: ${res.status}`));
+  }
 };

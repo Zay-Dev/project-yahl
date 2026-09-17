@@ -70,6 +70,7 @@ export type TResponseOneCliSecret = {
   headerName?: string;
   hostPattern: string;
   id: string;
+  isProtected: boolean;
   name: string;
   pathPattern?: string;
   preview?: string;

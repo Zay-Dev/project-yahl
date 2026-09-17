@@ -10,6 +10,7 @@ import type {
   TResponseOneCliSecrets,
 } from '../-api-types';
 import { normalizeSecretList, oneCliRequest, type TOneCliSecretRaw } from '../-onecli-client';
+import { isProtectedOneCliSecretName } from '../-onecli-protected';
 
 const paramsSchema = Joi.object<TRequestOneCliSecretParams>({
   id: Joi.string().trim().required(),
@@ -26,17 +27,28 @@ const createBodySchema = Joi.object<TRequestCreateOneCliSecretBody>({
   value: Joi.string().trim().min(1).required(),
 });
 
-const toResponse = (raw: TOneCliSecretRaw): TResponseOneCliSecret => ({
-  createdAt: raw.createdAt,
-  headerName: raw.injectionConfig?.headerName,
-  hostPattern: raw.hostPattern || '',
-  id: raw.id || '',
-  name: raw.name || '',
-  pathPattern: raw.pathPattern ?? undefined,
-  preview: raw.preview,
-  type: raw.type || 'generic',
-  valueFormat: raw.injectionConfig?.valueFormat,
-});
+const toResponse = (raw: TOneCliSecretRaw): TResponseOneCliSecret => {
+  const name = raw.name || '';
+
+  return {
+    createdAt: raw.createdAt,
+    headerName: raw.injectionConfig?.headerName,
+    hostPattern: raw.hostPattern || '',
+    id: raw.id || '',
+    isProtected: isProtectedOneCliSecretName(name),
+    name,
+    pathPattern: raw.pathPattern ?? undefined,
+    preview: raw.preview,
+    type: raw.type || 'generic',
+    valueFormat: raw.injectionConfig?.valueFormat,
+  };
+};
+
+const findSecretById = async (id: string): Promise<TOneCliSecretRaw | undefined> => {
+  const { data } = await oneCliRequest<unknown>('GET', '/secrets');
+
+  return normalizeSecretList(data).find((item) => item.id === id);
+};
 
 export const listOneCliSecrets = [
   Middlewares.Chainable
@@ -71,6 +83,10 @@ export const createOneCliSecret = [
       body: joi.getValidatedOrThrow(createBodySchema, req.body),
     }))
     .next(async (express, { body }) => {
+      if (isProtectedOneCliSecretName(body.name)) {
+        throw errors.badRequest('Cannot create a secret with a seeded OneCLI name');
+      }
+
       const payload: Record<string, unknown> = {
         hostPattern: body.hostPattern,
         injectionConfig: {
@@ -89,6 +105,28 @@ export const createOneCliSecret = [
       const { data } = await oneCliRequest<TOneCliSecretRaw>('POST', '/secrets', payload);
 
       express.respondOne<TResponseOneCliSecret>(toResponse(data));
+    })
+    .toMiddleware(),
+];
+
+export const deleteOneCliSecret = [
+  Middlewares.Chainable
+    .validate(({ req }) => ({
+      params: joi.getValidatedOrThrow(paramsSchema, req.params),
+    }))
+    .next(async (express, { params }) => {
+      const existing = await findSecretById(params.id);
+      if (!existing?.id) {
+        throw errors.notFound('OneCLI secret not found');
+      }
+
+      if (isProtectedOneCliSecretName(existing.name || '')) {
+        throw errors.badRequest('Cannot delete seeded OneCLI secret');
+      }
+
+      await oneCliRequest('DELETE', `/secrets/${params.id}`);
+
+      express.respondOne({ id: params.id, ok: true as const });
     })
     .toMiddleware(),
 ];
