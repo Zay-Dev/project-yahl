@@ -24,7 +24,9 @@ jobs:
           - name: web
             dockerfile: project-yahl/web/Dockerfile
             image: yahl-web
-            build_args: VITE_API_BASE_URL=/api VITE_CODE_SERVER_PUBLIC_URL=/code
+            build_args: |
+              VITE_API_BASE_URL=/api
+              VITE_CODE_SERVER_PUBLIC_URL=/code
           - name: worker
             dockerfile: project-yahl/worker/Dockerfile
             image: yahl-worker
