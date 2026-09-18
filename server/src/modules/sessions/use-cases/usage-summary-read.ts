@@ -1,21 +1,9 @@
 import Joi from 'joi';
 
-import { Repository } from '@/core';
-
 import { Middlewares } from '@omni-infra/express';
 
-const normalizeControlPlaneToken = (value: string) => value.replace(/\s+/g, '');
-
-const assertControlPlaneServiceToken = (headerValue: string | string[] | undefined): void => {
-  const expected = normalizeControlPlaneToken(process.env.CONTROL_PLANE_SERVICE_TOKEN ?? '');
-  const provided = typeof headerValue === 'string'
-    ? normalizeControlPlaneToken(headerValue)
-    : '';
-
-  if (!expected || provided !== expected) {
-    throw errors.custom('invalid control plane token', 401);
-  }
-};
+import { Repository } from '@/core';
+import { assertControlPlaneServiceToken } from '@/modules/sessions/-control-plane-token';
 
 export const getUsageSummary = [
   Middlewares.Chainable
