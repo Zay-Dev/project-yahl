@@ -31,10 +31,6 @@ export const resolveOneCliDashboardUrl = (raw: string) => {
   try {
     const parsed = new URL(trimmed);
 
-    if (parsed.hostname === 'onecli') {
-      parsed.hostname = '127.0.0.1';
-    }
-
     return parsed.toString().replace(/\/+$/, '');
   } catch {
     return trimmed.replace(/\/+$/, '');

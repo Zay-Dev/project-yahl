@@ -4,10 +4,10 @@ import { describe, it } from 'node:test';
 import { resolveOneCliDashboardUrl } from '@/orchestrator/-docker/clients/api';
 
 describe('resolveOneCliDashboardUrl', () => {
-  it('rewrites docker service hostname to localhost', () => {
+  it('keeps the docker service hostname', () => {
     assert.equal(
       resolveOneCliDashboardUrl('http://onecli:10254'),
-      'http://127.0.0.1:10254',
+      'http://onecli:10254',
     );
   });
 
