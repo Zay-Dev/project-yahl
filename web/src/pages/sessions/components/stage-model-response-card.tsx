@@ -40,7 +40,7 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
       </div>
       {Object.hasOwn(response, "usage") ? (
         <div className="mt-2">
-          <TokenStatsRow domains={domains} totals={response.usage} />
+          <TokenStatsRow domains={domains} totals={response.usage ?? null} />
         </div>
       ) : null}
       {hasPreview ? (

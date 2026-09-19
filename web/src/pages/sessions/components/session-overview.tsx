@@ -62,7 +62,7 @@ const UsageGroup = ({
           byModel={byModel}
           compact={false}
           domains={domains}
-          totals={totals}
+          totals={totals ?? null}
         />
       </div>
     </div>

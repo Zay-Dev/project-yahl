@@ -172,7 +172,7 @@ const StageRow = ({
           <span>{item.toolCallCount} tools</span>
         </div>
         {Object.hasOwn(item, "tokenTotals") ? (
-          <TokenStatsRow byModel={item.byModel} domains={item.domains} totals={item.tokenTotals} />
+          <TokenStatsRow byModel={item.byModel} domains={item.domains} totals={item.tokenTotals ?? null} />
         ) : null}
       </div>
     </CollapsibleTrigger>
@@ -240,7 +240,7 @@ const NestedGroupCard = ({
             <span>{row.childRequestIds.length} stages</span>
           </div>
           {Object.hasOwn(item, "tokenTotals") ? (
-            <TokenStatsRow byModel={item.byModel} domains={item.domains} totals={item.tokenTotals} />
+            <TokenStatsRow byModel={item.byModel} domains={item.domains} totals={item.tokenTotals ?? null} />
           ) : null}
         </div>
       </div>
