@@ -17,23 +17,9 @@ const ONECLI_PROXY_HOST = 'onecli:10255';
 export const remapOneCliProxyHost = (value: string) =>
   value.replaceAll(LEGACY_ONECLI_PROXY_HOST, ONECLI_PROXY_HOST);
 
-const remapTransportEnvValue = (value: string) => {
-  const remapped = remapOneCliProxyHost(value);
-
-  if (remapped === '/tmp/onecli-gateway-ca.pem') {
-    return '/onecli/proxy-ca.pem';
-  }
-
-  if (remapped === '/tmp/onecli-combined-ca.pem') {
-    return '/onecli/combined-ca.pem';
-  }
-
-  return remapped;
-};
-
 const remapTransportEnv = (env: Record<string, string>) =>
   Object.fromEntries(
-    Object.entries(env).map(([key, value]) => [key, remapTransportEnvValue(value)]),
+    Object.entries(env).map(([key, value]) => [key, remapOneCliProxyHost(value)]),
   );
 
 export const agentNoProxy = 'localhost,127.0.0.1,::1,redis,server,mongo,onecli,worker,llm-proxy,host.docker.internal';
