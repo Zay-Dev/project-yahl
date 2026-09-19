@@ -22,6 +22,7 @@ import {
   normalizeUsageToTokenTotals,
   sumModelResponseUsagesByRequestId,
 } from '../-usage-normalize';
+import { hideTokenUsage } from '../-hide-token-usage';
 import { collectToolResultById, parseToolSummaries } from '../-utils/normalize-tool-call';
 import { modelModelResponse, modelStage, modelToolCall } from '../models';
 
@@ -197,9 +198,8 @@ const toListItem = (
   requestId: stage.requestId,
   stageId: stage._id.toString(),
   status: resolveStageStatus(stage),
-  byModel,
+  ...(hideTokenUsage() ? {} : { byModel, tokenTotals }),
   domains,
-  tokenTotals,
   toolCallCount,
   updatedAt: toIso(stage.updatedAt as Date) ?? '',
   ...(stage.stage?.whileSetup ? { whileSetup: stage.stage.whileSetup } : {}),
@@ -355,7 +355,12 @@ export const getSessionStage = [
         contextAfter: stage.contextAfter as Record<string, unknown> | undefined,
         loopMeta: stage.loopMeta,
         modelResponses: modelResponses.map((doc) => {
-          const response = (doc.response ?? {}) as Record<string, unknown>;
+          const response = { ...((doc.response ?? {}) as Record<string, unknown>) };
+          const hidden = hideTokenUsage();
+
+          if (hidden) {
+            delete response.usage;
+          }
 
           return {
             _id: String(doc._id),
@@ -369,7 +374,7 @@ export const getSessionStage = [
             response,
             tags: Array.isArray(doc.tags) ? doc.tags as TModelResponseTag[] : undefined,
             thinkingMode: doc.thinkingMode,
-            usage: normalizeUsageToTokenTotals(response.usage),
+            ...(hidden ? {} : { usage: normalizeUsageToTokenTotals(response.usage) }),
           };
         }),
         stage: stage.stage as TYahlStage,

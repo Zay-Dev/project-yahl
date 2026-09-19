@@ -56,12 +56,12 @@ export type TResponseGetSession = {
   taskId: string;
   taskSkills: TTaskSkillFile[];
   taskYahl: string;
-  byModel: TResponseModelUsageByModel[];
+  byModel?: TResponseModelUsageByModel[];
   domains: string[];
   lastModelResponseAt?: string;
-  nixeryUsage: TResponseNixeryUsageGroup[];
-  stageUsage: TResponseModelUsageSummary;
-  tokenTotals: TResponseTokenTotals | null;
+  nixeryUsage?: TResponseNixeryUsageGroup[];
+  stageUsage?: TResponseModelUsageSummary;
+  tokenTotals?: TResponseTokenTotals | null;
   updatedAt: string;
 };
 
@@ -75,7 +75,7 @@ export type TResponseSessionListItem = {
   sessionId: string;
   taskId?: string;
   domains: string[];
-  tokenTotals: TResponseTokenTotals | null;
+  tokenTotals?: TResponseTokenTotals | null;
   updatedAt: string;
 };
 
@@ -102,9 +102,9 @@ export type TResponseStageListItem = {
   requestId: string;
   stageId: string;
   status: TResponseStageStatus;
-  byModel: TResponseModelUsageByModel[];
+  byModel?: TResponseModelUsageByModel[];
   domains: string[];
-  tokenTotals: TTokenTotals | null;
+  tokenTotals?: TTokenTotals | null;
   toolCallCount: number;
   updatedAt: string;
   whileSetup?: TYahlWhileSetup;
@@ -141,7 +141,7 @@ export type TResponseStageModelResponseItem = {
   response?: Record<string, unknown>;
   tags?: TModelResponseTag[];
   thinkingMode?: boolean;
-  usage: TTokenTotals | null;
+  usage?: TTokenTotals | null;
 };
 
 export type TResponseStageToolSummary = {

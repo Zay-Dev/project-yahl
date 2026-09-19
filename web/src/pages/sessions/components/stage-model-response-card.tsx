@@ -38,7 +38,7 @@ export function StageModelResponseCard({ response }: TStageModelResponseCardProp
         ) : null}
         {response.thinkingMode ? <span>thinking</span> : null}
       </div>
-      {response.usage || domains.length > 0 ? (
+      {Object.hasOwn(response, "usage") ? (
         <div className="mt-2">
           <TokenStatsRow domains={domains} totals={response.usage} />
         </div>

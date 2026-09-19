@@ -57,7 +57,7 @@ const mergeByModel = (rows: TResponseStageListItem[]): TResponseModelUsageByMode
   const byKey = new Map<string, TResponseModelUsageByModel>();
 
   for (const row of rows) {
-    for (const entry of row.byModel) {
+    for (const entry of row.byModel ?? []) {
       const key = entry.model;
       const prev = byKey.get(key);
 
@@ -154,10 +154,14 @@ export const rollupNestedGroupItem = (
     requestId: groupRequestId,
     stageId: `group:${groupRequestId}`,
     status: rollupStatus(children),
-    tokenTotals: children.reduce<TResponseTokenTotals | null>(
-      (acc, row) => addTotals(acc, row.tokenTotals),
-      null,
-    ),
+    ...(children.some((row) => Object.hasOwn(row, "tokenTotals"))
+      ? {
+        tokenTotals: children.reduce<TResponseTokenTotals | null>(
+          (acc, row) => addTotals(acc, row.tokenTotals ?? null),
+          null,
+        ),
+      }
+      : {}),
     toolCallCount: children.reduce((sum, row) => sum + row.toolCallCount, 0),
     updatedAt: last.updatedAt,
     whileSetup: first.whileSetup,

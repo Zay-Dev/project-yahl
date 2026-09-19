@@ -30,6 +30,7 @@ export function SessionsPage() {
   }, [showBackground]);
 
   const sessions = result.data ?? [];
+  const showTokenUsage = sessions.length === 0 || Object.hasOwn(sessions[0], "tokenTotals");
   const visibleSessions = useMemo(
     () => filterSessionsForList(sessions, showBackground),
     [sessions, showBackground],
@@ -69,7 +70,9 @@ export function SessionsPage() {
               <tr>
                 <th className="p-3 text-left font-medium">Task</th>
                 <th className="p-3 text-left font-medium">Updated At</th>
-                <th className="p-3 text-left font-medium">Tokens</th>
+                {showTokenUsage ? (
+                  <th className="p-3 text-left font-medium">Tokens</th>
+                ) : null}
                 <th className="p-3 text-left font-medium">Actions</th>
               </tr>
             </thead>
@@ -95,7 +98,9 @@ export function SessionsPage() {
                     </div>
                   </td>
                   <td className="p-3">{new Date(session.updatedAt).toLocaleString()}</td>
-                  <td className="p-3">{session.tokenTotals?.totalTokens || 0}</td>
+                  {showTokenUsage ? (
+                    <td className="p-3">{session.tokenTotals?.totalTokens || 0}</td>
+                  ) : null}
                   <td className="p-3">
                     <SessionDeleteDialog sessionId={session.sessionId} />
                   </td>

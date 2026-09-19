@@ -52,14 +52,19 @@ Verified against Community ~1.19:
 | `POST` | `/api/secrets` | Create generic secret (seed / Platform custom add) |
 | `PATCH` | `/api/secrets/:id` | Update value (platform UI) |
 | `DELETE` | `/api/secrets/:id` | Delete custom secret only (seeded names blocked in YAHL) |
-| `GET`/`POST` | `/api/agents`, grants | Seed best-effort agent + grant |
+| `GET` | `/api/agents` | List agents. Seed grants every returned agent, not only the first |
+| `POST` | `/api/agents` | Create `yahl-default` when no API key exists yet |
+| `PUT` | `/api/agents/{agentId}/grants/secrets/{secretId}` | Attach one secret to one agent. No body. This is the secrets-tab toggle |
+| `PUT` | `/api/agents/{agentId}/secrets` | Fallback when the grant route returns 404. Body `{"secretIds":["..."]}` |
 | `GET` | `/api/user/api-key` | Seed may discover a key |
 | `GET` | `/api/container-config` | Proxy env + CA (SDK / orchestrator) |
 | `GET` | `/api/health` | Readiness |
 
 SDK `getContainerConfig` via `@onecli-sh/sdk` also talks to the dashboard URL; keep `ONECLI_DASHBOARD_URL` correct so the SDK resolves the same host.
 
-Upstream: [Create a secret](https://onecli.sh/docs/api-reference/secrets/create-a-secret) (cloud docs still show `/v1`), [self-hosting](https://onecli.sh/docs/self-hosting/community).
+Upstream: [Create a secret](https://onecli.sh/docs/api-reference/secrets/create-a-secret) and [attach a secret](https://onecli.sh/docs/api-reference/grants/attach-a-secret-to-an-agent) (cloud docs still show `/v1`; self-hosted uses the same paths under `/api`), [self-hosting](https://onecli.sh/docs/self-hosting/community).
+
+A secret can sit in the vault and still be refused. The proxy then returns `access_restricted`. The manage link in that error, `/p/{slug}/connections/apps/...`, is a OneCLI Cloud path and **404s** on this self-hosted dashboard. The toggle is `/agents/{id}?tab=secrets`. Seed turns those toggles on for every agent on every run, including when the secrets already exist. It does not log secret values.
 
 ## YAHL integration map
 
@@ -80,7 +85,7 @@ Agent / llm-proxy  →  HTTPS_PROXY  →  onecli:10255  →  provider APIs
 | Container config / CA | `runtime/orchestrator/-docker/clients/api.ts`, `onecli-snapshot.ts` |
 | Tenant seed | `yahl-saas/yahl-tenant-infra/compose/scripts/onecli-seed.sh` (from `start-stack.sh`) |
 
-Bootstrap seeds **Deepseek** (`api.deepseek.com`) and **KuaiPao AI** (`kuaipao.ai`, `/v1/*`) with value `placeholder`. Replace keys in **Platform → OneCLI secrets**.
+Bootstrap seeds **Deepseek** (`api.deepseek.com`) and **KuaiPao AI** (`kuaipao.ai`, `/v1/*`) with value `placeholder`, then grants both to every agent. Replace keys in **Platform → OneCLI secrets**.
 
 Those seeded names are **non-deletable** (`isProtected` on the list API). Operators can **add custom** secrets (name / host / optional path / value) and delete only those custom entries. Creating a secret named `Deepseek` or `KuaiPao AI` is rejected.
 

@@ -155,7 +155,7 @@ export function SessionOverview({
           <dd className="mt-0.5">{formatDate(session.lastModelResponseAt)}</dd>
         </div>
       </dl>
-      {hasUsage ? (
+      {Object.hasOwn(session, "tokenTotals") && hasUsage ? (
         <div className="mt-4 space-y-3">
           <UsageGroup
             byModel={session.byModel}
@@ -180,9 +180,9 @@ export function SessionOverview({
             />
           ))}
         </div>
-      ) : (
+      ) : Object.hasOwn(session, "tokenTotals") ? (
         <p className="mt-4 text-sm text-muted-foreground">No token usage recorded yet.</p>
-      )}
+      ) : null}
     </div>
   );
 }

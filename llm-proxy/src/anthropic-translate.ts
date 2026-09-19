@@ -174,6 +174,11 @@ export const anthropicResponseToOpenAi = (
   const usage = anthropic.usage && typeof anthropic.usage === 'object'
     ? anthropic.usage as Record<string, unknown>
     : undefined;
+  const inputTokens = Number(usage?.input_tokens ?? 0);
+  const outputTokens = Number(usage?.output_tokens ?? 0);
+  const cacheReadTokens = Number(usage?.cache_read_input_tokens ?? 0);
+  const cacheCreateTokens = Number(usage?.cache_creation_input_tokens ?? 0);
+  const promptTokens = inputTokens + cacheReadTokens + cacheCreateTokens;
 
   return {
     choices: [{
@@ -199,9 +204,9 @@ export const anthropicResponseToOpenAi = (
     object: 'chat.completion',
     usage: usage
       ? {
-        completion_tokens: Number(usage.output_tokens ?? 0),
-        prompt_tokens: Number(usage.input_tokens ?? 0),
-        total_tokens: Number(usage.input_tokens ?? 0) + Number(usage.output_tokens ?? 0),
+        completion_tokens: outputTokens,
+        prompt_tokens: promptTokens,
+        total_tokens: promptTokens + outputTokens,
       }
       : undefined,
   };

@@ -16,6 +16,7 @@ import {
   sumModelResponseUsagesBySessionRef,
   sumModelResponseUsagesForSession,
 } from '../-usage-normalize';
+import { hideTokenUsage } from '../-hide-token-usage';
 import { resolveSessionRunState } from '../-session-run-state';
 import { modelSession, modelStage } from '../models';
 
@@ -72,11 +73,15 @@ const toResponse = (
   taskSkills: session.taskSkills ?? [],
   taskYahl: session.taskYahl ?? '',
   domains: usage.domains,
-  byModel: usage.byModel,
+  ...(hideTokenUsage()
+    ? {}
+    : {
+      byModel: usage.byModel,
+      nixeryUsage: usage.nixeryUsage,
+      stageUsage: usage.stageUsage,
+      tokenTotals: usage.tokenTotals,
+    }),
   ...(usage.lastModelResponseAt ? { lastModelResponseAt: usage.lastModelResponseAt } : {}),
-  nixeryUsage: usage.nixeryUsage,
-  stageUsage: usage.stageUsage,
-  tokenTotals: usage.tokenTotals,
   updatedAt: toIso(session.updatedAt) ?? '',
 });
 
@@ -91,7 +96,7 @@ const toListResponse = (
   sessionId: session.sessionId,
   taskId: session.taskId,
   domains: usage.domains,
-  tokenTotals: usage.tokenTotals,
+  ...(hideTokenUsage() ? {} : { tokenTotals: usage.tokenTotals }),
   updatedAt: toIso(session.updatedAt) ?? '',
 });
 

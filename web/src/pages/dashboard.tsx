@@ -20,6 +20,7 @@ export function DashboardPage() {
   });
 
   const sessions = result.data ?? [];
+  const showTokenUsage = sessions.length === 0 || Object.hasOwn(sessions[0], "tokenTotals");
 
   const totalTokens = useMemo(() => {
     return sessions.reduce((sum, session) => {
@@ -31,7 +32,7 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+      <div className={`grid auto-rows-min gap-4 ${showTokenUsage ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
         <div className="rounded-xl bg-muted/50 p-4">
           <p className="text-sm text-muted-foreground">Stream status</p>
           <p className="text-2xl font-semibold">{streamStatus}</p>
@@ -40,10 +41,12 @@ export function DashboardPage() {
           <p className="text-sm text-muted-foreground">Sessions tracked</p>
           <p className="text-2xl font-semibold">{sessions.length}</p>
         </div>
-        <div className="rounded-xl bg-muted/50 p-4">
-          <p className="text-sm text-muted-foreground">Total tokens</p>
-          <p className="text-2xl font-semibold">{totalTokens}</p>
-        </div>
+        {showTokenUsage ? (
+          <div className="rounded-xl bg-muted/50 p-4">
+            <p className="text-sm text-muted-foreground">Total tokens</p>
+            <p className="text-2xl font-semibold">{totalTokens}</p>
+          </div>
+        ) : null}
       </div>
       <div className="rounded-xl bg-muted/50 p-4">
         <p className="text-sm text-muted-foreground">Most recently updated session</p>
