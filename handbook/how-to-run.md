@@ -59,7 +59,7 @@ The agent compose file sets `SESSION_API_BASE_URL` (default `http://server:4000`
 
 **Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind data dir, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides). Create **`data/knowledge_export`** before the first observation or upsert (`mkdir -p data/knowledge_export`) if upgrading from Wiki.js.
 
-**Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) (built on the host when orchestrator runs).
+**Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) / [`runtime/Dockerfile.browser`](runtime/Dockerfile.browser) (built on every orchestrator run; SaaS tenants seed BuildKit cache from GHCR `yahl-agent` / `yahl-browser`).
 
 #### Why it feels safe (roles and boundaries)
 

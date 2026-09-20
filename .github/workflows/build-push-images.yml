@@ -33,6 +33,14 @@ jobs:
           - name: llm-proxy
             dockerfile: project-yahl/llm-proxy/Dockerfile
             image: yahl-llm-proxy
+          - name: agent
+            dockerfile: project-yahl/runtime/Dockerfile.agent
+            image: yahl-agent
+            cache_to: type=inline
+          - name: browser
+            dockerfile: project-yahl/runtime/Dockerfile.browser
+            image: yahl-browser
+            cache_to: type=inline
     steps:
       - name: Resolve image version tag
         id: version
@@ -84,3 +92,4 @@ jobs:
           build-args: |
             OMNIFLEX_APP_DIR=project-yahl
             ${{ matrix.build_args }}
+          cache-to: ${{ matrix.cache_to }}

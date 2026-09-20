@@ -6,6 +6,8 @@ services:
       dockerfile: ${OMNIFLEX_APP_DIR:-project-yahl}/runtime/Dockerfile.browser
       args:
         OMNIFLEX_APP_DIR: ${OMNIFLEX_APP_DIR:-project-yahl}
+      cache_from:
+        - ${BROWSER_IMAGE:-project-yahl-browser:latest}
     shm_size: 2gb
     environment:
       TZ: ${TZ:-Asia/Hong_Kong}

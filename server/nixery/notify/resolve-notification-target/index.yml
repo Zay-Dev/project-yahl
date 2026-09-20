@@ -1,5 +1,8 @@
 id: resolve-notification-target
-description: Resolve notify target channel/to/name/preference from phone or email (channels.json + user-onboarding when isUser)
+description: >
+  Resolve notify target channel/to/name/preference from phone or email
+  (channels.json + user-onboarding when isUser). Unresolved recipients still
+  return ok:true with fallbacks and resolved:false — only empty to fails.
 
 packages: [nodejs]
 

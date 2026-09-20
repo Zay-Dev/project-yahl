@@ -47,8 +47,24 @@ const resolveOmniflexBuildContext = () => {
   return path.resolve(hostRepoRoot, '..');
 };
 
+const isRegistryImageRef = (image: string) => image.includes('/');
+
+const pullImageBestEffort = (image: string) => {
+  if (!isRegistryImageRef(image)) {
+    return;
+  }
+
+  try {
+    console.log(`[orchestrator] pulling cache seed ${image}...`);
+    execSync(`docker pull "${image}"`, { stdio: 'inherit' });
+  } catch (err) {
+    console.warn(`[orchestrator] pull failed for ${image}; continuing with local cache`, err);
+  }
+};
+
 const composeBuildEnv = (buildContext: string, hostRepoRoot: string) => ({
   ...process.env,
+  DOCKER_BUILDKIT: process.env.DOCKER_BUILDKIT || '1',
   OMNIFLEX_BUILD_CONTEXT: buildContext,
   HOST_REPO_ROOT: hostRepoRoot,
 });
@@ -60,6 +76,8 @@ export const buildBrowser = () => {
     const hostRepoRoot = resolveDockerHostRepoRoot();
     const buildContext = resolveOmniflexBuildContext();
     const hostComposeFile = path.join(hostRepoRoot, 'docker-compose.browser.yml');
+
+    pullImageBestEffort(process.env.BROWSER_IMAGE);
 
     console.log(`[orchestrator] browser build context=${buildContext}`);
     console.log(`[orchestrator] browser compose file=${hostComposeFile}`);
@@ -83,6 +101,8 @@ export const buildAgent = () => {
     const hostRepoRoot = resolveDockerHostRepoRoot();
     const buildContext = resolveOmniflexBuildContext();
     const hostComposeFile = path.join(hostRepoRoot, 'docker-compose.agent.yml');
+
+    pullImageBestEffort(process.env.AGENT_IMAGE);
 
     console.log(`[orchestrator] agent build context=${buildContext}`);
     console.log(`[orchestrator] agent compose file=${hostComposeFile}`);

@@ -47,5 +47,9 @@ export async function validateOutput(ctx) {
     return { ok: false, reason: 'name string required' };
   }
 
+  if (parsed.resolved !== undefined && typeof parsed.resolved !== 'boolean') {
+    return { ok: false, reason: 'resolved must be boolean when present' };
+  }
+
   return { ok: true };
 }

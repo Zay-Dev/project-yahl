@@ -5,6 +5,7 @@ import { loadTopicCorpus } from '/opt/nixery/plugin/lib/dist/index.js';
 import { logProgress, resolveDefId } from '../lib/run-agent.mjs';
 
 const CHANNELS_FILE = '/whatsapp/inbox/channels.json';
+const WORKSPACE = '/workspace';
 
 const readJson = async (filePath) => {
   const raw = await fs.readFile(filePath, 'utf8');
@@ -126,30 +127,19 @@ const loadUserPreference = async () => {
   }
 };
 
-const main = async () => {
-  const workspace = '/workspace';
-  const defRoot = '/opt/nixery/def';
-  const defId = resolveDefId(defRoot);
-  const input = await readJson(path.join(workspace, 'input.json'));
+const resolveOutputPath = (input) => {
   const outputName = typeof input.output === 'string' && input.output.trim()
     ? input.output.trim()
     : 'result.json';
-  const outputPath = path.join(workspace, outputName);
-  const rawTo = String(input.to ?? '').trim();
-  const nameOverride = typeof input.name === 'string' ? input.name.trim() : '';
 
-  logProgress(defId, `start to=${rawTo}`);
+  return path.join(WORKSPACE, outputName);
+};
 
-  if (!rawTo) {
-    const gate = { ok: false, error: 'to is required' };
-
-    await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
-    process.exit(1);
-  }
-
+const buildFallbackGate = (rawTo, nameOverride) => {
   if (isEmailTarget(rawTo)) {
-    const gate = {
+    return {
       ok: true,
+      resolved: true,
       channel: 'email',
       to: rawTo.toLowerCase(),
       name: nameOverride,
@@ -158,63 +148,121 @@ const main = async () => {
       isUser: false,
       greetsEntity: '',
     };
+  }
 
-    await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
-    logProgress(defId, 'done channel=email');
+  const chatId = toWhatsAppChatId(rawTo);
+
+  return {
+    ok: true,
+    resolved: false,
+    channel: 'whatsapp',
+    to: chatId || rawTo,
+    name: nameOverride,
+    summary: '',
+    preference: '',
+    isUser: false,
+    greetsEntity: '',
+  };
+};
+
+const writeGate = async (outputPath, gate) => {
+  await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
+};
+
+const main = async () => {
+  const defRoot = '/opt/nixery/def';
+  const defId = resolveDefId(defRoot);
+  const input = await readJson(path.join(WORKSPACE, 'input.json'));
+  const outputPath = resolveOutputPath(input);
+  const rawTo = String(input.to ?? '').trim();
+  const nameOverride = typeof input.name === 'string' ? input.name.trim() : '';
+
+  logProgress(defId, `start to=${rawTo}`);
+
+  if (!rawTo) {
+    await writeGate(outputPath, { ok: false, error: 'to is required' });
+    process.exit(1);
+  }
+
+  if (isEmailTarget(rawTo)) {
+    const gate = buildFallbackGate(rawTo, nameOverride);
+
+    await writeGate(outputPath, gate);
+    logProgress(defId, 'done channel=email resolved=true');
 
     return;
   }
 
-  const chatId = toWhatsAppChatId(rawTo);
-  const channels = await loadChannels();
-  const matched = chatId ? findChannel(channels, chatId) : undefined;
-  const summary = typeof matched?.summary === 'string' ? matched.summary.trim() : '';
-  const isUser = isUserSummary(summary);
-  const name = nameOverride
-    || (typeof matched?.displayName === 'string' ? matched.displayName.trim() : '')
-    || '';
-  const greetsEntity = typeof matched?.greetsEntity === 'string'
-    ? matched.greetsEntity.trim()
-    : '';
+  try {
+    const chatId = toWhatsAppChatId(rawTo);
+    const channels = await loadChannels();
+    const matched = chatId ? findChannel(channels, chatId) : undefined;
+    const summary = typeof matched?.summary === 'string' ? matched.summary.trim() : '';
+    const isUser = isUserSummary(summary);
+    const name = nameOverride
+      || (typeof matched?.displayName === 'string' ? matched.displayName.trim() : '')
+      || '';
+    const greetsEntity = typeof matched?.greetsEntity === 'string'
+      ? matched.greetsEntity.trim()
+      : '';
 
-  let preference = '';
+    let preference = '';
 
-  if (isUser) {
-    preference = await loadUserPreference();
-  } else {
-    preference = summary;
+    if (isUser) {
+      preference = await loadUserPreference();
+    } else {
+      preference = summary;
+    }
+
+    const gate = {
+      ok: true,
+      resolved: Boolean(matched),
+      channel: 'whatsapp',
+      to: chatId || rawTo,
+      name,
+      summary,
+      preference,
+      isUser,
+      greetsEntity,
+    };
+
+    await writeGate(outputPath, gate);
+    logProgress(defId, `done channel=whatsapp resolved=${gate.resolved} isUser=${isUser}`);
+  } catch (error) {
+    console.error(error);
+
+    const gate = buildFallbackGate(rawTo, nameOverride);
+
+    await writeGate(outputPath, gate);
+    logProgress(defId, 'done channel=whatsapp resolved=false enrichment-fallback');
   }
-
-  const gate = {
-    ok: true,
-    channel: 'whatsapp',
-    to: chatId || rawTo,
-    name,
-    summary,
-    preference,
-    isUser,
-    greetsEntity,
-  };
-
-  await fs.writeFile(outputPath, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
-  logProgress(defId, `done channel=whatsapp isUser=${isUser} matched=${Boolean(matched)}`);
 };
 
 main().catch(async (error) => {
   console.error(error);
 
   try {
-    await fs.writeFile(
-      '/workspace/result.json',
-      `${JSON.stringify({
+    const input = await readJson(path.join(WORKSPACE, 'input.json'));
+    const outputPath = resolveOutputPath(input);
+    const rawTo = String(input.to ?? '').trim();
+    const nameOverride = typeof input.name === 'string' ? input.name.trim() : '';
+
+    if (!rawTo) {
+      await writeGate(outputPath, { ok: false, error: 'to is required' });
+      process.exit(1);
+    }
+
+    await writeGate(outputPath, buildFallbackGate(rawTo, nameOverride));
+  } catch {
+    try {
+      await writeGate(path.join(WORKSPACE, 'result.json'), {
         ok: false,
         error: error instanceof Error ? error.message : 'resolve-notification-target failed',
-      }, null, 2)}\n`,
-      'utf8',
-    );
-  } catch {
-    // ignore
-  }
+      });
+    } catch {
+      // ignore
+    }
 
-  process.exit(1);
+    process.exit(1);
+  }
 });
