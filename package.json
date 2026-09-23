@@ -14,6 +14,7 @@
     "dev:runtime": "pnpm --filter @project-yahl/runtime run dev",
     "dev:server": "pnpm --filter @project-yahl/server run dev",
     "dev:web": "pnpm --filter web run dev",
+    "nixery:dist": "PRODUCT_DIR=. bash ./scripts/ensure-nixery-dist.sh ./server/nixery",
     "nixery:link": "pnpm --filter @project-yahl/shared run build && node shared/nixery/nixery-link.mjs",
     "orchestrate": "pnpm --filter runtime run orchestrate",
     "test": "pnpm --filter runtime run test",
