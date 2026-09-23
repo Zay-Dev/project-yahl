@@ -93,6 +93,7 @@ services:
       - ${HOST_REPO_ROOT}/..:${HOST_REPO_ROOT}/..:ro
       - ./data/workspace:${HOST_REPO_ROOT}/data/workspace
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
+      - ./runtime/.agent-files:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/runtime/.agent-files
       - ./data/workspace:/workspace
       - ./data/mastermind:/data/mastermind
       - ./server/tasks:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/server/tasks
