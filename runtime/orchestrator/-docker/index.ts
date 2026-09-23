@@ -49,8 +49,22 @@ const resolveOmniflexBuildContext = () => {
 
 const isRegistryImageRef = (image: string) => image.includes('/');
 
+const localImageExists = (image: string) => {
+  try {
+    execSync(`docker image inspect "${image}"`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const pullImageBestEffort = (image: string) => {
   if (!isRegistryImageRef(image)) {
+    return;
+  }
+
+  if (localImageExists(image)) {
+    console.log(`[orchestrator] cache seed already present ${image}; skip pull`);
     return;
   }
 
@@ -65,9 +79,12 @@ const pullImageBestEffort = (image: string) => {
 const composeBuildEnv = (buildContext: string, hostRepoRoot: string) => ({
   ...process.env,
   DOCKER_BUILDKIT: process.env.DOCKER_BUILDKIT || '1',
+  BUILDX_NO_DEFAULT_ATTESTATIONS: process.env.BUILDX_NO_DEFAULT_ATTESTATIONS || '1',
   OMNIFLEX_BUILD_CONTEXT: buildContext,
   HOST_REPO_ROOT: hostRepoRoot,
 });
+
+const composeBuildFlags = '--provenance=false --sbom=false';
 
 export const buildBrowser = () => {
   try {
@@ -82,7 +99,7 @@ export const buildBrowser = () => {
     console.log(`[orchestrator] browser build context=${buildContext}`);
     console.log(`[orchestrator] browser compose file=${hostComposeFile}`);
     console.log('Running: docker compose build browser...');
-    execSync(`docker compose -f "${hostComposeFile}" build browser`, {
+    execSync(`docker compose -f "${hostComposeFile}" build ${composeBuildFlags} browser`, {
       cwd: hostRepoRoot,
       env: composeBuildEnv(buildContext, hostRepoRoot),
       stdio: 'inherit',
@@ -107,7 +124,7 @@ export const buildAgent = () => {
     console.log(`[orchestrator] agent build context=${buildContext}`);
     console.log(`[orchestrator] agent compose file=${hostComposeFile}`);
     console.log("Running: docker compose build agent...");
-    execSync(`docker compose -f "${hostComposeFile}" build agent`, {
+    execSync(`docker compose -f "${hostComposeFile}" build ${composeBuildFlags} agent`, {
       cwd: hostRepoRoot,
       env: composeBuildEnv(buildContext, hostRepoRoot),
       stdio: "inherit",
