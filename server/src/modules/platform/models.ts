@@ -1,5 +1,4 @@
 import type { ICronJob, IPlatformChannelState, IPlatformProposal } from './-types';
-
 import type { Document } from 'mongoose';
 
 import { model as createModel, Schema } from 'mongoose';

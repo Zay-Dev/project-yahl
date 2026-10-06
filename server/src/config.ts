@@ -3,7 +3,10 @@ import type { TServerType } from '@/servers';
 import path from 'path';
 import * as dotenv from 'dotenv';
 
+import { loadEnvOverrideFile } from './env-override';
+
 dotenv.config();
+loadEnvOverrideFile();
 
 type TConfig = {
   cookieParser: {

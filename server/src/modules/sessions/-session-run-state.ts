@@ -10,7 +10,7 @@ import {
 
 export type { TSessionRunState } from './-session-run-state-signals';
 
-const _isOrchestratorActive = (sessionId: string) => {
+export const isOrchestratorActive = (sessionId: string) => {
   const lockPath = orchestratorRunLockPath(sessionId);
 
   if (!fs.existsSync(lockPath)) {
@@ -45,7 +45,7 @@ export const resolveSessionRunState = async (params: {
 
   return resolveSessionRunStateFromSignals({
     agentActive: isAgentContainerRunning(params.sessionId),
-    orchestratorActive: _isOrchestratorActive(params.sessionId),
+    orchestratorActive: isOrchestratorActive(params.sessionId),
     pausedRequestIds,
     stages: params.stages,
   });

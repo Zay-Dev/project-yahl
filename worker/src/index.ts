@@ -1,5 +1,7 @@
 import type { TCronJobDef } from './-cron/scheduler.js';
 
+import './load-env-override.js';
+
 import {
   getSystemAdminEmail,
   isSmtpConfigured,

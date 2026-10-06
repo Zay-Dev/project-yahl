@@ -29,6 +29,7 @@ type TServices = {
     totalTokens: number;
   }>;
   validateSessionById: (sessionId: string) => Promise<TYahlDocument>;
+  countActiveSessionRuns: () => Promise<number>;
   validateTaskRunInput: (
     taskId: string,
     runInput?: Record<string, unknown>,
@@ -51,6 +52,8 @@ export namespace Repository {
   export const registerSumUsageSince = _asValue('sumUsageSince');
 
   export const registerValidateSessionById = _asValue('validateSessionById');
+
+  export const registerCountActiveSessionRuns = _asValue('countActiveSessionRuns');
 
   export const registerValidateTaskRunInput = _asValue('validateTaskRunInput');
 }

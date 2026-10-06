@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 import { resolveAgentContainerName } from './-agent-container-name';
 import { modelSession } from './models';
@@ -9,9 +9,10 @@ export const isAgentContainerRunning = (sessionId: string): boolean => {
   const name = resolveAgentContainerName(sessionId);
 
   try {
-    const output = execSync(
-      `docker ps --filter name=^/${name}$ --filter status=running --format {{.Names}}`,
-      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
+    const output = execFileSync(
+      'docker',
+      ['ps', '--filter', `name=^/${name}$`, '--filter', 'status=running', '--format', '{{.Names}}'],
+      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 4000 },
     ).trim();
 
     return output === name;

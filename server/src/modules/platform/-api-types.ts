@@ -96,3 +96,18 @@ export type TRequestCreateOneCliSecretBody = {
   pathPattern?: string;
   value: string;
 };
+
+export type TResponseEnvOverrideStatus = {
+  activeSessionCount: number;
+  appliedVersion: string;
+  currentVersion: string;
+  pending: boolean;
+};
+
+export type TRequestRestartEnvOverrideBody = {
+  confirmRunning?: boolean;
+};
+
+export type TResponseRestartEnvOverride = {
+  ok: true;
+};

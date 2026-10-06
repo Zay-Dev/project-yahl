@@ -168,6 +168,10 @@
       "development": "./nixery/load-validation.ts",
       "import": "./dist/nixery/load-validation.js"
     },
+    "./env/override-keys": {
+      "development": "./env/override-keys.ts",
+      "import": "./dist/env/override-keys.js"
+    },
     "./email/whitelist": {
       "development": "./email/whitelist.ts",
       "import": "./dist/email/whitelist.js"

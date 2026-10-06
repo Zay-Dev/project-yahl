@@ -1,12 +1,14 @@
 import type {
   TRequestCreateCronJobBody,
   TRequestCreateOneCliSecretBody,
+  TRequestRestartEnvOverrideBody,
   TRequestUpdateCronJobBody,
   TRequestUpdateOneCliSecretBody,
   TResponseCronJob,
   TResponseCronJobListItem,
   TResponseCronJobMutation,
   TResponseCronJobs,
+  TResponseEnvOverrideStatus,
   TResponseOneCliSecret,
   TResponseOneCliSecrets,
 } from "@project-yahl/server/modules/platform/-api-types";
@@ -14,6 +16,7 @@ import type {
 import { API_BASE_URL } from "@/providers/constants";
 
 const cronJobsBase = `${API_BASE_URL}/api/platform/cron/jobs`;
+const envOverrideBase = `${API_BASE_URL}/api/platform/env-override`;
 const oneCliSecretsBase = `${API_BASE_URL}/api/platform/onecli/secrets`;
 
 const parsePayload = <T>(json: T & { data?: T }) => json.data ?? json;
@@ -100,6 +103,38 @@ export const deleteCronJob = async (id: string): Promise<TResponseCronJobMutatio
   const json = await res.json() as TResponseCronJobMutation & { data?: TResponseCronJobMutation };
 
   return parsePayload(json);
+};
+
+export const getEnvOverrideStatus = async (): Promise<TResponseEnvOverrideStatus> => {
+  const res = await fetch(envOverrideBase);
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, `Failed to load env override: ${res.status}`));
+  }
+
+  const json = await res.json() as TResponseEnvOverrideStatus & { data?: TResponseEnvOverrideStatus };
+
+  return parsePayload(json);
+};
+
+export const restartEnvOverrideServices = async (
+  body: TRequestRestartEnvOverrideBody = {},
+): Promise<void> => {
+  const res = await fetch(`${envOverrideBase}/restart`, {
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+
+  if (res.status === 409) {
+    const error = new Error(await parseError(res, "Running tasks need confirmation"));
+    error.name = "EnvOverrideRunningTasks";
+    throw error;
+  }
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, `Failed to restart services: ${res.status}`));
+  }
 };
 
 export const listOneCliSecrets = async (): Promise<TResponseOneCliSecret[]> => {

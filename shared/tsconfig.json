@@ -15,6 +15,7 @@
   "include": [
     "agent-files/**/*.ts",
     "email/**/*.ts",
+    "env/**/*.ts",
     "knowledge-qa/**/*.ts",
     "nixery/**/*.ts",
     "request-activity/**/*.ts",

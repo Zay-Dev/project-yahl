@@ -66,6 +66,7 @@ COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/package.json ./${OMNIFLEX_APP_DI
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.agent.yml ./${OMNIFLEX_APP_DIR}/docker-compose.agent.yml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.browser.yml ./${OMNIFLEX_APP_DIR}/docker-compose.browser.yml
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/docker-compose.yml ./${OMNIFLEX_APP_DIR}/docker-compose.yml
+COPY ${OMNIFLEX_APP_DIR}/.env.example ./${OMNIFLEX_APP_DIR}/.env.example
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server/package.json ./${OMNIFLEX_APP_DIR}/server/package.json
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server/dist ./${OMNIFLEX_APP_DIR}/server/dist
 COPY --from=build /omniflex/${OMNIFLEX_APP_DIR}/server/node_modules ./${OMNIFLEX_APP_DIR}/server/node_modules

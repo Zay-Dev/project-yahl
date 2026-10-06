@@ -19,6 +19,8 @@ import {
 } from './use-cases/work-read';
 import { getWhatsAppChannel } from './use-cases/channel-whatsapp-read';
 import { putWhatsAppChannel } from './use-cases/channel-whatsapp-write';
+import { getEnvOverrideStatus } from './use-cases/env-override-read';
+import { restartEnvOverrideServices } from './use-cases/env-override-restart';
 import {
   createOneCliSecret,
   deleteOneCliSecret,
@@ -62,6 +64,10 @@ exposedRoute('/api/platform/cron/jobs')
 
 exposedRoute('/api/platform/channels')
   .get('/whatsapp', getWhatsAppChannel);
+
+exposedRoute('/api/platform/env-override')
+  .get('/', getEnvOverrideStatus)
+  .post('/restart', restartEnvOverrideServices);
 
 exposedRoute('/api/platform/onecli/secrets')
   .get('/', listOneCliSecrets)

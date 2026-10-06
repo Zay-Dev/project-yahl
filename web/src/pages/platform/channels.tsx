@@ -20,7 +20,7 @@ const statusMessage = (channel: TResponseWhatsAppChannel | null): string | null 
   }
 
   if (!channel.enabled) {
-    return "WhatsApp is disabled. Set WHATSAPP_ENABLED=true on the server and worker.";
+    return "WhatsApp is disabled. Set WHATSAPP_ENABLED=true in .env or .env.override.";
   }
 
   if (channel.status === "ready") {

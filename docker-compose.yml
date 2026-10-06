@@ -73,6 +73,7 @@ services:
       SESSION_API_BASE_URL: http://server:4000
       WORKSPACE_ROOT: /workspace
       EMAIL_WHITELIST: ${EMAIL_WHITELIST:-}
+      ENV_OVERRIDE_PATH: /override/.env.override
       WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-false}
       WHATSAPP_WHITELIST: ${WHATSAPP_WHITELIST:-}
       YAHL_NIXERY_INLINE_RETRY_MAX: ${YAHL_NIXERY_INLINE_RETRY_MAX:-1}
@@ -90,6 +91,11 @@ services:
     volumes:
       - ./.env:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env:ro
       - ./.env.nixery:/omniflex/${OMNIFLEX_APP_DIR:-project-yahl}/.env.nixery:ro
+      - type: bind
+        source: ./.env.override
+        target: /override/.env.override
+        bind:
+          create_host_path: false
       - ${HOST_REPO_ROOT}/..:${HOST_REPO_ROOT}/..:ro
       - ./data/workspace:${HOST_REPO_ROOT}/data/workspace
       - ./runtime/.onecli:${HOST_REPO_ROOT}/runtime/.onecli
@@ -177,7 +183,14 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-}
+      ENV_OVERRIDE_PATH: /override/.env.override
     volumes:
+      - type: bind
+        source: ./.env.override
+        target: /override/.env.override
+        read_only: true
+        bind:
+          create_host_path: false
       - ./data/workspace:/workspace
       - ./data/whatsapp_auth:/whatsapp/auth
       - ./data/whatsapp_inbox:/whatsapp/inbox
@@ -207,6 +220,11 @@ services:
     ports:
       - "127.0.0.1:${CODE_SERVER_PORT:-8080}:8080"
     volumes:
+      - type: bind
+        source: ./.env.override
+        target: /home/coder/yahl/.env.override
+        bind:
+          create_host_path: false
       - ./data/knowledge_export:/home/coder/yahl/knowledge_export:rw
       - ./data/workspace/sessions:/home/coder/yahl/sessions:ro
       - ./data/workspace/tasks:/home/coder/yahl/workspace_tasks:rw
