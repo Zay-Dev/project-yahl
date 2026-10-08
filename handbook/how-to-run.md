@@ -2,7 +2,7 @@
 
 **Prerequisites:** Node, pnpm, Docker.
 
-**Monorepo layout** (Omniflex workspace member; install packages from `../`):
+## Layout
 
 | Path | Package / role |
 |------|----------------|
@@ -10,9 +10,9 @@
 | `server/` | `@project-yahl/server` — Express + Mongoose session/tasks API |
 | `web/` | Vite + shadcn — Sessions, Tasks, platform approvals, cron jobs, channels |
 | `worker/` | Cron ticks (via server API), platform approvals, WhatsApp/SMTP |
-| `llm-proxy/` | `@project-yahl/llm-proxy` — OpenAI-compatible LLM hub (retries, usage postback, quota) |
+| `llm-proxy/` | `@project-yahl/llm-proxy` — OpenAI-compatible LLM hub (retries, usage postback) |
 
-Install and build framework packages from the **Omniflex repo root**:
+Install and build framework packages from the **Omniflex repo root** (parent of this app):
 
 ```bash
 cd ..
@@ -20,29 +20,27 @@ pnpm install
 pnpm -r --filter "./infras/**" run build
 ```
 
-Copy [`.env.example`](.env.example) to `.env`. Set at minimum:
+* working with Omniflex develop branch
+
+## One-time setup
+
+Copy [`.env.example`](../.env.example) to `.env`. Set at minimum:
 
 - `HOST_REPO_ROOT` — absolute path to this repo (required for agent workspace bind mounts)
 - `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` — OneCLI proxy for LLM keys
+- `LLM_PROXY_TOKEN` — shared token for caller → llm-proxy
 
-Copy [`.env.nixery.example`](.env.nixery.example) to `.env.nixery` for nixery LLM defaults (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and optional phase URLs). Values may use `${LLM_BASE_URL}` / `${LLM_API_KEY}` from `.env`, or concrete URLs/keys. The orchestrator loads `.env.nixery` at startup in [`runtime/orchestrator/config.ts`](../runtime/orchestrator/config.ts) after `.env`; empty keys in `server/nixery/*/index.yml` inherit the same-named `process.env` value. For `compose:up:all`, the file is bind-mounted into the server (not via compose `env_file`) so the spawned orchestrator can read and expand it — the host file must exist.
+Copy [`.env.nixery.example`](../.env.nixery.example) to `.env.nixery` for nixery LLM defaults (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and optional phase URLs). Values may use `${LLM_BASE_URL}` / `${LLM_API_KEY}` from `.env`, or concrete URLs/keys. Stage and nixery both use **DeepSeek** (`api.deepseek.com`). The orchestrator loads `.env.nixery` at startup in [`runtime/orchestrator/config.ts`](../runtime/orchestrator/config.ts) after `.env`; empty keys in `server/nixery/*/index.yml` inherit the same-named `process.env` value. For `compose:up:all`, the file is bind-mounted into the server (not via compose `env_file`) so the spawned orchestrator can read and expand it — the host file must exist.
 
-Copy `server/.env.example` to `server/.env` if you run the server standalone.
+Copy `server/.env.example` to `server/.env` if you run the server without the root `.env` path.
 
-### Docker Compose
+```bash
+mkdir -p data/knowledge_export
+```
 
-| File | Purpose |
-|------|---------|
-| [`docker-compose.yml`](docker-compose.yml) | Infra and optional built server/web |
-| [`docker-compose.agent.yml`](docker-compose.agent.yml) | Per-session agent container (orchestrator only) |
+Image build context is the **Omniflex monorepo root** (`..` from this app). App paths use `OMNIFLEX_APP_DIR` (default `project-yahl`). `COMPOSE_PROJECT_NAME` is independent (Docker naming only).
 
-**`pnpm run compose:up`** starts local infra: mongo, redis, onecli, onecli_postgres, **code-server**, **worker**, **llm-proxy**.
-
-**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173), **code-server** (`127.0.0.1:${CODE_SERVER_PORT:-8080}`), **worker**, **llm-proxy**.
-
-Image build context is the **Omniflex monorepo root** (`..` from project-yahl). App paths use `OMNIFLEX_APP_DIR` (default `project-yahl`). `COMPOSE_PROJECT_NAME` is independent (Docker naming only).
-
-Docker only reads `.dockerignore` from the **build context root**, so put it at the Omniflex monorepo root (`../.dockerignore` from project-yahl) — not under `project-yahl/`. Suggested contents:
+Docker only reads `.dockerignore` from the **build context root**, so put it at the Omniflex monorepo root (`../.dockerignore` from this app) — not under `project-yahl/`. Suggested contents:
 
 ```gitignore
 **/node_modules
@@ -50,45 +48,98 @@ Docker only reads `.dockerignore` from the **build context root**, so put it at 
 **/dist
 **/.env
 **/.env.*
+!**/.env.example
 **/.DS_Store
 
 */data/
 ```
 
+**Local volume data** (gitignored): [`data/`](../data/) (mongo, onecli, workspace session files, `whatsapp_auth`, `whatsapp_inbox`, `knowledge_export`), [`runtime/.onecli/`](../runtime/.onecli/) (OneCLI CA overrides).
+
+**Dockerfiles:** [`server/Dockerfile`](../server/Dockerfile), [`web/Dockerfile`](../web/Dockerfile), [`runtime/Dockerfile.agent`](../runtime/Dockerfile.agent) / [`runtime/Dockerfile.browser`](../runtime/Dockerfile.browser) — agent and browser images build on the first orchestrator run.
+
+## Run modes
+
+| File | Purpose |
+|------|---------|
+| [`docker-compose.yml`](../docker-compose.yml) | Infra and optional built server/web |
+| [`docker-compose.agent.yml`](../docker-compose.agent.yml) | Per-session agent container (orchestrator only) |
+
 The agent compose file sets `SESSION_API_BASE_URL` (default `http://server:4000`) for platform skills.
 
-**Local volume data** (gitignored): [`data/`](data/) (mongo, onecli, mastermind data dir, workspace session files, `whatsapp_auth`, `whatsapp_inbox`), [`runtime/.onecli/`](runtime/.onecli/) (OneCLI CA overrides). Create **`data/knowledge_export`** before the first observation or upsert (`mkdir -p data/knowledge_export`) if upgrading from Wiki.js.
+### Infra + host (typical local)
 
-**Dockerfiles:** [`server/Dockerfile`](server/Dockerfile), [`web/Dockerfile`](web/Dockerfile), [`runtime/Dockerfile.agent`](runtime/Dockerfile.agent) / [`runtime/Dockerfile.browser`](runtime/Dockerfile.browser) (built on every orchestrator run; SaaS tenants seed BuildKit cache from GHCR `yahl-agent` / `yahl-browser`, pulling only when the image is missing locally).
+1. Start infra: `pnpm run compose:up`
+2. Run API + runtime: `pnpm run dev` (server + runtime hot reload)
+3. Run web (separate terminal): `pnpm run dev:web`
+4. First successful run (after OneCLI is configured):
 
-#### Why it feels safe (roles and boundaries)
+```bash
+curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
+  -H 'Content-Type: application/json' \
+  -d '{"taskId":"who_am_i"}'
+```
 
-This is about **blast-radius design**, not a formal security audit. It assumes you trust the **server control plane** (host in local dev, `server` container in Docker prod) and your OneCLI vault config.
+### Full Docker
 
-Runs are started by the server via [`spawn-orchestrate.ts`](server/src/modules/sessions/use-cases/spawn-orchestrate.ts) (`POST /api/runs`, fork, ask-user/verify resume). In **local dev** that orchestrator child process runs on your **host** (alongside `pnpm run dev`); you can still run `pnpm run orchestrate` manually for debugging. In **Docker prod** (`compose:up:all`) the same spawn happens **inside the server container** (built orchestrator + `docker.sock` to bring up agents). The orchestrator is not its own long-lived compose service — it is a per-run process the server (or you, in dev) starts.
+**`pnpm run compose:up:all`** builds and starts mongo, redis, onecli, onecli_postgres, **server** (4000), **web** (5173), **code-server** (`127.0.0.1:${CODE_SERVER_PORT:-8080}`), **worker**, **llm-proxy**.
+
+The server container bind-mounts `./server/tasks` so Tasks UI edits persist on the host repo.
+
+### Commands
+
+| Command | What it does |
+|---------|--------------|
+| `pnpm run compose:up` | Infra only (mongo, redis, onecli, code-server, worker, llm-proxy) |
+| `pnpm run compose:up:all` | Full Docker stack (infra + built server + web + code-server + worker + llm-proxy) |
+| `pnpm run compose:down` | Tear down compose stack |
+| `pnpm run dev` | Server + runtime on the host |
+| `pnpm run dev:server` | API server only |
+| `pnpm run dev:web` | Web UI only |
+| `pnpm run orchestrate` | Run orchestrator manually (spawns agent containers; needs `--session-id`) |
+
+## Ports
+
+| Port | Service |
+|------|---------|
+| **4000** | Session / tasks API server |
+| **5173** | Web UI (`compose:up:all` or `dev:web`) |
+| **8080** | Code-server (`127.0.0.1` only; knowledge / files) |
+| **10254** | OneCLI dashboard + REST API |
+| **10255** | OneCLI MITM proxy (secret injection) |
+| **4100** | llm-proxy (Docker network; callers use `LLM_BASE_URL`) |
+| **27017** | MongoDB |
+| **6379** | Redis |
+| **4091** | Worker health (in-container only; compose healthcheck) |
+
+## Roles and boundaries
+
+This is about **blast-radius design**, not a formal security audit. It assumes you trust the **session server** (host in local dev, `server` container in full Docker) and your OneCLI vault config.
+
+Runs are started by the server via [`spawn-orchestrate.ts`](../server/src/modules/sessions/use-cases/spawn-orchestrate.ts) (`POST /api/runs`, fork, ask-user/verify resume). In **local dev** that orchestrator child process runs on your **host** (alongside `pnpm run dev`); you can still run `pnpm run orchestrate` manually for debugging. In **full Docker** (`compose:up:all`) the same spawn happens **inside the server container** (built orchestrator + `docker.sock` to bring up agents). The orchestrator is not its own long-lived compose service — it is a per-run process the server (or you, in dev) starts.
 
 | Role | Runs as | Can touch | Cannot / should not |
 |------|---------|-----------|---------------------|
 | **Human (web UI)** | Browser | Sessions, tasks, ask-user answers, platform approvals | Spawn agents, read vault keys, bypass approval queue |
-| **Server** | Host (`pnpm run dev:server`) or `server` container (prod) | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic; control plane only |
-| **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in Docker prod); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
+| **Session server** | Host (`pnpm run dev:server`) or `server` container | Mongo, task files (`server/tasks/`), spawn orchestrator per run; `docker.sock` in container for agent containers | Run stage logic |
+| **Orchestrator** | Child process spawned by server (host in dev, inside `server` container in full Docker); optional manual `pnpm run orchestrate` on host | Stage pipeline, context filtering, verify gates, agent lifecycle | Expose full repo or whole task YAML to the agent; VM control flow stays on orchestrator via `isolated-vm` |
 | **Stage agent** | Ephemeral `agent-{sessionId}` container | Session scratch `~/` → `/workspace/sessions/{sessionId}/`, read-only skills, Redis stage queue, typed HTTP to server (`platform` tool) / OneCLI proxy | Repo source, Mongo, direct vault — tools API only |
 | **Knowledge corpus** | `data/knowledge_export` on host; nixery read defs mount **ro**, write defs **rw** | Markdown under `en/topics/`, `whatsapp/`, `greets/` | Agent access — humans browse/edit via code-server |
-| **Code-server** | `code-server` container (`127.0.0.1:${CODE_SERVER_PORT:-8080}` on host; `/code/` via gateway in prod) | Flat under `/home/coder/yahl/`: `knowledge_export` (**rw**), `sessions` (ro), `workspace_tasks`, `SKILLS`, `YAHL`, `tasks`, `nixery` | `docker.sock`, vault keys — gateway auth only |
+| **Code-server** | `code-server` container (`127.0.0.1:${CODE_SERVER_PORT:-8080}` on host) | Flat under `/home/coder/yahl/`: `knowledge_export` (**rw**), `sessions` (ro), `workspace_tasks`, `SKILLS`, `YAHL`, `tasks`, `nixery` | `docker.sock`, vault keys |
 | **Worker** | `worker` container | Cron (via server API), platform approvals, optional WhatsApp Web send/receive, SMTP outbound | Does not spawn orchestrator or agent containers; WhatsApp/email I/O is pure runtime (no YAHL) |
 | **OneCLI** | `onecli` container | Provider secrets in vault; MITM proxy (10255) | Keys are scoped by dashboard host/path rules you configure |
 
-Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir.
+Concurrent sessions each get their own agent container and scratch dir (agent `~/` = session subdir).
 
 **Local dev:** server on host spawns orchestrator on host; agents still run in Docker via `docker-compose.agent.yml`. Manual `pnpm run orchestrate` bypasses the server spawn path but uses the same agent isolation.
 
-**Docker prod:** server container spawns orchestrator inside the container (`dist/orchestrator` when `NODE_ENV=production`); the server’s `docker.sock` mount starts per-session agent containers on the shared network.
+**Full Docker:** server container spawns orchestrator inside the container (`dist/orchestrator` when `NODE_ENV=production`); the server’s `docker.sock` mount starts per-session agent containers on the shared network.
 
 **How the agent container is restricted:**
 
-- **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-agent.ts`](runtime/orchestrator/-docker/compose-agent.ts), project `agent-{sessionId}`), then tears it down.
-- **Minimal mounts** — only [`data/workspace/`](data/workspace/) (writable) and [`runtime/.agent-files/`](runtime/.agent-files/) (`SKILLS` → `/opt/skills`, `YAHL` → `/opt/yahl`, both `:ro`). Orchestrator refreshes `.agent-files/` at start from built-ins + installed nixery plugins. No `data/mastermind/`, server code, tasks tree, or `.env` in the agent image.
-- **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge reads via `nixeryRun` → `~/nixery/get-knowledge/`; study dialogue under `~/nixery/study/` — never the canonical corpus ([`docker-entrypoint.sh`](runtime/agent/docker-entrypoint.sh); see [security.md](security.md)).
+- **Ephemeral and scoped** — orchestrator brings up one agent per run ([`compose-agent.ts`](../runtime/orchestrator/-docker/compose-agent.ts), project `agent-{sessionId}`), then tears it down.
+- **Minimal mounts** — only [`data/workspace/`](../data/workspace/) (writable) and [`runtime/.agent-files/`](../runtime/.agent-files/) (`SKILLS` → `/opt/skills`, `YAHL` → `/opt/yahl`, both `:ro`). Orchestrator refreshes `.agent-files/` at start from built-ins + installed nixery plugins. No server code, tasks tree, or `.env` in the agent image.
+- **Session scratch** — `AGENT_SESSION_HOME=/workspace/sessions/{sessionId}`; knowledge reads via `nixeryRun` → `~/nixery/get-knowledge/`; study dialogue under `~/nixery/study/` — never the canonical corpus ([`docker-entrypoint.sh`](../runtime/agent/docker-entrypoint.sh); see [security.md](security.md)).
 - **Structured tools only** — `run_bash`, `browser`, `set_context`, `extend_context`, `ask_user`, `platform`, `nixery`; orchestrator applies writes and enforces `produceContextKeys` / `contextKeys` allowlists.
 - **One stage at a time** — Redis envelope carries filtered context + a single stage payload; the model does not see full task YAML or future stages.
 - **LLM keys sanitized** — with OneCLI, orchestrator injects **proxy env + CA** into the agent override; keep `LLM_API_KEY` as placeholder on the host. Internal services stay on `NO_PROXY` (direct, not through the proxy). See OneCLI setup below for vault rules.
@@ -100,7 +151,7 @@ Concurrent sessions each get their own agent container and scratch dir (agent `~
 ```mermaid
 flowchart TB
   human[Human_web_UI]
-  server[Server_host_or_container]
+  server[Session_server]
   orch[Orchestrator_per_run_process]
   agent[Agent_container]
   platform[Platform_tool]
@@ -119,27 +170,7 @@ flowchart TB
   worker -->|approved_jobs| server
 ```
 
-### Local development
-
-1. Start infra: `pnpm run compose:up`
-2. Run API + runtime: `pnpm run dev` (server + runtime hot reload)
-3. Run web (separate terminal): `pnpm run dev:web`
-4. Run a session: `pnpm run orchestrate`
-
-Individual commands:
-
-| Command | What it does |
-|---------|--------------|
-| `pnpm run compose:up` | Infra only (mongo, redis, onecli, code-server, worker, llm-proxy) |
-| `pnpm run compose:up:all` | Full Docker stack (infra + built server + web + code-server + worker + llm-proxy) |
-| `pnpm run dev` | Server + runtime on the host |
-| `pnpm run dev:server` | API server only |
-| `pnpm run dev:web` | Web UI only |
-| `pnpm run orchestrate` | Run orchestrator (spawns agent containers) |
-
-The server container bind-mounts `./server/tasks` so Tasks UI edits persist on the host repo.
-
-### Advanced orchestrate flags
+## Advanced orchestrate flags
 
 | Flag | Purpose |
 |------|---------|
@@ -148,29 +179,29 @@ The server container bind-mounts `./server/tasks` so Tasks UI edits persist on t
 | `--verify-resume-id <verifyId>` | Verify checkpoint resume |
 | `--produce-keys-resume-id <verifyId>` | Produce-keys retry resume |
 
-Create a session via `POST /api/tasks/:taskId/runs` (or fork API), then orchestrate with `--session-id` only. Deprecated: `--task-id`, `--forkrun-id`.
+Prefer `POST /api/runs` with a `taskId` for the happy path. For manual debugging, create a session via `POST /api/tasks/:taskId/runs` (or fork API), then `pnpm run orchestrate -- --session-id <id>`. Deprecated: `--task-id`, `--forkrun-id`.
 
 Example: `pnpm run orchestrate -- --session-id my-debug-session`
 
-### OneCLI setup
+## OneCLI setup
 
 See **[onecli-api.md](./onecli-api.md)** for ports, secrets, and the REST surface YAHL uses.
 
-**Local**
+LLM traffic (stages, Stagehand, nixery) goes through **llm-proxy** → OneCLI → **DeepSeek** (`api.deepseek.com`).
 
 1. Start infra: `pnpm run compose:up`
 2. Open OneCLI dashboard at `http://127.0.0.1:10254` (optional) or use **Platform → OneCLI secrets** once the server is up
-3. Create an agent identity and copy its token (or let tenant seed write `ONECLI_API_KEY`)
-4. Add / update provider credentials (Deepseek, KuaiPao, …) with correct host/path patterns
+3. Create an agent identity and copy its token into `ONECLI_API_KEY`
+4. Add / update the **Deepseek** secret with host pattern `api.deepseek.com` (and path pattern if needed)
 5. Set `ONECLI_DASHBOARD_URL` and `ONECLI_API_KEY` in `.env`
 6. Run one orchestrator session to bootstrap shared override files under `runtime/.onecli/`
-7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` as placeholders only. Browser automation uses Stagehand (local Chromium in the agent container; see [`runtime/orchestrator/SKILLS/stagehand/SKILL.md`](runtime/orchestrator/SKILLS/stagehand/SKILL.md)).
+7. Keep `LLM_API_KEY` / `DEEPSEEK_API_KEY` as placeholders only. Browser automation uses Stagehand (local Chromium in the agent container; see [`runtime/orchestrator/SKILLS/stagehand/SKILL.md`](../runtime/orchestrator/SKILLS/stagehand/SKILL.md)).
 
-**SaaS tenants:** OneCLI UI is not public. Bootstrap seeds placeholder secrets; operators set real keys in the YAHL web app at `/platform/onecli`.
-
-### WhatsApp + outbound channels
+## WhatsApp + outbound channels
 
 WhatsApp send/receive and SMTP live on the **worker** only — not in stage agents. YAHL tasks (`greets`, `whatsapp_wiki_stack`, `traffic_monitor`, …) propose notifications or tidy wiki; the worker does the actual delivery.
+
+Process env in [`.env.example`](../.env.example) is the default. Operators can override WhatsApp, SMTP, admin email, and email/WhatsApp whitelists in **`.env.override`** on the host (also editable as code-server `.env.override`). Only those keys are allowed; the server strips anything else (e.g. `LLM_MODEL`) on start. A missing or blank override is initialized from `.env` then `.env.example` (whitelist keys only) by the server. After you edit the file, the web banner prompts to restart **worker** and **server**. Compose scripts `touch` the host file first so Docker does not create a directory at that path.
 
 From [`.env.example`](../.env.example):
 
@@ -184,15 +215,13 @@ From [`.env.example`](../.env.example):
 | `EMAIL_WHITELIST` | Comma-separated emails; matching propose recipients are pre-approved |
 | `PLATFORM_APPROVAL_TOKEN` | Required for human approve at `/platform/approvals` (`X-Approval-Token`); empty disables approve |
 | `WORKER_INTERNAL_TOKEN` | Same value on **server** and **worker**; worker pushes WhatsApp QR/status to server for `/platform/channels` |
-| `CONTROL_PLANE_SERVICE_TOKEN` | Shared secret for control-plane → tenant quota/usage routes; empty rejects those internal calls |
-| `QUOTA_STATE_FILE` | Path to SaaS quota JSON (tenant). When set, **server** and **llm-proxy** enforce quota from that file |
 | `SANITIZE_CHANNEL_MESSAGE` | Optional host path mounted into worker as `/sanitize/sanitize-channel-message.mjs`
 
 Compose mounts host `data/whatsapp_auth` and `data/whatsapp_inbox` into the worker (outside the agent workspace). Worker health listens on `127.0.0.1:${WORKER_HEALTH_PORT}` inside the container (default **4091**; compose healthcheck only — not published to the host).
 
 **First login**
 
-1. Set `WHATSAPP_ENABLED=true` and `WORKER_INTERNAL_TOKEN` (same secret on server + worker) in `.env`.
+1. Set `WHATSAPP_ENABLED=true` and `WORKER_INTERNAL_TOKEN` (same secret on server + worker) in `.env` or `.env.override`, then restart worker and server.
 2. `pnpm run compose:up` (or restart `server` and `worker` after changing `.env`).
 3. Open **`/platform/channels`** in the web UI and scan the QR when status is **pending** (terminal QR in worker logs is a fallback).
 
@@ -206,13 +235,13 @@ If `/platform/channels` stays **disconnected**, check worker logs for `WORKER_IN
 
 Inbound text and attachments for onboarded chats land in `data/whatsapp_inbox` (files under `{folder}/attachments/`). `whatsapp_wiki_stack` materializes image attachments, runs nixery `image-to-text`, merges into wiki, then clears messages and attachment files. Non-image types are stored and noted in digests but not parsed yet.
 
-### Smoke tests
+## Smoke tests
 
 ```bash
 # OneCLI dashboard
 curl -sf http://127.0.0.1:10254/
 
-# OneCLI proxy route
+# OneCLI proxy route (DeepSeek)
 curl -x http://127.0.0.1:10255 -H "Authorization: Bearer placeholder" https://api.deepseek.com/models
 
 # Server health
@@ -223,12 +252,9 @@ curl -sf http://127.0.0.1:4000/__/health
 
 # Worker health (in-container loopback; compose healthcheck uses this)
 docker compose exec worker node -e "fetch('http://127.0.0.1:4091/health').then(r=>process.exit(r.ok?0:1))"
-
-# Runtime
-pnpm run orchestrate
 ```
 
-### Troubleshooting OneCLI
+## Troubleshooting OneCLI
 
 | Symptom | Check |
 |---------|-------|
@@ -237,7 +263,7 @@ pnpm run orchestrate
 | `certificate rejected` | `runtime/.onecli/` contains refreshed CA files and compose override |
 | `provider key not injected` | Host/path matching and agent permissions in OneCLI dashboard |
 
-### API reference
+## API reference
 
 **Tasks**
 
@@ -268,7 +294,7 @@ pnpm run orchestrate
 |--------|------|-------------|
 | GET | `/api/fork-sessions/:forkSessionId` | Load fork setup for orchestrator |
 
-**Platform** (Mastermind proposals, cron jobs, worker queue)
+**Platform** (proposals, cron jobs, worker queue)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -348,7 +374,7 @@ SSE streams expose live run logs (`meta` / `log` / `status`) and session events 
 
 Session persistence uses normalized Mongo collections (`Sessions`, `Stages`, `SessionToolCalls`, `SessionModelResponses`, `SessionAskUserQuestions`, `SessionVerifyCheckpoints`, `ForkSessions`, and related rows). After upgrading schema, wipe the database or drop those collections so old single-document `sessions` rows do not conflict with the new layout.
 
-### Ask-user timeout and recovery
+## Ask-user timeout and recovery
 
 Orchestrator waits at most `YAHL_ASK_USER_MAX_WAIT_MS` (default `600000`) and polls every `YAHL_ASK_USER_POLL_MS` (default `250`). After a timeout it stores a verify checkpoint on the session; the web UI **Resume from checkpoint** POSTs `/api/sessions/:sessionId/verify-checkpoints/:verifyId/resume`.
 

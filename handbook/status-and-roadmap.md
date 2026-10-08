@@ -31,12 +31,11 @@ But more importantly — it does feel like patching in the right direction. No m
 | knowledge-to-script | Works | Default-on for AI stages (`knowledgeToScript`); narrow scripts under `~/data/scripts/` with Stagehand/`yahl-browser` bridge. Opt out per stage with `false`. Research helper `consult-script-candidate` advises next script ops. See [yahl-syntax.md](yahl-syntax.md). |
 | cacheMaxAge | Works | AI-stage grace window (minutes) for trusting durable cache files before live-probing again. |
 | Stage repair | Works | Session Detail one-off instruction at an anchor stage; orchestrator runs `kind: 'repair'` without rewriting the whole task. |
-| Quota gating | Works | Server + llm-proxy read SaaS quota from `QUOTA_STATE_FILE`; control-plane writes via `CONTROL_PLANE_SERVICE_TOKEN`. |
 | Task-local skills | Works | Echoed from session snapshot to agent `~/task-skills/`; see [yahl-syntax.md](yahl-syntax.md). |
 | Knowledge store | Works | Filesystem corpus at `data/knowledge_export` (`en/topics/`, `whatsapp/`, `greets/`); humans edit via code-server; nixery read defs ro / write defs rw — see [security.md](security.md). |
 | Topic governance | Works | `runInput.knowledge_manager_instruction` + overnight cron `knowledge_manager` (full corpus); observations inbox; cross-topic `knowledge_transfer` approvals; within-topic `dedup-knowledge` after approved transfers. |
 | Background sessions | Works | Cron/utility runs hidden by default on `/sessions` (toggle to show). |
-| Platform UI | Works | `/platform/approvals` (`PLATFORM_APPROVAL_TOKEN` / `X-Approval-Token`); `/platform/cron-jobs` create/edit/delete (worker ticks via `POST /api/runs`); `/platform/channels` WhatsApp QR/status. Example: `traffic_monitor` at `0 8 * * *` / `Asia/Hong_Kong` with `runInput` — see [how-to-run.md](how-to-run.md). |
+| Platform UI | Works | `/platform/approvals` (`PLATFORM_APPROVAL_TOKEN` / `X-Approval-Token`); `/platform/cron-jobs` create/edit/delete (worker ticks via `POST /api/runs`); `/platform/channels` WhatsApp QR/status. Channel env via `.env.override` + restart banner. Example: `traffic_monitor` at `0 8 * * *` / `Asia/Hong_Kong` with `runInput` — see [how-to-run.md](how-to-run.md). |
 | Direct user ↔ assistant chat | Planned | Deferred for v1; skills stay stateless for now. |
 | A2UI | Planned | Real structured UI payloads — earlier bolt-on attempt failed; avoid another half-measure. |
 | Restart from arbitrary stage | Planned | Agent `goto` and Session Detail **repair** (one-off instruction at an anchor) already cover jump-and-continue and targeted re-run. Still want a plain UI restart-from-stage that reuses upstream context without a repair instruction — not fork-and-pray at the failure point. |

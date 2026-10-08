@@ -32,7 +32,7 @@ Pipeline detail: [`handbook/how-it-works.md`](handbook/how-it-works.md).
 - **`cacheMaxAge`** — AI-stage grace window (minutes) for trusting durable cache files before live-probing again — fewer token burns on cold re-reads.
 - **Per-stage repair** — from Session Detail, inject a one-off instruction at an anchor stage (`kind: 'repair'`) without rewriting the whole task.
 - **Plug-in nixery** — typed one-shot containers; install plugins; orchestrator materializes [`runtime/.agent-files/`](../runtime/.agent-files/) at start (or `pnpm nixery:link` locally) to grow or shrink the `/nixery` surface.
-- **LLM proxy** — OpenAI-compatible hub with retries (408/429/5xx), usage postback, Anthropic translation; optional SaaS **quota** gating via `QUOTA_STATE_FILE`.
+- **LLM proxy** — OpenAI-compatible hub with retries (408/429/5xx), usage postback, Anthropic translation; DeepSeek via OneCLI.
 - **Platform skills** — cron jobs, notification proposals, task dispatch via `/platform(...)` on the server.
 - **Knowledge Manager** — overnight multi-stage corpus review (`knowledge_manager` cron); stage agents submit observations, not direct wiki edits.
 - **WhatsApp + cron** — worker owns channels; scan the QR at **`/platform/channels`**; tasks like `greets`, `whatsapp_wiki_stack`, and `traffic_monitor` propose outbound; SMTP fallback when WhatsApp ghosts you.
@@ -131,7 +131,7 @@ Full roles, mounts, and blast-radius design: [`handbook/security.md`](handbook/s
 
 ## Getting started
 
-**Packages (Omniflex member):** `runtime/` · `server/` · `web/` · `worker/` · `llm-proxy/` — install from `../`.
+Packages: `runtime/` · `server/` · `web/` · `worker/` · `llm-proxy/`. Install framework deps from the Omniflex parent (`../`).
 
 ```bash
 cd ..
@@ -139,17 +139,19 @@ pnpm install
 pnpm -r --filter "./infras/**" run build
 ```
 
-Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI), and [`.env.nixery.example`](.env.nixery.example) → `.env.nixery` for nixery LLM defaults. Then:
+Copy [`.env.example`](.env.example) → `.env` (`HOST_REPO_ROOT`, OneCLI, `LLM_PROXY_TOKEN`), and [`.env.nixery.example`](.env.nixery.example) → `.env.nixery` for nixery LLM defaults (DeepSeek). Then:
 
 ```bash
 cd project-yahl
 pnpm run compose:up          # mongo, redis, onecli, code-server, worker, llm-proxy
-pnpm run compose:up:all      # optional: built server + web + code-server
+pnpm run compose:up:all      # optional: built server + web + code-server + worker + llm-proxy
 # or: pnpm run dev && pnpm run dev:web
 curl -sS -X POST "http://127.0.0.1:4000/api/runs" \
   -H 'Content-Type: application/json' \
   -d '{"taskId":"who_am_i"}'
 ```
+
+Configure the Deepseek OneCLI secret (`api.deepseek.com`) before expecting LLM calls to succeed — see [handbook/onecli-api.md](handbook/onecli-api.md).
 
 Optional: set `WHATSAPP_ENABLED=true` (and friends) in `.env`, restart worker, scan the QR — full channel setup in the handbook.
 
@@ -164,6 +166,7 @@ Full compose, WhatsApp/SMTP, local flags, OneCLI, API, and ask-user recovery: [`
 | [handbook/nixery.md](handbook/nixery.md) | Plug-in abilities, layout, philosophy |
 | [handbook/security.md](handbook/security.md) | Knowledge store protection + outbound channel boundaries |
 | [handbook/how-to-run.md](handbook/how-to-run.md) | Compose, WhatsApp/SMTP, local, OneCLI, API, ask-user recovery |
+| [handbook/onecli-api.md](handbook/onecli-api.md) | OneCLI ports, vault secrets, DeepSeek routing |
 | [handbook/how-it-works.md](handbook/how-it-works.md) | Runtime / stage pipeline |
 | [handbook/tricks.md](handbook/tricks.md) | Operator tips (`source_instruction`, greets / WhatsApp, …) |
 

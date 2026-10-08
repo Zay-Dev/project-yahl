@@ -21,7 +21,7 @@ sequenceDiagram
 - **Session-scoped reads** — `nixeryRun: get-knowledge` explores export mirror in-container, writes markdown to `~/nixery/get-knowledge/{output}`; agent reads full file content in following stages.
 - **Path injection blocked** — upsert rejects caller `source` / `file` / `path` args.
 - **Controlled writes** — `upsert-knowledge-page` accepts `key`+`value` or `page`+`content` with `topic` only; known keys are suggestions (unknown keys soft-default to a slug page).
-- **Human browse/edit** — code-server at `/code/` (dev: `127.0.0.1:${CODE_SERVER_PORT:-8080}`); web sidebar **Knowledge / Files** opens the tenant IDE root (corpus under `knowledge_export`); agents never use this route.
+- **Human browse/edit** — code-server at `/code/` (dev: `127.0.0.1:${CODE_SERVER_PORT:-8080}`); web sidebar **Knowledge / Files** opens the code-server root (corpus under `knowledge_export`); agents never use this route.
 - **Untrusted task hints** — task SKILL files loaded via `guidelinePath` on nixery `research` get an explicit untrusted-content banner in the prompt.
 - **Workspace vs knowledge** — `extract-info` = RAG over session workspace files; `image-to-text` = DeepSeek vision over session image files; `get-knowledge` = curated corpus via export mirror. Different defs, different trust boundary.
 
@@ -29,7 +29,7 @@ sequenceDiagram
 
 - **Worker-only volumes** — WhatsApp auth (`data/whatsapp_auth`) and inbox (`data/whatsapp_inbox`) mount into the worker container only. Stage agents never see them.
 - **Proposals stay on the server** — Agents never send WhatsApp or email. Outbound goes through platform proposals; humans approve at `/platform/approvals` with `PLATFORM_APPROVAL_TOKEN` (`X-Approval-Token`).
-- **Whitelist pre-approve** — `WHATSAPP_WHITELIST` / `EMAIL_WHITELIST` matching recipients skip the approval queue for that channel.
+- **Whitelist pre-approve** — `WHATSAPP_WHITELIST` / `EMAIL_WHITELIST` matching recipients skip the approval queue for that channel. Channel overrides live in `.env.override` on the host (also editable as code-server `.env.override`); unlisted keys are stripped on server start.
 - **SMTP admin alert** — when WhatsApp is unavailable mid-send and SMTP is configured, the worker may email `SYSTEM_ADMIN_EMAIL`; it does not open a side channel for agents.
 
 Read pattern in stage logic:

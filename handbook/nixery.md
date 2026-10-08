@@ -1,6 +1,6 @@
 # Nixery — concepts & layout
 
-Nixery is the **installable ability runtime** for YAHL: typed one-shot containers invoked via `/nixery(defId, …)`. The SaaS / platform baseline ships this runtime with an **empty catalog** — no pre-installed defs. Plugins under [`server/nixery/`](../server/nixery/) are optional add-ons; install them to grow the `/nixery` surface, uninstall them to shrink it. Zero plugins is a valid deployment.
+Nixery is the **installable ability runtime** for YAHL: typed one-shot containers invoked via `/nixery(defId, …)`. The default empty catalog ships with no pre-installed defs. Plugins under [`server/nixery/`](../server/nixery/) are optional add-ons; install them to grow the `/nixery` surface, uninstall them to shrink it. Zero plugins is a valid deployment.
 
 It is not a chat black box. Each ability (when installed) is a human-authored contract (`index.yml` + `run.mjs` + `validation.mjs`) around fuzzy LLM or Node work. Stage pipeline: [how-it-works.md](how-it-works.md); call syntax: [yahl-syntax.md](yahl-syntax.md).
 
